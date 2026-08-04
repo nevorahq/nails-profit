@@ -1,11 +1,6 @@
-import { asc, eq } from "drizzle-orm";
-import { headers } from "next/headers";
-
-import { db } from "@/db";
-import { memberships } from "@/db/schema";
 import { capabilities, permissionFor, scopeFor, type Capability } from "@/domain/rbac";
-import { auth } from "@/lib/auth";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
+import { getActiveMembership } from "@/lib/membership";
 
 /**
  * The caller's own resolved section 6.1 permissions. A role-aware UI needs this
@@ -17,19 +12,13 @@ import { apiError, apiSuccess, requestId } from "@/lib/http";
  */
 export async function GET(request: Request) {
   const id = requestId(request);
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
-
-  const [membership] = await db
-    .select({ organizationId: memberships.organizationId, role: memberships.role })
-    .from(memberships)
-    .where(eq(memberships.userId, session.user.id))
-    .orderBy(asc(memberships.createdAt), asc(memberships.id))
-    .limit(1);
-
-  if (!membership) {
+  const caller = await getActiveMembership();
+  if (!caller.session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
+  if (!caller.membership) {
     return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
   }
+
+  const membership = caller.membership;
 
   // `note` stays server-side: it is the spec's Russian wording, not UI copy.
   // Scope is null when the capability is denied — shipping the placeholder

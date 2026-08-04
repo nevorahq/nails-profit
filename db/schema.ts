@@ -193,6 +193,41 @@ export const services = pgTable(
   (table) => [index("service_org_idx").on(table.organizationId)],
 );
 
+export const invitationStatus = pgEnum("invitation_status", ["pending", "accepted", "revoked"]);
+
+/**
+ * Staff invitations, spec section 4.3. Only the token hash is stored, per the
+ * one-time-token rule in section 12.3. Expiry is a timestamp rather than a
+ * fourth status so no background job is needed to keep the row honest.
+ */
+export const invitations = pgTable(
+  "invitation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    /** Stored normalized (trimmed, lower-cased) so one address cannot be invited twice. */
+    email: text("email").notNull(),
+    role: memberRole("role").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    status: invitationStatus("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedBy: text("accepted_by").references(() => users.id, { onDelete: "set null" }),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("invitation_token_hash_idx").on(table.tokenHash),
+    index("invitation_org_status_idx").on(table.organizationId, table.status),
+    // At most one live invitation per address per organization. Revoked and
+    // accepted rows stay out of the way so an address can be re-invited.
+    uniqueIndex("invitation_pending_email_idx")
+      .on(table.organizationId, table.email)
+      .where(sql`${table.status} = 'pending'`),
+  ],
+);
+
 export const auditEvents = pgTable(
   "audit_event",
   {
