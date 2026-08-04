@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -12,6 +13,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import type { LocalizedText } from "@/i18n/localized-text";
 
 export const organizationType = pgEnum("organization_type", ["solo", "studio"]);
 export const memberRole = pgEnum("member_role", ["owner", "manager", "master"]);
@@ -82,6 +85,21 @@ export const verifications = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+/**
+ * Spec section 11.1 requires these on every main table: `version` for optimistic
+ * locking (`If-Match` in section 12.1) and the actor columns. `created_by` and
+ * `updated_by` are `text`, not the spec's `uuid`, because Better Auth owns user
+ * ID generation and issues text IDs. They stay nullable and `set null` on delete
+ * so removing a user never blocks a business row.
+ */
+const auditColumns = {
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  updatedBy: text("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
 export const organizations = pgTable("organization", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -89,8 +107,7 @@ export const organizations = pgTable("organization", {
   currency: currency("currency").notNull().default("MDL"),
   locale: locale("locale").notNull().default("ru"),
   timezone: text("timezone").notNull().default("Europe/Chisinau"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  ...auditColumns,
 });
 
 export const memberships = pgTable(
@@ -104,7 +121,7 @@ export const memberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: memberRole("role").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    ...auditColumns,
   },
   (table) => [
     uniqueIndex("membership_org_user_idx").on(table.organizationId, table.userId),
@@ -119,11 +136,12 @@ export const materials = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "restrict" }),
+    // Spec section 11.2 lists Material with a plain name; only Service,
+    // ServiceCategory and AddOn carry localized names.
     name: text("name").notNull(),
     baseUnit: unit("base_unit").notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    ...auditColumns,
   },
   (table) => [index("material_org_idx").on(table.organizationId)],
 );
@@ -161,10 +179,13 @@ export const services = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "restrict" }),
-    name: text("name").notNull(),
+    // Spec section 11.2 requires a localized name; LOC-008 requires a fallback
+    // chain. Stored as jsonb keyed by locale ({"ru": "...", "ro": "..."}) rather
+    // than a translation table: three locales do not justify the extra join, and
+    // `resolveLocalizedText` owns the fallback.
+    name: jsonb("name").$type<LocalizedText>().notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    ...auditColumns,
   },
   (table) => [index("service_org_idx").on(table.organizationId)],
 );

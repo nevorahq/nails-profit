@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateCosting } from "@/domain/costing";
+import { calculateCosting, type CostingInput } from "@/domain/costing";
+
+/** Narrows to the complete branch so tests can read figures directly. */
+function completeCosting(input: CostingInput) {
+  const result = calculateCosting(input);
+  if (result.incompleteCostData) {
+    throw new Error(`expected a complete costing, got: ${result.incompleteReasons.join(", ")}`);
+  }
+  return result;
+}
 
 describe("calculateCosting", () => {
   it("matches the roadmap Gate 2 canonical scenario", () => {
-    const result = calculateCosting({
+    const result = completeCosting({
       priceMinor: 60_000,
       materialCostMinor: 3_500,
       durationMinutes: 90,
@@ -26,7 +35,7 @@ describe("calculateCosting", () => {
     [{ type: "percentage_after_materials", basisPoints: 4_000 } as const, 22_600],
   ])("supports %o commission", (commission, expected) => {
     expect(
-      calculateCosting({
+      completeCosting({
         priceMinor: 60_000,
         materialCostMinor: 3_500,
         durationMinutes: 90,
@@ -36,21 +45,41 @@ describe("calculateCosting", () => {
     ).toBe(expected);
   });
 
-  it("never treats missing material costs as zero", () => {
+  it("flags missing material costs instead of treating them as zero", () => {
+    const result = calculateCosting({
+      priceMinor: 60_000,
+      materialCostMinor: null,
+      durationMinutes: 90,
+      currency: "MDL",
+      commission: { type: "fixed", amountMinor: 0 },
+    });
+
+    expect(result.incompleteCostData).toBe(true);
+    if (!result.incompleteCostData) throw new Error("expected an incomplete result");
+    expect(result.incompleteReasons).toEqual(["missing_material_cost"]);
+    // The point of the flag: no figure is emitted that could be read as a margin.
+    expect(result).not.toHaveProperty("contributionMarginMinor");
+    expect(result).not.toHaveProperty("marginBasisPoints");
+    expect(result).not.toHaveProperty("profitPerHourMinor");
+    expect(result.priceMinor).toBe(60_000);
+    expect(result.durationMinutes).toBe(90);
+  });
+
+  it("still rejects a zero duration when material data is missing", () => {
     expect(() =>
       calculateCosting({
         priceMinor: 60_000,
         materialCostMinor: null,
-        durationMinutes: 90,
+        durationMinutes: 0,
         currency: "MDL",
         commission: { type: "fixed", amountMinor: 0 },
       }),
-    ).toThrow("INCOMPLETE_MATERIAL_COST");
+    ).toThrow("durationMinutes");
   });
 
   it("reports a loss-making service as a loss, not as zero", () => {
     // 300 MDL price, 40% commission (120 MDL), 250 MDL of materials => -70 MDL.
-    const result = calculateCosting({
+    const result = completeCosting({
       priceMinor: 30_000,
       materialCostMinor: 25_000,
       durationMinutes: 120,
@@ -66,7 +95,7 @@ describe("calculateCosting", () => {
   });
 
   it("keeps margin and profit per hour consistent in sign", () => {
-    const result = calculateCosting({
+    const result = completeCosting({
       priceMinor: 20_000,
       materialCostMinor: 18_000,
       durationMinutes: 60,
@@ -80,7 +109,7 @@ describe("calculateCosting", () => {
   });
 
   it("reports an undefined margin percentage for a free service", () => {
-    const result = calculateCosting({
+    const result = completeCosting({
       priceMinor: 0,
       materialCostMinor: 4_000,
       durationMinutes: 60,
@@ -94,7 +123,7 @@ describe("calculateCosting", () => {
   });
 
   it("never charges a negative commission when materials exceed the price", () => {
-    const result = calculateCosting({
+    const result = completeCosting({
       priceMinor: 10_000,
       materialCostMinor: 15_000,
       durationMinutes: 60,

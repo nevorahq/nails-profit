@@ -13,18 +13,38 @@ export type CostingInput = Readonly<{
   commission: Commission;
 }>;
 
-export type CostingResult = Readonly<{
+/** Why a costing could not be completed. Drives the CST-010 list. */
+export type IncompleteReason = "missing_material_cost";
+
+type CostingCommon = {
   formulaVersion: "costing-v1";
   currency: Currency;
   priceMinor: number;
-  materialCostMinor: number;
-  commissionMinor: number;
-  contributionMarginMinor: number;
-  /** Null when the price is zero, where a margin percentage has no meaning. */
-  marginBasisPoints: number | null;
-  profitPerHourMinor: number;
+  durationMinutes: number;
   explanation: readonly string[];
-}>;
+};
+
+/**
+ * Spec section 8.8.1: a missing material cost is never treated as zero. Rather
+ * than throwing, the calculation returns `incompleteCostData` so the visit can
+ * still be stored and listed (CST-010). The incomplete branch carries no
+ * figures at all — a partial number here would be read as a real margin.
+ */
+export type CostingResult = Readonly<
+  | (CostingCommon & {
+      incompleteCostData: false;
+      materialCostMinor: number;
+      commissionMinor: number;
+      contributionMarginMinor: number;
+      /** Null when the price is zero, where a margin percentage has no meaning. */
+      marginBasisPoints: number | null;
+      profitPerHourMinor: number;
+    })
+  | (CostingCommon & {
+      incompleteCostData: true;
+      incompleteReasons: readonly IncompleteReason[];
+    })
+>;
 
 function assertNonNegativeInteger(value: number, field: string) {
   if (!Number.isSafeInteger(value) || value < 0) {
@@ -34,13 +54,23 @@ function assertNonNegativeInteger(value: number, field: string) {
 
 export function calculateCosting(input: CostingInput): CostingResult {
   assertNonNegativeInteger(input.priceMinor, "priceMinor");
-  if (input.materialCostMinor === null) {
-    throw new Error("INCOMPLETE_MATERIAL_COST");
-  }
-  assertNonNegativeInteger(input.materialCostMinor, "materialCostMinor");
   if (!Number.isSafeInteger(input.durationMinutes) || input.durationMinutes <= 0) {
     throw new RangeError("durationMinutes must be a positive integer");
   }
+
+  if (input.materialCostMinor === null) {
+    return {
+      formulaVersion: "costing-v1",
+      currency: input.currency,
+      priceMinor: input.priceMinor,
+      durationMinutes: input.durationMinutes,
+      incompleteCostData: true,
+      incompleteReasons: ["missing_material_cost"],
+      explanation: [`price:${input.priceMinor}`, "materials:unknown", `duration_minutes:${input.durationMinutes}`],
+    };
+  }
+
+  assertNonNegativeInteger(input.materialCostMinor, "materialCostMinor");
 
   let commissionMinor: number;
   switch (input.commission.type) {
@@ -72,6 +102,8 @@ export function calculateCosting(input: CostingInput): CostingResult {
     formulaVersion: "costing-v1",
     currency: input.currency,
     priceMinor: input.priceMinor,
+    durationMinutes: input.durationMinutes,
+    incompleteCostData: false,
     materialCostMinor: input.materialCostMinor,
     commissionMinor,
     contributionMarginMinor,

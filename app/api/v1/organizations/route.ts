@@ -73,13 +73,20 @@ export async function POST(request: Request) {
 
     const [created] = await tx
       .insert(organizations)
-      .values({ ...parsed.data, timezone: "Europe/Chisinau" })
+      .values({
+        ...parsed.data,
+        timezone: "Europe/Chisinau",
+        createdBy: session.user.id,
+        updatedBy: session.user.id,
+      })
       .returning();
 
     await tx.insert(memberships).values({
       organizationId: created.id,
       userId: session.user.id,
       role: "owner",
+      createdBy: session.user.id,
+      updatedBy: session.user.id,
     });
     return created;
   });
