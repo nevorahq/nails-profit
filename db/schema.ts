@@ -14,13 +14,13 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { memberRoles } from "@/domain/rbac";
 import type { LocalizedText } from "@/i18n/localized-text";
 
 export const organizationType = pgEnum("organization_type", ["solo", "studio"]);
-// Spec section 6.1 defines four roles. Analyst is carried here even though no
-// capability check reads it yet: adding an enum value later, once memberships
-// exist, is a migration; adding it now is free.
-export const memberRole = pgEnum("member_role", ["owner", "manager", "master", "analyst"]);
+// Derived from the section 6.1 capability matrix so the database enum and the
+// permission table can never list different roles.
+export const memberRole = pgEnum("member_role", memberRoles);
 export const currency = pgEnum("currency", ["MDL", "EUR"]);
 export const locale = pgEnum("locale", ["ru", "ro", "en"]);
 export const unit = pgEnum("material_unit", ["ml", "g", "piece"]);

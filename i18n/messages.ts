@@ -11,16 +11,22 @@ export const errorMessages = {
     UNAUTHENTICATED: "Требуется вход в систему",
     VALIDATION_ERROR: "Проверьте заполненные поля",
     MEMBERSHIP_EXISTS: "Вы уже состоите в организации",
+    MEMBERSHIP_NOT_FOUND: "Вы пока не состоите ни в одной организации",
+    FORBIDDEN: "Недостаточно прав для этого действия",
   },
   ro: {
     UNAUTHENTICATED: "Este necesară autentificarea",
     VALIDATION_ERROR: "Verificați câmpurile completate",
     MEMBERSHIP_EXISTS: "Faceți deja parte dintr-o organizație",
+    MEMBERSHIP_NOT_FOUND: "Încă nu faceți parte din nicio organizație",
+    FORBIDDEN: "Drepturi insuficiente pentru această acțiune",
   },
   en: {
     UNAUTHENTICATED: "Authentication is required",
     VALIDATION_ERROR: "Check the fields you filled in",
     MEMBERSHIP_EXISTS: "You already belong to an organization",
+    MEMBERSHIP_NOT_FOUND: "You do not belong to an organization yet",
+    FORBIDDEN: "You do not have permission for this action",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>;
 
