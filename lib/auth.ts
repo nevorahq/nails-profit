@@ -5,6 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { getServerEnv } from "@/env";
+import { resolvePasswordResetDelivery } from "@/lib/password-reset-delivery";
 
 const env = getServerEnv();
 
@@ -47,6 +48,15 @@ export const auth = betterAuth({
       hash: (password) => argon2Hash(password, argon2Options),
       verify: ({ hash, password }) => argon2Verify(hash, password, argon2Options),
     },
+    // Section 4.3 account recovery. One hour rather than the library default of
+    // one hour restated explicitly, so the window is a decision and not an
+    // accident. Better Auth answers /forget-password identically whether or not
+    // the address exists, and pads the timing, so the endpoint cannot be used to
+    // enumerate accounts.
+    resetPasswordTokenExpiresIn: 60 * 60,
+    sendResetPassword: async ({ user, url }) => {
+      await resolvePasswordResetDelivery().send({ email: user.email, url });
+    },
   },
   /**
    * Spec section 15.3 requires rate limits on auth. Storage is in-memory, which
@@ -61,7 +71,9 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 300, max: 10 },
       "/sign-up/email": { window: 3600, max: 5 },
-      "/forget-password": { window: 3600, max: 5 },
+      // Paths must match Better Auth's own routes exactly — a rule for a path
+      // that does not exist silently limits nothing.
+      "/request-password-reset": { window: 3600, max: 5 },
       "/reset-password": { window: 3600, max: 5 },
     },
   },

@@ -69,6 +69,11 @@ export function LoginForm({ initialMode = "signin" }: { initialMode?: "signin" |
       <button className="switch-button" type="button" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>
         {mode === "signup" ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Создать"}
       </button>
+      {mode === "signin" && (
+        <Link className="switch-button" href="/forgot-password">
+          Забыли пароль?
+        </Link>
+      )}
     </section>
   );
 }
