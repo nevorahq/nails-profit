@@ -21,6 +21,8 @@ export const errorMessages = {
     INVITATION_EMAIL_MISMATCH: "Приглашение выписано на другой адрес",
     INVITATION_NOT_FOUND: "Активное приглашение не найдено",
     ROLE_NOT_ASSIGNABLE: "Вы не можете выдать эту роль",
+    ORGANIZATION_DELETED: "Организация уже удалена",
+    CONFIRMATION_MISMATCH: "Название не совпадает — введите его точно",
   },
   ro: {
     UNAUTHENTICATED: "Este necesară autentificarea",
@@ -36,6 +38,8 @@ export const errorMessages = {
     INVITATION_EMAIL_MISMATCH: "Invitația a fost emisă pentru altă adresă",
     INVITATION_NOT_FOUND: "Nu a fost găsită nicio invitație activă",
     ROLE_NOT_ASSIGNABLE: "Nu puteți acorda acest rol",
+    ORGANIZATION_DELETED: "Organizația este deja ștearsă",
+    CONFIRMATION_MISMATCH: "Denumirea nu coincide — introduceți-o exact",
   },
   en: {
     UNAUTHENTICATED: "Authentication is required",
@@ -51,6 +55,8 @@ export const errorMessages = {
     INVITATION_EMAIL_MISMATCH: "The invitation was issued for a different address",
     INVITATION_NOT_FOUND: "No pending invitation found",
     ROLE_NOT_ASSIGNABLE: "You cannot grant this role",
+    ORGANIZATION_DELETED: "The organization is already deleted",
+    CONFIRMATION_MISMATCH: "The name does not match — type it exactly",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>;
 

@@ -110,6 +110,15 @@ export const organizations = pgTable("organization", {
   currency: currency("currency").notNull().default("MDL"),
   locale: locale("locale").notNull().default("ru"),
   timezone: text("timezone").notNull().default("Europe/Chisinau"),
+  /**
+   * Owner-requested erasure, spec sections 4.3 and 15.3. Deletion is recorded
+   * here rather than by dropping the row: the financial tables reference the
+   * organization with ON DELETE RESTRICT precisely so history survives, and
+   * section 15.3 asks for PII to be anonymized while required financial records
+   * are kept. Memberships and invitations are removed, so a marked row is
+   * unreachable.
+   */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   ...auditColumns,
 });
 

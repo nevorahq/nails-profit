@@ -1,8 +1,8 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
-import { memberships } from "@/db/schema";
+import { memberships, organizations } from "@/db/schema";
 import type { MemberRole } from "@/domain/rbac";
 import { auth } from "@/lib/auth";
 
@@ -27,7 +27,10 @@ export async function getActiveMembership(): Promise<
   const [row] = await db
     .select({ organizationId: memberships.organizationId, role: memberships.role })
     .from(memberships)
-    .where(eq(memberships.userId, session.user.id))
+    .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
+    // Deletion removes memberships, so this join is belt and braces: a row left
+    // behind by a partial failure must not grant access to a deleted workspace.
+    .where(and(eq(memberships.userId, session.user.id), isNull(organizations.deletedAt)))
     .orderBy(asc(memberships.createdAt), asc(memberships.id))
     .limit(1);
 
