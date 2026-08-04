@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: nail_profit
+      POSTGRES_USER: nail_profit
+      POSTGRES_PASSWORD: nail_profit
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nail_profit -d nail_profit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - nail_profit_postgres:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/010-app-role.sql:ro
+
+volumes:
+  nail_profit_postgres:
