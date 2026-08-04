@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nail Profit OS — UX/UI preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --canvas:#f7f3ed; --surface:#fffcf8; --surface-strong:#eee7de;
+      --ink:#241e26; --muted:#706872; --border:#d9d0c6;
+      --accent:#d75b45; --accent-hover:#b84535; --accent-soft:#f6ddd6;
+      --sage:#8e9d84; --profit:#2f7552; --profit-soft:#ddede4;
+      --warning:#a66a18; --warning-soft:#f6e9cf; --loss:#b93b45;
+      --sidebar:#292229; --sidebar-muted:#bdb2bb;
+      --shadow:0 16px 48px rgba(36,30,38,.14);
+    }
+    body.dark {
+      --canvas:#181519; --surface:#211d22; --surface-strong:#2d282e;
+      --ink:#f6f0e8; --muted:#b8afb7; --border:#3a343b;
+      --accent:#db725f; --accent-hover:#ed806c; --accent-soft:#3d2828;
+      --sage:#97a38f; --profit:#6baa82; --profit-soft:#20382b;
+      --warning:#d29a43; --warning-soft:#3c3020; --loss:#d46b74;
+      --sidebar:#121012; --sidebar-muted:#a79da5;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.45 "Instrument Sans", sans-serif; }
+    button, input { font:inherit; }
+    button { cursor:pointer; }
+    .app { min-height:100vh; display:grid; grid-template-columns:232px minmax(0,1fr); }
+    .sidebar { position:sticky; top:0; height:100vh; padding:24px 16px; background:var(--sidebar); color:#fff; display:flex; flex-direction:column; }
+    .brand { display:flex; align-items:center; gap:10px; padding:0 10px 26px; font-weight:600; letter-spacing:-.02em; }
+    .mark { width:30px; height:30px; display:grid; place-items:center; border:1px solid #6f606d; border-radius:8px; color:#ffe6df; font:600 12px "IBM Plex Mono", monospace; }
+    .brand small { color:#d75b45; font:500 9px "IBM Plex Mono", monospace; vertical-align:top; }
+    .nav-label { margin:20px 10px 7px; color:#8f838d; font:500 10px "IBM Plex Mono",monospace; letter-spacing:.12em; }
+    .nav { display:grid; gap:3px; }
+    .nav button { width:100%; border:0; background:transparent; color:var(--sidebar-muted); padding:10px 11px; border-radius:8px; text-align:left; display:flex; align-items:center; gap:10px; }
+    .nav button:hover { color:#fff; background:#352d35; }
+    .nav button.active { color:#fff; background:#41343d; box-shadow:inset 3px 0 var(--accent); }
+    .nav .glyph { width:18px; color:#998d96; font:500 12px "IBM Plex Mono",monospace; }
+    .profile { margin-top:auto; border-top:1px solid #443941; padding:17px 8px 0; display:flex; align-items:center; gap:10px; }
+    .avatar { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:#f2cabc; color:#4a2825; font-weight:600; }
+    .profile b { display:block; font-size:13px; }.profile span { color:#9e929b; font-size:11px; }
+    main { min-width:0; }
+    .topbar { height:72px; padding:0 32px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:color-mix(in srgb,var(--canvas) 86%,transparent); backdrop-filter:blur(12px); }
+    .crumb { color:var(--muted); font-size:13px; }.crumb b { color:var(--ink); }
+    .top-actions { display:flex; gap:9px; align-items:center; }
+    .icon-btn,.secondary,.primary { min-height:40px; border-radius:8px; padding:0 14px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font-weight:600; }
+    .icon-btn { width:40px; padding:0; }
+    .primary { background:var(--accent); color:white; border-color:var(--accent); }
+    .primary:hover { background:var(--accent-hover); }
+    .content { max-width:1440px; margin:0 auto; padding:34px 32px 64px; }
+    .page { display:none; }.page.active { display:block; }
+    .eyebrow { margin-bottom:8px; color:var(--accent); font:500 11px "IBM Plex Mono",monospace; letter-spacing:.1em; text-transform:uppercase; }
+    h1,h2,h3,p { margin-top:0; }
+    h1 { margin-bottom:8px; font:600 30px/1.15 "Fraunces",serif; letter-spacing:-.025em; }
+    .lead { color:var(--muted); max-width:650px; margin-bottom:28px; }
+    .overview-grid { display:grid; grid-template-columns:minmax(0,1.75fr) minmax(300px,.85fr); gap:18px; }
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+    .hero-profit { padding:29px; min-height:360px; display:flex; flex-direction:column; }
+    .panel-kicker { color:var(--muted); font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+    .big-number { margin:16px 0 3px; font:500 46px/1 "IBM Plex Mono",monospace; letter-spacing:-.055em; }
+    .big-caption { color:var(--muted); }
+    .delta { display:inline-flex; width:max-content; margin:16px 0 26px; padding:5px 8px; border-radius:999px; color:var(--profit); background:var(--profit-soft); font-size:12px; font-weight:600; }
+    .breakdown { margin-top:auto; }
+    .breakdown-bar { height:18px; display:flex; overflow:hidden; border-radius:4px; background:var(--surface-strong); }
+    .seg-mat { width:11%; background:var(--sage); }.seg-commission { width:30%; background:#756b74; }.seg-profit { width:59%; background:var(--profit); }
+    .legend { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:13px; }
+    .legend small { display:block; color:var(--muted); }.legend b { font:500 14px "IBM Plex Mono",monospace; }
+    .attention { padding:24px; }
+    .attention h2,.section-title { font:600 19px "Fraunces",serif; }
+    .task { display:grid; grid-template-columns:9px 1fr auto; gap:11px; align-items:start; padding:17px 0; border-bottom:1px solid var(--border); }
+    .task:last-of-type { border-bottom:0; }.dot { width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--warning); }.dot.loss{background:var(--loss)}.dot.info{background:var(--accent)}
+    .task b { display:block; font-size:14px; }.task span { color:var(--muted); font-size:12px; }.task a { color:var(--accent); font-size:12px; font-weight:600; }
+    .full-btn { width:100%; margin-top:14px; }
+    .lower-grid { margin-top:18px; display:grid; grid-template-columns:1.25fr .75fr; gap:18px; }
+    .table-panel { padding:22px; overflow:hidden; }
+    .section-head { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:12px; }
+    table { border-collapse:collapse; width:100%; }
+    th { color:var(--muted); font-size:11px; font-weight:600; text-align:left; padding:10px 8px; border-bottom:1px solid var(--border); }
+    td { padding:13px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    td.num { font:500 12px "IBM Plex Mono",monospace; text-align:right; }.profit-num { color:var(--profit); }
+    .badge { display:inline-flex; padding:4px 7px; border-radius:999px; background:var(--profit-soft); color:var(--profit); font-size:11px; font-weight:600; }
+    .badge.warn { background:var(--warning-soft); color:var(--warning); }
+    .mini-bars { padding:22px; }
+    .bar-row { margin:18px 0; }.bar-meta { display:flex; justify-content:space-between; gap:12px; font-size:12px; }.bar-meta span:last-child { font-family:"IBM Plex Mono",monospace; }
+    .track { height:7px; background:var(--surface-strong); border-radius:2px; margin-top:7px; overflow:hidden; }.fill { height:100%; background:var(--profit); }.fill.orange { background:var(--accent); }.fill.sage { background:var(--sage); }
+    .service-layout { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(290px,.65fr); gap:18px; align-items:start; }
+    .form-panel { padding:24px; }.fields { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:24px; }
+    label { display:grid; gap:6px; color:var(--muted); font-size:12px; font-weight:600; }
+    input { width:100%; height:42px; padding:0 11px; border:1px solid var(--border); border-radius:8px; color:var(--ink); background:var(--surface); outline:none; }
+    input:focus { border-color:var(--info); box-shadow:0 0 0 2px color-mix(in srgb,var(--info) 25%,transparent); }
+    .recipe-head { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }.recipe-head h2 { margin:0;font:600 19px "Fraunces",serif; }
+    .recipe-table td:first-child { font-weight:600; }.recipe-table td small { display:block;color:var(--muted);font-weight:400; }
+    .sticky-result { position:sticky; top:90px; padding:24px; }.sticky-result .big-number { font-size:34px; }.formula { margin-top:22px; border-top:1px solid var(--border); padding-top:13px; display:grid; gap:10px; }
+    .formula-row { display:flex; justify-content:space-between; gap:16px; color:var(--muted); }.formula-row b { color:var(--ink); font:500 13px "IBM Plex Mono",monospace; }.formula-row.total { border-top:1px solid var(--border); padding-top:11px; color:var(--ink);font-weight:600; }.formula-row.total b{color:var(--profit)}
+    .complete { margin-top:20px; padding:12px; border-radius:8px; color:var(--profit); background:var(--profit-soft); font-size:12px; }
+    .mobile-stage { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:28px; align-items:start; }
+    .phone { width:390px; min-height:740px; border:9px solid #211d22; border-radius:36px; overflow:hidden; background:var(--canvas); box-shadow:var(--shadow); }
+    .phone-top { height:32px; display:flex; justify-content:center; align-items:center; }.notch { width:100px;height:18px;background:#211d22;border-radius:0 0 13px 13px; }
+    .phone-content { padding:16px; }.phone h2 { font:600 24px "Fraunces",serif; }.visit-card { padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface); }.client-row{display:flex;justify-content:space-between;gap:12px}.visit-time{font:500 12px "IBM Plex Mono",monospace;color:var(--accent)}
+    .design-box { margin-top:14px;padding:12px;background:var(--surface-strong);border-radius:8px;font-size:13px; }.sheet { margin:16px -16px -16px;padding:20px 16px 18px;background:var(--surface);border-top:1px solid var(--border);border-radius:18px 18px 0 0;box-shadow:0 -10px 30px rgba(36,30,38,.08)}
+    .choice { display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--border); }.choice strong{font:500 12px "IBM Plex Mono",monospace}.phone .primary{width:100%;margin-top:17px;height:46px}
+    .flow-copy { padding:14px 4px; }.flow-copy h2{font:600 28px "Fraunces",serif}.step{display:grid;grid-template-columns:28px 1fr;gap:12px;margin:20px 0}.step-num{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--border);border-radius:50%;font:500 11px "IBM Plex Mono",monospace}.step p{color:var(--muted);margin:4px 0 0}
+    .tokens { display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px }.swatch { min-height:135px;padding:16px;border-radius:12px;border:1px solid var(--border);display:flex;flex-direction:column;justify-content:flex-end }.swatch b{font-size:13px}.swatch span{font:500 11px "IBM Plex Mono",monospace}.s1{background:#241e26;color:white}.s2{background:#f7f3ed;color:#241e26}.s3{background:#d75b45;color:white}.s4{background:#2f7552;color:white}
+    .type-show { margin-top:18px;padding:28px }.display-sample{font:600 38px "Fraunces",serif;letter-spacing:-.03em}.body-sample{max-width:700px;color:var(--muted)}.data-sample{font:500 26px "IBM Plex Mono",monospace;color:var(--profit)}
+    .mobile-nav { display:none; }
+    @media(max-width:1000px){.app{grid-template-columns:72px 1fr}.sidebar{padding:20px 10px}.brand span,.nav-label,.nav button span:not(.glyph),.profile div:last-child{display:none}.brand{padding:0 10px 24px}.nav button{justify-content:center}.profile{justify-content:center}.overview-grid,.lower-grid,.service-layout,.mobile-stage{grid-template-columns:1fr}.sticky-result{position:static}.phone{justify-self:center}.tokens{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:700px){.app{display:block}.sidebar{display:none}.topbar{height:60px;padding:0 16px}.topbar .secondary{display:none}.content{padding:24px 16px 86px}.overview-grid{display:block}.attention,.lower-grid{margin-top:14px}.lower-grid{display:block}.mini-bars{margin-top:14px}.hero-profit{min-height:330px;padding:22px}.big-number{font-size:35px}.legend{grid-template-columns:1fr;gap:8px}.fields{grid-template-columns:1fr}.table-panel{overflow-x:auto}.service-layout{display:block}.sticky-result{margin-top:14px}.mobile-stage{display:block}.flow-copy{margin-bottom:20px}.phone{width:min(390px,100%);min-height:700px}.tokens{grid-template-columns:1fr 1fr}.mobile-nav{position:fixed;z-index:10;display:flex;bottom:0;left:0;right:0;height:68px;background:var(--surface);border-top:1px solid var(--border);justify-content:space-around;align-items:center}.mobile-nav button{border:0;background:transparent;color:var(--muted);font-size:11px}.mobile-nav button.active{color:var(--accent);font-weight:600}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Основная навигация">
+      <div class="brand"><div class="mark">NP</div><span>Nail Profit <small>OS</small></span></div>
+      <div class="nav-label">ОБЗОР</div>
+      <nav class="nav">
+        <button class="active" data-page="overview"><span class="glyph">01</span><span>Обзор прибыли</span></button>
+        <button data-page="service"><span class="glyph">02</span><span>Услуги</span></button>
+        <button><span class="glyph">03</span><span>Материалы</span></button>
+        <button data-page="visit"><span class="glyph">04</span><span>Визиты</span></button>
+      </nav>
+      <div class="nav-label">КЛИЕНТЫ</div>
+      <nav class="nav">
+        <button><span class="glyph">05</span><span>Клиенты</span></button>
+        <button><span class="glyph">06</span><span>Возврат клиентов</span></button>
+        <button><span class="glyph">07</span><span>Отменённые слоты</span></button>
+      </nav>
+      <div class="nav-label">КОНЦЕПЦИЯ</div>
+      <nav class="nav"><button data-page="system"><span class="glyph">08</span><span>Design system</span></button></nav>
+      <div class="profile"><div class="avatar">AM</div><div><b>Alina Moraru</b><span>Owner · Studio Uno</span></div></div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div class="crumb">Studio Uno / <b id="crumb">Обзор прибыли</b></div>
+        <div class="top-actions"><button class="icon-btn" id="theme" aria-label="Переключить тему">◐</button><button class="secondary">Импорт</button><button class="primary">Добавить услугу</button></div>
+      </header>
+      <div class="content">
+        <section class="page active" id="overview">
+          <div class="eyebrow">ИЮЛЬ 2026 · ВСЕ МАСТЕРА</div>
+          <h1>Вот что действительно осталось студии</h1>
+          <p class="lead">Расчёт использует завершённые визиты, фактические материалы и комиссии мастеров.</p>
+          <div class="overview-grid">
+            <article class="panel hero-profit">
+              <div class="panel-kicker">Contribution margin</div>
+              <div class="big-number">48 620 <small style="font-size:.45em">MDL</small></div>
+              <div class="big-caption">59% от выручки студии</div>
+              <div class="delta">↑ 12% к июню</div>
+              <div class="breakdown">
+                <div class="breakdown-bar" aria-label="Материалы 8740, комиссии 25040, останется студии 48620"><span class="seg-mat"></span><span class="seg-commission"></span><span class="seg-profit"></span></div>
+                <div class="legend"><div><small>Материалы</small><b>8 740</b></div><div><small>Комиссии</small><b>25 040</b></div><div><small>Останется вам</small><b>48 620</b></div></div>
+              </div>
+            </article>
+            <aside class="panel attention">
+              <div class="panel-kicker">СЛЕДУЮЩИЕ ДЕЙСТВИЯ</div><h2>Требует внимания</h2>
+              <div class="task"><span class="dot loss"></span><div><b>3 услуги без рецептуры</b><span>Прибыль может быть завышена</span></div><a>Добавить</a></div>
+              <div class="task"><span class="dot"></span><div><b>2 материала подорожали</b><span>Затронуто 6 услуг</span></div><a>Проверить</a></div>
+              <div class="task"><span class="dot info"></span><div><b>4 визита используют estimate</b><span>Нет фактической длительности</span></div><a>Уточнить</a></div>
+              <button class="secondary full-btn">Разобрать всё</button>
+            </aside>
+          </div>
+          <div class="lower-grid">
+            <article class="panel table-panel">
+              <div class="section-head"><h2 class="section-title">Прибыльность услуг</h2><button class="secondary">Все услуги</button></div>
+              <table><thead><tr><th>Услуга</th><th style="text-align:right">Цена</th><th style="text-align:right">Останется</th><th>Данные</th></tr></thead><tbody>
+                <tr><td>Маникюр + гель-лак</td><td class="num">600</td><td class="num profit-num">325</td><td><span class="badge">Точно</span></td></tr>
+                <tr><td>Укрепление + цвет</td><td class="num">750</td><td class="num profit-num">378</td><td><span class="badge">Точно</span></td></tr>
+                <tr><td>Сложный дизайн</td><td class="num">950</td><td class="num profit-num">476</td><td><span class="badge warn">Estimate</span></td></tr>
+              </tbody></table>
+            </article>
+            <article class="panel mini-bars"><h2 class="section-title">Прибыль в час</h2>
+              <div class="bar-row"><div class="bar-meta"><span>Укрепление</span><span>229 MDL</span></div><div class="track"><div class="fill" style="width:88%"></div></div></div>
+              <div class="bar-row"><div class="bar-meta"><span>Гель-лак</span><span>217 MDL</span></div><div class="track"><div class="fill sage" style="width:82%"></div></div></div>
+              <div class="bar-row"><div class="bar-meta"><span>Сложный дизайн</span><span>190 MDL</span></div><div class="track"><div class="fill orange" style="width:72%"></div></div></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="service">
+          <div class="eyebrow">УСЛУГИ / АКТИВНА</div><h1>Маникюр + гель-лак</h1><p class="lead">Изменения применяются к новым визитам. История завершённых визитов не пересчитывается.</p>
+          <div class="service-layout">
+            <article class="panel form-panel">
+              <div class="fields"><label>Название<input value="Маникюр + гель-лак"></label><label>Цена, MDL<input value="600"></label><label>Длительность<input value="1 ч 30 мин"></label></div>
+              <div class="recipe-head"><h2>Рецептура</h2><button class="secondary">+ Материал</button></div>
+              <table class="recipe-table"><thead><tr><th>Материал</th><th>Норма</th><th style="text-align:right">Стоимость</th></tr></thead><tbody>
+                <tr><td>Rubber Base<small>280 MDL · 15 ml</small></td><td>0.45 ml</td><td class="num">8.40</td></tr>
+                <tr><td>Top No Wipe<small>250 MDL · 15 ml</small></td><td>0.35 ml</td><td class="num">5.83</td></tr>
+                <tr><td>Гель-лак<small>190 MDL · 10 ml</small></td><td>0.50 ml</td><td class="num">9.50</td></tr>
+                <tr><td>Одноразовый набор<small>Пилка, перчатки, салфетки</small></td><td>1 шт</td><td class="num">11.27</td></tr>
+              </tbody></table>
+            </article>
+            <aside class="panel sticky-result"><div class="panel-kicker">ОСТАНЕТСЯ ВАМ</div><div class="big-number">325 <small style="font-size:.45em">MDL</small></div><div class="big-caption">54.17% · 216.67 MDL/час</div>
+              <div class="formula"><div class="formula-row"><span>Цена</span><b>600</b></div><div class="formula-row"><span>Материалы</span><b>−35</b></div><div class="formula-row"><span>Комиссия 40%</span><b>−240</b></div><div class="formula-row total"><span>Останется вам</span><b>325</b></div></div>
+              <div class="complete">✓ Расчёт точный. Все обязательные данные заполнены.</div><button class="primary full-btn">Сохранить новую версию</button>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page" id="visit">
+          <div class="eyebrow">MOBILE-FIRST FLOW</div><h1>Завершение визита без лишнего учёта</h1><p class="lead">Мастер подтверждает нормативный расход одним действием и меняет только реальные отклонения.</p>
+          <div class="mobile-stage"><div class="flow-copy">
+            <h2>Стандартный визит — до 60 секунд</h2>
+            <div class="step"><span class="step-num">01</span><div><b>Открыть текущего клиента</b><p>Услуга и дизайн уже заполнены из записи.</p></div></div>
+            <div class="step"><span class="step-num">02</span><div><b>Подтвердить расход</b><p>Primary action «Всё по норме». Корректируются только исключения.</p></div></div>
+            <div class="step"><span class="step-num">03</span><div><b>Увидеть результат</b><p>После сохранения система сообщает, сколько осталось с визита.</p></div></div>
+          </div><div class="phone"><div class="phone-top"><span class="notch"></span></div><div class="phone-content"><div class="visit-time">СЕЙЧАС · 11:00–12:30</div><h2>Мария Попеску</h2><div class="visit-card"><div class="client-row"><div><b>Маникюр + гель-лак</b><div style="color:var(--muted);font-size:12px">Миндаль · короткие · 2 цвета</div></div><strong>600 MDL</strong></div><div class="design-box">Референс и фото клиента доступны в профиле</div></div><div class="sheet"><div class="panel-kicker">ФАКТИЧЕСКИЙ РАСХОД</div><h3 style="margin:7px 0 4px">Всё использовано по норме?</h3><p style="color:var(--muted);font-size:13px">Материалы 35 MDL · комиссия 240 MDL</p><div class="choice"><span>Rubber Base</span><strong>0.45 ml</strong></div><div class="choice"><span>Top No Wipe</span><strong>0.35 ml</strong></div><div class="choice"><span>Одноразовый набор</span><strong>1 шт</strong></div><button class="primary">Всё по норме · завершить</button></div></div></div></div>
+        </section>
+
+        <section class="page" id="system">
+          <div class="eyebrow">STUDIO LEDGER</div><h1>Тёплая студия. Точные цифры.</h1><p class="lead">Система избегает и pink beauty cliché, и холодного fintech. Цвет действия отделён от цвета финансового результата.</p>
+          <div class="tokens"><div class="swatch s1"><b>Ink</b><span>#241E26</span></div><div class="swatch s2"><b>Canvas</b><span>#F7F3ED</span></div><div class="swatch s3"><b>Action</b><span>#D75B45</span></div><div class="swatch s4"><b>Profit</b><span>#2F7552</span></div></div>
+          <article class="panel type-show"><div class="panel-kicker">TYPOGRAPHY</div><div class="display-sample">Вы знаете цену. Увидьте, что останется вам.</div><p class="body-sample">Instrument Sans обслуживает интерфейс и длинные тексты на русском, румынском и английском. Fraunces появляется только там, где продукт формулирует главный вывод.</p><div class="data-sample">325.00 MDL · 54.17%</div></article>
+        </section>
+      </div>
+    </main>
+  </div>
+  <nav class="mobile-nav" aria-label="Мобильная навигация"><button class="active" data-page="overview">Обзор</button><button data-page="service">Услуги</button><button data-page="visit">Сегодня</button><button>Клиенты</button><button data-page="system">Ещё</button></nav>
+  <script>
+    const names={overview:'Обзор прибыли',service:'Маникюр + гель-лак',visit:'Завершение визита',system:'Design system'};
+    document.querySelectorAll('[data-page]').forEach(button=>button.addEventListener('click',()=>{
+      const id=button.dataset.page;
+      document.querySelectorAll('.page').forEach(page=>page.classList.toggle('active',page.id===id));
+      document.querySelectorAll('.sidebar [data-page]').forEach(item=>item.classList.toggle('active',item.dataset.page===id));
+      document.querySelectorAll('.mobile-nav [data-page]').forEach(item=>item.classList.toggle('active',item.dataset.page===id));
+      document.getElementById('crumb').textContent=names[id];
+      window.scrollTo({top:0,behavior:'smooth'});
+    }));
+    document.getElementById('theme').addEventListener('click',()=>document.body.classList.toggle('dark'));
+  </script>
+</body>
+</html>
