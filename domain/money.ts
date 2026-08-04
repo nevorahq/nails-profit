@@ -12,6 +12,23 @@ export function money(amountMinor: number, currency: Currency): Money {
   return { amountMinor, currency };
 }
 
+/**
+ * Wire format from spec section 12.1: `{ "amount": 12550, "currency": "MDL" }`.
+ * `amount` stays in minor units — the client divides for display, so no float
+ * ever crosses the boundary.
+ */
+export type MoneyJson = {
+  amount: number;
+  currency: Currency;
+};
+
+export function toMoneyJson(amountMinor: number, currency: Currency): MoneyJson {
+  if (!Number.isSafeInteger(amountMinor)) {
+    throw new RangeError("Money must be a safe integer in minor units");
+  }
+  return { amount: amountMinor, currency };
+}
+
 export function formatMoney(value: Money, locale = "ru-MD") {
   return new Intl.NumberFormat(locale, {
     style: "currency",

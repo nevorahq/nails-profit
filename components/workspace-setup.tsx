@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { getErrorMessage } from "@/i18n/messages";
+
 export function WorkspaceSetup({ name }: { name: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -25,8 +27,13 @@ export function WorkspaceSetup({ name }: { name: string }) {
     });
 
     if (!response.ok) {
-      const payload = await response.json();
-      setError(payload.error?.message ?? "Не удалось создать пространство");
+      const payload = await response.json().catch(() => null);
+      const code = payload?.error?.code;
+      setError(
+        code
+          ? getErrorMessage(code, payload.error.message ?? "Не удалось создать пространство")
+          : "Не удалось создать пространство",
+      );
       setPending(false);
       return;
     }

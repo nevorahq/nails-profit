@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { roundRatio } from "@/domain/money";
+import { roundRatio, toMoneyJson } from "@/domain/money";
+
+describe("toMoneyJson", () => {
+  it("serialises minor units without converting to a float", () => {
+    expect(toMoneyJson(12_550, "MDL")).toEqual({ amount: 12_550, currency: "MDL" });
+    expect(toMoneyJson(-7_000, "EUR")).toEqual({ amount: -7_000, currency: "EUR" });
+  });
+
+  it("refuses a non-integer amount", () => {
+    expect(() => toMoneyJson(125.5, "MDL")).toThrow(RangeError);
+  });
+});
 
 describe("roundRatio", () => {
   it("rounds a loss to the same magnitude as the equivalent gain", () => {

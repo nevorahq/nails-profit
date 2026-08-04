@@ -1,12 +1,11 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
-import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { memberships, organizations } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { apiError, requestId } from "@/lib/http";
+import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 
 const createOrganizationSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -39,7 +38,7 @@ export async function GET(request: Request) {
     .where(eq(memberships.userId, session.user.id))
     .orderBy(asc(memberships.createdAt), asc(memberships.id));
 
-  return NextResponse.json({ data: rows, requestId: id }, { headers: { "x-request-id": id } });
+  return apiSuccess(rows, id);
 }
 
 export async function POST(request: Request) {
@@ -50,10 +49,9 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = createOrganizationSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", issues: parsed.error.issues }, requestId: id },
-      { status: 422, headers: { "x-request-id": id } },
-    );
+    return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
+      fieldErrors: toFieldErrors(parsed.error.issues),
+    });
   }
 
   const organization = await db.transaction(async (tx) => {
@@ -95,8 +93,5 @@ export async function POST(request: Request) {
     return apiError(409, "MEMBERSHIP_EXISTS", "User already belongs to an organization", id);
   }
 
-  return NextResponse.json(
-    { data: organization, requestId: id },
-    { status: 201, headers: { "x-request-id": id } },
-  );
+  return apiSuccess(organization, id, 201);
 }
