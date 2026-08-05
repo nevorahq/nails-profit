@@ -28,6 +28,7 @@ type Fixture = Readonly<{
   visitId: string;
   addOnId: string;
   locationId: string;
+  bookingId: string;
   otherOrganization: Readonly<{ owner: Actor; serviceId: string; specialistId: string }>;
 }>;
 
@@ -528,6 +529,64 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/bookings/[id]",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read; an Analyst opens the card without the client's phone or email",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}` }),
+  },
+  {
+    route: "/api/v1/bookings/[id]",
+    method: "PATCH",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; an Analyst reads only",
+    request: async (fixture) => ({
+      path: `/api/v1/bookings/${fixture.bookingId}`,
+      body: { client_id: fixture.clientId, version: 1 },
+    }),
+  },
+  {
+    route: "/api/v1/bookings/[id]/confirm",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; already confirmed is a 409, never a 403",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/confirm`, body: {} }),
+  },
+  {
+    route: "/api/v1/bookings/[id]/reschedule",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; a Master moves their own appointments",
+    request: async (fixture) => ({
+      path: `/api/v1/bookings/${fixture.bookingId}/reschedule`,
+      body: { starts_at: "2026-09-09T07:00:00.000Z", version: 1 },
+    }),
+  },
+  {
+    route: "/api/v1/bookings/[id]/cancel",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; the reason is a code, so no PII reaches the column",
+    request: async (fixture) => ({
+      path: `/api/v1/bookings/${fixture.bookingId}/cancel`,
+      body: { reason: "duplicate" },
+    }),
+  },
+  {
+    route: "/api/v1/bookings/[id]/no-show",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; recorded, never charged for",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/no-show`, body: {} }),
+  },
+  {
+    route: "/api/v1/bookings/[id]/complete",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; closing into a visit is the same right as recording one",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/complete`, body: {} }),
+  },
+  {
     route: "/api/v1/imports/templates/[entity]",
     method: "GET",
     allowed: ALL_ROLES,
@@ -590,6 +649,25 @@ describe("RBAC and tenant isolation", () => {
       await studio.owner.post("/api/v1/locations", { name: "Главный зал", slug: "matrix-studio" }),
     ).id;
 
+    // The lifecycle endpoints need something to act on. It belongs to the
+    // Master's own specialist, so a 403 from those rows means the role was
+    // refused rather than merely out of scope.
+    await studio.owner.put(`/api/v1/specialists/${studio.specialistId}/locations`, {
+      location_ids: [locationId],
+    });
+    const bookingId = dataOf<{ id: string }>(
+      await studio.owner.post(
+        "/api/v1/bookings",
+        {
+          location_id: locationId,
+          specialist_id: studio.specialistId,
+          service_id: studio.serviceId,
+          starts_at: "2026-09-02T07:00:00.000Z",
+        },
+        { "idempotency-key": `matrix-${crypto.randomUUID()}` },
+      ),
+    ).id;
+
     const otherOwner = await (await import("../helpers/studio")).createCanonicalStudio(
       "other-owner@studio.example",
       "Other Studio",
@@ -602,6 +680,7 @@ describe("RBAC and tenant isolation", () => {
       visitId,
       addOnId,
       locationId,
+      bookingId,
       otherOrganization: {
         owner: otherOwner.owner,
         serviceId: otherOwner.serviceId,
@@ -720,6 +799,25 @@ describe("RBAC and tenant isolation", () => {
         label: "visit adjustment",
         path: (f) => `/api/v1/visits/${f.visitId}/adjust`,
         body: { actual_duration_minutes: 90 },
+      },
+      {
+        method: "GET",
+        // The card carries the client's name, phone and email; a leak here is
+        // a leak of the studio's client list, not merely of a timetable.
+        label: "booking card",
+        path: (f) => `/api/v1/bookings/${f.bookingId}`,
+      },
+      {
+        method: "POST",
+        label: "booking cancellation",
+        path: (f) => `/api/v1/bookings/${f.bookingId}/cancel`,
+        body: { reason: "duplicate" },
+      },
+      {
+        method: "POST",
+        label: "booking reschedule",
+        path: (f) => `/api/v1/bookings/${f.bookingId}/reschedule`,
+        body: { starts_at: "2026-09-16T07:00:00.000Z", version: 1 },
       },
       { method: "GET", label: "import job", path: async (f) => `/api/v1/imports/${await freshImportJob(f)}` },
       {

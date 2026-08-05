@@ -19,6 +19,8 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 | Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check that `ops:booking-maintenance` is running each minute |
 | Booking slot conflicts | 10 minutes | ≥10 `booking.slot_conflict` | ≥50 | Normal under load; a spike with no traffic means stale availability |
 | Exclusion violations | 1 hour | ≥1 `booking.exclusion_violation` | ≥5 | The application check was bypassed or raced — investigate before the next release |
+| Unanswered requests | 1 hour | ≥5 cancelled as `confirmation_expired` | ≥20 | The studio is not seeing its pending requests, or the confirmation TTL is too short |
+| Duplicate completion attempts | 1 hour | ≥1 `BOOKING_ALREADY_COMPLETED` | ≥5 | Two people closed one appointment; the unique index held, but the calendar is showing stale state |
 | Backup age | 24 hours | >26 hours | >48 hours | Run backup and validate storage lifecycle |
 | Restore drill | Per schema release/monthly | Not run in 31 days | Last drill failed | Block release until a passing drill |
 
@@ -26,7 +28,8 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 
 - `request.error` from `instrumentation.ts`;
 - `rate_limit.exceeded` from API rate limiting;
-- `booking.slot_conflict` and `booking.exclusion_violation` from booking creation;
+- `booking.slot_conflict` and `booking.exclusion_violation` from booking creation and rescheduling;
+- `booking.confirmed`, `booking.cancelled`, `booking.no_show` and `booking.completed` from the lifecycle endpoints, which carry the booking id and nothing about the client;
 - `booking.maintenance_completed` from the hold sweep, which must appear every minute;
 - `health.database_failed` from the public health check;
 - audit events in PostgreSQL for export, deletion, invitations and financial changes.

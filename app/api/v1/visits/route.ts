@@ -1,21 +1,13 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  consumptions,
-  financialSnapshots,
-  specialists,
-  visitLines,
-  visits,
-} from "@/db/schema";
+import { financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { toMilliUnits } from "@/domain/units";
-import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
-import { recordPilotProductEvent } from "@/lib/pilot-events";
-import { buildVisitDraft, recalculateVisitProfit, writeFinancialSnapshot } from "@/lib/visit-service";
+import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 
 /**
  * Manually recorded completed visits, roadmap phase 3.
@@ -157,133 +149,32 @@ export async function POST(request: Request) {
         .from(specialists)
         .where(eq(specialists.userId, actor.userId))
         .limit(1);
-      if (!own || own.id !== parsed.data.specialist_id) return { failure: "FORBIDDEN_SPECIALIST" as const };
+      if (!own || own.id !== parsed.data.specialist_id) return { ok: false as const, failure: "forbidden" as const };
     }
 
-    const draft = await buildVisitDraft(tx, {
+    return recordCompletedVisit(tx, {
+      organizationId: actor.organizationId,
+      actor: { userId: actor.userId, role: actor.role },
       serviceId: parsed.data.service_id,
-      addOnIds: parsed.data.add_on_ids,
       specialistId: parsed.data.specialist_id,
-      at: completedAt,
-    });
-    if (!draft) return { failure: "SERVICE_NOT_FOUND" as const };
-    if (!draft.commission) return { failure: "MISSING_COMMISSION_RULE" as const };
-    if (draft.plannedDurationMinutes <= 0) return { failure: "MISSING_DURATION" as const };
-
-    const [visit] = await tx
-      .insert(visits)
-      .values({
-        organizationId: actor.organizationId,
-        clientId: parsed.data.client_id ?? null,
-        specialistId: parsed.data.specialist_id,
-        serviceId: parsed.data.service_id,
-        completedAt,
-        plannedDurationMinutes: draft.plannedDurationMinutes,
-        actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,
-        commissionType: draft.commission.type,
-        commissionBasisPoints: draft.commission.basisPoints,
-        commissionFixedAmountMinor: draft.commission.fixedAmountMinor,
-        createdBy: actor.userId,
-        updatedBy: actor.userId,
-      })
-      .returning();
-
-    await tx.insert(visitLines).values(
-      draft.lines.map((line) => ({
-        organizationId: actor.organizationId,
-        visitId: visit.id,
-        kind: line.kind,
-        serviceId: line.serviceId,
-        addOnId: line.addOnId,
-        nameSnapshot: line.nameSnapshot,
-        priceMinor: line.priceMinor,
-        discountMinor: line.discountMinor,
-        durationMinutes: line.durationMinutes,
-        createdBy: actor.userId,
-        updatedBy: actor.userId,
+      clientId: parsed.data.client_id ?? null,
+      addOnIds: parsed.data.add_on_ids,
+      completedAt,
+      actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,
+      consumption: parsed.data.consumption.map((entry) => ({
+        materialId: entry.material_id,
+        actualQuantityMilliUnits: toMilliUnits(entry.actual_quantity),
       })),
-    );
-
-    const actualByMaterial = new Map(
-      parsed.data.consumption.map((entry) => [entry.material_id, toMilliUnits(entry.actual_quantity)]),
-    );
-
-    if (draft.consumptions.length > 0) {
-      await tx.insert(consumptions).values(
-        draft.consumptions.map((line) => ({
-          organizationId: actor.organizationId,
-          visitId: visit.id,
-          materialId: line.materialId,
-          materialNameSnapshot: line.materialNameSnapshot,
-          baseUnitSnapshot: line.baseUnitSnapshot,
-          normativeQuantityMilliUnits: line.normativeQuantityMilliUnits,
-          actualQuantityMilliUnits: actualByMaterial.get(line.materialId) ?? null,
-          packagePriceMinorSnapshot: line.packagePriceMinorSnapshot,
-          packageSizeMilliUnitsSnapshot: line.packageSizeMilliUnitsSnapshot,
-          createdBy: actor.userId,
-          updatedBy: actor.userId,
-        })),
-      );
-    }
-
-    const recalculated = await recalculateVisitProfit(tx, visit.id);
-    const snapshot = await writeFinancialSnapshot(tx, {
-      organizationId: actor.organizationId,
-      visitId: visit.id,
-      profit: recalculated!.profit,
-      currency: draft.currency,
-      actorUserId: actor.userId,
-    });
-
-    await recordAuditEvent(tx, {
-      organizationId: actor.organizationId,
-      actorUserId: actor.userId,
-      eventType: "visit.completed",
-      entityType: "visit",
-      entityId: visit.id,
-      after: { revenue_minor: snapshot.revenueMinor, snapshot_version: snapshot.snapshotVersion },
       requestId: id,
     });
-
-    await recordPilotProductEvent(tx, {
-      organizationId: actor.organizationId,
-      eventName: "visit_completed",
-      actorUserId: actor.userId,
-      actorRole: actor.role,
-      source: "api",
-      entityType: "visit",
-      entityId: visit.id,
-      metadata: { complete_margin: snapshot.incompleteReasons.length === 0 },
-    });
-
-    // This mirrors `loadOnboarding`: the guided workflow is complete after the
-    // first financial snapshot. Whether its margin is complete remains visible
-    // in the visit event and is a separate Gate 6 financial-quality criterion.
-    await recordPilotProductEvent(tx, {
-      organizationId: actor.organizationId,
-      eventName: "onboarding_completed",
-      actorUserId: actor.userId,
-      actorRole: actor.role,
-      source: "api",
-      entityType: "organization",
-      entityId: actor.organizationId,
-    });
-
-    return { visit, snapshot };
   });
 
-  if ("failure" in result) {
-    switch (result.failure) {
-      case "SERVICE_NOT_FOUND":
-        return apiError(404, "SERVICE_NOT_FOUND", "No service with this ID", id);
-      case "MISSING_COMMISSION_RULE":
-        // Refusing beats recording a visit whose commission would read as zero.
-        return apiError(422, "MISSING_COMMISSION_RULE", "The specialist has no commission rule", id);
-      case "MISSING_DURATION":
-        return apiError(422, "MISSING_DURATION", "The service has no duration", id);
-      case "FORBIDDEN_SPECIALIST":
-        return apiError(403, "FORBIDDEN", "This role may only record its own visits", id);
+  if (!result.ok) {
+    if (result.failure === "forbidden") {
+      return apiError(403, "FORBIDDEN", "This role may only record its own visits", id);
     }
+    const refusal = VISIT_FAILURES[result.failure];
+    return apiError(refusal.status, refusal.code, refusal.message, id);
   }
 
   return apiSuccess(

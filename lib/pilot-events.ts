@@ -12,7 +12,21 @@ export type PilotEventName =
   | "visit_completed"
   | "import_started"
   | "import_completed"
-  | "import_failed";
+  | "import_failed"
+  /**
+   * The booking funnel, roadmap section 7.10. Deduplicated by booking id like
+   * every other event here, so each answers whether something happened to an
+   * appointment rather than how many times: an appointment moved twice counts
+   * once as `booking_rescheduled`. How often is a question for the audit trail,
+   * which records every move; the funnel is about how many bookings reach each
+   * stage.
+   */
+  | "booking_started"
+  | "booking_confirmed"
+  | "booking_rescheduled"
+  | "booking_cancelled"
+  | "booking_no_show"
+  | "booking_completed";
 
 type ProductEventInput = Readonly<{
   organizationId: string;

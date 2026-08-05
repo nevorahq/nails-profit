@@ -538,6 +538,13 @@ export const visits = pgTable(
   (table) => [
     index("visit_org_completed_idx").on(table.organizationId, table.completedAt),
     index("visit_specialist_idx").on(table.specialistId, table.completedAt),
+    // Gate 7: "перенос, отмена и завершение оставляют audit trail и не создают
+    // дубли". Closing a booking twice would double its revenue in every report,
+    // and the application check that prevents it is one retry away from being
+    // raced. Partial, because visits recorded by hand have no booking at all.
+    uniqueIndex("visit_booking_idx")
+      .on(table.bookingId)
+      .where(sql`${table.bookingId} is not null`),
     check("visit_planned_duration_positive", sql`${table.plannedDurationMinutes} > 0`),
     check(
       "visit_commission_shape",

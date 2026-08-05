@@ -1,9 +1,9 @@
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { z } from "zod";
 
-import { bookingLines, bookings, specialists } from "@/db/schema";
+import { bookingLines, bookingStatus, bookings } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, scopeFor } from "@/domain/rbac";
+import { can } from "@/domain/rbac";
 import { toZonedParts } from "@/domain/timezone";
 import {
   alternativeSlots,
@@ -13,12 +13,15 @@ import {
   loadSlotContext,
 } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
-import { createBooking } from "@/lib/booking-service";
+import { mayActOnSpecialist, scopedSpecialistId } from "@/lib/booking-access";
+import { bookingPayload } from "@/lib/booking-http";
+import { bookingLinesOf, createBooking, type BookingStatus } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { logEvent } from "@/lib/logger";
 import { getActiveMembership } from "@/lib/membership";
+import { recordPilotProductEvent } from "@/lib/pilot-events";
 
 /**
  * Bookings taken by staff, roadmap sections 7.2 and 7.6.
@@ -61,20 +64,21 @@ export async function GET(request: Request) {
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const requestedSpecialist = url.searchParams.get("specialist_id");
-  const status = url.searchParams.get("status");
+  const location = url.searchParams.get("location_id");
+  // Section 7.2: the calendar filters by status, and usually by more than one —
+  // "everything still on" is `pending_confirmation` and `confirmed` together.
+  // Unknown values are dropped rather than refused, so a stale bookmark shows
+  // the calendar instead of an error.
+  const statuses = (url.searchParams.get("status")?.split(",") ?? [])
+    .map((value) => value.trim())
+    .filter((value): value is BookingStatus =>
+      (bookingStatus.enumValues as readonly string[]).includes(value),
+    );
 
   const rows = await withTenant(actor.organizationId, async (tx) => {
     // Section 6.1: a Master sees their own calendar, resolved from the linked
     // specialist row rather than from a query parameter the caller controls.
-    let ownSpecialistId: string | null = null;
-    if (scopeFor(actor.role, "bookings") === "own") {
-      const [own] = await tx
-        .select({ id: specialists.id })
-        .from(specialists)
-        .where(eq(specialists.userId, actor.userId))
-        .limit(1);
-      ownSpecialistId = own?.id ?? "00000000-0000-0000-0000-000000000000";
-    }
+    const ownSpecialistId = await scopedSpecialistId(tx, actor);
 
     const conditions = [
       from ? gte(bookings.startsAt, new Date(from)) : undefined,
@@ -84,7 +88,8 @@ export async function GET(request: Request) {
         : requestedSpecialist
           ? eq(bookings.specialistId, requestedSpecialist)
           : undefined,
-      status ? inArray(bookings.status, [status as "confirmed"]) : undefined,
+      location ? eq(bookings.locationId, location) : undefined,
+      statuses.length > 0 ? inArray(bookings.status, statuses) : undefined,
     ].filter(Boolean);
 
     const found = await tx
@@ -110,27 +115,12 @@ export async function GET(request: Request) {
   });
 
   return apiSuccess(
-    rows.found.map((booking) => ({
-      id: booking.id,
-      location_id: booking.locationId,
-      specialist_id: booking.specialistId,
-      workplace_id: booking.workplaceId,
-      client_id: booking.clientId,
-      starts_at: booking.startsAt,
-      ends_at: booking.endsAt,
-      status: booking.status,
-      source: booking.source,
-      confirmation_due_at: booking.confirmationDueAt,
-      version: booking.version,
-      lines: rows.lines
-        .filter((line) => line.bookingId === booking.id)
-        .map((line) => ({
-          kind: line.kind,
-          name: line.nameSnapshot,
-          price_minor: line.priceMinor,
-          duration_minutes: line.durationMinutes,
-        })),
-    })),
+    rows.found.map((booking) =>
+      bookingPayload(
+        booking,
+        rows.lines.filter((line) => line.bookingId === booking.id),
+      ),
+    ),
     id,
   );
 }
@@ -180,15 +170,8 @@ export async function POST(request: Request) {
       if (claim.status === "conflict") return { failure: "IDEMPOTENCY_CONFLICT" as const };
       if (claim.status === "replay") return { replay: claim.bookingId };
 
-      if (scopeFor(actor.role, "bookings") === "own") {
-        const [own] = await tx
-          .select({ id: specialists.id })
-          .from(specialists)
-          .where(eq(specialists.userId, actor.userId))
-          .limit(1);
-        if (!own || own.id !== parsed.data.specialist_id) {
-          return { failure: "FORBIDDEN_SPECIALIST" as const };
-        }
+      if (!(await mayActOnSpecialist(tx, actor, parsed.data.specialist_id))) {
+        return { failure: "FORBIDDEN_SPECIALIST" as const };
       }
 
       const context = await loadSlotContext(tx, parsed.data.location_id);
@@ -263,7 +246,29 @@ export async function POST(request: Request) {
         requestId: id,
       });
 
-      return { bookingId: created.bookingId, status: created.status, interval, price: draft.priceMinor };
+      await recordPilotProductEvent(tx, {
+        organizationId: actor.organizationId,
+        eventName: "booking_started",
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        source: "api",
+        entityType: "booking",
+        entityId: created.bookingId,
+      });
+      if (created.status === "confirmed") {
+        await recordPilotProductEvent(tx, {
+          organizationId: actor.organizationId,
+          eventName: "booking_confirmed",
+          actorUserId: actor.userId,
+          actorRole: actor.role,
+          source: "api",
+          entityType: "booking",
+          entityId: created.bookingId,
+        });
+      }
+
+      const [booking] = await tx.select().from(bookings).where(eq(bookings.id, created.bookingId)).limit(1);
+      return { booking, lines: await bookingLinesOf(tx, created.bookingId) };
     });
 
     if ("replay" in outcome) {
@@ -304,17 +309,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return apiSuccess(
-      {
-        id: outcome.bookingId,
-        status: outcome.status,
-        starts_at: outcome.interval.start,
-        ends_at: outcome.interval.end,
-        price_minor: outcome.price,
-      },
-      id,
-      201,
-    );
+    return apiSuccess(bookingPayload(outcome.booking, outcome.lines), id, 201);
   } catch (error) {
     // The exclusion constraint fired: two transactions got past the same check
     // at the same instant. The client sees what it would have seen anyway.

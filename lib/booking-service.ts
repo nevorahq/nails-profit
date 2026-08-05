@@ -96,6 +96,8 @@ export type ConflictQuery = Readonly<{
   interval: Interval;
   /** The hold being converted, which must not be treated as its own conflict. */
   ignoreHoldId?: string | null;
+  /** The booking being moved, which must not collide with where it already is. */
+  ignoreBookingId?: string | null;
   now: Date;
 }>;
 
@@ -122,6 +124,7 @@ export async function findConflict(
         query.workplaceId
           ? or(eq(bookings.specialistId, query.specialistId), eq(bookings.workplaceId, query.workplaceId))
           : eq(bookings.specialistId, query.specialistId),
+        query.ignoreBookingId ? ne(bookings.id, query.ignoreBookingId) : undefined,
       ),
     )
     .limit(1);
@@ -353,6 +356,221 @@ export async function activeBookingIntervals(
     );
 
   return rows.map((row) => ({ start: row.start, end: row.end }));
+}
+
+/* --- The lifecycle a booking moves through, roadmap sections 7.2 and 7.6 --- */
+
+export type BookingStatus = (typeof bookings.$inferSelect)["status"];
+export type BookingRow = typeof bookings.$inferSelect;
+
+/**
+ * Which status may follow which.
+ *
+ * Written out rather than derived, because the interesting entries are the
+ * empty ones: `cancelled`, `completed` and `no_show` are terminal, and a
+ * booking that could leave one would let a cancellation be undone by a request
+ * arriving late — the client has already been told it is off.
+ *
+ * `completed` and `no_show` are reachable only from `confirmed`. Marking a
+ * no-show on a request the studio never answered records the client's failure
+ * to attend something that was never arranged.
+ */
+export const BOOKING_TRANSITIONS: Readonly<Record<BookingStatus, readonly BookingStatus[]>> = {
+  pending_confirmation: ["confirmed", "cancelled"],
+  confirmed: ["cancelled", "completed", "no_show"],
+  cancelled: [],
+  completed: [],
+  no_show: [],
+};
+
+/** The statuses a booking may still be moved to another time from. */
+export const RESCHEDULABLE_STATUSES: readonly BookingStatus[] = ["pending_confirmation", "confirmed"];
+
+/**
+ * Why an appointment was called off, as codes rather than free text.
+ *
+ * Section 7.9 keeps PII out of booking columns, and a free-text reason typed
+ * while on the phone with a client is exactly where a phone number or a medical
+ * detail ends up. `confirmation_expired` is missing on purpose: only the repair
+ * job writes it, and a member of staff choosing it would be recording something
+ * that did not happen.
+ */
+export const STAFF_CANCELLATION_REASONS = [
+  "client_request",
+  "studio_request",
+  "no_contact",
+  "duplicate",
+  "other",
+] as const;
+
+export function canTransition(from: BookingStatus, to: BookingStatus): boolean {
+  return BOOKING_TRANSITIONS[from].includes(to);
+}
+
+export async function loadBooking(tx: TenantTransaction, bookingId: string): Promise<BookingRow | null> {
+  const [booking] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).limit(1);
+  return booking ?? null;
+}
+
+export type MutationFailure =
+  | Readonly<{ ok: false; failure: "not_found" }>
+  | Readonly<{ ok: false; failure: "version_conflict"; current: number }>
+  | Readonly<{ ok: false; failure: "illegal_transition"; from: BookingStatus }>
+  | Readonly<{ ok: false; failure: "conflict"; conflict: BookingConflict }>;
+
+export type TransitionInput = Readonly<{
+  bookingId: string;
+  to: BookingStatus;
+  expectedVersion?: number | null;
+  /** Who ended it, for a cancellation. The schema refuses one without the other. */
+  actor?: "client" | "staff" | "system";
+  /** A short code, never free text: section 7.9 keeps PII out of this column. */
+  reason?: string | null;
+  actorUserId: string | null;
+  now: Date;
+}>;
+
+/**
+ * Moves a booking to its next status, or explains why it cannot go there.
+ *
+ * The version is matched in the `WHERE` clause rather than compared after a
+ * read: two staff members answering the same pending request at the same moment
+ * both read version 1, and only the row that the update actually matched may
+ * claim to have changed anything.
+ */
+export async function transitionBooking(
+  tx: TenantTransaction,
+  input: TransitionInput,
+): Promise<Readonly<{ ok: true; booking: BookingRow }> | MutationFailure> {
+  const booking = await loadBooking(tx, input.bookingId);
+  if (!booking) return { ok: false, failure: "not_found" };
+
+  if (input.expectedVersion != null && booking.version !== input.expectedVersion) {
+    return { ok: false, failure: "version_conflict", current: booking.version };
+  }
+  if (!canTransition(booking.status, input.to)) {
+    return { ok: false, failure: "illegal_transition", from: booking.status };
+  }
+
+  const cancelling = input.to === "cancelled";
+  const [updated] = await tx
+    .update(bookings)
+    .set({
+      status: input.to,
+      confirmedAt: input.to === "confirmed" ? input.now : booking.confirmedAt,
+      // A confirmed booking has nothing left to answer; leaving the deadline
+      // behind would make the repair job cancel an appointment that is on.
+      confirmationDueAt: input.to === "confirmed" ? null : booking.confirmationDueAt,
+      completedAt: input.to === "completed" ? input.now : booking.completedAt,
+      cancelledAt: cancelling ? input.now : null,
+      cancelledBy: cancelling ? (input.actor ?? "staff") : null,
+      cancellationReason: cancelling ? (input.reason ?? null) : null,
+      updatedAt: input.now,
+      updatedBy: input.actorUserId,
+      version: booking.version + 1,
+    })
+    .where(and(eq(bookings.id, booking.id), eq(bookings.version, booking.version)))
+    .returning();
+
+  if (!updated) return { ok: false, failure: "version_conflict", current: booking.version };
+  return { ok: true, booking: updated };
+}
+
+export type RescheduleInput = Readonly<{
+  organizationId: string;
+  bookingId: string;
+  interval: Interval;
+  /** Moving the appointment to a colleague is a reschedule too. */
+  specialistId?: string | null;
+  workplaceId?: string | null;
+  expectedVersion?: number | null;
+  actorUserId: string | null;
+  now: Date;
+}>;
+
+/**
+ * Moves a booking to another time, under the same protection as creating one.
+ *
+ * The lock is taken on the destination day and the check ignores the booking
+ * being moved: an appointment cannot conflict with where it already is, and
+ * without that exception every same-day reschedule would refuse itself.
+ */
+export async function rescheduleBooking(
+  tx: TenantTransaction,
+  input: RescheduleInput,
+): Promise<Readonly<{ ok: true; booking: BookingRow; previous: Interval }> | MutationFailure> {
+  const booking = await loadBooking(tx, input.bookingId);
+  if (!booking) return { ok: false, failure: "not_found" };
+
+  if (input.expectedVersion != null && booking.version !== input.expectedVersion) {
+    return { ok: false, failure: "version_conflict", current: booking.version };
+  }
+  if (!RESCHEDULABLE_STATUSES.includes(booking.status)) {
+    return { ok: false, failure: "illegal_transition", from: booking.status };
+  }
+
+  const specialistId = input.specialistId ?? booking.specialistId;
+  const workplaceId = input.workplaceId === undefined ? booking.workplaceId : input.workplaceId;
+
+  // Where it is now and where it is going: both have to be held, because the
+  // slot being vacated becomes bookable the moment this commits. Deduplicated
+  // and sorted, so two reschedules trading a pair of days cannot deadlock by
+  // taking the same two locks in opposite orders.
+  const toLock = [
+    { specialistId: booking.specialistId, at: booking.startsAt },
+    { specialistId, at: input.interval.start },
+  ]
+    .map((target) => ({ ...target, key: `${target.specialistId}:${target.at.toISOString().slice(0, 10)}` }))
+    .filter((target, index, all) => all.findIndex((other) => other.key === target.key) === index)
+    .sort((left, right) => left.key.localeCompare(right.key));
+
+  for (const target of toLock) {
+    await lockSpecialistDay(tx, input.organizationId, target.specialistId, target.at);
+  }
+
+  await expireStaleHolds(tx, specialistId, input.now);
+
+  const conflict = await findConflict(tx, {
+    specialistId,
+    workplaceId,
+    interval: input.interval,
+    ignoreBookingId: booking.id,
+    now: input.now,
+  });
+  if (conflict) return { ok: false, failure: "conflict", conflict };
+
+  const [updated] = await tx
+    .update(bookings)
+    .set({
+      specialistId,
+      workplaceId,
+      startsAt: input.interval.start,
+      endsAt: input.interval.end,
+      // A request that has not been answered stays unanswered at its new time,
+      // but never past the appointment it is holding.
+      confirmationDueAt:
+        booking.status === "pending_confirmation" && booking.confirmationDueAt
+          ? new Date(Math.min(booking.confirmationDueAt.getTime(), input.interval.start.getTime()))
+          : booking.confirmationDueAt,
+      updatedAt: input.now,
+      updatedBy: input.actorUserId,
+      version: booking.version + 1,
+    })
+    .where(and(eq(bookings.id, booking.id), eq(bookings.version, booking.version)))
+    .returning();
+
+  if (!updated) return { ok: false, failure: "version_conflict", current: booking.version };
+
+  return {
+    ok: true,
+    booking: updated,
+    previous: { start: booking.startsAt, end: booking.endsAt },
+  };
+}
+
+/** The lines a booking carries, for its card and for closing it into a visit. */
+export async function bookingLinesOf(tx: TenantTransaction, bookingId: string) {
+  return tx.select().from(bookingLines).where(eq(bookingLines.bookingId, bookingId));
 }
 
 /**
