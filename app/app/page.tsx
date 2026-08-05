@@ -1,5 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
@@ -35,11 +36,19 @@ export default async function AppPage() {
       </header>
       <section className="empty-state">
         <span className="step-number">01</span>
-        <h2>Добавьте первую услугу</h2>
-        <p>Следующий инкремент соединит услугу, материалы и объяснимый результат расчёта.</p>
-        <button className="primary-button" disabled>
-          Добавить услугу — скоро
-        </button>
+        <h2>Посчитайте первую услугу</h2>
+        <p>
+          Заведите материалы с закупочными ценами, затем услугу с ценой и длительностью, и укажите норму
+          расхода. Расчёт покажет, сколько остаётся после материалов и комиссии.
+        </p>
+        <div className="button-row">
+          <Link className="primary-button" href="/app/materials">
+            Материалы
+          </Link>
+          <Link className="secondary-button" href="/app/services">
+            Услуги
+          </Link>
+        </div>
       </section>
     </main>
   );

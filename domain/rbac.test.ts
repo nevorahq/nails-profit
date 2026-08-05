@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   can,
+  canManageCatalogue,
   canManageRole,
   capabilities,
   hasConstraint,
@@ -126,6 +127,18 @@ describe("rbac helpers", () => {
     for (const role of ["owner", "manager", "master"] as const) {
       expect(hasConstraint(role, "clients", "exclude_pii")).toBe(false);
     }
+  });
+
+  it("keeps a master out of the shared catalogue", () => {
+    // The matrix grants a Master materials write, but scoped to their own
+    // visits. Catalogue edits are organization-wide, so `can` alone is not
+    // enough — this is the check the write endpoints use.
+    expect(can("master", "materials", "write")).toBe(true);
+    expect(canManageCatalogue("master", "materials")).toBe(false);
+
+    expect(canManageCatalogue("owner", "materials")).toBe(true);
+    expect(canManageCatalogue("manager", "materials")).toBe(true);
+    expect(canManageCatalogue("analyst", "materials")).toBe(false);
   });
 
   it("lets a manager administer everyone except an owner", () => {

@@ -146,6 +146,17 @@ export function hasConstraint(
   return permissionFor(role, capability).constraints.includes(constraint);
 }
 
+/**
+ * True when the role may write across the whole organization, not merely its own
+ * rows. Catalogue changes need this: section 6.1 grants a Master `materials`
+ * write, but scoped to "фактическое списание по своим визитам" — recording what
+ * they used on their own visit, not editing the shared catalogue every other
+ * master calculates against. Checking `can` alone would let a Master rewrite it.
+ */
+export function canManageCatalogue(role: MemberRole, capability: Capability): boolean {
+  return can(role, capability, "write") && scopeFor(role, capability) === "all";
+}
+
 /** True when `actor` may administer a member holding `target`'s role. */
 export function canManageRole(actor: MemberRole, target: MemberRole): boolean {
   if (!can(actor, "user_management", "write")) return false;
