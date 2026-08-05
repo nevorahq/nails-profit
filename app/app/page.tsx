@@ -1,25 +1,21 @@
 import { eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
-import { AppNav } from "@/components/app-nav";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AppNav } from "@/components/app-nav";
+import { PeriodFilter } from "@/components/period-filter";
+import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
 import { memberships, organizations, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
-import { auth } from "@/lib/auth";
-import { WorkspaceSetup } from "@/components/workspace-setup";
-import { costingReasonLabels, formatBasisPoints, formatMoneyMinor } from "@/lib/format";
-import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import type { AppLocale } from "@/i18n/messages";
-
-const reasonLabels: Record<string, string> = {
-  ...costingReasonLabels,
-  missing_actual_consumption: "не записан фактический расход",
-  missing_material_price: "у материала не было цены на момент визита",
-  no_revenue: "визит без выручки",
-};
+import { getTranslator, type MessageKey } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
+import { auth } from "@/lib/auth";
+import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
+import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 
 /** DSH-009: every figure states the formula it was computed with. */
 function Metric({
@@ -63,18 +59,21 @@ export default async function AppPage({
     return <WorkspaceSetup name={session.user.name} />;
   }
 
+  const locale = membership.organization.locale as AppLocale;
+  const t = getTranslator(locale);
+
   if (!can(membership.role, "dashboard", "read")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет доступа к отчётам.</p>
+        <p className="warning-banner">{t("dashboard.noAccess")}</p>
       </main>
     );
   }
 
   const filters = await searchParams;
   const organizationId = membership.organization.id;
-  const locale = membership.organization.locale as AppLocale;
   const currency = membership.organization.currency;
+  const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
 
   const data = await withTenant(organizationId, async (tx) => {
     // Section 6.1: a Master sees "только собственные" — resolved from the
@@ -116,61 +115,42 @@ export default async function AppPage({
   const { metrics } = data;
   const period =
     filters.from || filters.to
-      ? `${filters.from ?? "начало"} — ${filters.to ?? "сегодня"}`
-      : "за всё время";
+      ? `${filters.from ?? t("filters.periodStart")} — ${filters.to ?? t("filters.periodToday")}`
+      : t("filters.allTime");
 
   return (
     <main className="app-shell">
       <header className="app-header">
         <div>
-          <span className="eyebrow">Studio Ledger · {period}</span>
+          <span className="eyebrow">
+            {t("dashboard.eyebrow")} · {period}
+          </span>
           <h1>{membership.organization.name}</h1>
         </div>
         <AppNav active="/app" locale={locale} />
       </header>
 
-      <form className="inline-form" method="get">
-        <label>
-          С
-          <input type="date" name="from" defaultValue={filters.from ?? ""} />
-        </label>
-        <label>
-          По
-          <input type="date" name="to" defaultValue={filters.to ?? ""} />
-        </label>
-        {data.canFilterBySpecialist && (
-          <label>
-            Мастер
-            <select name="specialist" defaultValue={filters.specialist ?? ""}>
-              <option value="">все</option>
-              {data.people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button className="secondary-button" type="submit">
-          Показать
-        </button>
-      </form>
+      <PeriodFilter
+        locale={locale}
+        from={filters.from}
+        to={filters.to}
+        specialistId={filters.specialist}
+        people={data.people}
+        showSpecialist={data.canFilterBySpecialist}
+      />
 
       {metrics.visits === 0 ? (
         <section className="empty-state">
           <span className="step-number">01</span>
-          <h2>Пока нет закрытых визитов</h2>
-          <p>
-            Отчёт строится из завершённых визитов. Закройте первый — и здесь появятся выручка, маржа и
-            прибыль в час.
-          </p>
+          <h2>{t("dashboard.emptyTitle")}</h2>
+          <p>{t("dashboard.emptyBody")}</p>
           <div className="button-row">
             <Link className="primary-button" href="/app/visits/new">
-              Закрыть визит
+              {t("dashboard.closeVisit")}
             </Link>
             {!data.hasSpecialists && (
               <Link className="secondary-button" href="/app/specialists">
-                Сначала добавить мастера
+                {t("dashboard.addSpecialistFirst")}
               </Link>
             )}
           </div>
@@ -180,100 +160,96 @@ export default async function AppPage({
           {metrics.incompleteVisits > 0 && (
             <div className="warning-banner">
               <strong>
-                {metrics.incompleteVisits} из {metrics.visits} визитов не посчитаны
+                {t("dashboard.incompleteTitle", {
+                  incomplete: metrics.incompleteVisits,
+                  total: metrics.visits,
+                })}
               </strong>{" "}
-              — их выручка {formatMoneyMinor(metrics.incompleteRevenueMinor, currency)} учтена, но в марже
-              они не участвуют, чтобы не занизить её.
+              {t("dashboard.incompleteBody", { revenue: money(metrics.incompleteRevenueMinor) })}
               <ul>
                 {Object.entries(metrics.incompleteReasonCounts).map(([reason, count]) => (
                   <li key={reason}>
-                    {reasonLabels[reason] ?? reason}: {count}
+                    {t(`reason.${reason}` as MessageKey)}: {count}
                   </li>
                 ))}
               </ul>
               <Link className="text-link" href="/app/visits">
-                Открыть визиты →
+                {t("dashboard.openVisits")}
               </Link>
             </div>
           )}
 
           <section className="panel insight-panel">
-            <h2>Итоги периода</h2>
+            <h2>{t("dashboard.periodTotals")}</h2>
             <div className="metric-grid">
               <Metric
-                label="Выручка"
-                value={formatMoneyMinor(metrics.revenueMinor, currency)}
-                formula={`сумма по ${metrics.visits} визитам`}
+                label={t("dashboard.revenue")}
+                value={money(metrics.revenueMinor)}
+                formula={t("dashboard.revenueFormula", { visits: metrics.visits })}
               />
               <Metric
-                label="Останется вам"
-                value={formatMoneyMinor(metrics.contributionMarginMinor, currency)}
-                formula={`выручка − материалы − комиссия, по ${metrics.costedVisits} посчитанным`}
+                label={t("dashboard.youKeep")}
+                value={money(metrics.contributionMarginMinor)}
+                formula={t("dashboard.marginFormula", { visits: metrics.costedVisits })}
                 strong
                 negative={metrics.contributionMarginMinor < 0}
               />
               <Metric
-                label="Маржа"
-                value={formatBasisPoints(metrics.marginBasisPoints)}
-                formula={`${formatMoneyMinor(metrics.contributionMarginMinor, currency)} ÷ ${formatMoneyMinor(metrics.costedRevenueMinor, currency)}`}
+                label={t("dashboard.margin")}
+                value={formatBasisPoints(metrics.marginBasisPoints, localeTag(locale))}
+                formula={`${money(metrics.contributionMarginMinor)} ÷ ${money(metrics.costedRevenueMinor)}`}
                 negative={(metrics.marginBasisPoints ?? 0) < 0}
               />
               <Metric
-                label="Прибыль в час"
-                value={
-                  metrics.profitPerHourMinor === null
-                    ? "—"
-                    : formatMoneyMinor(metrics.profitPerHourMinor, currency)
-                }
-                formula={`÷ ${Math.round(metrics.costedDurationMinutes / 60)} ч работы`}
+                label={t("dashboard.perHour")}
+                value={metrics.profitPerHourMinor === null ? "—" : money(metrics.profitPerHourMinor)}
+                formula={t("dashboard.perHourFormula", {
+                  hours: Math.round(metrics.costedDurationMinutes / 60),
+                })}
                 negative={(metrics.profitPerHourMinor ?? 0) < 0}
               />
             </div>
           </section>
 
           <section className="panel">
-            <h2>Материалы: план и факт</h2>
+            <h2>{t("dashboard.materialsTitle")}</h2>
             <div className="metric-grid">
               <Metric
-                label="По рецептуре"
-                value={formatMoneyMinor(metrics.normativeMaterialCostMinor, currency)}
-                formula="норма расхода × закупочная цена"
+                label={t("dashboard.normative")}
+                value={money(metrics.normativeMaterialCostMinor)}
+                formula={t("dashboard.normativeFormula")}
               />
               <Metric
-                label="Фактически"
-                value={formatMoneyMinor(metrics.actualMaterialCostMinor, currency)}
-                formula="фактический расход × цена на момент визита"
+                label={t("dashboard.actual")}
+                value={money(metrics.actualMaterialCostMinor)}
+                formula={t("dashboard.actualFormula")}
               />
               <Metric
-                label="Отклонение"
-                value={formatMoneyMinor(metrics.materialDeviationMinor, currency)}
-                formula="факт − норма"
+                label={t("dashboard.deviation")}
+                value={money(metrics.materialDeviationMinor)}
+                formula={t("dashboard.deviationFormula")}
                 negative={metrics.materialDeviationMinor > 0}
               />
             </div>
             {metrics.materialDeviationMinor > 0 && (
               <p className="muted">
-                Расход выше нормы на {formatMoneyMinor(metrics.materialDeviationMinor, currency)} — стоит
-                проверить нормы в рецептурах или списание.
+                {t("dashboard.overspend", { amount: money(metrics.materialDeviationMinor) })}
               </p>
             )}
           </section>
 
           <section className="panel">
-            <h2>Услуги по прибыли</h2>
-            <p className="muted">
-              Порядок по сумме прибыли. Прибыль в час может расставить услуги иначе — длинная услуга
-              приносит больше за визит, но меньше за час.
-            </p>
+            <h2>{t("dashboard.rankingTitle")}</h2>
+            <p className="muted">{t("dashboard.rankingHint")}</p>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Услуга</th>
-                  <th>Визитов</th>
-                  <th>Выручка</th>
-                  <th>Останется</th>
-                  <th>Маржа</th>
-                  <th>В час</th>
+                  <th>{t("dashboard.service")}</th>
+                  <th>{t("dashboard.visitCount")}</th>
+                  <th>{t("dashboard.revenue")}</th>
+                  <th>{t("dashboard.keeps")}</th>
+                  <th>{t("dashboard.margin")}</th>
+                  <th>{t("dashboard.hourly")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -281,15 +257,13 @@ export default async function AppPage({
                   <tr key={entry.serviceId ?? entry.serviceName}>
                     <td>{entry.serviceName}</td>
                     <td>{entry.visits}</td>
-                    <td>{formatMoneyMinor(entry.revenueMinor, currency)}</td>
+                    <td>{money(entry.revenueMinor)}</td>
                     <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                      {formatMoneyMinor(entry.contributionMarginMinor, currency)}
+                      {money(entry.contributionMarginMinor)}
                     </td>
-                    <td>{formatBasisPoints(entry.marginBasisPoints)}</td>
+                    <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>
                     <td className={(entry.profitPerHourMinor ?? 0) < 0 ? "metric-negative" : ""}>
-                      {entry.profitPerHourMinor === null
-                        ? "—"
-                        : formatMoneyMinor(entry.profitPerHourMinor, currency)}
+                      {entry.profitPerHourMinor === null ? "—" : money(entry.profitPerHourMinor)}
                     </td>
                   </tr>
                 ))}

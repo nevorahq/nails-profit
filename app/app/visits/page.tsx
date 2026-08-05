@@ -1,21 +1,16 @@
 import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
-import { AppNav } from "@/components/app-nav";
 import Link from "next/link";
 
+import { AppNav } from "@/components/app-nav";
+import { PeriodFilter } from "@/components/period-filter";
 import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
-import { costingReasonLabels, formatBasisPoints, formatMoneyMinor } from "@/lib/format";
+import { getTranslator, type MessageKey } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
+import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
-
-/** Reasons that only a visit can produce, on top of the catalogue ones. */
-const visitReasonLabels: Record<string, string> = {
-  ...costingReasonLabels,
-  missing_actual_consumption: "не записан фактический расход",
-  missing_material_price: "у материала не было цены на момент визита",
-  no_revenue: "визит без выручки",
-};
 
 export default async function VisitsPage({
   searchParams,
@@ -23,11 +18,13 @@ export default async function VisitsPage({
   searchParams: Promise<{ from?: string; to?: string; specialist?: string }>;
 }) {
   const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const t = getTranslator(locale);
+  const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
 
   if (!can(membership.role, "bookings", "read")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет доступа к визитам.</p>
+        <p className="warning-banner">{t("visits.noAccess")}</p>
       </main>
     );
   }
@@ -97,68 +94,52 @@ export default async function VisitsPage({
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Визиты</h1>
+          <h1>{t("visits.title")}</h1>
         </div>
         <AppNav active="/app/visits" locale={locale} />
       </header>
 
       <div className="button-row">
         <Link className="primary-button" href="/app/visits/new">
-          Закрыть визит
+          {t("visits.close")}
         </Link>
       </div>
 
-      <form className="inline-form" method="get">
-        <label>
-          С
-          <input type="date" name="from" defaultValue={filters.from ?? ""} />
-        </label>
-        <label>
-          По
-          <input type="date" name="to" defaultValue={filters.to ?? ""} />
-        </label>
-        {data.canFilterBySpecialist && (
-          <label>
-            Мастер
-            <select name="specialist" defaultValue={filters.specialist ?? ""}>
-              <option value="">все</option>
-              {data.people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button className="secondary-button" type="submit">
-          Показать
-        </button>
-      </form>
+      <PeriodFilter
+        locale={locale}
+        from={filters.from}
+        to={filters.to}
+        specialistId={filters.specialist}
+        people={data.people}
+        showSpecialist={data.canFilterBySpecialist}
+      />
 
       {data.detailed.length > 0 && withMargin < data.detailed.length && (
         <div className="warning-banner">
-          У {data.detailed.length - withMargin} из {data.detailed.length} визитов маржа не посчитана —
-          не хватает данных. Такие визиты помечены ниже.
+          {t("visits.incompleteBanner", {
+            incomplete: data.detailed.length - withMargin,
+            total: data.detailed.length,
+          })}
         </div>
       )}
 
       <table className="data-table">
         <thead>
           <tr>
-            <th>Когда</th>
-            <th>Услуга</th>
-            <th>Клиент</th>
-            <th>Выручка</th>
-            <th>Останется</th>
-            <th>Маржа</th>
-            <th>В час</th>
+            <th>{t("visits.when")}</th>
+            <th>{t("visits.service")}</th>
+            <th>{t("visits.client")}</th>
+            <th>{t("visits.revenue")}</th>
+            <th>{t("visits.keeps")}</th>
+            <th>{t("visits.margin")}</th>
+            <th>{t("visits.hourly")}</th>
           </tr>
         </thead>
         <tbody>
           {data.detailed.length === 0 && (
             <tr>
               <td colSpan={7} className="muted">
-                Визитов пока нет.
+                {t("visits.none")}
               </td>
             </tr>
           )}
@@ -167,33 +148,33 @@ export default async function VisitsPage({
             const incomplete = !snapshot || snapshot.contributionMarginMinor === null;
             return (
               <tr key={visit.id}>
-                <td>{visit.completedAt.toLocaleDateString("ru-MD")}</td>
+                <td>{visit.completedAt.toLocaleDateString(localeTag(locale))}</td>
                 <td>
                   {serviceLine
                     ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
                     : "—"}
                   {lines.length > 1 && <span className="unit-hint">+{lines.length - 1}</span>}
-                  {visit.status === "adjusted" && <span className="badge-warning">скорректирован</span>}
+                  {visit.status === "adjusted" && <span className="badge-warning">{t("visits.adjusted")}</span>}
                 </td>
                 <td>{clientName ?? <span className="muted">—</span>}</td>
-                <td>{snapshot ? formatMoneyMinor(snapshot.revenueMinor, currency) : "—"}</td>
+                <td>{snapshot ? money(snapshot.revenueMinor) : "—"}</td>
                 {incomplete ? (
                   <td colSpan={3}>
                     <span className="badge-warning">
                       {(snapshot?.incompleteReasons ?? [])
-                        .map((reason) => visitReasonLabels[reason] ?? reason)
-                        .join("; ") || "нет расчёта"}
+                        .map((reason) => t(`reason.${reason}` as MessageKey))
+                        .join("; ") || t("visits.noCalculation")}
                     </span>
                   </td>
                 ) : (
                   <>
                     <td className={snapshot!.contributionMarginMinor! < 0 ? "metric-negative" : ""}>
-                      {formatMoneyMinor(snapshot!.contributionMarginMinor!, currency)}
+                      {money(snapshot!.contributionMarginMinor!)}
                     </td>
-                    <td>{formatBasisPoints(snapshot!.marginBasisPoints)}</td>
+                    <td>{formatBasisPoints(snapshot!.marginBasisPoints, localeTag(locale))}</td>
                     <td className={snapshot!.profitPerHourMinor! < 0 ? "metric-negative" : ""}>
-                      {formatMoneyMinor(snapshot!.profitPerHourMinor!, currency)}
-                      {snapshot!.estimatedDuration && <span className="unit-hint">оценка</span>}
+                      {money(snapshot!.profitPerHourMinor!)}
+                      {snapshot!.estimatedDuration && <span className="unit-hint">{t("visits.estimate")}</span>}
                     </td>
                   </>
                 )}

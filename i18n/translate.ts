@@ -54,8 +54,16 @@ export function createTranslator<K extends string>(
   locale: AppLocale,
 ) {
   const table = dictionaries[locale] ?? dictionaries.ru;
+
   return function t(key: K, params?: Params): string {
-    return interpolate(resolve(table[key], locale, params), params);
+    // Keys are typed, so a missing one cannot normally happen. It can where a
+    // key is built from a domain code — a costing reason, an import issue —
+    // and the domain gains a new one before its wording is written. Showing
+    // the code is a visible gap; the alternative here is a crash on the
+    // dashboard, because an undefined message would be read as plural forms.
+    const message = table[key] ?? dictionaries.ru[key];
+    if (message === undefined) return key;
+    return interpolate(resolve(message, locale, params), params);
   };
 }
 

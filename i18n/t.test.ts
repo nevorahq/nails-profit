@@ -69,6 +69,13 @@ describe("translation", () => {
     expect(t("import.confirm", { count: 2 })).toBe("Import 2 rows");
   });
 
+  it("shows the key when the domain grows a code the dictionary lacks", () => {
+    // A new costing reason must not crash the dashboard: an undefined message
+    // would be read as plural forms and dereferenced.
+    const t = getTranslator("ru");
+    expect(t("reason.brand_new_code" as MessageKey)).toBe("reason.brand_new_code");
+  });
+
   it("leaves an unknown placeholder visible rather than blank", () => {
     const t = getTranslator("ru");
     expect(t("import.columnNumber")).toContain("{number}");
