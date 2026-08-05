@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { $ZodIssue } from "zod/v4/core";
 
+import { logEvent } from "@/lib/logger";
+
 /**
  * API envelope from spec section 12.1. Field names are snake_case because the
  * spec's error example is (`request_id`, `field_errors`), and a single API
@@ -60,7 +62,20 @@ export function apiError(
  * refusal into an instruction; without it a client retries immediately and
  * spends its next window on requests that cannot succeed.
  */
-export function rateLimited(id: string, retryAfterSeconds: number) {
+export function rateLimited(
+  id: string,
+  retryAfterSeconds: number,
+  context: { organizationId?: string | null; userId?: string | null; bucket: string } = { bucket: "unknown" },
+) {
+  // Section 15.6 wants an alert on error spikes; a limit that starts refusing
+  // is the earliest signal of one, and it is invisible unless it is logged.
+  logEvent(
+    "warn",
+    "rate_limit.exceeded",
+    { requestId: id, organizationId: context.organizationId, userId: context.userId },
+    { bucket: context.bucket, retry_after_seconds: retryAfterSeconds },
+  );
+
   return apiError(429, "RATE_LIMITED", "Too many requests; try again later", id, {
     details: { retry_after_seconds: retryAfterSeconds },
     headers: { "retry-after": String(retryAfterSeconds) },

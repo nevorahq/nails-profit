@@ -30,7 +30,9 @@ export async function POST(request: Request) {
   // token is 256 bits, so this is not about guessing odds — it is about making
   // an attempt cost something.
   const limit = checkRateLimit(callerKey(request, session.user.id), INVITATION_ACCEPT_RULE);
-  if (!limit.allowed) return rateLimited(id, limit.retryAfterSeconds);
+  if (!limit.allowed) {
+    return rateLimited(id, limit.retryAfterSeconds, { bucket: "invitation.accept", userId: session.user.id });
+  }
 
   const body = await request.json().catch(() => null);
   const parsed = acceptSchema.safeParse(body);

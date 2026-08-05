@@ -30,7 +30,13 @@ export async function POST(request: Request) {
   // Before the body is read, not after: the point is to avoid decoding and
   // parsing two megabytes for a caller that is already over the limit.
   const limit = checkRateLimit(callerKey(request, actor.userId), IMPORT_UPLOAD_RULE);
-  if (!limit.allowed) return rateLimited(id, limit.retryAfterSeconds);
+  if (!limit.allowed) {
+    return rateLimited(id, limit.retryAfterSeconds, {
+      bucket: "import.upload",
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+    });
+  }
 
   const form = await request.formData().catch(() => null);
   const entity = String(form?.get("entity") ?? "");

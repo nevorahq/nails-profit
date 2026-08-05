@@ -9,6 +9,7 @@ import type { Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
+import { logEvent } from "@/lib/logger";
 import { callerKey, checkRateLimit, IMPORT_CONFIRM_RULE } from "@/lib/rate-limit";
 import { canImport, previewFor } from "@/lib/import-flow";
 import { applyImport } from "@/lib/import-service";
@@ -34,7 +35,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // Confirm writes the catalogue row by row, so it is limited too — a loop here
   // costs the database, not just this process.
   const limit = checkRateLimit(callerKey(request, actor.userId), IMPORT_CONFIRM_RULE);
-  if (!limit.allowed) return rateLimited(id, limit.retryAfterSeconds);
+  if (!limit.allowed) {
+    return rateLimited(id, limit.retryAfterSeconds, {
+      bucket: "import.confirm",
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+    });
+  }
 
   const { id: jobId } = await context.params;
 
@@ -136,6 +143,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     return apiError(409, "ALREADY_COMPLETED", "This import has already been applied", id);
   }
+
+  // Section 15.6 asks for import failures among the metrics. Counts only: the
+  // rows themselves are the customer's data, and the file name can be a person.
+  logEvent(
+    "info",
+    "import.completed",
+    { requestId: id, organizationId: actor.organizationId, userId: actor.userId },
+    { ...result.counts, issues: result.issues.length },
+  );
 
   return apiSuccess({ id: jobId, result: result.counts, issues: result.issues }, id);
 }
