@@ -37,6 +37,7 @@ export default async function MaterialsPage() {
             Материалы
           </Link>
           <Link href="/app/specialists">Мастера</Link>
+          <Link href="/app/import">Импорт</Link>
         </nav>
       </header>
       <MaterialCatalogue materials={rows} />

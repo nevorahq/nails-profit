@@ -40,6 +40,8 @@ const TABLES_IN_DELETE_ORDER = [
   "service",
   "service_category",
   "invitation",
+  "external_reference",
+  "import_job",
   "audit_event",
   "membership",
   "organization",

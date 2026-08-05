@@ -68,7 +68,9 @@ export type IssueCode =
   | "negative_not_allowed"
   | "too_long"
   | "duplicate_in_file"
-  | "looks_like_formula";
+  | "looks_like_formula"
+  /** Raised while writing, not while validating — a constraint the file broke. */
+  | "write_failed";
 
 export type RowIssue = Readonly<{
   line: number;

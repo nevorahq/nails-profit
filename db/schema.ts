@@ -648,6 +648,91 @@ export const auditEvents = pgTable(
   (table) => [index("audit_event_org_created_idx").on(table.organizationId, table.createdAt)],
 );
 
+/**
+ * Spec section 11.2 ExternalReference, unique on provider + entity + external
+ * ID + tenant.
+ *
+ * This is what makes INT-004 true: importing the same file twice updates rows
+ * instead of doubling the catalogue. `external_id` is either an id the source
+ * system gave us or the fingerprint derived from the row's natural key, and the
+ * distinction is recorded so a later live connector can tell a real id from a
+ * derived one rather than inheriting our guess as fact.
+ */
+export const externalIdKind = pgEnum("external_id_kind", ["external", "fingerprint"]);
+
+export const externalReferences = pgTable(
+  "external_reference",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    /** `csv` today; a CRM connector later, without touching the domain model. */
+    provider: text("provider").notNull(),
+    entityType: text("entity_type").notNull(),
+    externalId: text("external_id").notNull(),
+    localId: uuid("local_id").notNull(),
+    idKind: externalIdKind("id_kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("external_reference_identity_idx").on(
+      table.organizationId,
+      table.provider,
+      table.entityType,
+      table.externalId,
+    ),
+    index("external_reference_local_idx").on(table.organizationId, table.localId),
+  ],
+);
+
+export const importJobStatus = pgEnum("import_job_status", [
+  "uploaded",
+  "completed",
+  "failed",
+]);
+
+/**
+ * One run of the INT-002 flow: upload, mapping, validation preview, confirm,
+ * result.
+ *
+ * The uploaded text is kept between upload and confirm so both steps read the
+ * same bytes — a preview computed from one file and applied to another is a
+ * quiet way to import something nobody reviewed. It is cleared on completion:
+ * a client list is PII, and section 15.3 gives no reason to keep the raw file
+ * once the rows are in. The mapping and the counts stay, which is what an audit
+ * of "where did this row come from" actually needs.
+ */
+export const importJobs = pgTable(
+  "import_job",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    entityType: text("entity_type").notNull(),
+    status: importJobStatus("status").notNull().default("uploaded"),
+    fileName: text("file_name").notNull(),
+    delimiter: text("delimiter").notNull(),
+    encoding: text("encoding").notNull(),
+    /** Null once the job is finished; see the note above. */
+    sourceText: text("source_text"),
+    headers: jsonb("headers").$type<string[]>().notNull().default([]),
+    mapping: jsonb("mapping").$type<Record<string, number | null>>().notNull().default({}),
+    createdCount: integer("created_count").notNull().default(0),
+    updatedCount: integer("updated_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    failedCount: integer("failed_count").notNull().default(0),
+    /** Per-row problems, kept so the owner can fix the file after the fact. */
+    issues: jsonb("issues").$type<unknown[]>().notNull().default([]),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [index("import_job_org_created_idx").on(table.organizationId, table.createdAt)],
+);
+
 export const organizationRelations = relations(organizations, ({ many }) => ({
   memberships: many(memberships),
   materials: many(materials),

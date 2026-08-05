@@ -114,6 +114,7 @@ export default async function SpecialistsPage() {
           <Link className="active" href="/app/specialists">
             Мастера
           </Link>
+          <Link href="/app/import">Импорт</Link>
         </nav>
       </header>
       <SpecialistManager

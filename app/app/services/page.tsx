@@ -73,6 +73,7 @@ export default async function ServicesPage() {
           <Link href="/app/add-ons">Опции</Link>
           <Link href="/app/materials">Материалы</Link>
           <Link href="/app/specialists">Мастера</Link>
+          <Link href="/app/import">Импорт</Link>
         </nav>
       </header>
       <ServiceList services={rows} locale={locale} />

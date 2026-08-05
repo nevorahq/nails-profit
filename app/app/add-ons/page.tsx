@@ -84,6 +84,7 @@ export default async function AddOnsPage() {
           </Link>
           <Link href="/app/materials">Материалы</Link>
           <Link href="/app/specialists">Мастера</Link>
+          <Link href="/app/import">Импорт</Link>
         </nav>
       </header>
       <AddOnCatalogue
