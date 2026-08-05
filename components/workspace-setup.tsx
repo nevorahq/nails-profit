@@ -3,10 +3,12 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { getErrorMessage } from "@/i18n/messages";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 
-export function WorkspaceSetup({ name }: { name: string }) {
+export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLocale }) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -22,7 +24,7 @@ export function WorkspaceSetup({ name }: { name: string }) {
         name: data.get("name"),
         type: data.get("type"),
         currency: data.get("currency"),
-        locale: "ru",
+        locale,
       }),
     });
 
@@ -31,8 +33,8 @@ export function WorkspaceSetup({ name }: { name: string }) {
       const code = payload?.error?.code;
       setError(
         code
-          ? getErrorMessage(code, payload.error.message ?? "Не удалось создать пространство")
-          : "Не удалось создать пространство",
+          ? getErrorMessage(code, payload.error.message ?? t("workspace.failed"), locale)
+          : t("workspace.failed"),
       );
       setPending(false);
       return;
@@ -43,24 +45,24 @@ export function WorkspaceSetup({ name }: { name: string }) {
   return (
     <main className="auth-shell">
       <section className="auth-card workspace-card">
-        <span className="eyebrow">Добро пожаловать, {name}</span>
-        <h1>Создайте рабочее пространство</h1>
+        <span className="eyebrow">{t("workspace.welcome", { name })}</span>
+        <h1>{t("workspace.title")}</h1>
         <form onSubmit={submit}>
           <label>
-            Название
-            <input name="name" required minLength={2} placeholder="Например, Studio Belle" />
+            {t("workspace.name")}
+            <input name="name" required minLength={2} placeholder={t("workspace.namePlaceholder")} />
           </label>
           <fieldset>
-            <legend>Формат</legend>
-            <label className="radio-row"><input type="radio" name="type" value="solo" defaultChecked /> Solo-мастер</label>
-            <label className="radio-row"><input type="radio" name="type" value="studio" /> Студия</label>
+            <legend>{t("workspace.format")}</legend>
+            <label className="radio-row"><input type="radio" name="type" value="solo" defaultChecked /> {t("workspace.solo")}</label>
+            <label className="radio-row"><input type="radio" name="type" value="studio" /> {t("workspace.studio")}</label>
           </fieldset>
           <label>
-            Валюта
-            <select name="currency" defaultValue="MDL"><option value="MDL">MDL — молдавский лей</option><option value="EUR">EUR — евро</option></select>
+            {t("workspace.currency")}
+            <select name="currency" defaultValue="MDL"><option value="MDL">MDL</option><option value="EUR">EUR</option></select>
           </label>
           {error && <div className="form-error">{error}</div>}
-          <button className="primary-button" disabled={pending}>{pending ? "Создаём…" : "Продолжить"}</button>
+          <button className="primary-button" disabled={pending}>{pending ? t("workspace.creating") : t("workspace.continue")}</button>
         </form>
       </section>
     </main>

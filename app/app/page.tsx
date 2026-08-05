@@ -16,6 +16,7 @@ import { localeTag } from "@/i18n/translate";
 import { auth } from "@/lib/auth";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
+import { resolveLocale } from "@/lib/locale";
 
 /** DSH-009: every figure states the formula it was computed with. */
 function Metric({
@@ -56,7 +57,9 @@ export default async function AppPage({
     .limit(1);
 
   if (!membership) {
-    return <WorkspaceSetup name={session.user.name} />;
+    // No organization yet, so its language does not exist to ask: the browser's
+    // preference is the only signal, and it becomes the new workspace's locale.
+    return <WorkspaceSetup name={session.user.name} locale={await resolveLocale()} />;
   }
 
   const locale = membership.organization.locale as AppLocale;

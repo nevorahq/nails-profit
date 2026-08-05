@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
 
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({ locale }: { locale: AppLocale }) {
+  const t = getTranslator(locale);
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -31,13 +34,10 @@ export function ForgotPasswordForm() {
         <Link className="brand" href="/">
           Nail Profit OS
         </Link>
-        <h1>Проверьте почту</h1>
-        <p>
-          Если такой адрес зарегистрирован, мы отправили на него ссылку для восстановления доступа. Ссылка
-          действует один час.
-        </p>
+        <h1>{t("auth.checkMail")}</h1>
+<p>{t("auth.checkMailBody")}</p>
         <Link className="switch-button" href="/login">
-          Вернуться ко входу
+          {t("auth.backToLogin")}
         </Link>
       </section>
     );
@@ -48,19 +48,19 @@ export function ForgotPasswordForm() {
       <Link className="brand" href="/">
         Nail Profit OS
       </Link>
-      <h1>Восстановление доступа</h1>
-      <p>Укажите email, которым вы входите. Мы пришлём ссылку для установки нового пароля.</p>
+      <h1>{t("auth.recoverTitle")}</h1>
+      <p>{t("auth.recoverBody")}</p>
       <form onSubmit={submit}>
         <label>
-          Email
+          {t("auth.email")}
           <input name="email" type="email" autoComplete="email" required />
         </label>
         <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? "Отправляем…" : "Прислать ссылку"}
+          {pending ? t("auth.sending") : t("auth.sendLink")}
         </button>
       </form>
       <Link className="switch-button" href="/login">
-        Вспомнили пароль? Войти
+        {t("auth.rememberedIt")}
       </Link>
     </section>
   );

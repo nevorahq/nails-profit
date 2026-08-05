@@ -4,10 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
 
-export function LoginForm({ initialMode = "signin" }: { initialMode?: "signin" | "signup" }) {
+export function LoginForm({
+  initialMode = "signin",
+  locale,
+}: {
+  initialMode?: "signin" | "signup";
+  locale: AppLocale;
+}) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -31,7 +40,7 @@ export function LoginForm({ initialMode = "signin" }: { initialMode?: "signin" |
         : await authClient.signIn.email({ email, password, callbackURL: "/app" });
 
     if (result.error) {
-      setError(result.error.message ?? "Не удалось выполнить вход");
+      setError(result.error.message ?? t("auth.signInFailed"));
       setPending(false);
       return;
     }
@@ -44,34 +53,34 @@ export function LoginForm({ initialMode = "signin" }: { initialMode?: "signin" |
       <Link className="brand" href="/">
         Nail Profit OS
       </Link>
-      <h1>{mode === "signup" ? "Создать аккаунт" : "С возвращением"}</h1>
-      <p>Ваш profit layer поверх существующей системы записи.</p>
+      <h1>{mode === "signup" ? t("auth.signUpTitle") : t("auth.welcomeBack")}</h1>
+      <p>{t("auth.subtitle")}</p>
       <form onSubmit={submit}>
         {mode === "signup" && (
           <label>
-            Ваше имя
+            {t("auth.name")}
             <input name="name" autoComplete="name" required minLength={2} />
           </label>
         )}
         <label>
-          Email
+          {t("auth.email")}
           <input name="email" type="email" autoComplete="email" required />
         </label>
         <label>
-          Пароль
+          {t("auth.password")}
           <input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={10} />
         </label>
         {error && <div className="form-error">{error}</div>}
         <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? "Подождите…" : mode === "signup" ? "Создать аккаунт" : "Войти"}
+          {pending ? t("auth.wait") : mode === "signup" ? t("auth.signUp") : t("auth.signIn")}
         </button>
       </form>
       <button className="switch-button" type="button" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>
-        {mode === "signup" ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Создать"}
+        {mode === "signup" ? t("auth.haveAccount") : t("auth.noAccount")}
       </button>
       {mode === "signin" && (
         <Link className="switch-button" href="/forgot-password">
-          Забыли пароль?
+          {t("auth.forgot")}
         </Link>
       )}
     </section>

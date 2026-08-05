@@ -4,10 +4,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
 
-export function ResetPasswordForm({ token, linkError }: { token?: string; linkError?: string }) {
+export function ResetPasswordForm({
+  token,
+  linkError,
+  locale,
+}: {
+  token?: string;
+  linkError?: string;
+  locale: AppLocale;
+}) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -19,10 +30,10 @@ export function ResetPasswordForm({ token, linkError }: { token?: string; linkEr
         <Link className="brand" href="/">
           Nail Profit OS
         </Link>
-        <h1>Ссылка недействительна</h1>
-        <p>Ссылка восстановления истекла или уже была использована. Запросите новую.</p>
+        <h1>{t("auth.linkInvalid")}</h1>
+        <p>{t("auth.linkInvalidBody")}</p>
         <Link className="primary-button" href="/forgot-password">
-          Запросить новую ссылку
+          {t("auth.requestNewLink")}
         </Link>
       </section>
     );
@@ -36,14 +47,14 @@ export function ResetPasswordForm({ token, linkError }: { token?: string; linkEr
     const password = String(data.get("password"));
 
     if (password !== String(data.get("passwordConfirmation"))) {
-      setError("Пароли не совпадают");
+      setError(t("auth.passwordsDiffer"));
       setPending(false);
       return;
     }
 
     const result = await authClient.resetPassword({ newPassword: password, token });
     if (result.error) {
-      setError(result.error.message ?? "Не удалось изменить пароль");
+      setError(result.error.message ?? t("auth.passwordChangeFailed"));
       setPending(false);
       return;
     }
@@ -57,15 +68,15 @@ export function ResetPasswordForm({ token, linkError }: { token?: string; linkEr
       <Link className="brand" href="/">
         Nail Profit OS
       </Link>
-      <h1>Новый пароль</h1>
-      <p>Придумайте пароль не короче 10 символов.</p>
+      <h1>{t("auth.newPassword")}</h1>
+      <p>{t("auth.newPasswordHint")}</p>
       <form onSubmit={submit}>
         <label>
-          Новый пароль
+          {t("auth.newPassword")}
           <input name="password" type="password" autoComplete="new-password" required minLength={10} />
         </label>
         <label>
-          Повторите пароль
+          {t("auth.repeatPassword")}
           <input
             name="passwordConfirmation"
             type="password"
@@ -76,7 +87,7 @@ export function ResetPasswordForm({ token, linkError }: { token?: string; linkEr
         </label>
         {error && <div className="form-error">{error}</div>}
         <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? "Сохраняем…" : "Сохранить пароль"}
+          {pending ? t("common.saving") : t("auth.savePassword")}
         </button>
       </form>
     </section>
