@@ -106,6 +106,7 @@ export default async function SpecialistsPage() {
           <h1>Мастера и комиссии</h1>
         </div>
         <nav className="tab-nav">
+          <Link href="/app/visits">Визиты</Link>
           <Link href="/app/services">Услуги</Link>
           <Link href="/app/add-ons">Опции</Link>
           <Link href="/app/materials">Материалы</Link>

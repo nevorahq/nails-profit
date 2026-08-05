@@ -76,6 +76,7 @@ export default async function AddOnsPage() {
           <h1>Опции к услугам</h1>
         </div>
         <nav className="tab-nav">
+          <Link href="/app/visits">Визиты</Link>
           <Link href="/app/services">Услуги</Link>
           <Link className="active" href="/app/add-ons">
             Опции

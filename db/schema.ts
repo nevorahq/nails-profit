@@ -488,12 +488,23 @@ export const visits = pgTable(
     plannedDurationMinutes: integer("planned_duration_minutes").notNull(),
     actualDurationMinutes: integer("actual_duration_minutes"),
     status: visitStatus("status").notNull().default("completed"),
+    // CST-009: the commission rule is copied into the visit. Resolving it from
+    // the rule table by date would almost work, but it would leave a closed
+    // visit depending on rows that live elsewhere and can still be edited.
+    commissionType: commissionType("commission_type").notNull(),
+    commissionBasisPoints: integer("commission_basis_points"),
+    commissionFixedAmountMinor: bigint("commission_fixed_amount_minor", { mode: "number" }),
     ...auditColumns,
   },
   (table) => [
     index("visit_org_completed_idx").on(table.organizationId, table.completedAt),
     index("visit_specialist_idx").on(table.specialistId, table.completedAt),
     check("visit_planned_duration_positive", sql`${table.plannedDurationMinutes} > 0`),
+    check(
+      "visit_commission_shape",
+      sql`(${table.commissionType} = 'fixed' and ${table.commissionFixedAmountMinor} is not null and ${table.commissionBasisPoints} is null)
+        or (${table.commissionType} <> 'fixed' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)`,
+    ),
     check(
       "visit_actual_duration_positive",
       sql`${table.actualDurationMinutes} is null or ${table.actualDurationMinutes} > 0`,

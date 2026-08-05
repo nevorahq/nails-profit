@@ -259,9 +259,13 @@ export async function createVisit(
     completedAt?: Date;
     plannedDurationMinutes?: number;
     actualDurationMinutes?: number | null;
+    commissionType?: CommissionType;
+    commissionBasisPoints?: number | null;
+    commissionFixedAmountMinor?: number | null;
   },
 ) {
   const { visits } = await import("@/db/schema");
+  const commissionType = options.commissionType ?? "percentage";
   const [visit] = await adminDb
     .insert(visits)
     .values({
@@ -272,6 +276,11 @@ export async function createVisit(
       completedAt: options.completedAt ?? new Date(),
       plannedDurationMinutes: options.plannedDurationMinutes ?? 90,
       actualDurationMinutes: options.actualDurationMinutes ?? null,
+      commissionType,
+      commissionBasisPoints:
+        commissionType === "fixed" ? null : (options.commissionBasisPoints ?? 4_000),
+      commissionFixedAmountMinor:
+        commissionType === "fixed" ? (options.commissionFixedAmountMinor ?? 10_000) : null,
     })
     .returning();
   return visit;

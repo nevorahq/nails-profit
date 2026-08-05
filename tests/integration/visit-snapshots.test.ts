@@ -322,3 +322,211 @@ describe("visit snapshots", () => {
     expect(stillThere.clientId).toBe(client.id);
   });
 });
+
+/**
+ * The service layer that closes and re-costs a visit. These exercise the same
+ * functions the API route calls, so a regression in snapshotting shows up here
+ * rather than in production.
+ */
+describe("closing and adjusting a visit", () => {
+  let organizationId: string;
+  let userId: string;
+  let specialistId: string;
+  let serviceId: string;
+  let materialId: string;
+
+  async function close(actualQuantity: number | null) {
+    const { withTenant } = await import("@/db/tenant");
+    const { buildVisitDraft, recalculateVisitProfit, writeFinancialSnapshot } = await import(
+      "@/lib/visit-service"
+    );
+
+    return withTenant(organizationId, async (tx) => {
+      const at = new Date();
+      const draft = (await buildVisitDraft(tx, {
+        serviceId,
+        addOnIds: [],
+        specialistId,
+        at,
+      }))!;
+
+      const [visit] = await tx
+        .insert(visits)
+        .values({
+          organizationId,
+          specialistId,
+          serviceId,
+          completedAt: at,
+          plannedDurationMinutes: draft.plannedDurationMinutes,
+          actualDurationMinutes: draft.plannedDurationMinutes,
+          commissionType: draft.commission!.type,
+          commissionBasisPoints: draft.commission!.basisPoints,
+          commissionFixedAmountMinor: draft.commission!.fixedAmountMinor,
+        })
+        .returning();
+
+      await tx.insert(visitLines).values(
+        draft.lines.map((line) => ({
+          organizationId,
+          visitId: visit.id,
+          kind: line.kind,
+          serviceId: line.serviceId,
+          addOnId: line.addOnId,
+          nameSnapshot: line.nameSnapshot,
+          priceMinor: line.priceMinor,
+          discountMinor: line.discountMinor,
+          durationMinutes: line.durationMinutes,
+        })),
+      );
+
+      await tx.insert(consumptions).values(
+        draft.consumptions.map((line) => ({
+          organizationId,
+          visitId: visit.id,
+          materialId: line.materialId,
+          materialNameSnapshot: line.materialNameSnapshot,
+          baseUnitSnapshot: line.baseUnitSnapshot,
+          normativeQuantityMilliUnits: line.normativeQuantityMilliUnits,
+          actualQuantityMilliUnits: actualQuantity === null ? null : toMilliUnits(actualQuantity),
+          packagePriceMinorSnapshot: line.packagePriceMinorSnapshot,
+          packageSizeMilliUnitsSnapshot: line.packageSizeMilliUnitsSnapshot,
+        })),
+      );
+
+      const profit = (await recalculateVisitProfit(tx, visit.id))!.profit;
+      const snapshot = await writeFinancialSnapshot(tx, {
+        organizationId,
+        visitId: visit.id,
+        profit,
+        currency: "MDL",
+        actorUserId: userId,
+      });
+      return { visitId: visit.id, snapshot };
+    });
+  }
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const user = await createUser();
+    userId = user.id;
+    organizationId = (await createOrganization({ ownerId: user.id })).id;
+    specialistId = (await createSpecialist(organizationId)).id;
+
+    const { createCommissionRule, createRecipe } = await import("../helpers/factories");
+    await createCommissionRule(organizationId, specialistId, { basisPoints: 4_000 });
+
+    // 100 MDL for 10 ml, so 10 MDL per ml.
+    const material = await createMaterial(organizationId, {
+      packagePriceMinor: 10_000,
+      packageSize: 10,
+      createdBy: userId,
+    });
+    materialId = material.id;
+    const service = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
+    serviceId = service.id;
+    await createRecipe(organizationId, service.id, [{ materialId: material.id, quantity: 2 }]);
+  });
+
+  it("snapshots the catalogue when the visit is closed", async () => {
+    const { snapshot } = await close(2);
+
+    expect(snapshot.snapshotVersion).toBe(1);
+    expect(snapshot.revenueMinor).toBe(60_000);
+    expect(snapshot.materialCostMinor).toBe(2_000);
+    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.incompleteReasons).toEqual([]);
+  });
+
+  it("stores a snapshot even when the margin cannot be computed", async () => {
+    // CST-010 needs the row in order to list what is missing; the figures that
+    // depend on the unknown stay null rather than zero.
+    const { snapshot } = await close(null);
+
+    expect(snapshot.revenueMinor).toBe(60_000);
+    expect(snapshot.contributionMarginMinor).toBeNull();
+    expect(snapshot.materialCostMinor).toBeNull();
+    expect(snapshot.incompleteReasons).toEqual(["missing_actual_consumption"]);
+    // The normative cost is knowable, so it is recorded.
+    expect(snapshot.normativeMaterialCostMinor).toBe(2_000);
+  });
+
+  it("leaves a closed visit alone when the material price later changes", async () => {
+    const { visitId } = await close(2);
+
+    await addMaterialPrice(organizationId, materialId, {
+      packagePriceMinor: 20_000,
+      packageSize: 10,
+      createdBy: userId,
+    });
+
+    const { withTenant } = await import("@/db/tenant");
+    const { recalculateVisitProfit } = await import("@/lib/visit-service");
+    const again = await withTenant(organizationId, (tx) => recalculateVisitProfit(tx, visitId));
+
+    expect(again!.profit.status).toBe("complete");
+    if (again!.profit.status !== "complete") throw new Error("expected complete");
+    expect(again!.profit.costing.materialCostMinor).toBe(2_000);
+  });
+
+  it("prices a new visit with the new price while the old one keeps the old", async () => {
+    const first = await close(2);
+
+    await addMaterialPrice(organizationId, materialId, {
+      packagePriceMinor: 20_000,
+      packageSize: 10,
+      createdBy: userId,
+    });
+    const second = await close(2);
+
+    expect(first.snapshot.contributionMarginMinor).toBe(34_000);
+    expect(second.snapshot.contributionMarginMinor).toBe(32_000);
+  });
+
+  it("adds a correction as a new version and keeps the first", async () => {
+    const { visitId } = await close(2);
+
+    const { withTenant } = await import("@/db/tenant");
+    const { recalculateVisitProfit, writeFinancialSnapshot } = await import("@/lib/visit-service");
+
+    const corrected = await withTenant(organizationId, async (tx) => {
+      await tx
+        .update(consumptions)
+        .set({ actualQuantityMilliUnits: toMilliUnits(5) })
+        .where(eq(consumptions.visitId, visitId));
+      const profit = (await recalculateVisitProfit(tx, visitId))!.profit;
+      return writeFinancialSnapshot(tx, {
+        organizationId,
+        visitId,
+        profit,
+        currency: "MDL",
+        actorUserId: userId,
+      });
+    });
+
+    expect(corrected.snapshotVersion).toBe(2);
+    expect(corrected.contributionMarginMinor).toBe(31_000);
+
+    const history = await adminDb
+      .select()
+      .from(financialSnapshots)
+      .where(eq(financialSnapshots.visitId, visitId));
+    expect(history).toHaveLength(2);
+    expect(history.find((row) => row.snapshotVersion === 1)!.contributionMarginMinor).toBe(34_000);
+  });
+
+  it("records the deviation between the recipe and what was used", async () => {
+    const { visitId } = await close(5);
+
+    const { withTenant } = await import("@/db/tenant");
+    const { recalculateVisitProfit } = await import("@/lib/visit-service");
+    const result = await withTenant(organizationId, (tx) => recalculateVisitProfit(tx, visitId));
+
+    // Normative 2 ml at 10 MDL, actually 5 ml: 30 MDL over, 150 percent.
+    expect(result!.profit.deviation).toMatchObject({
+      normativeCostMinor: 2_000,
+      actualCostMinor: 5_000,
+      deviationMinor: 3_000,
+      deviationBasisPoints: 15_000,
+    });
+  });
+});
