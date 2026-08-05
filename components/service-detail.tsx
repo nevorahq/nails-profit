@@ -41,14 +41,27 @@ export type ServiceDetailData = {
     | { status: "incomplete"; reasons: string[]; unpriced_material_ids: string[] };
 };
 
+export type ServiceAddOn = {
+  id: string;
+  displayName: string;
+  price_delta_minor: number;
+  duration_delta_minutes: number;
+};
+
 export function ServiceDetail({
   service,
   materials,
   displayName,
+  addOns,
+  linkedAddOnIds,
+  selectedAddOnIds,
 }: {
   service: ServiceDetailData;
   materials: MaterialRow[];
   displayName: string;
+  addOns: ServiceAddOn[];
+  linkedAddOnIds: string[];
+  selectedAddOnIds: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +84,32 @@ export function ServiceDetail({
       }),
     });
     await finish(response);
+  }
+
+  async function saveLinkedAddOns(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const data = new FormData(event.currentTarget);
+    const response = await fetch(`/api/v1/services/${service.id}/add-ons`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ add_on_ids: data.getAll("linked").map(String) }),
+    });
+    await finish(response);
+  }
+
+  /**
+   * The chosen set lives in the URL rather than in component state: the costing
+   * is computed on the server, so a shareable link shows the same numbers to
+   * whoever opens it.
+   */
+  function togglePreview(addOnId: string, checked: boolean) {
+    const next = checked
+      ? [...selectedAddOnIds, addOnId]
+      : selectedAddOnIds.filter((id) => id !== addOnId);
+    const query = next.length > 0 ? `?add_ons=${next.join(",")}` : "";
+    router.push(`/app/services/${service.id}${query}`);
   }
 
   async function saveRecipe(event: FormEvent<HTMLFormElement>) {
@@ -210,8 +249,50 @@ export function ServiceDetail({
         )}
       </section>
 
+      {addOns.length > 0 && (
+        <section className="panel">
+          <h2>Опции</h2>
+          <form className="inline-form" onSubmit={saveLinkedAddOns}>
+            <fieldset className="checkbox-set">
+              <legend>Предлагаются с этой услугой</legend>
+              {addOns.map((addOn) => (
+                <label key={addOn.id} className="radio-row">
+                  <input
+                    type="checkbox"
+                    name="linked"
+                    value={addOn.id}
+                    defaultChecked={linkedAddOnIds.includes(addOn.id)}
+                  />{" "}
+                  {addOn.displayName}
+                </label>
+              ))}
+            </fieldset>
+            <button className="primary-button" type="submit" disabled={pending}>
+              Сохранить список
+            </button>
+          </form>
+        </section>
+      )}
+
       <section className="panel insight-panel">
         <h2>Что остаётся вам</h2>
+        {linkedAddOnIds.length > 0 && (
+          <fieldset className="checkbox-set">
+            <legend>Посчитать с опциями</legend>
+            {addOns
+              .filter((addOn) => linkedAddOnIds.includes(addOn.id))
+              .map((addOn) => (
+                <label key={addOn.id} className="radio-row">
+                  <input
+                    type="checkbox"
+                    checked={selectedAddOnIds.includes(addOn.id)}
+                    onChange={(event) => togglePreview(addOn.id, event.target.checked)}
+                  />{" "}
+                  {addOn.displayName}
+                </label>
+              ))}
+          </fieldset>
+        )}
         {service.costing.status === "incomplete" ? (
           <div className="warning-banner">
             <strong>Расчёт неполный.</strong>

@@ -30,6 +30,7 @@ export default async function MaterialsPage() {
         </div>
         <nav className="tab-nav">
           <Link href="/app/services">Услуги</Link>
+          <Link href="/app/add-ons">Опции</Link>
           <Link className="active" href="/app/materials">
             Материалы
           </Link>

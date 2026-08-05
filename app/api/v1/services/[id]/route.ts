@@ -32,7 +32,13 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const { id } = await context.params;
-  const requestedSpecialist = new URL(request.url).searchParams.get("specialist_id");
+  const url = new URL(request.url);
+  const requestedSpecialist = url.searchParams.get("specialist_id");
+  // Costing a service together with a chosen set of add-ons (SRV-003).
+  const addOnIds = (url.searchParams.get("add_on_ids") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   const result = await withTenant(caller.membership.organizationId, async (tx) => {
     const [service] = await tx.select().from(services).where(eq(services.id, id)).limit(1);
@@ -50,7 +56,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       )[0]?.id ??
       null;
 
-    return { service, costing: await loadServiceCosting(tx, service, { specialistId }) };
+    return { service, costing: await loadServiceCosting(tx, service, { specialistId, addOnIds }) };
   });
 
   if (!result) {

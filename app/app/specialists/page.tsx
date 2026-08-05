@@ -107,6 +107,7 @@ export default async function SpecialistsPage() {
         </div>
         <nav className="tab-nav">
           <Link href="/app/services">Услуги</Link>
+          <Link href="/app/add-ons">Опции</Link>
           <Link href="/app/materials">Материалы</Link>
           <Link className="active" href="/app/specialists">
             Мастера

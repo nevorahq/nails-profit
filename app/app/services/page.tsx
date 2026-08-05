@@ -68,6 +68,7 @@ export default async function ServicesPage() {
           <Link className="active" href="/app/services">
             Услуги
           </Link>
+          <Link href="/app/add-ons">Опции</Link>
           <Link href="/app/materials">Материалы</Link>
           <Link href="/app/specialists">Мастера</Link>
         </nav>

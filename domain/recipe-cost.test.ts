@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { calculateCosting } from "@/domain/costing";
-import { calculateRecipeCost, type RecipeLine } from "@/domain/recipe-cost";
+import { calculateRecipeCost, mergeRecipeLines, type RecipeLine } from "@/domain/recipe-cost";
 import { toMilliUnits } from "@/domain/units";
 
 const gelPolish: RecipeLine = {
@@ -126,5 +126,62 @@ describe("recipe cost feeding the costing engine", () => {
     expect(costing.incompleteCostData).toBe(true);
     if (!costing.incompleteCostData) throw new Error("expected an incomplete costing");
     expect(costing.incompleteReasons).toEqual(["missing_material_cost"]);
+  });
+});
+
+describe("mergeRecipeLines", () => {
+  const price = { packagePriceMinor: 10_000, packageSizeMilliUnits: 3_000 };
+
+  it("sums quantities of the same material into one line", () => {
+    const merged = mergeRecipeLines(
+      [{ materialId: "gel", quantityMilliUnits: 2_000, price }],
+      [{ materialId: "gel", quantityMilliUnits: 1_000, price }],
+    );
+
+    expect(merged).toEqual([{ materialId: "gel", quantityMilliUnits: 3_000, price }]);
+  });
+
+  it("merges before costing, because costing twice rounds twice", () => {
+    // 100 MDL for 3 ml. Two separate 1 ml lines round to 33.33 each and total
+    // 66.66; one merged 2 ml line costs 66.67 — which is what pouring 2 ml out
+    // of that bottle actually costs.
+    const separate = calculateRecipeCost([
+      { materialId: "gel", quantityMilliUnits: 1_000, price },
+      { materialId: "gel-again", quantityMilliUnits: 1_000, price },
+    ]);
+    const merged = calculateRecipeCost(
+      mergeRecipeLines(
+        [{ materialId: "gel", quantityMilliUnits: 1_000, price }],
+        [{ materialId: "gel", quantityMilliUnits: 1_000, price }],
+      ),
+    );
+
+    expect(separate.complete && separate.materialCostMinor).toBe(6_666);
+    expect(merged.complete && merged.materialCostMinor).toBe(6_667);
+  });
+
+  it("keeps distinct materials apart", () => {
+    const merged = mergeRecipeLines(
+      [{ materialId: "gel", quantityMilliUnits: 2_000, price }],
+      [{ materialId: "top", quantityMilliUnits: 1_000, price }],
+    );
+    expect(merged).toHaveLength(2);
+  });
+
+  it("lets a missing price on either side poison the merged line", () => {
+    const merged = mergeRecipeLines(
+      [{ materialId: "gel", quantityMilliUnits: 2_000, price: null }],
+      [{ materialId: "gel", quantityMilliUnits: 1_000, price: null }],
+    );
+
+    const result = calculateRecipeCost(merged);
+    expect(result.complete).toBe(false);
+    if (result.complete) throw new Error("expected incomplete");
+    expect(result.unpricedMaterialIds).toEqual(["gel"]);
+  });
+
+  it("handles being given nothing at all", () => {
+    expect(mergeRecipeLines()).toEqual([]);
+    expect(mergeRecipeLines([], [])).toEqual([]);
   });
 });

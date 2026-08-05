@@ -1,6 +1,7 @@
-import { and, desc, eq, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 
 import {
+  addOns,
   commissionRules,
   materialPriceVersions,
   materials,
@@ -11,7 +12,7 @@ import {
 import type { TenantTransaction } from "@/db/tenant";
 import { selectCommissionRule, toCommission } from "@/domain/commission";
 import { calculateCosting, type CostingResult } from "@/domain/costing";
-import { calculateRecipeCost, type RecipeLine } from "@/domain/recipe-cost";
+import { calculateRecipeCost, mergeRecipeLines, type RecipeLine } from "@/domain/recipe-cost";
 import type { Currency } from "@/domain/money";
 
 /**
@@ -28,7 +29,12 @@ export type ServiceCostingReason =
   | "missing_duration"
   | "missing_commission_rule"
   | "missing_recipe"
-  | "missing_material_cost";
+  | "missing_material_cost"
+  // SRV-003 lets an add-on shift price and duration in either direction, so a
+  // badly configured set can push either below zero. That is a configuration
+  // error, not a number to hand back.
+  | "negative_price_with_add_ons"
+  | "invalid_duration_with_add_ons";
 
 export type RecipeLineView = Readonly<{
   materialId: string;
@@ -115,20 +121,61 @@ export async function loadRecipeLines(
   return { lines, views };
 }
 
+/** The recipe in force for an add-on, mirroring `loadActiveRecipe` for services. */
+async function loadActiveAddOnRecipe(tx: TenantTransaction, addOnId: string, at: Date) {
+  const [recipe] = await tx
+    .select({ id: recipes.id })
+    .from(recipes)
+    .where(and(eq(recipes.addOnId, addOnId), lte(recipes.activeFrom, at)))
+    .orderBy(desc(recipes.activeFrom), desc(recipes.recipeVersion))
+    .limit(1);
+  return recipe ?? null;
+}
+
 export async function loadServiceCosting(
   tx: TenantTransaction,
   service: typeof services.$inferSelect,
-  options: { specialistId?: string | null; at?: Date } = {},
+  options: { specialistId?: string | null; at?: Date; addOnIds?: readonly string[] } = {},
 ): Promise<ServiceCosting> {
   const at = options.at ?? new Date();
   const reasons: ServiceCostingReason[] = [];
 
   const recipe = await loadActiveRecipe(tx, service.id, at);
-  const { lines, views } = recipe ? await loadRecipeLines(tx, recipe.id) : { lines: [], views: [] };
+  const base = recipe ? await loadRecipeLines(tx, recipe.id) : { lines: [], views: [] };
+
+  // SRV-003: an add-on shifts price, duration and recipe. RLS keeps the lookup
+  // tenant-scoped, so an id from another organization simply finds nothing.
+  const selectedAddOns =
+    options.addOnIds && options.addOnIds.length > 0
+      ? await tx.select().from(addOns).where(inArray(addOns.id, [...options.addOnIds]))
+      : [];
+
+  const addOnRecipes: RecipeLine[][] = [];
+  const addOnViews: RecipeLineView[] = [];
+  for (const addOn of selectedAddOns) {
+    const addOnRecipe = await loadActiveAddOnRecipe(tx, addOn.id, at);
+    if (!addOnRecipe) continue;
+    const loaded = await loadRecipeLines(tx, addOnRecipe.id);
+    addOnRecipes.push(loaded.lines);
+    addOnViews.push(...loaded.views);
+  }
+
+  // Quantities are merged per material before costing: the same bottle poured
+  // twice must be costed once, or the rounding happens twice.
+  const lines = mergeRecipeLines(base.lines, ...addOnRecipes);
+  const views = mergeViews(base.views, addOnViews);
   const recipeCost = calculateRecipeCost(lines);
 
+  const priceDelta = selectedAddOns.reduce((total, addOn) => total + addOn.priceDeltaMinor, 0);
+  const durationDelta = selectedAddOns.reduce((total, addOn) => total + addOn.durationDeltaMinutes, 0);
+  const priceMinor = service.priceMinor === null ? null : service.priceMinor + priceDelta;
+  const durationMinutes =
+    service.durationMinutes === null ? null : service.durationMinutes + durationDelta;
+
   if (service.priceMinor === null) reasons.push("missing_price");
+  else if (priceMinor! < 0) reasons.push("negative_price_with_add_ons");
   if (service.durationMinutes === null) reasons.push("missing_duration");
+  else if (durationMinutes! <= 0) reasons.push("invalid_duration_with_add_ons");
   // SRV-007. A service that has never had a recipe is not a service that costs
   // no materials — reporting it complete would hand back a margin computed as if
   // the materials were free, which is the exact failure this codebase refuses
@@ -181,9 +228,9 @@ export async function loadServiceCosting(
 
   const currency = (service.currency ?? "MDL") as Currency;
   const costing = calculateCosting({
-    priceMinor: service.priceMinor!,
+    priceMinor: priceMinor!,
     materialCostMinor: recipeCost.materialCostMinor,
-    durationMinutes: service.durationMinutes!,
+    durationMinutes: durationMinutes!,
     currency,
     commission: toCommission(commission),
   });
@@ -198,4 +245,25 @@ export async function loadServiceCosting(
   }
 
   return { status: "complete", currency, costing, lines: detailedViews };
+}
+
+/**
+ * The display counterpart of `mergeRecipeLines`: one row per material, so a
+ * breakdown never shows the same bottle twice.
+ */
+function mergeViews(
+  base: readonly RecipeLineView[],
+  fromAddOns: readonly RecipeLineView[],
+): RecipeLineView[] {
+  const merged = new Map<string, RecipeLineView>();
+  for (const view of [...base, ...fromAddOns]) {
+    const existing = merged.get(view.materialId);
+    merged.set(
+      view.materialId,
+      existing
+        ? { ...existing, quantityMilliUnits: existing.quantityMilliUnits + view.quantityMilliUnits }
+        : { ...view },
+    );
+  }
+  return [...merged.values()];
 }

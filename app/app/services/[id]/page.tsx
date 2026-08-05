@@ -1,7 +1,7 @@
 import { asc, eq, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
-import { services, specialists } from "@/db/schema";
+import { addOns, serviceAddOns, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { ServiceDetail, type ServiceDetailData } from "@/components/service-detail";
@@ -10,9 +10,21 @@ import { loadMaterials } from "@/app/app/materials/page";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { requireWorkspace } from "@/lib/workspace";
 
-export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ServicePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ add_ons?: string }>;
+}) {
   const { membership, locale } = await requireWorkspace();
   const { id } = await params;
+  // The chosen add-on set comes from the URL so the server can compute the
+  // costing and a shared link reproduces the same numbers.
+  const selectedAddOnIds = ((await searchParams).add_ons ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   if (!can(membership.role, "services", "read")) {
     return (
@@ -35,8 +47,22 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
       .orderBy(asc(specialists.createdAt), asc(specialists.id))
       .limit(1);
 
-    const costing = await loadServiceCosting(tx, service, { specialistId: specialist?.id ?? null });
-    return { service, costing };
+    const costing = await loadServiceCosting(tx, service, {
+      specialistId: specialist?.id ?? null,
+      addOnIds: selectedAddOnIds,
+    });
+
+    const catalogue = await tx
+      .select()
+      .from(addOns)
+      .where(isNull(addOns.archivedAt))
+      .orderBy(asc(addOns.createdAt));
+    const linked = await tx
+      .select({ addOnId: serviceAddOns.addOnId })
+      .from(serviceAddOns)
+      .where(eq(serviceAddOns.serviceId, service.id));
+
+    return { service, costing, catalogue, linked: linked.map((row) => row.addOnId) };
   });
 
   if (!loaded) notFound();
@@ -81,6 +107,14 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
       service={data}
       materials={materials}
       displayName={resolveLocalizedText(loaded.service.name, locale, locale) ?? "Без названия"}
+      addOns={loaded.catalogue.map((addOn) => ({
+        id: addOn.id,
+        displayName: resolveLocalizedText(addOn.name, locale, locale) ?? "Без названия",
+        price_delta_minor: addOn.priceDeltaMinor,
+        duration_delta_minutes: addOn.durationDeltaMinutes,
+      }))}
+      linkedAddOnIds={loaded.linked}
+      selectedAddOnIds={selectedAddOnIds}
     />
   );
 }

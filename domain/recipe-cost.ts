@@ -72,3 +72,36 @@ export function calculateRecipeCost(lines: readonly RecipeLine[]): RecipeCost {
 export function isEmptyRecipe(lines: readonly RecipeLine[]): boolean {
   return lines.length === 0;
 }
+
+/**
+ * Combines recipes — a service plus its add-ons — into one line per material.
+ *
+ * Quantities are summed before costing, not costed and then added. The master
+ * pours 3 ml out of one bottle; charging for 2 ml and 1 ml separately rounds
+ * twice and can land a minor unit away from the truth. This is the same reason
+ * `materialCostMinor` refuses to multiply a rounded per-unit price.
+ *
+ * The first price seen for a material wins, because every line refers to the
+ * same material and therefore the same purchase price; a line with no price at
+ * all still poisons the merged line, since the total quantity cannot be costed.
+ */
+export function mergeRecipeLines(...recipes: readonly (readonly RecipeLine[])[]): RecipeLine[] {
+  const merged = new Map<string, RecipeLine>();
+
+  for (const lines of recipes) {
+    for (const line of lines) {
+      const existing = merged.get(line.materialId);
+      if (!existing) {
+        merged.set(line.materialId, { ...line });
+        continue;
+      }
+      merged.set(line.materialId, {
+        materialId: line.materialId,
+        quantityMilliUnits: existing.quantityMilliUnits + line.quantityMilliUnits,
+        price: existing.price ?? line.price,
+      });
+    }
+  }
+
+  return [...merged.values()];
+}

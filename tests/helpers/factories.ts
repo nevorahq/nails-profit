@@ -192,3 +192,43 @@ export async function createRecipe(
 
   return recipe;
 }
+
+export async function createAddOn(
+  organizationId: string,
+  options: { name?: string; priceDeltaMinor?: number; durationDeltaMinutes?: number } = {},
+) {
+  const { addOns } = await import("@/db/schema");
+  const [addOn] = await adminDb
+    .insert(addOns)
+    .values({
+      organizationId,
+      name: { ru: options.name ?? "Опция" },
+      priceDeltaMinor: options.priceDeltaMinor ?? 0,
+      durationDeltaMinutes: options.durationDeltaMinutes ?? 0,
+    })
+    .returning();
+  return addOn;
+}
+
+export async function createAddOnRecipe(
+  organizationId: string,
+  addOnId: string,
+  items: { materialId: string; quantity: number }[],
+) {
+  const [recipe] = await adminDb
+    .insert(recipes)
+    .values({ organizationId, addOnId, recipeVersion: 1, activeFrom: new Date(Date.now() - 60_000) })
+    .returning();
+
+  if (items.length > 0) {
+    await adminDb.insert(recipeItems).values(
+      items.map((item) => ({
+        organizationId,
+        recipeId: recipe.id,
+        materialId: item.materialId,
+        normativeQuantityMilliUnits: toMilliUnits(item.quantity),
+      })),
+    );
+  }
+  return recipe;
+}
