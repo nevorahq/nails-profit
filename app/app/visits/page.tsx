@@ -99,6 +99,7 @@ export default async function VisitsPage({
           <h1>Визиты</h1>
         </div>
         <nav className="tab-nav">
+          <Link href="/app">Отчёт</Link>
           <Link className="active" href="/app/visits">
             Визиты
           </Link>

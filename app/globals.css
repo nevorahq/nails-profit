@@ -106,6 +106,7 @@ h1 { font-family: Georgia, serif; font-size: clamp(42px, 7vw, 84px); line-height
 .metric { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
 .metric span { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .metric strong { font-size: 24px; font-family: Georgia, serif; }
+.metric small { font-size: 11px; line-height: 1.4; }
 .metric-strong { border-color: var(--accent); }
 .metric-negative strong, td.metric-negative { color: #a4262c; }
 

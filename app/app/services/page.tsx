@@ -65,6 +65,7 @@ export default async function ServicesPage() {
           <h1>Услуги</h1>
         </div>
         <nav className="tab-nav">
+          <Link href="/app">Отчёт</Link>
           <Link href="/app/visits">Визиты</Link>
           <Link className="active" href="/app/services">
             Услуги
