@@ -112,6 +112,7 @@ async function call<T>(
   method: string,
   path: string,
   body: RequestBody,
+  extraHeaders: Record<string, string> = {},
 ): Promise<ApiResponse<T>> {
   const url = new URL(path, ORIGIN);
   const match = matchRoute(url.pathname);
@@ -124,6 +125,7 @@ async function call<T>(
 
   const headers = new Headers();
   if (cookie) headers.set("cookie", cookie);
+  for (const [name, value] of Object.entries(extraHeaders)) headers.set(name, value);
 
   let payload: BodyInit | undefined;
   if (body instanceof FormData) {
@@ -157,21 +159,21 @@ export type Actor = Readonly<{
   userId: string;
   email: string;
   cookie: string | null;
-  get<T = unknown>(path: string): Promise<ApiResponse<T>>;
-  post<T = unknown>(path: string, body?: RequestBody): Promise<ApiResponse<T>>;
-  put<T = unknown>(path: string, body?: RequestBody): Promise<ApiResponse<T>>;
-  patch<T = unknown>(path: string, body?: RequestBody): Promise<ApiResponse<T>>;
-  delete<T = unknown>(path: string, body?: RequestBody): Promise<ApiResponse<T>>;
+  get<T = unknown>(path: string, headers?: Record<string, string>): Promise<ApiResponse<T>>;
+  post<T = unknown>(path: string, body?: RequestBody, headers?: Record<string, string>): Promise<ApiResponse<T>>;
+  put<T = unknown>(path: string, body?: RequestBody, headers?: Record<string, string>): Promise<ApiResponse<T>>;
+  patch<T = unknown>(path: string, body?: RequestBody, headers?: Record<string, string>): Promise<ApiResponse<T>>;
+  delete<T = unknown>(path: string, body?: RequestBody, headers?: Record<string, string>): Promise<ApiResponse<T>>;
 }>;
 
 function actorFor(identity: { userId: string; email: string; cookie: string | null }): Actor {
   return {
     ...identity,
-    get: (path) => call(identity.cookie, "GET", path, undefined),
-    post: (path, body) => call(identity.cookie, "POST", path, body),
-    put: (path, body) => call(identity.cookie, "PUT", path, body),
-    patch: (path, body) => call(identity.cookie, "PATCH", path, body),
-    delete: (path, body) => call(identity.cookie, "DELETE", path, body),
+    get: (path, headers) => call(identity.cookie, "GET", path, undefined, headers),
+    post: (path, body, headers) => call(identity.cookie, "POST", path, body, headers),
+    put: (path, body, headers) => call(identity.cookie, "PUT", path, body, headers),
+    patch: (path, body, headers) => call(identity.cookie, "PATCH", path, body, headers),
+    delete: (path, body, headers) => call(identity.cookie, "DELETE", path, body, headers),
   };
 }
 

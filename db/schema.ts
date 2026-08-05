@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -516,6 +517,12 @@ export const visits = pgTable(
       .notNull()
       .references(() => specialists.id, { onDelete: "restrict" }),
     serviceId: uuid("service_id").references(() => services.id, { onDelete: "set null" }),
+    /**
+     * The booking this visit came from, section 7.4. Nullable and never
+     * backfilled: visits recorded by hand before booking existed are not
+     * missing anything, and a visit will always be creatable without one.
+     */
+    bookingId: uuid("booking_id").references((): AnyPgColumn => bookings.id, { onDelete: "set null" }),
     completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
     plannedDurationMinutes: integer("planned_duration_minutes").notNull(),
     actualDurationMinutes: integer("actual_duration_minutes"),
@@ -1173,6 +1180,201 @@ export const availabilityExceptions = pgTable(
     index("availability_exception_specialist_idx").on(table.specialistId, table.startsAt),
     index("availability_exception_org_idx").on(table.organizationId, table.startsAt),
     check("availability_exception_interval", sql`${table.endsAt} > ${table.startsAt}`),
+  ],
+);
+
+/* --- Phase 7.5: bookings, holds and double-booking protection --- */
+
+export const bookingStatus = pgEnum("booking_status", [
+  "pending_confirmation",
+  "confirmed",
+  "cancelled",
+  "completed",
+  "no_show",
+]);
+export const bookingSource = pgEnum("booking_source", [
+  "public_booking",
+  "staff",
+  "rebooking",
+  "waitlist",
+  "import",
+  "api",
+]);
+export const bookingActor = pgEnum("booking_actor", ["client", "staff", "system"]);
+export const bookingHoldStatus = pgEnum("booking_hold_status", [
+  "active",
+  "converted",
+  "expired",
+  "released",
+]);
+
+/**
+ * A booking, roadmap section 7.4.
+ *
+ * `pending_confirmation` and `confirmed` are the *active* statuses: both occupy
+ * the specialist, and a cancelled or completed booking does not. Section 7.5
+ * puts a PostgreSQL exclusion constraint over exactly those two, written by
+ * hand in the migration because Drizzle cannot express `EXCLUDE USING gist`.
+ * The application checks for conflicts first; the constraint is what holds when
+ * two transactions race past the same check.
+ *
+ * Prices and durations live in `booking_line` as snapshots, for the same reason
+ * a visit snapshots them: a catalogue edit tomorrow must not restate what a
+ * client was quoted today.
+ */
+export const bookings = pgTable(
+  "booking",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    /** Only for services that occupy a chair or a room. */
+    workplaceId: uuid("workplace_id").references(() => workplaces.id, { onDelete: "restrict" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: bookingStatus("status").notNull().default("pending_confirmation"),
+    source: bookingSource("source").notNull(),
+    /**
+     * When a manually confirmed booking lapses. It holds the slot until then —
+     * a request the studio has not answered still stops someone else taking the
+     * time — and never past the appointment itself.
+     */
+    confirmationDueAt: timestamp("confirmation_due_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledBy: bookingActor("cancelled_by"),
+    /** A short reason code, never free text: section 7.9 keeps PII out of this. */
+    cancellationReason: text("cancellation_reason"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("booking_org_starts_idx").on(table.organizationId, table.startsAt),
+    index("booking_specialist_starts_idx").on(table.specialistId, table.startsAt),
+    index("booking_location_starts_idx").on(table.locationId, table.startsAt),
+    index("booking_client_idx").on(table.clientId),
+    check("booking_interval", sql`${table.endsAt} > ${table.startsAt}`),
+    check(
+      "booking_cancellation_shape",
+      sql`(${table.status} = 'cancelled' and ${table.cancelledAt} is not null and ${table.cancelledBy} is not null)
+        or (${table.status} <> 'cancelled' and ${table.cancelledAt} is null and ${table.cancelledBy} is null)`,
+    ),
+  ],
+);
+
+/** What was booked and at what price, snapshotted like a visit line. */
+export const bookingLines = pgTable(
+  "booking_line",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    serviceId: uuid("service_id").references(() => services.id, { onDelete: "set null" }),
+    addOnId: uuid("add_on_id").references(() => addOns.id, { onDelete: "set null" }),
+    nameSnapshot: jsonb("name_snapshot").$type<LocalizedText>().notNull(),
+    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull().default(0),
+    ...auditColumns,
+  },
+  (table) => [
+    index("booking_line_booking_idx").on(table.bookingId),
+    check("booking_line_price_non_negative", sql`${table.priceMinor} >= 0`),
+  ],
+);
+
+/**
+ * A five-minute reservation of a slot while a client fills in their name and
+ * phone, section 7.5.
+ *
+ * Without it the last step of the public flow is a lottery: the slot shown on
+ * the previous screen can be taken while the form is being typed. With it, the
+ * loser of that race finds out at the moment they pick the time, not after
+ * entering their details.
+ *
+ * Expiry is not enforced by the exclusion constraint — `now()` is not immutable
+ * and cannot appear in one — so a stale hold is marked expired by the next
+ * request touching that specialist, and by a sweep that runs on its own.
+ */
+export const bookingHolds = pgTable(
+  "booking_hold",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    workplaceId: uuid("workplace_id").references(() => workplaces.id, { onDelete: "restrict" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    status: bookingHoldStatus("status").notNull().default("active"),
+    /**
+     * Only the hash. The raw token goes to the browser once and is the proof
+     * that this visitor — not another one who guessed the id — may convert it.
+     */
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    convertedBookingId: uuid("converted_booking_id").references(() => bookings.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("booking_hold_token_idx").on(table.tokenHash),
+    index("booking_hold_specialist_idx").on(table.specialistId, table.startsAt),
+    index("booking_hold_expiry_idx").on(table.status, table.expiresAt),
+    check("booking_hold_interval", sql`${table.endsAt} > ${table.startsAt}`),
+  ],
+);
+
+/**
+ * Idempotency for the mutations section 7.5 requires it on: public create,
+ * reschedule and staff create.
+ *
+ * A retried request must return the first result rather than book a second
+ * appointment — mobile networks retry, and a client who taps "confirm" twice
+ * on a slow connection is not asking for two Tuesdays. The fingerprint is
+ * stored so that reusing a key for a *different* request is refused instead of
+ * silently answering with someone else's booking.
+ */
+export const bookingIdempotencyKeys = pgTable(
+  "booking_idempotency_key",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    scope: text("scope").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("booking_idempotency_key_idx").on(
+      table.organizationId,
+      table.scope,
+      table.idempotencyKey,
+    ),
+    index("booking_idempotency_created_idx").on(table.createdAt),
   ],
 );
 

@@ -506,6 +506,28 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/bookings",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read; a Master sees their own calendar",
+    request: async () => ({ path: "/api/v1/bookings" }),
+  },
+  {
+    route: "/api/v1/bookings",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; an Analyst reads only. Without an Idempotency-Key this is a 422, never a 403",
+    request: async (fixture) => ({
+      path: "/api/v1/bookings",
+      body: {
+        location_id: fixture.locationId,
+        specialist_id: fixture.studio.specialistId,
+        service_id: fixture.studio.serviceId,
+        starts_at: "2026-09-02T07:00:00.000Z",
+      },
+    }),
+  },
+  {
     route: "/api/v1/imports/templates/[entity]",
     method: "GET",
     allowed: ALL_ROLES,

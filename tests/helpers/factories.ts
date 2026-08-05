@@ -47,6 +47,28 @@ export async function createOrganization(options: { name?: string; ownerId?: str
   return organization;
 }
 
+export async function createLocation(
+  organizationId: string,
+  options: { slug?: string; name?: string; timezone?: string } = {},
+) {
+  const { locations, bookingSettings } = await import("@/db/schema");
+  const [location] = await adminDb
+    .insert(locations)
+    .values({
+      organizationId,
+      slug: options.slug ?? `loc-${randomUUID().slice(0, 8)}`,
+      name: options.name ?? "Основной адрес",
+      timezone: options.timezone ?? "Europe/Chisinau",
+    })
+    .returning();
+
+  // Created together, as the endpoint does: a location without settings is one
+  // the availability engine can neither publish nor refuse to publish.
+  await adminDb.insert(bookingSettings).values({ organizationId, locationId: location.id });
+
+  return location;
+}
+
 export async function createMaterial(
   organizationId: string,
   options: {
