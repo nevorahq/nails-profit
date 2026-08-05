@@ -7,10 +7,17 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 
+export type OrganizationMember = {
+  user_id: string;
+  email: string;
+  role: string;
+};
+
 export type SpecialistRow = {
   id: string;
   name: string;
   cooperation_type: string;
+  user_id: string | null;
   default_rule: {
     type: string;
     basis_points: number | null;
@@ -40,12 +47,14 @@ function describeRule(rule: SpecialistRow["default_rule"], currency: string, t: 
 export function SpecialistManager({
   specialists,
   services,
+  members,
   currency,
   locale,
   canManage,
 }: {
   specialists: SpecialistRow[];
   services: { id: string; name: string }[];
+  members: OrganizationMember[];
   currency: string;
   locale: AppLocale;
   canManage: boolean;
@@ -55,11 +64,11 @@ export function SpecialistManager({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function send(url: string, payload: unknown, form?: HTMLFormElement) {
+  async function send(url: string, payload: unknown, form?: HTMLFormElement, method = "POST") {
     setPending(true);
     setError(null);
     const response = await fetch(url, {
-      method: "POST",
+      method,
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -115,9 +124,31 @@ export function SpecialistManager({
     );
   }
 
+  async function linkAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    await send(
+      `/api/v1/specialists/${data.get("specialist_id")}`,
+      { user_id: data.get("user_id") },
+      form,
+      "PATCH",
+    );
+  }
+
+  async function unlinkAccount(specialistId: string) {
+    await send(`/api/v1/specialists/${specialistId}`, { user_id: null }, undefined, "PATCH");
+  }
+
   const withoutRule = specialists.filter(
     (person) => person.cooperation_type === "commission" && person.default_rule === null,
   );
+
+  // One account belongs to one specialist, so an account already linked is not
+  // offered again — the database refuses it anyway, and a dropdown that lists
+  // choices which cannot work is worse than a shorter one.
+  const linked = new Set(specialists.map((person) => person.user_id).filter(Boolean));
+  const unlinkedMembers = members.filter((member) => !linked.has(member.user_id));
 
   return (
     <>
@@ -180,12 +211,13 @@ export function SpecialistManager({
             <th>{t("specialists.cooperation")}</th>
             <th>{t("specialists.defaultRule")}</th>
             <th>{t("specialists.exceptions")}</th>
+            <th>{t("specialists.account")}</th>
           </tr>
         </thead>
         <tbody>
           {specialists.length === 0 && (
             <tr>
-              <td colSpan={4} className="muted">
+              <td colSpan={5} className="muted">
                 {t("specialists.none")}
               </td>
             </tr>
@@ -215,10 +247,65 @@ export function SpecialistManager({
                   </ul>
                 )}
               </td>
+              <td>
+                {person.user_id ? (
+                  <>
+                    {members.find((member) => member.user_id === person.user_id)?.email ?? person.user_id}
+                    {canManage && (
+                      <button
+                        className="inline-action"
+                        type="button"
+                        disabled={pending}
+                        onClick={() => unlinkAccount(person.id)}
+                      >
+                        {t("specialists.unlink")}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span className="badge-warning">{t("specialists.notLinked")}</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {canManage && specialists.length > 0 && (
+        <section className="panel">
+          <h2>{t("specialists.linkAccount")}</h2>
+          <p className="muted">{t("specialists.linkHint")}</p>
+          {unlinkedMembers.length === 0 ? (
+            <p className="muted">{t("specialists.noMembers")}</p>
+          ) : (
+            <form className="inline-form" onSubmit={linkAccount}>
+              <label>
+                {t("specialists.specialist")}
+                <select name="specialist_id">
+                  {specialists.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("specialists.member")}
+                <select name="user_id">
+                  {unlinkedMembers.map((member) => (
+                    <option key={member.user_id} value={member.user_id}>
+                      {member.email} — {t(`roles.${member.role}` as MessageKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("common.saving") : t("specialists.link")}
+              </button>
+            </form>
+          )}
+        </section>
+      )}
 
       {canManage && specialists.length > 0 && services.length > 0 && (
         <section className="panel">

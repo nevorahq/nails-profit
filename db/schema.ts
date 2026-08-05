@@ -294,6 +294,12 @@ export const specialists = pgTable(
   (table) => [
     index("specialist_org_idx").on(table.organizationId),
     index("specialist_user_idx").on(table.userId),
+    // One specialist per account. Every "own" scope from section 6.1 resolves a
+    // master to their specialist row with a single lookup; two rows for one
+    // account would make which visits they may see depend on row order.
+    uniqueIndex("specialist_org_user_idx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.userId} is not null`),
   ],
 );
 

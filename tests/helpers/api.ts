@@ -40,7 +40,29 @@ collectRoutes(API_ROOT, ["api"], routes);
  * own server API. Left in the table, `[...all]` would swallow every unmatched
  * path and turn a typo into a passing test.
  */
-const matchable = routes.filter((route) => !route.pattern.some((segment) => segment.startsWith("[...")));
+const matchable = routes
+  .filter((route) => !route.pattern.some((segment) => segment.startsWith("[...")))
+  // Static segments beat dynamic ones, as they do in Next.js itself. Without
+  // this, `/api/v1/invitations/accept` matches `/api/v1/invitations/[id]`
+  // whenever that file happens to be read first, and the test calls the wrong
+  // handler — or, worse, quietly passes against it.
+  .sort((left, right) => {
+    for (let index = 0; index < Math.min(left.pattern.length, right.pattern.length); index += 1) {
+      const leftDynamic = isDynamic(left.pattern[index]);
+      const rightDynamic = isDynamic(right.pattern[index]);
+      if (leftDynamic !== rightDynamic) return leftDynamic ? 1 : -1;
+    }
+    return 0;
+  });
+
+function isDynamic(segment: string) {
+  return segment.startsWith("[") && segment.endsWith("]");
+}
+
+/** Every route the client can reach, for tests that assert full coverage. */
+export function listRoutes(): readonly RouteFile[] {
+  return matchable;
+}
 
 export function matchRoute(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
@@ -50,7 +72,7 @@ export function matchRoute(pathname: string) {
 
     const params: Record<string, string> = {};
     const matched = route.pattern.every((patternSegment, index) => {
-      if (patternSegment.startsWith("[") && patternSegment.endsWith("]")) {
+      if (isDynamic(patternSegment)) {
         params[patternSegment.slice(1, -1)] = segments[index];
         return true;
       }
@@ -73,7 +95,7 @@ type HandlerModule = Record<string, unknown>;
 
 const moduleCache = new Map<string, Promise<HandlerModule>>();
 
-function loadRoute(file: string) {
+export function loadRoute(file: string) {
   const cached = moduleCache.get(file);
   if (cached) return cached;
   const loading = import(/* @vite-ignore */ pathToFileURL(file).href) as Promise<HandlerModule>;
@@ -120,9 +142,13 @@ async function call<T>(
   })) as Response;
 
   const text = await response.text();
+  // Not every endpoint answers JSON: a template download is a CSV file, and
+  // parsing it as JSON would turn a working response into a test error.
+  const isJson = response.headers.get("content-type")?.includes("application/json") ?? false;
+
   return {
     status: response.status,
-    body: (text ? JSON.parse(text) : null) as T,
+    body: (text && isJson ? JSON.parse(text) : (text as unknown)) as T,
     headers: response.headers,
   };
 }

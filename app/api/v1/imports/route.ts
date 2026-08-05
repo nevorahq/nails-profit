@@ -133,5 +133,11 @@ export async function GET(request: Request) {
       .limit(50),
   );
 
-  return apiSuccess(rows, id);
+  // Filtered rather than refused: the list is a history of what the role may
+  // import, so a Master sees an empty one instead of a wall.
+  const visible = rows.filter(
+    (row) => isImportableEntity(row.entity) && canImport(caller.membership!.role, row.entity),
+  );
+
+  return apiSuccess(visible, id);
 }

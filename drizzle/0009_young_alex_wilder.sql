@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "specialist_org_user_idx" ON "specialist" USING btree ("organization_id","user_id") WHERE "specialist"."user_id" is not null;

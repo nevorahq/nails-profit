@@ -121,6 +121,10 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .button-row { display: flex; gap: 12rem; justify-content: center; flex-wrap: wrap; }
 .secondary-button { display: inline-block; padding: 14rem 22rem; border-radius: 999rem; border: 1rem solid var(--line); background: transparent; color: var(--ink); font-size: 16rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+/* A minor action inside a table cell: it has to stay a real button for the
+   keyboard, but it must not weigh as much as the form's primary action. */
+.inline-action { margin-left: 10rem; border: 0; background: transparent; color: var(--accent); font-size: 14rem; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 4rem; }
+.inline-action:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; padding: 26rem 24rem; margin: 22rem 0; box-shadow: var(--shadow); }
 .panel h2 { font-size: 26rem; margin: 0 0 18rem; }

@@ -1,7 +1,8 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { AppNav } from "@/components/app-nav";
 
-import { commissionRules, services, specialists } from "@/db/schema";
+import { db } from "@/db";
+import { commissionRules, memberships, services, specialists, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
@@ -74,6 +75,7 @@ export default async function SpecialistsPage() {
           id: person.id,
           name: person.name,
           cooperation_type: person.cooperationType,
+          user_id: person.userId,
           default_rule: defaultRule
             ? {
                 type: defaultRule.type,
@@ -100,6 +102,18 @@ export default async function SpecialistsPage() {
     };
   });
 
+  // Read outside the tenant transaction because `membership` is the one table
+  // RLS does not cover; the organization filter is what scopes it. Only someone
+  // who may manage specialists is shown who could be linked to one.
+  const members = canManageCatalogue(membership.role, "commissions")
+    ? await db
+        .select({ user_id: memberships.userId, email: users.email, role: memberships.role })
+        .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
+        .where(eq(memberships.organizationId, membership.organizationId))
+        .orderBy(asc(memberships.createdAt))
+    : [];
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -112,6 +126,7 @@ export default async function SpecialistsPage() {
       <SpecialistManager
         specialists={people}
         services={catalogue}
+        members={members}
         currency={currency}
         locale={locale}
         canManage={canManageCatalogue(membership.role, "commissions")}

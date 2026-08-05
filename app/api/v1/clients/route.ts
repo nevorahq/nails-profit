@@ -1,7 +1,7 @@
-import { asc, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { clients } from "@/db/schema";
+import { clients, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { normalizePhone } from "@/domain/phone";
 import { can, scopeFor } from "@/domain/rbac";
@@ -34,9 +34,34 @@ export async function GET(request: Request) {
     return apiError(403, "FORBIDDEN", "This role cannot read clients", id);
   }
 
-  const rows = await withTenant(actor.organizationId, (tx) =>
-    tx.select().from(clients).where(isNull(clients.archivedAt)).orderBy(asc(clients.name)),
-  );
+  const rows = await withTenant(actor.organizationId, async (tx) => {
+    // Section 6.1 gives a Master "только назначенные клиенты/визиты". A client
+    // is theirs once they have served them, so the link is a visit — which also
+    // means the master's own client list cannot be widened by guessing an id.
+    if (scopeFor(actor.role, "clients") === "own") {
+      const [own] = await tx
+        .select({ id: specialists.id })
+        .from(specialists)
+        .where(eq(specialists.userId, actor.userId))
+        .limit(1);
+      if (!own) return [];
+
+      return tx
+        .selectDistinct({
+          id: clients.id,
+          name: clients.name,
+          normalizedPhone: clients.normalizedPhone,
+          email: clients.email,
+          anonymizedAt: clients.anonymizedAt,
+        })
+        .from(clients)
+        .innerJoin(visits, eq(visits.clientId, clients.id))
+        .where(and(isNull(clients.archivedAt), eq(visits.specialistId, own.id)))
+        .orderBy(asc(clients.name));
+    }
+
+    return tx.select().from(clients).where(isNull(clients.archivedAt)).orderBy(asc(clients.name));
+  });
 
   // Section 6.1: an Analyst reads client history "без телефонов и email".
   const hidePii = scopeFor(actor.role, "clients") === "all" && !can(actor.role, "clients", "write");

@@ -1,3 +1,4 @@
+import type { MemberRole } from "@/domain/rbac";
 import { dataOf, signUp, type Actor } from "./api";
 
 /**
@@ -73,4 +74,17 @@ export async function createCanonicalStudio(email: string, organizationName = "C
   });
 
   return { owner, organizationId, specialistId, materialId, serviceId };
+}
+
+/**
+ * A colleague, added the only way the product allows: an invitation issued by
+ * someone who may grant that role, then accepted by an account with the same
+ * address. There is no back door for tests — the membership under test is one
+ * the product can actually produce.
+ */
+export async function inviteMember(owner: Actor, email: string, role: MemberRole): Promise<Actor> {
+  const { token } = dataOf<{ token: string }>(await owner.post("/api/v1/invitations", { email, role }));
+  const member = await signUp(email, role);
+  await member.post("/api/v1/invitations/accept", { token });
+  return member;
 }

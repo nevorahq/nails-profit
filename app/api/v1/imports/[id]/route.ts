@@ -40,11 +40,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const result = await withTenant(actor.organizationId, async (tx) => {
     const [job] = await tx.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
     if (!job) return { error: "NOT_FOUND" as const };
+    if (!isImportableEntity(job.entityType)) return { error: "NOT_FOUND" as const };
+    // Permission before state, as in confirm: a role that may not touch this
+    // import should be told so whether or not the job has already been applied.
+    if (!canImport(actor.role, job.entityType)) return { error: "FORBIDDEN" as const };
     if (job.status !== "uploaded" || job.sourceText === null) {
       return { error: "ALREADY_COMPLETED" as const };
     }
-    if (!isImportableEntity(job.entityType)) return { error: "NOT_FOUND" as const };
-    if (!canImport(actor.role, job.entityType)) return { error: "FORBIDDEN" as const };
 
     // Only keys the template declares, and only columns the file has. A mapping
     // posted with an out-of-range index would otherwise read undefined cells
@@ -127,6 +129,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   if (!job || !isImportableEntity(job.entityType)) {
     return apiError(404, "NOT_FOUND", "Import job not found", id);
+  }
+
+  // The preview below is the file's own rows — for a client import, names and
+  // phone numbers. Reading it is the same act as importing it, so it takes the
+  // same permission: section 6.1 lets an Analyst read client history "без
+  // телефонов и email", and a job detail must not be the way around that.
+  if (!canImport(caller.membership.role, job.entityType)) {
+    return apiError(403, "FORBIDDEN", "This role cannot read this import", id);
   }
 
   return apiSuccess(
