@@ -429,6 +429,195 @@ export const invitations = pgTable(
   ],
 );
 
+/**
+ * Minimal client card, roadmap P0. Contacts are optional: a walk-in may leave a
+ * name and nothing else, and requiring more would block the first visit.
+ *
+ * Section 15.3 requires erasure to anonymize a client while keeping the
+ * financial records. `anonymizedAt` is what makes that possible without
+ * deleting the row the visits point at.
+ */
+export const clients = pgTable(
+  "client",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    /** E.164, normalized on the way in (LOC-005). */
+    normalizedPhone: text("normalized_phone"),
+    email: text("email"),
+    locale: locale("locale"),
+    anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("client_org_idx").on(table.organizationId),
+    // Section 11.3: partial unique on normalized contacts, so the same person
+    // cannot be entered twice, while any number of clients may have no contact.
+    uniqueIndex("client_org_phone_idx")
+      .on(table.organizationId, table.normalizedPhone)
+      .where(sql`${table.normalizedPhone} is not null`),
+    uniqueIndex("client_org_email_idx")
+      .on(table.organizationId, sql`lower(${table.email})`)
+      .where(sql`${table.email} is not null`),
+  ],
+);
+
+export const visitStatus = pgEnum("visit_status", ["completed", "adjusted"]);
+
+/**
+ * A completed visit, entered by hand (roadmap phase 3). There is no booking to
+ * point at: the MVP deliberately has no calendar.
+ */
+export const visits = pgTable(
+  "visit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    serviceId: uuid("service_id").references(() => services.id, { onDelete: "set null" }),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    plannedDurationMinutes: integer("planned_duration_minutes").notNull(),
+    actualDurationMinutes: integer("actual_duration_minutes"),
+    status: visitStatus("status").notNull().default("completed"),
+    ...auditColumns,
+  },
+  (table) => [
+    index("visit_org_completed_idx").on(table.organizationId, table.completedAt),
+    index("visit_specialist_idx").on(table.specialistId, table.completedAt),
+    check("visit_planned_duration_positive", sql`${table.plannedDurationMinutes} > 0`),
+    check(
+      "visit_actual_duration_positive",
+      sql`${table.actualDurationMinutes} is null or ${table.actualDurationMinutes} > 0`,
+    ),
+  ],
+);
+
+/**
+ * SRV-004: price and duration are copied into the visit. The name is copied
+ * too, so a renamed or archived service still reads correctly in history.
+ */
+export const visitLines = pgTable(
+  "visit_line",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    visitId: uuid("visit_id")
+      .notNull()
+      .references(() => visits.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    /** References are for reporting only; the snapshot is what is charged. */
+    serviceId: uuid("service_id").references(() => services.id, { onDelete: "set null" }),
+    addOnId: uuid("add_on_id").references(() => addOns.id, { onDelete: "set null" }),
+    nameSnapshot: jsonb("name_snapshot").$type<LocalizedText>().notNull(),
+    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    discountMinor: bigint("discount_minor", { mode: "number" }).notNull().default(0),
+    durationMinutes: integer("duration_minutes").notNull().default(0),
+    ...auditColumns,
+  },
+  (table) => [
+    index("visit_line_visit_idx").on(table.visitId),
+    check("visit_line_price_non_negative", sql`${table.priceMinor} >= 0`),
+    check(
+      "visit_line_discount_within_price",
+      sql`${table.discountMinor} >= 0 and ${table.discountMinor} <= ${table.priceMinor}`,
+    ),
+  ],
+);
+
+/**
+ * CST-006: the recipe is copied into the visit and the master fills in what was
+ * actually used. The purchase price is snapshotted as the package pair rather
+ * than a rounded per-unit cost, so the arithmetic stays exact — the same reason
+ * `materialCostMinor` never multiplies a rounded unit price.
+ */
+export const consumptions = pgTable(
+  "consumption",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    visitId: uuid("visit_id")
+      .notNull()
+      .references(() => visits.id, { onDelete: "cascade" }),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => materials.id, { onDelete: "restrict" }),
+    materialNameSnapshot: text("material_name_snapshot").notNull(),
+    baseUnitSnapshot: unit("base_unit_snapshot").notNull(),
+    normativeQuantityMilliUnits: bigint("normative_quantity_milli_units", { mode: "number" }).notNull(),
+    /** Null until the master records it; never read as zero. */
+    actualQuantityMilliUnits: bigint("actual_quantity_milli_units", { mode: "number" }),
+    packagePriceMinorSnapshot: bigint("package_price_minor_snapshot", { mode: "number" }),
+    packageSizeMilliUnitsSnapshot: bigint("package_size_milli_units_snapshot", { mode: "number" }),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("consumption_visit_material_idx").on(table.visitId, table.materialId),
+    check("consumption_normative_non_negative", sql`${table.normativeQuantityMilliUnits} >= 0`),
+    check(
+      "consumption_actual_non_negative",
+      sql`${table.actualQuantityMilliUnits} is null or ${table.actualQuantityMilliUnits} >= 0`,
+    ),
+    check(
+      "consumption_package_size_positive",
+      sql`${table.packageSizeMilliUnitsSnapshot} is null or ${table.packageSizeMilliUnitsSnapshot} > 0`,
+    ),
+  ],
+);
+
+/**
+ * Append-only financial result of a visit, spec section 11.2 and 8.8.1.
+ *
+ * Adjusting a visit writes a new version; nothing here is ever updated. That is
+ * what lets a dashboard total be reproduced months later, and what makes the
+ * roadmap's "прошлые расчёты не меняются" checkable rather than aspirational.
+ */
+export const financialSnapshots = pgTable(
+  "financial_snapshot",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    visitId: uuid("visit_id")
+      .notNull()
+      .references(() => visits.id, { onDelete: "cascade" }),
+    snapshotVersion: integer("snapshot_version").notNull(),
+    formulaVersion: text("formula_version").notNull(),
+    currency: currency("currency").notNull(),
+    revenueMinor: bigint("revenue_minor", { mode: "number" }).notNull(),
+    materialCostMinor: bigint("material_cost_minor", { mode: "number" }),
+    normativeMaterialCostMinor: bigint("normative_material_cost_minor", { mode: "number" }),
+    commissionMinor: bigint("commission_minor", { mode: "number" }),
+    contributionMarginMinor: bigint("contribution_margin_minor", { mode: "number" }),
+    marginBasisPoints: integer("margin_basis_points"),
+    profitPerHourMinor: bigint("profit_per_hour_minor", { mode: "number" }),
+    durationMinutes: integer("duration_minutes"),
+    estimatedDuration: boolean("estimated_duration").notNull().default(false),
+    /** Empty when the visit costed cleanly; otherwise why it could not. */
+    incompleteReasons: jsonb("incomplete_reasons").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (table) => [
+    uniqueIndex("financial_snapshot_visit_version_idx").on(table.visitId, table.snapshotVersion),
+    index("financial_snapshot_org_idx").on(table.organizationId, table.createdAt),
+    check("financial_snapshot_version_positive", sql`${table.snapshotVersion} > 0`),
+  ],
+);
+
 export const auditEvents = pgTable(
   "audit_event",
   {

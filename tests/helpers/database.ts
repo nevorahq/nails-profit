@@ -24,6 +24,11 @@ export const adminDb = drizzle(adminClient, { schema });
 
 /** Every application table, children before parents. */
 const TABLES_IN_DELETE_ORDER = [
+  "financial_snapshot",
+  "consumption",
+  "visit_line",
+  "visit",
+  "client",
   "recipe_item",
   "recipe",
   "commission_rule",

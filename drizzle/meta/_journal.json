@@ -43,6 +43,13 @@
       "when": 1785912989602,
       "tag": "0005_motionless_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785919183486,
+      "tag": "0006_plain_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

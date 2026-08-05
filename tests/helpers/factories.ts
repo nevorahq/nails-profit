@@ -232,3 +232,47 @@ export async function createAddOnRecipe(
   }
   return recipe;
 }
+
+export async function createClient(
+  organizationId: string,
+  options: { name?: string; normalizedPhone?: string | null; email?: string | null } = {},
+) {
+  const { clients } = await import("@/db/schema");
+  const [client] = await adminDb
+    .insert(clients)
+    .values({
+      organizationId,
+      name: options.name ?? "Клиент",
+      normalizedPhone: options.normalizedPhone ?? null,
+      email: options.email ?? null,
+    })
+    .returning();
+  return client;
+}
+
+export async function createVisit(
+  organizationId: string,
+  options: {
+    specialistId: string;
+    clientId?: string | null;
+    serviceId?: string | null;
+    completedAt?: Date;
+    plannedDurationMinutes?: number;
+    actualDurationMinutes?: number | null;
+  },
+) {
+  const { visits } = await import("@/db/schema");
+  const [visit] = await adminDb
+    .insert(visits)
+    .values({
+      organizationId,
+      specialistId: options.specialistId,
+      clientId: options.clientId ?? null,
+      serviceId: options.serviceId ?? null,
+      completedAt: options.completedAt ?? new Date(),
+      plannedDurationMinutes: options.plannedDurationMinutes ?? 90,
+      actualDurationMinutes: options.actualDurationMinutes ?? null,
+    })
+    .returning();
+  return visit;
+}
