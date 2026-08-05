@@ -27,6 +27,7 @@ type Fixture = Readonly<{
   clientId: string;
   visitId: string;
   addOnId: string;
+  locationId: string;
   otherOrganization: Readonly<{ owner: Actor; serviceId: string; specialistId: string }>;
 }>;
 
@@ -62,6 +63,17 @@ async function freshImportJob(fixture: Fixture) {
   const form = importForm();
   const response = await fixture.studio.owner.post("/api/v1/imports", form);
   return dataOf<{ id: string }>(response).id;
+}
+
+async function freshException(fixture: Fixture) {
+  return dataOf<{ id: string }>(
+    await fixture.studio.owner.post("/api/v1/availability/exceptions", {
+      specialist_id: fixture.studio.specialistId,
+      kind: "unavailable",
+      starts_at: "2026-12-24T08:00:00.000Z",
+      ends_at: "2026-12-24T12:00:00.000Z",
+    }),
+  ).id;
 }
 
 async function freshInvitation(fixture: Fixture) {
@@ -384,6 +396,116 @@ const cases: readonly Case[] = [
     request: async (fixture) => ({ path: `/api/v1/imports/${await freshImportJob(fixture)}/confirm` }),
   },
   {
+    route: "/api/v1/locations",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read: a master cannot be told their Tuesday is at an address they may not see",
+    request: async () => ({ path: "/api/v1/locations" }),
+  },
+  {
+    route: "/api/v1/locations",
+    method: "POST",
+    allowed: ["owner"],
+    note: "An address and its timezone are organization settings in all but name",
+    request: async () => ({
+      path: "/api/v1/locations",
+      body: { name: "Второй адрес", slug: `addr-${crypto.randomUUID().slice(0, 8)}` },
+    }),
+  },
+  {
+    route: "/api/v1/locations/[id]",
+    method: "PATCH",
+    allowed: ["owner"],
+    note: "organization_settings write",
+    request: async (fixture) => ({
+      path: `/api/v1/locations/${fixture.locationId}`,
+      body: { name: "Основной адрес" },
+    }),
+  },
+  {
+    route: "/api/v1/locations/[id]/booking-settings",
+    method: "PUT",
+    allowed: ["owner"],
+    note: "Publishing a public booking page is an organization-level decision",
+    request: async (fixture) => ({
+      path: `/api/v1/locations/${fixture.locationId}/booking-settings`,
+      body: { min_lead_minutes: 90 },
+    }),
+  },
+  {
+    route: "/api/v1/availability/rules",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read; a Master sees their own rota",
+    request: async () => ({ path: "/api/v1/availability/rules" }),
+  },
+  {
+    route: "/api/v1/availability/rules",
+    method: "PUT",
+    allowed: CATALOGUE_MANAGERS,
+    note: "A rota decides which clients reach whom, so it takes the organization-wide scope",
+    request: async (fixture) => ({
+      path: "/api/v1/availability/rules",
+      body: {
+        specialist_id: fixture.studio.specialistId,
+        location_id: fixture.locationId,
+        effective_from: "2026-08-05",
+        intervals: [{ weekday: 3, start: "09:00", end: "18:00" }],
+      },
+    }),
+  },
+  {
+    route: "/api/v1/availability/exceptions",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read, narrowed to their own for a Master",
+    request: async () => ({ path: "/api/v1/availability/exceptions" }),
+  },
+  {
+    route: "/api/v1/availability/exceptions",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; a Master may block their own time and nobody else's",
+    request: async (fixture) => ({
+      path: "/api/v1/availability/exceptions",
+      body: {
+        specialist_id: fixture.studio.specialistId,
+        kind: "unavailable",
+        starts_at: "2026-12-25T08:00:00.000Z",
+        ends_at: "2026-12-25T12:00:00.000Z",
+      },
+    }),
+  },
+  {
+    route: "/api/v1/availability/exceptions",
+    method: "DELETE",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write, own schedule for a Master",
+    request: async (fixture) => ({
+      path: `/api/v1/availability/exceptions?id=${await freshException(fixture)}`,
+    }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/locations",
+    method: "PUT",
+    allowed: CATALOGUE_MANAGERS,
+    note: "Where someone works is scheduling data, not a personal preference",
+    request: async (fixture) => ({
+      path: `/api/v1/specialists/${fixture.studio.specialistId}/locations`,
+      body: { location_ids: [fixture.locationId] },
+    }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/services",
+    method: "PUT",
+    allowed: CATALOGUE_MANAGERS,
+    note: "Which services someone performs, and how long they take them",
+    request: async (fixture) => ({
+      path: `/api/v1/specialists/${fixture.studio.specialistId}/services`,
+      body: { services: [{ service_id: fixture.studio.serviceId, duration_minutes: 120 }] },
+    }),
+  },
+  {
     route: "/api/v1/imports/templates/[entity]",
     method: "GET",
     allowed: ALL_ROLES,
@@ -442,6 +564,10 @@ describe("RBAC and tenant isolation", () => {
       await studio.owner.post("/api/v1/add-ons", { name: { ru: "Дизайн" }, price_delta_minor: 5_000 }),
     ).id;
 
+    const locationId = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/locations", { name: "Главный зал", slug: "matrix-studio" }),
+    ).id;
+
     const otherOwner = await (await import("../helpers/studio")).createCanonicalStudio(
       "other-owner@studio.example",
       "Other Studio",
@@ -453,6 +579,7 @@ describe("RBAC and tenant isolation", () => {
       clientId,
       visitId,
       addOnId,
+      locationId,
       otherOrganization: {
         owner: otherOwner.owner,
         serviceId: otherOwner.serviceId,
