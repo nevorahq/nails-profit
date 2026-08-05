@@ -85,6 +85,13 @@
       "when": 1785952482817,
       "tag": "0011_talented_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785954290419,
+      "tag": "0012_thankful_expediter",
+      "breakpoints": true
     }
   ]
 }

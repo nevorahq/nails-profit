@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -115,24 +116,38 @@ const auditColumns = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
-export const organizations = pgTable("organization", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  type: organizationType("type").notNull(),
-  currency: currency("currency").notNull().default("MDL"),
-  locale: locale("locale").notNull().default("ru"),
-  timezone: text("timezone").notNull().default("Europe/Chisinau"),
-  /**
-   * Owner-requested erasure, spec sections 4.3 and 15.3. Deletion is recorded
-   * here rather than by dropping the row: the financial tables reference the
-   * organization with ON DELETE RESTRICT precisely so history survives, and
-   * section 15.3 asks for PII to be anonymized while required financial records
-   * are kept. Memberships and invitations are removed, so a marked row is
-   * unreachable.
-   */
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  ...auditColumns,
-});
+export const organizations = pgTable(
+  "organization",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    type: organizationType("type").notNull(),
+    /**
+     * Public booking path segment, roadmap section 7.2 (`/book/{slug}`).
+     *
+     * Nullable because it arrives by the expand step of an expand/migrate/contract
+     * migration, and because an organization that never publishes a booking page
+     * never needs one. Unique across tenants — it is a public address rather than
+     * a tenant-scoped name — and deliberately not derived from the id, which
+     * section 7.9 forbids exposing.
+     */
+    slug: text("slug"),
+    currency: currency("currency").notNull().default("MDL"),
+    locale: locale("locale").notNull().default("ru"),
+    timezone: text("timezone").notNull().default("Europe/Chisinau"),
+    /**
+     * Owner-requested erasure, spec sections 4.3 and 15.3. Deletion is recorded
+     * here rather than by dropping the row: the financial tables reference the
+     * organization with ON DELETE RESTRICT precisely so history survives, and
+     * section 15.3 asks for PII to be anonymized while required financial records
+     * are kept. Memberships and invitations are removed, so a marked row is
+     * unreachable.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [uniqueIndex("organization_slug_idx").on(table.slug)],
+);
 
 export const memberships = pgTable(
   "membership",
@@ -909,6 +924,255 @@ export const pilotIssues = pgTable(
       sql`(${table.status} = 'open' and ${table.resolvedAt} is null and ${table.resolvedBy} is null)
         or (${table.status} = 'resolved' and ${table.resolvedAt} is not null and ${table.resolvedBy} is not null)`,
     ),
+  ],
+);
+
+/* --- Phase 7.1: locations, schedules and booking configuration --- */
+
+export const locationStatus = pgEnum("location_status", ["active", "archived"]);
+export const workplaceStatus = pgEnum("workplace_status", ["active", "archived"]);
+export const bookingPublicStatus = pgEnum("booking_public_status", ["draft", "published", "paused"]);
+export const bookingConfirmationMode = pgEnum("booking_confirmation_mode", ["instant", "manual"]);
+export const availabilityExceptionKind = pgEnum("availability_exception_kind", ["available", "unavailable"]);
+
+/**
+ * Where the work happens, roadmap section 7.4.
+ *
+ * The timezone lives here rather than on the organization: a studio with two
+ * addresses can straddle a border, and every schedule rule is written in the
+ * local time of one address. `organization.timezone` stays as the default a new
+ * location inherits.
+ */
+export const locations = pgTable(
+  "location",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    /** Public path segment. Section 7.9: it must not reveal an internal id. */
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    address: text("address"),
+    /** IANA name, validated against the runtime's own database on the way in. */
+    timezone: text("timezone").notNull(),
+    status: locationStatus("status").notNull().default("active"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("location_org_slug_idx").on(table.organizationId, table.slug),
+    index("location_org_idx").on(table.organizationId, table.status),
+  ],
+);
+
+/**
+ * A chair, a table, a room — a resource a service may require in addition to a
+ * specialist. Only services with a resource constraint use one, so most solo
+ * studios never create a single row here.
+ */
+export const workplaces = pgTable(
+  "workplace",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    status: workplaceStatus("status").notNull().default("active"),
+    /** Ties in the "any available" pick are broken by this, then by id. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...auditColumns,
+  },
+  (table) => [
+    index("workplace_location_idx").on(table.locationId, table.status),
+    uniqueIndex("workplace_location_name_idx").on(table.locationId, table.name),
+  ],
+);
+
+/** Which addresses a specialist actually works at. */
+export const specialistLocations = pgTable(
+  "specialist_location",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("specialist_location_pair_idx").on(table.specialistId, table.locationId),
+    index("specialist_location_location_idx").on(table.locationId),
+  ],
+);
+
+/**
+ * Which services a specialist performs, and how long they take *them*.
+ *
+ * The duration override is why this is not a boolean: the same service takes a
+ * beginner longer than the master who trained them, and a slot search that
+ * ignores the difference either overbooks one or wastes the other's day.
+ */
+export const specialistServices = pgTable(
+  "specialist_service",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    serviceId: uuid("service_id")
+      .notNull()
+      .references(() => services.id, { onDelete: "restrict" }),
+    durationOverrideMinutes: integer("duration_override_minutes"),
+    requiresWorkplace: boolean("requires_workplace").notNull().default(false),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("specialist_service_pair_idx").on(table.specialistId, table.serviceId),
+    index("specialist_service_service_idx").on(table.serviceId),
+    check(
+      "specialist_service_duration_positive",
+      sql`${table.durationOverrideMinutes} is null or ${table.durationOverrideMinutes} > 0`,
+    ),
+  ],
+);
+
+/**
+ * One booking configuration per location, section 7.4.
+ *
+ * Every number here narrows what the availability engine may offer, and each
+ * has a reason a salon can state out loud: a lead time so nobody books the slot
+ * starting in four minutes, an advance window so next year's calendar is not a
+ * commitment, buffers for cleaning between clients.
+ */
+export const bookingSettings = pgTable(
+  "booking_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    publicStatus: bookingPublicStatus("public_status").notNull().default("draft"),
+    slotStepMinutes: integer("slot_step_minutes").notNull().default(15),
+    minLeadMinutes: integer("min_lead_minutes").notNull().default(120),
+    maxAdvanceDays: integer("max_advance_days").notNull().default(60),
+    bufferBeforeMinutes: integer("buffer_before_minutes").notNull().default(0),
+    bufferAfterMinutes: integer("buffer_after_minutes").notNull().default(10),
+    confirmationMode: bookingConfirmationMode("confirmation_mode").notNull().default("instant"),
+    /** How long a manually confirmed booking may hold a slot before it lapses. */
+    confirmationTtlMinutes: integer("confirmation_ttl_minutes").notNull().default(120),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("booking_settings_location_idx").on(table.locationId),
+    check("booking_settings_step", sql`${table.slotStepMinutes} in (5, 10, 15, 20, 30, 60)`),
+    check("booking_settings_lead", sql`${table.minLeadMinutes} between 0 and 43200`),
+    check("booking_settings_advance", sql`${table.maxAdvanceDays} between 1 and 365`),
+    check(
+      "booking_settings_buffers",
+      sql`${table.bufferBeforeMinutes} between 0 and 240 and ${table.bufferAfterMinutes} between 0 and 240`,
+    ),
+    check("booking_settings_ttl", sql`${table.confirmationTtlMinutes} between 15 and 1440`),
+  ],
+);
+
+/**
+ * The weekly working pattern, written in local time.
+ *
+ * Minutes from midnight rather than a `time` column: the engine adds durations
+ * and buffers to these values, and an integer is the type arithmetic is defined
+ * on. `end_minute` may reach 1440 so a shift can end at midnight, and several
+ * rows per weekday are allowed — a split shift is two intervals, not a special
+ * case.
+ */
+export const scheduleRules = pgTable(
+  "schedule_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    /** ISO-8601 weekday: 1 is Monday, 7 is Sunday. */
+    weekday: integer("weekday").notNull(),
+    startMinute: integer("start_minute").notNull(),
+    endMinute: integer("end_minute").notNull(),
+    /** Local dates: a schedule change takes effect on a day, not at an instant. */
+    effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
+    /** Exclusive, like `commission_rule.active_to`, so a handover has no gap. */
+    effectiveTo: date("effective_to", { mode: "string" }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("schedule_rule_specialist_idx").on(table.specialistId, table.weekday),
+    index("schedule_rule_location_idx").on(table.locationId, table.weekday),
+    check("schedule_rule_weekday", sql`${table.weekday} between 1 and 7`),
+    check(
+      "schedule_rule_interval",
+      sql`${table.startMinute} >= 0 and ${table.endMinute} <= 1440 and ${table.startMinute} < ${table.endMinute}`,
+    ),
+    check(
+      "schedule_rule_effective_range",
+      sql`${table.effectiveTo} is null or ${table.effectiveTo} > ${table.effectiveFrom}`,
+    ),
+  ],
+);
+
+/**
+ * Holidays, sick days and the Tuesday someone works late — what a weekly
+ * pattern cannot express.
+ *
+ * Stored as instants because an exception is a real interval of time rather
+ * than a repeating rule; the API accepts local time and converts through the
+ * location's timezone. A null location means every location: a holiday is not
+ * taken at one address.
+ */
+export const availabilityExceptions = pgTable(
+  "availability_exception",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    locationId: uuid("location_id").references(() => locations.id, { onDelete: "restrict" }),
+    kind: availabilityExceptionKind("kind").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /**
+     * A short operational label such as "отпуск" — never a medical or personal
+     * note. Section 7.9 keeps PII out of scheduling data, and this field is
+     * visible to every manager.
+     */
+    reason: text("reason"),
+    ...auditColumns,
+  },
+  (table) => [
+    index("availability_exception_specialist_idx").on(table.specialistId, table.startsAt),
+    index("availability_exception_org_idx").on(table.organizationId, table.startsAt),
+    check("availability_exception_interval", sql`${table.endsAt} > ${table.startsAt}`),
   ],
 );
 
