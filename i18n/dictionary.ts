@@ -133,6 +133,21 @@ const ru = {
   "unit.g": "г",
   "unit.piece": "шт",
 
+  "onboarding.title": "Первый расчёт",
+  "onboarding.progress": "Шаг {done} из {total}",
+  "onboarding.specialist": "Мастер с правилом комиссии",
+  "onboarding.materials": "Материал с закупочной ценой",
+  "onboarding.service": "Услуга с ценой и длительностью",
+  "onboarding.recipe": "Рецептура услуги",
+  "onboarding.visit": "Первый закрытый визит",
+  "onboarding.go": "Перейти",
+  "onboarding.why":
+    "Каждый шаг — то, без чего расчёт не может ответить. Пропущенный шаг не занижает прибыль, а оставляет её непосчитанной.",
+  "onboarding.starter": "Добавить типовые материалы",
+  "onboarding.starterHint":
+    "Добавит {count} названий без цен — цены вы проставите свои. Повторное нажатие ничего не продублирует.",
+  "onboarding.starterAdded": "Добавлено материалов: {count}",
+
   "materials.title": "Материалы",
   "materials.noAccess": "У вашей роли нет доступа к материалам.",
   "materials.package": "Упаковка",
@@ -526,6 +541,21 @@ const ro: Record<MessageKey, Message> = {
   "unit.g": "g",
   "unit.piece": "buc",
 
+  "onboarding.title": "Primul calcul",
+  "onboarding.progress": "Pasul {done} din {total}",
+  "onboarding.specialist": "Maestru cu regulă de comision",
+  "onboarding.materials": "Material cu preț de achiziție",
+  "onboarding.service": "Serviciu cu preț și durată",
+  "onboarding.recipe": "Rețeta serviciului",
+  "onboarding.visit": "Prima vizită finalizată",
+  "onboarding.go": "Mergi",
+  "onboarding.why":
+    "Fiecare pas este ceva fără de care calculul nu poate răspunde. Un pas sărit nu subestimează profitul — îl lasă necalculat.",
+  "onboarding.starter": "Adaugă materiale tipice",
+  "onboarding.starterHint":
+    "Adaugă {count} denumiri fără prețuri — prețurile le puneți dvs. O apăsare repetată nu duplică nimic.",
+  "onboarding.starterAdded": "Materiale adăugate: {count}",
+
   "materials.title": "Materiale",
   "materials.noAccess": "Rolul dvs. nu are acces la materiale.",
   "materials.package": "Ambalaj",
@@ -913,6 +943,21 @@ const en: Record<MessageKey, Message> = {
   "unit.ml": "ml",
   "unit.g": "g",
   "unit.piece": "pcs",
+
+  "onboarding.title": "The first calculation",
+  "onboarding.progress": "Step {done} of {total}",
+  "onboarding.specialist": "A specialist with a commission rule",
+  "onboarding.materials": "A material with a purchase price",
+  "onboarding.service": "A service with a price and a duration",
+  "onboarding.recipe": "A recipe for the service",
+  "onboarding.visit": "The first closed visit",
+  "onboarding.go": "Go",
+  "onboarding.why":
+    "Each step is something the costing cannot answer without. A skipped step does not understate the profit — it leaves it uncalculated.",
+  "onboarding.starter": "Add typical materials",
+  "onboarding.starterHint":
+    "Adds {count} names without prices — you set your own. Pressing it again duplicates nothing.",
+  "onboarding.starterAdded": "Materials added: {count}",
 
   "materials.title": "Materials",
   "materials.noAccess": "Your role has no access to materials.",

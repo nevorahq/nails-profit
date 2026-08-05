@@ -4,12 +4,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppNav } from "@/components/app-nav";
+import { OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
 import { memberships, organizations, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, scopeFor } from "@/domain/rbac";
+import { starterMaterials } from "@/domain/import-templates";
+import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -17,6 +19,7 @@ import { auth } from "@/lib/auth";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { resolveLocale } from "@/lib/locale";
+import { loadOnboarding } from "@/lib/onboarding";
 
 /** DSH-009: every figure states the formula it was computed with. */
 function Metric({
@@ -102,6 +105,7 @@ export default async function AppPage({
     );
 
     const people = await loadSpecialistOptions(tx);
+    const onboarding = await loadOnboarding(tx);
     const activeSpecialists = await tx
       .select({ id: specialists.id })
       .from(specialists)
@@ -109,6 +113,7 @@ export default async function AppPage({
 
     return {
       ...dashboard,
+      onboarding,
       people,
       canFilterBySpecialist: scopeFor(membership.role, "dashboard") === "all",
       hasSpecialists: activeSpecialists.length > 0,
@@ -141,6 +146,15 @@ export default async function AppPage({
         people={data.people}
         showSpecialist={data.canFilterBySpecialist}
       />
+
+      {!data.onboarding.complete && (
+        <OnboardingPanel
+          progress={data.onboarding}
+          starterCount={starterMaterials.length}
+          canSeedMaterials={canManageCatalogue(membership.role, "materials")}
+          locale={locale}
+        />
+      )}
 
       {metrics.visits === 0 ? (
         <section className="empty-state">
