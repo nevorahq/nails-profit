@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
 
 /**
  * Language (LOC-001) and currency (LOC-006).
@@ -13,16 +14,27 @@ import { getTranslator } from "@/i18n/t";
  * property of the salon, and two masters looking at the same margin should be
  * reading the same words for it.
  */
+/**
+ * Endonyms, deliberately untranslated: someone looking for their own language
+ * scans for the word they would write themselves, and a Romanian speaker
+ * stranded in a Russian interface is looking for "Română", not "Румынский".
+ */
 const localeNames: Record<AppLocale, string> = {
   ru: "Русский",
   ro: "Română",
   en: "English",
 };
 
-const currencyNames: Record<string, string> = {
-  MDL: "MDL — молдавский лей",
-  EUR: "EUR — евро",
-};
+const currencies = ["MDL", "EUR"] as const;
+
+/**
+ * Currency names come from `Intl`, so they arrive in the reader's language
+ * without a third row in the dictionary to keep in step.
+ */
+function currencyName(code: string, locale: AppLocale): string {
+  const names = new Intl.DisplayNames([localeTag(locale)], { type: "currency" });
+  return `${code} — ${names.of(code) ?? code}`;
+}
 
 export function OrganizationSettings({
   locale,
@@ -89,9 +101,9 @@ export function OrganizationSettings({
             disabled={!canEdit || pending}
             onChange={(event) => change({ currency: event.target.value })}
           >
-            {Object.keys(currencyNames).map((option) => (
+            {currencies.map((option) => (
               <option key={option} value={option}>
-                {currencyNames[option]}
+                {currencyName(option, locale)}
               </option>
             ))}
           </select>

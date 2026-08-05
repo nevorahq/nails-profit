@@ -7,15 +7,17 @@ import { can, canManageCatalogue } from "@/domain/rbac";
 import { AddOnCatalogue, type AddOnRow } from "@/components/add-on-catalogue";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadMaterials } from "@/app/app/materials/page";
+import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function AddOnsPage() {
   const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const t = getTranslator(locale);
 
   if (!can(membership.role, "services", "read")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет доступа к услугам.</p>
+        <p className="warning-banner">{t("services.noAccess")}</p>
       </main>
     );
   }
@@ -52,7 +54,7 @@ export default async function AddOnsPage() {
 
         return {
           id: addOn.id,
-          displayName: resolveLocalizedText(addOn.name, locale, locale) ?? "Без названия",
+          displayName: resolveLocalizedText(addOn.name, locale, locale) ?? t("common.unnamed"),
           price_delta_minor: addOn.priceDeltaMinor,
           duration_delta_minutes: addOn.durationDeltaMinutes,
           recipe: lines.map((line) => ({
@@ -73,7 +75,7 @@ export default async function AddOnsPage() {
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Опции к услугам</h1>
+          <h1>{t("addOns.title")}</h1>
         </div>
         <AppNav active="/app/add-ons" locale={locale} />
       </header>

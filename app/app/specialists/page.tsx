@@ -7,20 +7,22 @@ import { selectCommissionRule } from "@/domain/commission";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { SpecialistManager, type SpecialistRow } from "@/components/specialist-manager";
 import { resolveLocalizedText } from "@/i18n/localized-text";
+import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
   const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const t = getTranslator(locale);
 
   if (!can(membership.role, "commissions", "read")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет доступа к комиссиям.</p>
+        <p className="warning-banner">{t("specialists.noAccess")}</p>
       </main>
     );
   }
 
-  // Section 6.1 limits a Master to "только собственный результат". The specialist
+  // Section 6.1 limits a Master to t("specialists.ownOnly"). The specialist
   // row carries the user it belongs to, so the scope is enforced here rather
   // than merely declared.
   const ownOnly = scopeFor(membership.role, "commissions") === "own";
@@ -93,7 +95,7 @@ export default async function SpecialistsPage() {
       people,
       catalogue: serviceRows.map((service) => ({
         id: service.id,
-        name: resolveLocalizedText(service.name, locale, locale) ?? "Без названия",
+        name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
       })),
     };
   });
@@ -103,7 +105,7 @@ export default async function SpecialistsPage() {
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Мастера и комиссии</h1>
+          <h1>{t("specialists.title")}</h1>
         </div>
         <AppNav active="/app/specialists" locale={locale} />
       </header>
@@ -111,6 +113,7 @@ export default async function SpecialistsPage() {
         specialists={people}
         services={catalogue}
         currency={currency}
+        locale={locale}
         canManage={canManageCatalogue(membership.role, "commissions")}
       />
     </main>

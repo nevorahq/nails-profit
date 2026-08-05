@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import type { MaterialRow } from "@/components/material-catalogue";
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator, type MessageKey } from "@/i18n/t";
 import {
-  costingReasonLabels,
   formatBasisPoints,
   formatDuration,
   formatMoneyMinor,
@@ -55,6 +56,7 @@ export function ServiceDetail({
   addOns,
   linkedAddOnIds,
   selectedAddOnIds,
+  locale,
 }: {
   service: ServiceDetailData;
   materials: MaterialRow[];
@@ -62,8 +64,10 @@ export function ServiceDetail({
   addOns: ServiceAddOn[];
   linkedAddOnIds: string[];
   selectedAddOnIds: string[];
+  locale: AppLocale;
 }) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -136,7 +140,7 @@ export function ServiceDetail({
   async function finish(response: Response) {
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? "Не удалось сохранить");
+      setError(payload?.error?.message ?? t("common.saveFailed"));
       setPending(false);
       return;
     }
@@ -151,7 +155,7 @@ export function ServiceDetail({
       <header className="app-header">
         <div>
           <Link className="text-link" href="/app/services">
-            ← Услуги
+            ← {t("services.title")}
           </Link>
           <h1>{displayName}</h1>
         </div>
@@ -160,10 +164,10 @@ export function ServiceDetail({
       {error && <div className="form-error">{error}</div>}
 
       <section className="panel">
-        <h2>Цена и длительность</h2>
+        <h2>{t("services.priceAndDuration")}</h2>
         <form className="inline-form" onSubmit={saveBasics}>
           <label>
-            Цена, {service.currency ?? "MDL"}
+            {t("services.priceIn", { currency: service.currency ?? "MDL" })}
             <input
               name="price"
               type="number"
@@ -173,7 +177,7 @@ export function ServiceDetail({
             />
           </label>
           <label>
-            Длительность, мин
+            {t("services.durationMinutes")}
             <input
               name="duration"
               type="number"
@@ -183,25 +187,25 @@ export function ServiceDetail({
             />
           </label>
           <button className="primary-button" type="submit" disabled={pending}>
-            Сохранить
+            {t("common.save")}
           </button>
         </form>
       </section>
 
       <section className="panel">
-        <h2>Рецептура</h2>
+        <h2>{t("services.recipe")}</h2>
         {materials.length === 0 ? (
           <p className="muted">
-            Сначала добавьте материалы в <Link href="/app/materials">каталог</Link>.
+            {t("services.materialsFirst", { catalogue: t("services.catalogue") })}
           </p>
         ) : (
           <form onSubmit={saveRecipe}>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Материал</th>
-                  <th>Норма расхода</th>
-                  <th>Стоимость</th>
+                  <th>{t("common.material")}</th>
+                  <th>{t("services.norm")}</th>
+                  <th>{t("services.cost")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -212,7 +216,7 @@ export function ServiceDetail({
                       <td>
                         {material.name}
                         {material.current_price === null && (
-                          <span className="badge-warning">нет цены</span>
+                          <span className="badge-warning">{t("common.noPrice")}</span>
                         )}
                       </td>
                       <td>
@@ -240,10 +244,10 @@ export function ServiceDetail({
               </tbody>
             </table>
             <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? "Сохраняем…" : "Сохранить рецептуру"}
+              {pending ? t("common.saving") : t("services.saveRecipe")}
             </button>
             <p className="muted">
-              Сохранение создаёт новую версию рецептуры. Прошлые расчёты не меняются.
+              {t("services.recipeVersionNote")}
             </p>
           </form>
         )}
@@ -251,10 +255,10 @@ export function ServiceDetail({
 
       {addOns.length > 0 && (
         <section className="panel">
-          <h2>Опции</h2>
+          <h2>{t("services.addOns")}</h2>
           <form className="inline-form" onSubmit={saveLinkedAddOns}>
             <fieldset className="checkbox-set">
-              <legend>Предлагаются с этой услугой</legend>
+              <legend>{t("services.offeredWith")}</legend>
               {addOns.map((addOn) => (
                 <label key={addOn.id} className="radio-row">
                   <input
@@ -268,17 +272,17 @@ export function ServiceDetail({
               ))}
             </fieldset>
             <button className="primary-button" type="submit" disabled={pending}>
-              Сохранить список
+              {t("services.saveList")}
             </button>
           </form>
         </section>
       )}
 
       <section className="panel insight-panel">
-        <h2>Что остаётся вам</h2>
+        <h2>{t("services.whatYouKeep")}</h2>
         {linkedAddOnIds.length > 0 && (
           <fieldset className="checkbox-set">
-            <legend>Посчитать с опциями</legend>
+            <legend>{t("services.calculateWithAddOns")}</legend>
             {addOns
               .filter((addOn) => linkedAddOnIds.includes(addOn.id))
               .map((addOn) => (
@@ -295,15 +299,15 @@ export function ServiceDetail({
         )}
         {service.costing.status === "incomplete" ? (
           <div className="warning-banner">
-            <strong>Расчёт неполный.</strong>
+            <strong>{t("services.incomplete")}</strong>
             <ul>
               {service.costing.reasons.map((reason) => (
-                <li key={reason}>{costingReasonLabels[reason] ?? reason}</li>
+                <li key={reason}>{t(`reason.${reason}` as MessageKey)}</li>
               ))}
             </ul>
             {service.costing.unpriced_material_ids.length > 0 && (
               <p>
-                Без цены:{" "}
+                {t("services.withoutPrice")}{" "}
                 {service.costing.unpriced_material_ids
                   .map((id) => materials.find((m) => m.id === id)?.name ?? id)
                   .join(", ")}
@@ -313,55 +317,57 @@ export function ServiceDetail({
         ) : (
           <>
             <div className="metric-grid">
-              <Metric label="Цена услуги" value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
-              <Metric label="Материалы" value={`− ${formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)}`} />
-              <Metric label="Комиссия мастера" value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
+              <Metric label={t("services.servicePrice")} value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
+              <Metric label={t("services.materials")} value={`− ${formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)}`} />
+              <Metric label={t("services.commission")} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
               <Metric
-                label="Останется вам"
+                label={t("services.youKeep")}
                 value={formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
                 strong
                 negative={service.costing.contribution_margin_minor < 0}
               />
               <Metric
-                label="Маржа"
+                label={t("services.margin")}
                 value={formatBasisPoints(service.costing.margin_basis_points)}
                 negative={(service.costing.margin_basis_points ?? 0) < 0}
               />
               <Metric
-                label="Прибыль в час"
+                label={t("services.perHour")}
                 value={formatMoneyMinor(service.costing.profit_per_hour_minor, service.costing.currency)}
                 negative={service.costing.profit_per_hour_minor < 0}
               />
             </div>
             {service.costing.contribution_margin_minor < 0 && (
               <div className="warning-banner">
-                Услуга работает в минус: материалы и комиссия стоят больше, чем цена.
+                {t("services.lossWarning")}
               </div>
             )}
             <details className="breakdown">
-              <summary>Как это посчитано</summary>
+              <summary>{t("services.howCounted")}</summary>
               <p>
                 {formatMoneyMinor(service.costing.price_minor, service.costing.currency)} −{" "}
-                {formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)} (материалы) −{" "}
-                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} (комиссия) ={" "}
+                {formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)} ({t("services.materialsWord")}) −{" "}
+                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t("services.commissionWord")}) ={" "}
                 {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
               </p>
               <p>
-                Прибыль в час ={" "}
+                {t("services.perHourFormula")}{" "}
                 {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)} ÷{" "}
-                {formatDuration(service.duration_minutes)} × 60 мин
+                {formatDuration(service.duration_minutes)} × 60 {t("common.minutes")}
               </p>
               <ul>
                 {service.recipe.map((line) => (
                   <li key={line.material_id}>
                     {line.material_name}: {formatQuantity(line.quantity_milli_units, line.base_unit)} ={" "}
                     {line.cost_minor === null
-                      ? "цена неизвестна"
+                      ? t("services.priceUnknown")
                       : formatMoneyMinor(line.cost_minor, service.costing.status === "complete" ? service.costing.currency : "MDL")}
                   </li>
                 ))}
               </ul>
-              <p className="muted">Версия формулы: {service.costing.formula_version}</p>
+              <p className="muted">
+                {t("services.formulaVersion", { version: service.costing.formula_version })}
+              </p>
             </details>
           </>
         )}

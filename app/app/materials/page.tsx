@@ -6,15 +6,17 @@ import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { baseUnitCostMinor } from "@/domain/units";
 import { MaterialCatalogue, type MaterialRow } from "@/components/material-catalogue";
+import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function MaterialsPage() {
   const { membership, organizationName, locale } = await requireWorkspace();
+  const t = getTranslator(locale);
 
   if (!can(membership.role, "materials", "read")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет доступа к материалам.</p>
+        <p className="warning-banner">{t("materials.noAccess")}</p>
       </main>
     );
   }
@@ -26,11 +28,11 @@ export default async function MaterialsPage() {
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Материалы</h1>
+          <h1>{t("materials.title")}</h1>
         </div>
         <AppNav active="/app/materials" locale={locale} />
       </header>
-      <MaterialCatalogue materials={rows} />
+      <MaterialCatalogue materials={rows} locale={locale} />
     </main>
   );
 }

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { formatMoneyMinor } from "@/lib/format";
 
 export type CloseFormService = {
@@ -37,14 +39,17 @@ export function VisitCloseForm({
   specialists,
   clients,
   currency,
+  locale,
 }: {
   services: CloseFormService[];
   addOns: CloseFormAddOn[];
   specialists: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   currency: string;
+  locale: AppLocale;
 }) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +100,7 @@ export function VisitCloseForm({
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? "Не удалось сохранить визит");
+      setError(payload?.error?.message ?? t("closeVisit.saveFailed"));
       setPending(false);
       return;
     }
@@ -108,8 +113,18 @@ export function VisitCloseForm({
   if (services.length === 0 || specialists.length === 0) {
     return (
       <div className="warning-banner">
-        Чтобы закрыть визит, нужны хотя бы одна <Link href="/app/services">услуга</Link> и один{" "}
-        <Link href="/app/specialists">мастер</Link> с правилом комиссии.
+        {t("closeVisit.needsSetup", {
+          service: t("services.service").toLowerCase(),
+          specialist: t("closeVisit.specialist"),
+        })}
+        <span className="button-row">
+          <Link className="text-link" href="/app/services">
+            {t("services.title")}
+          </Link>
+          <Link className="text-link" href="/app/specialists">
+            {t("specialists.title")}
+          </Link>
+        </span>
       </div>
     );
   }
@@ -119,7 +134,7 @@ export function VisitCloseForm({
       <section className="panel">
         <div className="inline-form">
           <label>
-            Услуга
+            {t("services.service")}
             <select
               name="service_id"
               value={serviceId}
@@ -136,7 +151,7 @@ export function VisitCloseForm({
             </select>
           </label>
           <label>
-            Мастер
+            {t("specialists.specialist")}
             <select name="specialist_id">
               {specialists.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -146,9 +161,9 @@ export function VisitCloseForm({
             </select>
           </label>
           <label>
-            Клиент
+            {t("closeVisit.client")}
             <select name="client_id" defaultValue="">
-              <option value="">без клиента</option>
+              <option value="">{t("closeVisit.noClient")}</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
                   {client.name}
@@ -157,14 +172,14 @@ export function VisitCloseForm({
             </select>
           </label>
           <label>
-            Факт. время, мин
+            {t("closeVisit.actualMinutes")}
             <input name="actual_duration" type="number" min="1" step="1" placeholder={String(duration)} />
           </label>
         </div>
 
         {availableAddOns.length > 0 && (
           <fieldset className="checkbox-set">
-            <legend>Опции</legend>
+            <legend>{t("closeVisit.addOns")}</legend>
             {availableAddOns.map((addOn) => (
               <label key={addOn.id} className="radio-row">
                 <input
@@ -185,21 +200,21 @@ export function VisitCloseForm({
         )}
 
         <p className="muted">
-          К оплате {formatMoneyMinor(price, currency)}, плановое время {duration} мин.
+          {t("closeVisit.dueLine", { amount: formatMoneyMinor(price, currency), duration })}
         </p>
       </section>
 
       <section className="panel">
-        <h2>Фактический расход</h2>
+        <h2>{t("closeVisit.actualUse")}</h2>
         {materials.length === 0 ? (
-          <p className="muted">У этой услуги нет рецептуры — расход записывать нечего.</p>
+          <p className="muted">{t("closeVisit.noRecipe")}</p>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Материал</th>
-                <th>Норма</th>
-                <th>Факт</th>
+                <th>{t("common.material")}</th>
+                <th>{t("closeVisit.norm")}</th>
+                <th>{t("closeVisit.actual")}</th>
               </tr>
             </thead>
             <tbody>
@@ -225,15 +240,14 @@ export function VisitCloseForm({
           </table>
         )}
         <p className="muted">
-          Факт подставлен по норме — исправьте только то, что отличается. Пустое поле означает «не
-          записано», и тогда маржа визита не считается.
+{t("closeVisit.prefilledNote")}
         </p>
       </section>
 
       {error && <div className="form-error">{error}</div>}
 
       <button className="primary-button" type="submit" disabled={pending}>
-        {pending ? "Сохраняем…" : "Закрыть визит"}
+        {pending ? t("common.saving") : t("closeVisit.title")}
       </button>
     </form>
   );

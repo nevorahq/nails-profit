@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { MaterialRow } from "@/components/material-catalogue";
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { formatDuration, formatMoneyMinor, formatQuantity } from "@/lib/format";
 
 export type AddOnRow = {
@@ -29,10 +31,11 @@ export function AddOnCatalogue({
   addOns: AddOnRow[];
   materials: MaterialRow[];
   currency: string;
-  locale: string;
+  locale: AppLocale;
   canManage: boolean;
 }) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -47,7 +50,7 @@ export function AddOnCatalogue({
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? "Не удалось сохранить");
+      setError(body?.error?.message ?? t("common.saveFailed"));
       setPending(false);
       return false;
     }
@@ -95,27 +98,26 @@ export function AddOnCatalogue({
     <>
       {canManage && (
         <section className="panel">
-          <h2>Добавить опцию</h2>
+          <h2>{t("addOns.add")}</h2>
           <form className="inline-form" onSubmit={createAddOn}>
             <label>
-              Название
-              <input name="name" required maxLength={200} placeholder="Френч" />
+              {t("addOns.name")}
+              <input name="name" required maxLength={200} placeholder={t("addOns.namePlaceholder")} />
             </label>
             <label>
-              Изменение цены, {currency}
+              {t("addOns.priceDelta", { currency })}
               <input name="price" type="number" step="0.01" placeholder="100" />
             </label>
             <label>
-              Изменение времени, мин
+              {t("addOns.timeDelta")}
               <input name="duration" type="number" step="1" placeholder="20" />
             </label>
             <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? "Сохраняем…" : "Добавить"}
+              {pending ? t("common.saving") : t("common.add")}
             </button>
           </form>
           <p className="muted">
-            Значения могут быть отрицательными: короткая длина может и стоить меньше, и занимать меньше
-            времени.
+{t("addOns.negativeHint")}
           </p>
         </section>
       )}
@@ -125,10 +127,10 @@ export function AddOnCatalogue({
       <table className="data-table">
         <thead>
           <tr>
-            <th>Опция</th>
-            <th>Цена</th>
-            <th>Время</th>
-            <th>Материалы</th>
+            <th>{t("addOns.addOn")}</th>
+            <th>{t("common.price")}</th>
+            <th>{t("addOns.time")}</th>
+            <th>{t("services.materials")}</th>
             {canManage && <th />}
           </tr>
         </thead>
@@ -136,7 +138,7 @@ export function AddOnCatalogue({
           {addOns.length === 0 && (
             <tr>
               <td colSpan={canManage ? 5 : 4} className="muted">
-                Опций пока нет.
+                {t("addOns.none")}
               </td>
             </tr>
           )}
@@ -159,7 +161,7 @@ export function AddOnCatalogue({
               </td>
               <td>
                 {addOn.recipe.length === 0 ? (
-                  <span className="muted">без материалов</span>
+                  <span className="muted">{t("addOns.noMaterials")}</span>
                 ) : (
                   <ul className="compact-list">
                     {addOn.recipe.map((line) => (
@@ -178,7 +180,7 @@ export function AddOnCatalogue({
                     type="button"
                     onClick={() => setEditing(editing === addOn.id ? null : addOn.id)}
                   >
-                    {editing === addOn.id ? "Отмена" : "Материалы"}
+                    {editing === addOn.id ? t("common.cancel") : t("services.materials")}
                   </button>
                 </td>
               )}
@@ -190,16 +192,20 @@ export function AddOnCatalogue({
       {canManage &&
         editing &&
         (materials.length === 0 ? (
-          <p className="muted">Сначала добавьте материалы в каталог.</p>
+          <p className="muted">{t("addOns.materialsFirst")}</p>
         ) : (
           <section className="panel">
-            <h2>Материалы опции «{addOns.find((a) => a.id === editing)?.displayName}»</h2>
+            <h2>
+              {t("addOns.materialsOf", {
+                name: addOns.find((a) => a.id === editing)?.displayName ?? "",
+              })}
+            </h2>
             <form onSubmit={(event) => saveRecipe(editing, event)}>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Материал</th>
-                    <th>Норма расхода</th>
+                    <th>{t("common.material")}</th>
+                    <th>{t("services.norm")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -212,7 +218,7 @@ export function AddOnCatalogue({
                         <td>
                           {material.name}
                           {material.current_price === null && (
-                            <span className="badge-warning">нет цены</span>
+                            <span className="badge-warning">{t("common.noPrice")}</span>
                           )}
                         </td>
                         <td>
@@ -231,9 +237,9 @@ export function AddOnCatalogue({
                 </tbody>
               </table>
               <button className="primary-button" type="submit" disabled={pending}>
-                Сохранить материалы
+                {t("addOns.saveMaterials")}
               </button>
-              <p className="muted">Сохранение создаёт новую версию рецептуры опции.</p>
+              <p className="muted">{t("addOns.recipeVersionNote")}</p>
             </form>
           </section>
         ))}

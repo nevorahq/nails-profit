@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 
 export type SpecialistRow = {
@@ -22,33 +24,34 @@ export type SpecialistRow = {
   }[];
 };
 
-const cooperationLabels: Record<string, string> = {
-  commission: "процент",
-  rent: "аренда",
-  staff: "оклад",
-};
-
-function describeRule(rule: SpecialistRow["default_rule"], currency: string) {
+function describeRule(rule: SpecialistRow["default_rule"], currency: string, t: Translate) {
   if (!rule) return null;
   if (rule.type === "fixed") {
-    return `${formatMoneyMinor(rule.fixed_amount_minor ?? 0, currency)} за услугу`;
+    return t("specialists.perService", {
+      amount: formatMoneyMinor(rule.fixed_amount_minor ?? 0, currency),
+    });
   }
   const rate = formatBasisPoints(rule.basis_points);
-  return rule.type === "percentage_after_materials" ? `${rate} после материалов` : `${rate} от выручки`;
+  return rule.type === "percentage_after_materials"
+    ? t("specialists.afterMaterials", { rate })
+    : t("specialists.ofRevenue", { rate });
 }
 
 export function SpecialistManager({
   specialists,
   services,
   currency,
+  locale,
   canManage,
 }: {
   specialists: SpecialistRow[];
   services: { id: string; name: string }[];
   currency: string;
+  locale: AppLocale;
   canManage: boolean;
 }) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -62,7 +65,7 @@ export function SpecialistManager({
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? "Не удалось сохранить");
+      setError(body?.error?.message ?? t("common.saveFailed"));
       setPending(false);
       return;
     }
@@ -102,7 +105,7 @@ export function SpecialistManager({
     const data = new FormData(form);
     const rule = ruleFromForm(data);
     if (!rule) {
-      setError("Укажите значение комиссии");
+      setError(t("specialists.valueRequired"));
       return;
     }
     await send(
@@ -120,51 +123,50 @@ export function SpecialistManager({
     <>
       {withoutRule.length > 0 && (
         <div className="warning-banner">
-          У {withoutRule.length} мастер(ов) нет правила комиссии. Услуги нельзя посчитать: комиссия не
-          считается нулевой, пока правило не задано.
+{t("specialists.withoutRuleBanner", { count: withoutRule.length })}
         </div>
       )}
 
       {!canManage && (
         <div className="warning-banner">
-          Ваша роль видит только собственный результат и не может менять правила комиссии.
+          {t("specialists.readOnlyNote")}
         </div>
       )}
 
       {canManage && (
         <section className="panel">
-          <h2>Добавить мастера</h2>
+          <h2>{t("specialists.add")}</h2>
           <form className="inline-form" onSubmit={createSpecialist}>
             <label>
-              Имя
-              <input name="name" required maxLength={200} placeholder="Ирина" />
+              {t("specialists.name")}
+              <input name="name" required maxLength={200} placeholder={t("specialists.namePlaceholder")} />
             </label>
             <label>
-              Сотрудничество
+              {t("specialists.cooperation")}
               <select name="cooperation_type" defaultValue="commission">
-                <option value="commission">процент</option>
-                <option value="rent">аренда</option>
-                <option value="staff">оклад</option>
+                <option value="commission">{t("cooperation.commission")}</option>
+                <option value="rent">{t("cooperation.rent")}</option>
+                <option value="staff">{t("cooperation.staff")}</option>
               </select>
             </label>
             <label>
-              Тип комиссии
+              {t("specialists.commissionType")}
               <select name="rule_type" defaultValue="percentage">
-                <option value="percentage">процент от выручки</option>
-                <option value="percentage_after_materials">процент после материалов</option>
-                <option value="fixed">фиксированная сумма</option>
+                <option value="percentage">{t("commissionType.percentage")}</option>
+                <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
+                <option value="fixed">{t("commissionType.fixed")}</option>
               </select>
             </label>
             <label>
-              Значение
+              {t("specialists.value")}
               <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
             </label>
             <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? "Сохраняем…" : "Добавить"}
+              {pending ? t("common.saving") : t("common.add")}
             </button>
           </form>
           <p className="muted">
-            Для процента укажите 40 — это 40%. Для фиксированной суммы — сумму в {currency}.
+            {t("specialists.valueHint", { currency })}
           </p>
         </section>
       )}
@@ -174,29 +176,29 @@ export function SpecialistManager({
       <table className="data-table">
         <thead>
           <tr>
-            <th>Мастер</th>
-            <th>Сотрудничество</th>
-            <th>Комиссия по умолчанию</th>
-            <th>Исключения по услугам</th>
+            <th>{t("specialists.specialist")}</th>
+            <th>{t("specialists.cooperation")}</th>
+            <th>{t("specialists.defaultRule")}</th>
+            <th>{t("specialists.exceptions")}</th>
           </tr>
         </thead>
         <tbody>
           {specialists.length === 0 && (
             <tr>
               <td colSpan={4} className="muted">
-                Мастеров пока нет.
+                {t("specialists.none")}
               </td>
             </tr>
           )}
           {specialists.map((person) => (
             <tr key={person.id}>
               <td>{person.name}</td>
-              <td>{cooperationLabels[person.cooperation_type] ?? person.cooperation_type}</td>
+              <td>{t(`cooperation.${person.cooperation_type}` as MessageKey)}</td>
               <td>
                 {person.default_rule ? (
-                  describeRule(person.default_rule, currency)
+                  describeRule(person.default_rule, currency, t)
                 ) : (
-                  <span className="badge-warning">не задана</span>
+                  <span className="badge-warning">{t("specialists.notSet")}</span>
                 )}
               </td>
               <td>
@@ -206,8 +208,8 @@ export function SpecialistManager({
                   <ul className="compact-list">
                     {person.service_exceptions.map((rule) => (
                       <li key={`${person.id}-${rule.service_id}`}>
-                        {services.find((service) => service.id === rule.service_id)?.name ?? "услуга"}:{" "}
-                        {describeRule(rule, currency)}
+                        {services.find((service) => service.id === rule.service_id)?.name ?? t("services.service")}:{" "}
+                        {describeRule(rule, currency, t)}
                       </li>
                     ))}
                   </ul>
@@ -220,14 +222,13 @@ export function SpecialistManager({
 
       {canManage && specialists.length > 0 && services.length > 0 && (
         <section className="panel">
-          <h2>Исключение по услуге</h2>
+          <h2>{t("specialists.serviceException")}</h2>
           <p className="muted">
-            Правило для конкретной услуги имеет приоритет над комиссией по умолчанию. Прошлые расчёты не
-            меняются — создаётся новая версия правила.
+{t("specialists.exceptionHint")}
           </p>
           <form className="inline-form" onSubmit={addException}>
             <label>
-              Мастер
+              {t("specialists.specialist")}
               <select name="specialist_id">
                 {specialists.map((person) => (
                   <option key={person.id} value={person.id}>
@@ -237,7 +238,7 @@ export function SpecialistManager({
               </select>
             </label>
             <label>
-              Услуга
+              {t("services.service")}
               <select name="service_id">
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>
@@ -247,19 +248,19 @@ export function SpecialistManager({
               </select>
             </label>
             <label>
-              Тип
+              {t("specialists.type")}
               <select name="rule_type" defaultValue="percentage">
-                <option value="percentage">процент от выручки</option>
-                <option value="percentage_after_materials">процент после материалов</option>
-                <option value="fixed">фиксированная сумма</option>
+                <option value="percentage">{t("commissionType.percentage")}</option>
+                <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
+                <option value="fixed">{t("commissionType.fixed")}</option>
               </select>
             </label>
             <label>
-              Значение
+              {t("specialists.value")}
               <input name="rule_value" type="number" step="0.01" min="0" placeholder="50" required />
             </label>
             <button className="primary-button" type="submit" disabled={pending}>
-              Сохранить исключение
+              {t("specialists.saveException")}
             </button>
           </form>
         </section>

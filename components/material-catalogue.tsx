@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { formatMoneyMinor, formatQuantity } from "@/lib/format";
 
 export type MaterialRow = {
@@ -17,8 +19,15 @@ export type MaterialRow = {
   } | null;
 };
 
-export function MaterialCatalogue({ materials }: { materials: MaterialRow[] }) {
+export function MaterialCatalogue({
+  materials,
+  locale,
+}: {
+  materials: MaterialRow[];
+  locale: AppLocale;
+}) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -48,7 +57,7 @@ export function MaterialCatalogue({ materials }: { materials: MaterialRow[] }) {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? "Не удалось сохранить материал");
+      setError(payload?.error?.message ?? t("materials.saveFailed"));
       setPending(false);
       return;
     }
@@ -64,34 +73,33 @@ export function MaterialCatalogue({ materials }: { materials: MaterialRow[] }) {
     <>
       {missingPrice > 0 && (
         <div className="warning-banner">
-          У {missingPrice} материал(ов) нет закупочной цены. Услуги с ними нельзя посчитать — неизвестная
-          цена не считается нулевой.
+{t("materials.missingPriceBanner", { count: missingPrice })}
         </div>
       )}
 
       <form className="inline-form" onSubmit={submit}>
         <label>
-          Название
-          <input name="name" required maxLength={200} placeholder="Гель-лак" />
+          {t("materials.name")}
+          <input name="name" required maxLength={200} placeholder={t("materials.namePlaceholder")} />
         </label>
         <label>
-          Единица
+          {t("materials.unit")}
           <select name="base_unit" defaultValue="ml">
-            <option value="ml">мл</option>
-            <option value="g">г</option>
-            <option value="piece">шт</option>
+            <option value="ml">{t("unit.ml")}</option>
+            <option value="g">{t("unit.g")}</option>
+            <option value="piece">{t("unit.piece")}</option>
           </select>
         </label>
         <label>
-          Цена упаковки
+          {t("materials.packagePrice")}
           <input name="price" type="number" step="0.01" min="0" placeholder="240" />
         </label>
         <label>
-          Объём упаковки
+          {t("materials.packageSize")}
           <input name="size" type="number" step="0.001" min="0" placeholder="15" />
         </label>
         <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? "Сохраняем…" : "Добавить"}
+          {pending ? t("common.saving") : t("common.add")}
         </button>
       </form>
       {error && <div className="form-error">{error}</div>}
@@ -99,17 +107,17 @@ export function MaterialCatalogue({ materials }: { materials: MaterialRow[] }) {
       <table className="data-table">
         <thead>
           <tr>
-            <th>Материал</th>
-            <th>Упаковка</th>
-            <th>Цена упаковки</th>
-            <th>Цена за единицу</th>
+            <th>{t("common.material")}</th>
+            <th>{t("materials.package")}</th>
+            <th>{t("materials.packagePrice")}</th>
+            <th>{t("materials.unitCost")}</th>
           </tr>
         </thead>
         <tbody>
           {materials.length === 0 && (
             <tr>
               <td colSpan={4} className="muted">
-                Материалов пока нет.
+                {t("materials.none")}
               </td>
             </tr>
           )}
@@ -127,7 +135,7 @@ export function MaterialCatalogue({ materials }: { materials: MaterialRow[] }) {
                       material.current_price.package_price_minor,
                       material.current_price.currency,
                     )
-                  : <span className="badge-warning">цена не указана</span>}
+                  : <span className="badge-warning">{t("materials.priceMissing")}</span>}
               </td>
               <td>
                 {material.current_price?.base_unit_cost_minor !== null &&

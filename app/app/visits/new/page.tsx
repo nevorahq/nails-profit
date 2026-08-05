@@ -6,6 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { VisitCloseForm, type CloseFormAddOn, type CloseFormService } from "@/components/visit-close-form";
 import { resolveLocalizedText } from "@/i18n/localized-text";
+import { getTranslator, type Translate } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 async function recipeLines(tx: Parameters<typeof loadCatalogue>[0], target: { serviceId?: string; addOnId?: string }) {
@@ -42,7 +43,11 @@ async function recipeLines(tx: Parameters<typeof loadCatalogue>[0], target: { se
   }));
 }
 
-async function loadCatalogue(tx: Parameters<Parameters<typeof withTenant>[1]>[0], locale: string) {
+async function loadCatalogue(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  locale: string,
+  t: Translate,
+) {
   const serviceRows = await tx
     .select()
     .from(services)
@@ -55,7 +60,7 @@ async function loadCatalogue(tx: Parameters<Parameters<typeof withTenant>[1]>[0]
   const catalogue: CloseFormService[] = await Promise.all(
     serviceRows.map(async (service) => ({
       id: service.id,
-      displayName: resolveLocalizedText(service.name, locale as "ru", locale as "ru") ?? "Без названия",
+      displayName: resolveLocalizedText(service.name, locale as "ru", locale as "ru") ?? t("common.unnamed"),
       price_minor: service.priceMinor,
       duration_minutes: service.durationMinutes,
       recipe: await recipeLines(tx, { serviceId: service.id }),
@@ -65,7 +70,7 @@ async function loadCatalogue(tx: Parameters<Parameters<typeof withTenant>[1]>[0]
   const options: CloseFormAddOn[] = await Promise.all(
     addOnRows.map(async (addOn) => ({
       id: addOn.id,
-      displayName: resolveLocalizedText(addOn.name, locale as "ru", locale as "ru") ?? "Без названия",
+      displayName: resolveLocalizedText(addOn.name, locale as "ru", locale as "ru") ?? t("common.unnamed"),
       price_delta_minor: addOn.priceDeltaMinor,
       duration_delta_minutes: addOn.durationDeltaMinutes,
       serviceIds: links.filter((link) => link.addOnId === addOn.id).map((link) => link.serviceId),
@@ -78,17 +83,18 @@ async function loadCatalogue(tx: Parameters<Parameters<typeof withTenant>[1]>[0]
 
 export default async function NewVisitPage() {
   const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "write")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет права записывать визиты.</p>
+        <p className="warning-banner">{t("closeVisit.noAccess")}</p>
       </main>
     );
   }
 
   const data = await withTenant(membership.organizationId, async (tx) => {
-    const { catalogue, options } = await loadCatalogue(tx, locale);
+    const { catalogue, options } = await loadCatalogue(tx, locale, t);
     const people = await tx
       .select({ id: specialists.id, name: specialists.name })
       .from(specialists)
@@ -108,10 +114,10 @@ export default async function NewVisitPage() {
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Закрыть визит</h1>
+          <h1>{t("closeVisit.title")}</h1>
         </div>
         <Link className="text-link" href="/app/visits">
-          ← История
+          ← {t("visits.title")}
         </Link>
       </header>
       <VisitCloseForm
@@ -120,6 +126,7 @@ export default async function NewVisitPage() {
         specialists={data.people}
         clients={data.clientRows}
         currency={currency}
+        locale={locale}
       />
     </main>
   );

@@ -7,15 +7,17 @@ import { can } from "@/domain/rbac";
 import { ServiceList, type ServiceRow } from "@/components/service-list";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadServiceCosting } from "@/lib/service-costing";
+import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ServicesPage() {
   const { membership, organizationName, locale } = await requireWorkspace();
+  const t = getTranslator(locale);
 
   if (!can(membership.role, "services", "read")) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет доступа к услугам.</p>
+        <p className="warning-banner">{t("services.noAccess")}</p>
       </main>
     );
   }
@@ -39,7 +41,7 @@ export default async function ServicesPage() {
         const costing = await loadServiceCosting(tx, service, { specialistId: specialist?.id ?? null });
         return {
           id: service.id,
-          displayName: resolveLocalizedText(service.name, locale, locale) ?? "Без названия",
+          displayName: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
           price_minor: service.priceMinor,
           duration_minutes: service.durationMinutes,
           currency: service.currency,
@@ -62,7 +64,7 @@ export default async function ServicesPage() {
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Услуги</h1>
+          <h1>{t("services.title")}</h1>
         </div>
         <AppNav active="/app/services" locale={locale} />
       </header>

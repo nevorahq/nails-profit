@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-import { costingReasonLabels, formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator, type MessageKey } from "@/i18n/t";
+import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 
 export type ServiceRow = {
   id: string;
@@ -22,7 +24,14 @@ export type ServiceRow = {
     | { status: "incomplete"; reasons: string[] };
 };
 
-export function ServiceList({ services, locale }: { services: ServiceRow[]; locale: string }) {
+export function ServiceList({
+  services,
+  locale,
+}: {
+  services: ServiceRow[];
+  locale: AppLocale;
+}) {
+  const t = getTranslator(locale);
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -48,7 +57,7 @@ export function ServiceList({ services, locale }: { services: ServiceRow[]; loca
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? "Не удалось создать услугу");
+      setError(payload?.error?.message ?? t("services.createFailed"));
       setPending(false);
       return;
     }
@@ -64,26 +73,25 @@ export function ServiceList({ services, locale }: { services: ServiceRow[]; loca
     <>
       {incomplete.length > 0 && (
         <div className="warning-banner">
-          {incomplete.length} услуг(и) нельзя посчитать: не хватает данных. Они помечены ниже — расчёт по
-          неполным данным не показывается, чтобы не выдать неверную прибыль за верную.
+{t("services.incompleteBanner", { count: incomplete.length })}
         </div>
       )}
 
       <form className="inline-form" onSubmit={submit}>
         <label>
-          Название услуги
-          <input name="name" required maxLength={200} placeholder="Маникюр с покрытием" />
+          {t("services.name")}
+          <input name="name" required maxLength={200} placeholder={t("services.namePlaceholder")} />
         </label>
         <label>
-          Цена
+          {t("common.price")}
           <input name="price" type="number" step="0.01" min="0" placeholder="600" />
         </label>
         <label>
-          Длительность, мин
+          {t("services.durationMinutes")}
           <input name="duration" type="number" step="1" min="1" placeholder="90" />
         </label>
         <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? "Создаём…" : "Добавить услугу"}
+          {pending ? t("services.creating") : t("services.add")}
         </button>
       </form>
       {error && <div className="form-error">{error}</div>}
@@ -91,19 +99,19 @@ export function ServiceList({ services, locale }: { services: ServiceRow[]; loca
       <table className="data-table">
         <thead>
           <tr>
-            <th>Услуга</th>
-            <th>Цена</th>
-            <th>Длительность</th>
-            <th>Останется вам</th>
-            <th>Маржа</th>
-            <th>Прибыль в час</th>
+            <th>{t("services.service")}</th>
+            <th>{t("common.price")}</th>
+            <th>{t("common.duration")}</th>
+            <th>{t("services.youKeep")}</th>
+            <th>{t("services.margin")}</th>
+            <th>{t("services.perHour")}</th>
           </tr>
         </thead>
         <tbody>
           {services.length === 0 && (
             <tr>
               <td colSpan={6} className="muted">
-                Услуг пока нет.
+                {t("services.none")}
               </td>
             </tr>
           )}
@@ -134,7 +142,7 @@ export function ServiceList({ services, locale }: { services: ServiceRow[]; loca
               ) : (
                 <td colSpan={3}>
                   <span className="badge-warning">
-                    нет данных: {service.costing.reasons.map((r) => costingReasonLabels[r] ?? r).join("; ")}
+                    {t("common.noData")}: {service.costing.reasons.map((r) => t(`reason.${r}` as MessageKey)).join("; ")}
                   </span>
                 </td>
               )}
