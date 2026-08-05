@@ -1,0 +1,185 @@
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { z } from "zod";
+
+import { commissionRules, specialists } from "@/db/schema";
+import { withTenant } from "@/db/tenant";
+import { selectCommissionRule } from "@/domain/commission";
+import { commissionTypes } from "@/domain/costing";
+import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { recordAuditEvent } from "@/lib/audit";
+import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { getActiveMembership } from "@/lib/membership";
+
+/**
+ * Specialists and their commission rules, spec RES-001, RES-004 and RES-005.
+ *
+ * Governed by the section 6.1 "Комиссии мастеров" row: Owner and Manager manage
+ * them, a Master sees only their own result, an Analyst sees aggregates. Writes
+ * go through canManageCatalogue, so a Master — whose scope is "own" — cannot
+ * edit the rules they are paid by.
+ */
+const defaultRuleInput = z
+  .object({
+    type: z.enum(commissionTypes),
+    basis_points: z.int().min(0).max(10_000).optional(),
+    fixed_amount_minor: z.int().min(0).optional(),
+    service_id: z.uuid().optional(),
+  })
+  .refine(
+    (value) =>
+      value.type === "fixed"
+        ? value.fixed_amount_minor !== undefined && value.basis_points === undefined
+        : value.basis_points !== undefined && value.fixed_amount_minor === undefined,
+    { message: "A fixed rule needs an amount; a percentage rule needs a rate" },
+  );
+
+const createSpecialistSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  cooperation_type: z.enum(["commission", "rent", "staff"]).default("commission"),
+  // RES-005: a commission specialist needs a default rule. Optional here so the
+  // record can be created first, but the costing then reports the gap rather
+  // than treating the commission as zero.
+  default_rule: defaultRuleInput.optional(),
+});
+
+export async function GET(request: Request) {
+  const id = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
+  }
+
+  const actor = caller.membership;
+  if (!can(actor.role, "commissions", "read")) {
+    return apiError(403, "FORBIDDEN", "This role cannot read commissions", id);
+  }
+
+  // First place `scope: "own"` becomes a real filter rather than a declaration:
+  // a specialist row carries the user it belongs to, so a Master can be limited
+  // to their own. Section 6.1: "Только собственный результат".
+  const ownOnly = scopeFor(actor.role, "commissions") === "own";
+
+  const rows = await withTenant(actor.organizationId, async (tx) => {
+    const people = await tx
+      .select()
+      .from(specialists)
+      .where(
+        ownOnly
+          ? and(isNull(specialists.archivedAt), eq(specialists.userId, actor.userId))
+          : isNull(specialists.archivedAt),
+      )
+      .orderBy(asc(specialists.createdAt));
+
+    return Promise.all(
+      people.map(async (person) => {
+        const rules = await tx
+          .select({
+            id: commissionRules.id,
+            serviceId: commissionRules.serviceId,
+            type: commissionRules.type,
+            basisPoints: commissionRules.basisPoints,
+            fixedAmountMinor: commissionRules.fixedAmountMinor,
+            activeFrom: commissionRules.activeFrom,
+            activeTo: commissionRules.activeTo,
+          })
+          .from(commissionRules)
+          .where(eq(commissionRules.specialistId, person.id));
+
+        const defaultRule = selectCommissionRule(
+          rules.filter((rule) => rule.serviceId === null),
+          "",
+        );
+        const exceptions = rules.filter(
+          (rule) => rule.serviceId !== null && (rule.activeTo === null || rule.activeTo > new Date()),
+        );
+
+        return {
+          id: person.id,
+          name: person.name,
+          cooperation_type: person.cooperationType,
+          user_id: person.userId,
+          default_rule: defaultRule
+            ? {
+                type: defaultRule.type,
+                basis_points: defaultRule.basisPoints,
+                fixed_amount_minor: defaultRule.fixedAmountMinor,
+                active_from: defaultRule.activeFrom,
+              }
+            : null,
+          service_exceptions: exceptions.map((rule) => ({
+            service_id: rule.serviceId,
+            type: rule.type,
+            basis_points: rule.basisPoints,
+            fixed_amount_minor: rule.fixedAmountMinor,
+          })),
+        };
+      }),
+    );
+  });
+
+  return apiSuccess(rows, id);
+}
+
+export async function POST(request: Request) {
+  const id = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
+  }
+
+  const actor = caller.membership;
+  if (!canManageCatalogue(actor.role, "commissions")) {
+    return apiError(403, "FORBIDDEN", "This role cannot manage specialists", id);
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = createSpecialistSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
+      fieldErrors: toFieldErrors(parsed.error.issues),
+    });
+  }
+
+  const specialist = await withTenant(actor.organizationId, async (tx) => {
+    const [created] = await tx
+      .insert(specialists)
+      .values({
+        organizationId: actor.organizationId,
+        name: parsed.data.name,
+        cooperationType: parsed.data.cooperation_type,
+        createdBy: actor.userId,
+        updatedBy: actor.userId,
+      })
+      .returning();
+
+    if (parsed.data.default_rule) {
+      await tx.insert(commissionRules).values({
+        organizationId: actor.organizationId,
+        specialistId: created.id,
+        serviceId: null,
+        type: parsed.data.default_rule.type,
+        basisPoints: parsed.data.default_rule.basis_points ?? null,
+        fixedAmountMinor: parsed.data.default_rule.fixed_amount_minor ?? null,
+        createdBy: actor.userId,
+        updatedBy: actor.userId,
+      });
+    }
+
+    await recordAuditEvent(tx, {
+      organizationId: actor.organizationId,
+      actorUserId: actor.userId,
+      eventType: "specialist.created",
+      entityType: "specialist",
+      entityId: created.id,
+      after: { name: created.name, cooperation_type: created.cooperationType },
+      requestId: id,
+    });
+
+    return created;
+  });
+
+  return apiSuccess({ id: specialist.id, name: specialist.name }, id, 201);
+}
+

@@ -33,6 +33,7 @@ export default async function MaterialsPage() {
           <Link className="active" href="/app/materials">
             Материалы
           </Link>
+          <Link href="/app/specialists">Мастера</Link>
         </nav>
       </header>
       <MaterialCatalogue materials={rows} />

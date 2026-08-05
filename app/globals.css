@@ -113,6 +113,8 @@ h1 { font-family: Georgia, serif; font-size: clamp(42px, 7vw, 84px); line-height
 .breakdown summary { cursor: pointer; font-weight: 700; color: var(--accent); }
 .breakdown p, .breakdown li { color: var(--muted); line-height: 1.6; }
 .muted { color: var(--muted); }
+.compact-list { margin: 0; padding-left: 18px; font-size: 14px; }
+.compact-list li { line-height: 1.5; }
 
 @media (max-width: 680px) {
   .app-header { flex-direction: column; align-items: flex-start; gap: 14px; }
