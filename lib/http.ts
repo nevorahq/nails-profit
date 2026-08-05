@@ -33,7 +33,11 @@ export function apiError(
   code: string,
   message: string,
   id: string,
-  extra: { fieldErrors?: FieldError[]; details?: Record<string, unknown> } = {},
+  extra: {
+    fieldErrors?: FieldError[];
+    details?: Record<string, unknown>;
+    headers?: Record<string, string>;
+  } = {},
 ) {
   const body: ApiErrorBody = {
     error: {
@@ -45,7 +49,22 @@ export function apiError(
     },
   };
 
-  return NextResponse.json(body, { status, headers: { "x-request-id": id } });
+  return NextResponse.json(body, {
+    status,
+    headers: { "x-request-id": id, ...extra.headers },
+  });
+}
+
+/**
+ * The one error that has to say when to come back. Retry-After is what turns a
+ * refusal into an instruction; without it a client retries immediately and
+ * spends its next window on requests that cannot succeed.
+ */
+export function rateLimited(id: string, retryAfterSeconds: number) {
+  return apiError(429, "RATE_LIMITED", "Too many requests; try again later", id, {
+    details: { retry_after_seconds: retryAfterSeconds },
+    headers: { "retry-after": String(retryAfterSeconds) },
+  });
 }
 
 /** Maps Zod issues onto the spec's `field_errors`, one entry per invalid path. */

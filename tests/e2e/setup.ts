@@ -8,7 +8,7 @@
  * check, the tenant transaction and the SQL are the ones that ship.
  */
 import { existsSync } from "node:fs";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 
 if (existsSync(".env")) {
   process.loadEnvFile(".env");
@@ -19,6 +19,16 @@ if (!process.env.DATABASE_URL) {
     "E2E tests need DATABASE_URL. Run `cp .env.example .env`, `docker compose up -d` and `npm run db:migrate` first.",
   );
 }
+
+/**
+ * Rate limit counters are process-global, so without this a test's verdict
+ * would depend on how many requests the tests before it happened to make.
+ * The limits themselves are exercised deliberately, in one test.
+ */
+beforeEach(async () => {
+  const { resetRateLimits } = await import("@/lib/rate-limit");
+  resetRateLimits();
+});
 
 vi.mock("next/headers", async () => {
   const { currentSessionHeaders } = await import("../helpers/session");

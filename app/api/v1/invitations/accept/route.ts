@@ -12,7 +12,8 @@ import {
 } from "@/domain/invitation";
 import { auth } from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
-import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, rateLimited, requestId, toFieldErrors } from "@/lib/http";
+import { callerKey, checkRateLimit, INVITATION_ACCEPT_RULE } from "@/lib/rate-limit";
 
 // The token travels in the body, not the path: URLs end up in access logs,
 // browser history and Referer headers, and this one is a bearer credential.
@@ -24,6 +25,12 @@ export async function POST(request: Request) {
   const id = requestId(request);
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
+
+  // Section 15.3 counts invitation links among the public ones to protect. The
+  // token is 256 bits, so this is not about guessing odds — it is about making
+  // an attempt cost something.
+  const limit = checkRateLimit(callerKey(request, session.user.id), INVITATION_ACCEPT_RULE);
+  if (!limit.allowed) return rateLimited(id, limit.retryAfterSeconds);
 
   const body = await request.json().catch(() => null);
   const parsed = acceptSchema.safeParse(body);

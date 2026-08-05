@@ -6,7 +6,8 @@ import { decodeCsv, detectDelimiter, parseCsv } from "@/domain/csv";
 import { suggestMapping } from "@/domain/import-mapping";
 import { importTemplates, isImportableEntity } from "@/domain/import-templates";
 import { canImport, MAX_IMPORT_BYTES, previewFor, serializePreview, templateFields } from "@/lib/import-flow";
-import { apiError, apiSuccess, requestId } from "@/lib/http";
+import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
+import { callerKey, checkRateLimit, IMPORT_UPLOAD_RULE } from "@/lib/rate-limit";
 import { getActiveMembership } from "@/lib/membership";
 import type { AppLocale } from "@/i18n/messages";
 
@@ -25,6 +26,11 @@ export async function POST(request: Request) {
     return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
   }
   const actor = caller.membership;
+
+  // Before the body is read, not after: the point is to avoid decoding and
+  // parsing two megabytes for a caller that is already over the limit.
+  const limit = checkRateLimit(callerKey(request, actor.userId), IMPORT_UPLOAD_RULE);
+  if (!limit.allowed) return rateLimited(id, limit.retryAfterSeconds);
 
   const form = await request.formData().catch(() => null);
   const entity = String(form?.get("entity") ?? "");

@@ -8,7 +8,8 @@ import { isImportableEntity } from "@/domain/import-templates";
 import type { Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
-import { apiError, apiSuccess, requestId } from "@/lib/http";
+import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
+import { callerKey, checkRateLimit, IMPORT_CONFIRM_RULE } from "@/lib/rate-limit";
 import { canImport, previewFor } from "@/lib/import-flow";
 import { applyImport } from "@/lib/import-service";
 import { getActiveMembership } from "@/lib/membership";
@@ -29,6 +30,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
   }
   const actor = caller.membership;
+
+  // Confirm writes the catalogue row by row, so it is limited too — a loop here
+  // costs the database, not just this process.
+  const limit = checkRateLimit(callerKey(request, actor.userId), IMPORT_CONFIRM_RULE);
+  if (!limit.allowed) return rateLimited(id, limit.retryAfterSeconds);
+
   const { id: jobId } = await context.params;
 
   const result = await withTenant(actor.organizationId, async (tx) => {
