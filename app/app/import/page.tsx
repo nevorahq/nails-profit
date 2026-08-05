@@ -1,22 +1,18 @@
 import { desc } from "drizzle-orm";
-import Link from "next/link";
 
+import { AppNav } from "@/components/app-nav";
+import { ImportWizard } from "@/components/import-wizard";
 import { importJobs } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { importableEntities } from "@/domain/import-templates";
-import { ImportWizard } from "@/components/import-wizard";
+import { getTranslator, type MessageKey } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
 import { canImport } from "@/lib/import-flow";
 import { requireWorkspace } from "@/lib/workspace";
 
-const entityLabels: Record<string, string> = {
-  material: "Материалы",
-  service: "Услуги",
-  specialist: "Мастера",
-  client: "Клиенты",
-};
-
 export default async function ImportPage() {
-  const { membership, organizationName } = await requireWorkspace();
+  const { membership, organizationName, locale } = await requireWorkspace();
+  const t = getTranslator(locale);
 
   // Only the entities this role may actually write. Offering a choice that will
   // be refused at confirm wastes the owner's file and their trust.
@@ -25,7 +21,7 @@ export default async function ImportPage() {
   if (allowed.length === 0) {
     return (
       <main className="app-shell">
-        <p className="warning-banner">У вашей роли нет прав на импорт данных.</p>
+        <p className="warning-banner">{t("import.noRights")}</p>
       </main>
     );
   }
@@ -53,44 +49,34 @@ export default async function ImportPage() {
       <header className="app-header">
         <div>
           <span className="eyebrow">{organizationName}</span>
-          <h1>Импорт</h1>
+          <h1>{t("import.title")}</h1>
         </div>
-        <nav className="tab-nav">
-          <Link href="/app">Отчёт</Link>
-          <Link href="/app/visits">Визиты</Link>
-          <Link href="/app/services">Услуги</Link>
-          <Link href="/app/add-ons">Опции</Link>
-          <Link href="/app/materials">Материалы</Link>
-          <Link href="/app/specialists">Мастера</Link>
-          <Link className="active" href="/app/import">
-            Импорт
-          </Link>
-        </nav>
+        <AppNav active="/app/import" locale={locale} />
       </header>
 
-      <ImportWizard entities={allowed} />
+      <ImportWizard entities={allowed} locale={locale} />
 
       {history.length > 0 && (
         <section className="panel">
-          <h2>Прошлые импорты</h2>
+          <h2>{t("import.history")}</h2>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Когда</th>
-                <th>Файл</th>
-                <th>Что</th>
-                <th>Добавлено</th>
-                <th>Обновлено</th>
-                <th>Пропущено</th>
-                <th>С ошибками</th>
+                <th>{t("import.when")}</th>
+                <th>{t("import.fileName")}</th>
+                <th>{t("import.what.column")}</th>
+                <th>{t("import.created")}</th>
+                <th>{t("import.updated")}</th>
+                <th>{t("import.skipped")}</th>
+                <th>{t("import.failed")}</th>
               </tr>
             </thead>
             <tbody>
               {history.map((job) => (
                 <tr key={job.id}>
-                  <td>{job.createdAt.toLocaleDateString("ru-MD")}</td>
+                  <td>{job.createdAt.toLocaleDateString(localeTag(locale))}</td>
                   <td>{job.fileName}</td>
-                  <td>{entityLabels[job.entity] ?? job.entity}</td>
+                  <td>{t(`entity.${job.entity}` as MessageKey)}</td>
                   {job.status === "completed" ? (
                     <>
                       <td>{job.created}</td>
@@ -100,7 +86,7 @@ export default async function ImportPage() {
                     </>
                   ) : (
                     <td colSpan={4} className="muted">
-                      не подтверждён
+                      {t("import.notConfirmed")}
                     </td>
                   )}
                 </tr>

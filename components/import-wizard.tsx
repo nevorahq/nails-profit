@@ -3,6 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import type { AppLocale } from "@/i18n/messages";
+import { getTranslator, type MessageKey } from "@/i18n/t";
+
 /**
  * The five steps of INT-002 as one screen: upload, mapping, validation preview,
  * confirm, result.
@@ -49,50 +52,14 @@ type Job = {
 
 type Result = { created: number; updated: number; skipped: number; failed: number };
 
-const entityLabels: Record<string, string> = {
-  material: "Материалы",
-  service: "Услуги",
-  specialist: "Мастера",
-  client: "Клиенты",
-};
-
-/** Wording an owner can act on, rather than the code the API returns. */
-const issueLabels: Record<string, string> = {
-  required_missing: "обязательное поле пустое",
-  not_a_number: "не похоже на число",
-  not_a_date: "не похоже на дату",
-  not_a_duration: "не похоже на длительность",
-  not_a_boolean: "нужно «да» или «нет»",
-  not_a_phone: "не похоже на телефон",
-  not_an_option: "недопустимое значение",
-  negative_not_allowed: "отрицательное значение",
-  too_long: "слишком длинное значение",
-  duplicate_in_file: "повтор строки в файле",
-  looks_like_formula: "значение начинается как формула Excel — импортируем как текст",
-  write_failed: "не удалось записать",
-};
-
 const encodingLabels: Record<string, string> = {
   "utf-8": "UTF-8",
   "windows-1251": "Windows-1251",
 };
 
-/**
- * Russian plurals: 1 строка, 2 строки, 5 строк. `Intl.PluralRules` knows the
- * categories, which is shorter and more honest than hand-written modulo
- * arithmetic — and it is the same mechanism the ro and en interfaces will need.
- */
-const pluralRules = new Intl.PluralRules("ru-RU");
-
-function plural(count: number, forms: { one: string; few: string; many: string }): string {
-  const category = pluralRules.select(count);
-  if (category === "one") return forms.one;
-  if (category === "few") return forms.few;
-  return forms.many;
-}
-
-export function ImportWizard({ entities }: { entities: string[] }) {
+export function ImportWizard({ entities, locale }: { entities: string[]; locale: AppLocale }) {
   const router = useRouter();
+  const t = getTranslator(locale);
   const [entity, setEntity] = useState(entities[0] ?? "material");
   const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -113,7 +80,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
     setPending(false);
 
     if (!response.ok) {
-      setError(body?.error?.message ?? "Не удалось прочитать файл");
+      setError(body?.error?.message ?? t("import.readFailed"));
       return;
     }
     setJob(body.data);
@@ -133,7 +100,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
     setPending(false);
 
     if (!response.ok) {
-      setError(body?.error?.message ?? "Не удалось пересчитать");
+      setError(body?.error?.message ?? t("import.recalcFailed"));
       return;
     }
     setJob({ ...job, mapping: body.data.mapping, preview: body.data.preview });
@@ -149,7 +116,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
     setPending(false);
 
     if (!response.ok) {
-      setError(body?.error?.message ?? "Не удалось импортировать");
+      setError(body?.error?.message ?? t("import.importFailed"));
       return;
     }
     setResult(body.data.result);
@@ -160,34 +127,33 @@ export function ImportWizard({ entities }: { entities: string[] }) {
   if (result) {
     return (
       <section className="panel">
-        <h2>Импорт завершён</h2>
+        <h2>{t("import.done")}</h2>
         <div className="metric-grid">
           <div className="metric metric-strong">
-            <span>Добавлено</span>
+            <span>{t("import.created")}</span>
             <strong>{result.created}</strong>
           </div>
           <div className="metric">
-            <span>Обновлено</span>
+            <span>{t("import.updated")}</span>
             <strong>{result.updated}</strong>
           </div>
           <div className="metric">
-            <span>Пропущено</span>
+            <span>{t("import.skipped")}</span>
             <strong>{result.skipped}</strong>
           </div>
           <div className={`metric${result.failed > 0 ? " metric-negative" : ""}`}>
-            <span>С ошибками</span>
+            <span>{t("import.failed")}</span>
             <strong>{result.failed}</strong>
           </div>
         </div>
         {result.failed > 0 && (
           <p className="muted">
-            Строки с ошибками не импортированы — остальные записаны. Исправьте их в файле и загрузите
-            его ещё раз: повторный импорт обновит существующие записи, а не создаст копии.
+{t("import.failedNote")}
           </p>
         )}
         <div className="button-row">
           <button className="secondary-button" type="button" onClick={() => setResult(null)}>
-            Импортировать ещё
+            {t("import.again")}
           </button>
         </div>
       </section>
@@ -197,32 +163,31 @@ export function ImportWizard({ entities }: { entities: string[] }) {
   if (!job) {
     return (
       <section className="panel">
-        <h2>Загрузите файл</h2>
+        <h2>{t("import.upload")}</h2>
         <form className="inline-form" onSubmit={upload}>
           <label>
-            Что импортируем
+            {t("import.what")}
             <select value={entity} onChange={(event) => setEntity(event.target.value)}>
               {entities.map((option) => (
                 <option key={option} value={option}>
-                  {entityLabels[option] ?? option}
+                  {t(`entity.${option}` as MessageKey)}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Файл CSV
+            {t("import.file")}
             <input type="file" name="file" accept=".csv,text/csv" required />
           </label>
           <button className="primary-button" type="submit" disabled={pending}>
-            {pending ? "Читаем…" : "Загрузить"}
+            {pending ? t("import.reading") : t("import.submit")}
           </button>
         </form>
         {error && <p className="form-error">{error}</p>}
         <p className="muted">
-          Подойдёт выгрузка из Excel — и с запятой, и с точкой с запятой, в UTF-8 или Windows-1251.
-          Ничего не записывается, пока вы не подтвердите.{" "}
+{t("import.hint")}{" "}
           <a className="text-link" href={`/api/v1/imports/templates/${entity}`}>
-            Скачать шаблон
+            {t("import.downloadTemplate")}
           </a>
         </p>
       </section>
@@ -235,16 +200,18 @@ export function ImportWizard({ entities }: { entities: string[] }) {
   return (
     <>
       <section className="panel">
-        <h2>Колонки</h2>
+        <h2>{t("import.columns")}</h2>
         <p className="muted">
-          {job.file_name} · {encodingLabels[job.encoding] ?? job.encoding} · разделитель «
-          {job.delimiter === "\t" ? "таб" : job.delimiter}»
+          {job.file_name} · {encodingLabels[job.encoding] ?? job.encoding} ·{" "}
+          {t("import.separator", {
+            separator: job.delimiter === "\t" ? t("import.separatorTab") : job.delimiter,
+          })}
         </p>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Поле</th>
-              <th>Колонка в файле</th>
+              <th>{t("import.field")}</th>
+              <th>{t("import.column")}</th>
             </tr>
           </thead>
           <tbody>
@@ -252,7 +219,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
               <tr key={field.key}>
                 <td>
                   {field.label}
-                  {field.required && <span className="badge-warning">обязательно</span>}
+                  {field.required && <span className="badge-warning">{t("import.required")}</span>}
                   {field.hint && <span className="unit-hint">{field.hint}</span>}
                 </td>
                 <td>
@@ -263,10 +230,10 @@ export function ImportWizard({ entities }: { entities: string[] }) {
                       remap(field.key, event.target.value === "" ? null : Number(event.target.value))
                     }
                   >
-                    <option value="">— не импортировать —</option>
+                    <option value="">{t("import.doNotImport")}</option>
                     {job.headers.map((header, index) => (
                       <option key={`${header}-${index}`} value={index}>
-                        {header || `колонка ${index + 1}`}
+                        {header || t("import.columnNumber", { number: index + 1 })}
                       </option>
                     ))}
                   </select>
@@ -279,28 +246,28 @@ export function ImportWizard({ entities }: { entities: string[] }) {
 
       {blocked && (
         <div className="warning-banner">
-          Не выбраны обязательные колонки:{" "}
-          {preview.missing_required_fields
-            .map((key) => job.fields.find((field) => field.key === key)?.label ?? key)
-            .join(", ")}
-          . Пока они не заданы, импортировать нечего.
+          {t("import.missingRequired", {
+            fields: preview.missing_required_fields
+              .map((key) => job.fields.find((field) => field.key === key)?.label ?? key)
+              .join(", "),
+          })}
         </div>
       )}
 
       {!blocked && (
         <section className="panel">
-          <h2>Что будет записано</h2>
+          <h2>{t("import.willWrite")}</h2>
           <div className="metric-grid">
             <div className="metric metric-strong">
-              <span>Строк готово</span>
+              <span>{t("import.rowsReady")}</span>
               <strong>{preview.total}</strong>
             </div>
             <div className={`metric${preview.failed_count > 0 ? " metric-negative" : ""}`}>
-              <span>С ошибками</span>
+              <span>{t("import.failed")}</span>
               <strong>{preview.failed_count}</strong>
             </div>
             <div className="metric">
-              <span>Повторов в файле</span>
+              <span>{t("import.rowsDuplicate")}</span>
               <strong>{preview.skipped_count}</strong>
             </div>
           </div>
@@ -308,7 +275,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Строка</th>
+                <th>{t("common.line")}</th>
                 {job.fields
                   .filter((field) => job.mapping[field.key] !== null)
                   .map((field) => (
@@ -335,8 +302,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
           </table>
           {preview.total > preview.sample.length && (
             <p className="muted">
-              Показаны первые {preview.sample.length} из {preview.total}{" "}
-              {plural(preview.total, { one: "строки", few: "строк", many: "строк" })}.
+              {t("import.showingFirst", { shown: preview.sample.length, total: preview.total })}
             </p>
           )}
         </section>
@@ -344,16 +310,13 @@ export function ImportWizard({ entities }: { entities: string[] }) {
 
       {preview.failed.length > 0 && (
         <section className="panel">
-          <h2>Строки с ошибками</h2>
-          <p className="muted">
-            Эти строки не будут импортированы. Остальные — будут. Номер строки совпадает с номером в
-            вашем файле.
-          </p>
+          <h2>{t("import.failedTitle")}</h2>
+          <p className="muted">{t("import.failedHint")}</p>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Строка</th>
-                <th>Что не так</th>
+                <th>{t("common.line")}</th>
+                <th>{t("import.whatIsWrong")}</th>
               </tr>
             </thead>
             <tbody>
@@ -365,7 +328,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
                       const field = job.fields.find((item) => item.key === issue.field);
                       return (
                         <span key={`${issue.field}-${index}`} className="badge-warning">
-                          {field?.label ?? issue.field}: {issueLabels[issue.code] ?? issue.code}
+                          {field?.label ?? issue.field}: {t(`issue.${issue.code}` as MessageKey)}
                           {issue.value && ` («${issue.value}»)`}
                         </span>
                       );
@@ -380,12 +343,12 @@ export function ImportWizard({ entities }: { entities: string[] }) {
 
       {preview.skipped.length > 0 && (
         <section className="panel">
-          <h2>Повторы внутри файла</h2>
+          <h2>{t("import.duplicatesTitle")}</h2>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Строка</th>
-                <th>Уже встречалась</th>
+                <th>{t("common.line")}</th>
+                <th>{t("import.alreadySeen")}</th>
               </tr>
             </thead>
             <tbody>
@@ -402,10 +365,7 @@ export function ImportWizard({ entities }: { entities: string[] }) {
 
       {preview.warnings.length > 0 && (
         <div className="warning-banner">
-          В {preview.warnings.length}{" "}
-          {plural(preview.warnings.length, { one: "строке", few: "строках", many: "строках" })}{" "}
-          значение начинается как формула Excel. Импортируем как обычный текст — при выгрузке формула
-          не выполнится.
+          {t("import.formulaWarning", { count: preview.warnings.length })}
         </div>
       )}
 
@@ -418,16 +378,10 @@ export function ImportWizard({ entities }: { entities: string[] }) {
           onClick={confirm}
           disabled={pending || blocked || preview.total === 0}
         >
-          {pending
-            ? "Импортируем…"
-            : `Импортировать ${preview.total} ${plural(preview.total, {
-                one: "строку",
-                few: "строки",
-                many: "строк",
-              })}`}
+          {pending ? t("import.importing") : t("import.confirm", { count: preview.total })}
         </button>
         <button className="secondary-button" type="button" onClick={() => setJob(null)}>
-          Отмена
+          {t("common.cancel")}
         </button>
       </div>
     </>

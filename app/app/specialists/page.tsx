@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import Link from "next/link";
+import { AppNav } from "@/components/app-nav";
 
 import { commissionRules, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -105,17 +105,7 @@ export default async function SpecialistsPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>Мастера и комиссии</h1>
         </div>
-        <nav className="tab-nav">
-          <Link href="/app">Отчёт</Link>
-          <Link href="/app/visits">Визиты</Link>
-          <Link href="/app/services">Услуги</Link>
-          <Link href="/app/add-ons">Опции</Link>
-          <Link href="/app/materials">Материалы</Link>
-          <Link className="active" href="/app/specialists">
-            Мастера
-          </Link>
-          <Link href="/app/import">Импорт</Link>
-        </nav>
+        <AppNav active="/app/specialists" locale={locale} />
       </header>
       <SpecialistManager
         specialists={people}

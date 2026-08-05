@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { AppNav } from "@/components/app-nav";
 import Link from "next/link";
 
 import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
@@ -98,17 +99,7 @@ export default async function VisitsPage({
           <span className="eyebrow">{organizationName}</span>
           <h1>Визиты</h1>
         </div>
-        <nav className="tab-nav">
-          <Link href="/app">Отчёт</Link>
-          <Link className="active" href="/app/visits">
-            Визиты
-          </Link>
-          <Link href="/app/services">Услуги</Link>
-          <Link href="/app/add-ons">Опции</Link>
-          <Link href="/app/materials">Материалы</Link>
-          <Link href="/app/specialists">Мастера</Link>
-          <Link href="/app/import">Импорт</Link>
-        </nav>
+        <AppNav active="/app/visits" locale={locale} />
       </header>
 
       <div className="button-row">

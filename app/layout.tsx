@@ -1,16 +1,34 @@
 import type { Metadata } from "next";
+import { Onest } from "next/font/google";
 
 import "./globals.css";
+import { getTranslator } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
+import { resolveLocale } from "@/lib/locale";
 
-export const metadata: Metadata = {
-  title: "Nail Profit OS",
-  description: "Себестоимость, маржа и прибыль в час для nail-мастеров и студий.",
-};
+const onest = Onest({
+  subsets: ["cyrillic", "latin"],
+  weight: "variable",
+  display: "swap",
+});
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+/** LOC-002: the tab title and description follow the interface language too. */
+export async function generateMetadata(): Promise<Metadata> {
+  const t = getTranslator(await resolveLocale());
+  return { title: "Nail Profit OS", description: t("app.description") };
+}
+
+/**
+ * LOC-002: `<html lang>` follows the interface language. Screen readers pick
+ * pronunciation from it, so a Romanian interface tagged `ru` is read aloud with
+ * Russian phonetics.
+ */
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await resolveLocale();
+
   return (
-    <html lang="ru">
-      <body>{children}</body>
+    <html lang={localeTag(locale)}>
+      <body className={onest.className}>{children}</body>
     </html>
   );
 }

@@ -1,37 +1,40 @@
 import Link from "next/link";
 
-import { getMessages } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
+import { resolveLocale } from "@/lib/locale";
 
-export default function HomePage() {
-  const t = getMessages("ru");
+export default async function HomePage() {
+  // No organization yet, so the language comes from the browser (LOC-008's
+  // fallback). A visitor whose laptop is Romanian should not be met in Russian.
+  const t = getTranslator(await resolveLocale());
 
   return (
     <main className="landing-shell">
       <nav className="topbar">
-        <span className="brand">{t.productName}</span>
+        <span className="brand">Nail Profit OS</span>
         <Link className="text-link" href="/login">
-          {t.login}
+          {t("landing.login")}
         </Link>
       </nav>
       <section className="hero">
-        <div className="eyebrow">Profit layer для вашей системы записи</div>
-        <h1>{t.hero}</h1>
-        <p>{t.tagline}. Fresha, DIKIDI, YCLIENTS и Stilio остаются там, где они уже работают.</p>
+        <div className="eyebrow">{t("landing.eyebrow")}</div>
+        <h1>{t("landing.hero")}</h1>
+        <p>{t("landing.tagline")}</p>
         <Link className="primary-button" href="/login?mode=signup">
-          {t.start}
+          {t("landing.start")}
         </Link>
       </section>
-      <section className="metric-preview" aria-label="Пример расчёта">
+      <section className="metric-preview" aria-label={t("landing.exampleLabel")}>
         <div>
-          <span>Цена услуги</span>
+          <span>{t("landing.servicePrice")}</span>
           <strong>600 MDL</strong>
         </div>
         <div>
-          <span>Останется вам</span>
+          <span>{t("landing.youKeep")}</span>
           <strong>325 MDL</strong>
         </div>
         <div>
-          <span>Прибыль в час</span>
+          <span>{t("landing.perHour")}</span>
           <strong>216,67 MDL</strong>
         </div>
       </section>

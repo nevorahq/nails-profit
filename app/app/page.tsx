@@ -1,5 +1,6 @@
 import { eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
+import { AppNav } from "@/components/app-nav";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -125,17 +126,7 @@ export default async function AppPage({
           <span className="eyebrow">Studio Ledger · {period}</span>
           <h1>{membership.organization.name}</h1>
         </div>
-        <nav className="tab-nav">
-          <Link className="active" href="/app">
-            Отчёт
-          </Link>
-          <Link href="/app/visits">Визиты</Link>
-          <Link href="/app/services">Услуги</Link>
-          <Link href="/app/add-ons">Опции</Link>
-          <Link href="/app/materials">Материалы</Link>
-          <Link href="/app/specialists">Мастера</Link>
-          <Link href="/app/import">Импорт</Link>
-        </nav>
+        <AppNav active="/app" locale={locale} />
       </header>
 
       <form className="inline-form" method="get">
