@@ -11,6 +11,7 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
  */
 const TABS: readonly { href: string; key: MessageKey }[] = [
   { href: "/app", key: "nav.dashboard" },
+  { href: "/app/calendar", key: "nav.calendar" },
   { href: "/app/visits", key: "nav.visits" },
   { href: "/app/services", key: "nav.services" },
   { href: "/app/add-ons", key: "nav.addOns" },

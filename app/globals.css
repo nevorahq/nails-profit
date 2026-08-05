@@ -232,9 +232,56 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .legal-document p, .legal-document li { color: var(--muted); font-size: 16rem; line-height: 1.7; }
 .legal-document li + li { margin-top: 8rem; }
 
+/* --- Phase 7.3: the staff calendar --- */
+
+.calendar-toolbar { display: flex; flex-wrap: wrap; gap: 16rem; align-items: center; justify-content: space-between; margin: 18rem 0 4rem; }
+.calendar-views { display: flex; gap: 16rem; }
+.calendar-views a { color: var(--muted); font-size: 14rem; font-weight: 600; text-decoration: none; padding: 8rem 0; border-bottom: 2rem solid transparent; }
+.calendar-views a.active { color: var(--accent); border-bottom-color: var(--accent); }
+.calendar-steps { display: flex; gap: 10rem; }
+/* Section 7.8 asks for 44rem touch targets under the 1px = 1rem scale, and the
+   period arrows are the smallest controls on the screen. */
+.calendar-steps .secondary-button { min-width: 44rem; justify-content: center; padding: 12rem 16rem; }
+
+.calendar-group h2 { font-size: 20rem; margin-bottom: 12rem; }
+.calendar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10rem; }
+.calendar-entry { border: 1rem solid var(--line); border-radius: 16rem; background: var(--surface); }
+/* The stripe repeats what the status text already says; it is a second signal,
+   never the only one (section 7.8). */
+.calendar-entry { border-left-width: 4rem; }
+.calendar-entry.status-confirmed { border-left-color: var(--accent); }
+.calendar-entry.status-pending_confirmation { border-left-color: var(--warning-border); }
+.calendar-entry.status-cancelled, .calendar-entry.status-no_show { border-left-color: var(--danger); }
+
+.calendar-entry summary { display: flex; flex-wrap: wrap; gap: 6rem 14rem; align-items: baseline; padding: 14rem 16rem; cursor: pointer; min-height: 44rem; }
+.calendar-entry summary::marker { color: var(--muted); }
+.calendar-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15rem; }
+.calendar-what { font-size: 15rem; }
+.calendar-who { color: var(--muted); font-size: 14rem; }
+.calendar-status { margin-left: auto; font-size: 12rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+
+.calendar-detail { padding: 0 16rem 16rem; border-top: 1rem solid var(--line); }
+.calendar-detail p { margin: 12rem 0; }
+.calendar-actions { display: flex; flex-wrap: wrap; gap: 10rem; align-items: flex-start; }
+.calendar-subform { flex-basis: 100%; }
+/* `display: flex` on a summary removes the disclosure triangle, so the caret is
+   put back by hand — otherwise these read as bold text nobody thinks to press. */
+.calendar-subform summary { cursor: pointer; color: var(--accent); font-size: 14rem; font-weight: 700; padding: 10rem 0; min-height: 44rem; display: flex; align-items: center; gap: 8rem; text-decoration: underline; text-underline-offset: 4rem; }
+.calendar-subform summary::before { content: "▸"; text-decoration: none; }
+.calendar-subform[open] summary::before { content: "▾"; }
+.calendar-subform .inline-form { margin-top: 8rem; }
+
+.calendar-facts { display: grid; grid-template-columns: minmax(120rem, 200rem) 1fr; gap: 10rem 18rem; margin: 18rem 0 0; }
+.calendar-facts dt { color: var(--muted); font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.calendar-facts dd { margin: 0; font-size: 15rem; }
+
 /* Same trap as the block above: media queries take px. */
 @media (max-width: 680px) {
   .app-header { flex-direction: column; align-items: flex-start; gap: 14rem; }
+  .calendar-toolbar { flex-direction: column; align-items: stretch; }
+  .calendar-status { margin-left: 0; }
+  .calendar-facts { grid-template-columns: 1fr; gap: 4rem; }
+  .calendar-facts dd + dt { margin-top: 12rem; }
   .inline-form { flex-direction: column; align-items: stretch; }
   .inline-form input, .inline-form select { min-width: 0; width: 100%; }
   /* The tables scroll rather than squashing the numbers: at 360rem the margin
