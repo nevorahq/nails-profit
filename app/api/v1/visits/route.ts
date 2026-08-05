@@ -14,6 +14,7 @@ import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { buildVisitDraft, recalculateVisitProfit, writeFinancialSnapshot } from "@/lib/visit-service";
 
 /**
@@ -242,6 +243,30 @@ export async function POST(request: Request) {
       entityId: visit.id,
       after: { revenue_minor: snapshot.revenueMinor, snapshot_version: snapshot.snapshotVersion },
       requestId: id,
+    });
+
+    await recordPilotProductEvent(tx, {
+      organizationId: actor.organizationId,
+      eventName: "visit_completed",
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      source: "api",
+      entityType: "visit",
+      entityId: visit.id,
+      metadata: { complete_margin: snapshot.incompleteReasons.length === 0 },
+    });
+
+    // This mirrors `loadOnboarding`: the guided workflow is complete after the
+    // first financial snapshot. Whether its margin is complete remains visible
+    // in the visit event and is a separate Gate 6 financial-quality criterion.
+    await recordPilotProductEvent(tx, {
+      organizationId: actor.organizationId,
+      eventName: "onboarding_completed",
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      source: "api",
+      entityType: "organization",
+      entityId: actor.organizationId,
     });
 
     return { visit, snapshot };

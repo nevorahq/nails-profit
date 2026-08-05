@@ -18,7 +18,7 @@ export default async function HomePage() {
       </nav>
       <section className="hero">
         <div className="eyebrow">{t("landing.eyebrow")}</div>
-        <h1>{t("landing.hero")}</h1>
+        <h1 style={{ whiteSpace: "pre-line" }}>{t("landing.hero")}</h1>
         <p>{t("landing.tagline")}</p>
         <Link className="primary-button" href="/login?mode=signup">
           {t("landing.start")}
@@ -38,6 +38,10 @@ export default async function HomePage() {
           <strong>216,67 MDL</strong>
         </div>
       </section>
+      <footer className="legal-footer">
+        <Link href="/privacy">{t("legal.privacyLink")}</Link>
+        <Link href="/terms">{t("legal.termsLink")}</Link>
+      </footer>
     </main>
   );
 }

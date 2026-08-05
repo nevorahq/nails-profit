@@ -8,6 +8,7 @@ import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 
 /**
  * Replaces a service's recipe, spec CST-005.
@@ -104,6 +105,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       after: { service_id: service.id, recipe_version: nextVersion, items: parsed.data.items.length },
       requestId: requestIdentifier,
     });
+
+    await recordCompletedServiceCostEvents(tx, actor);
 
     return { recipeId: recipe.id, version: nextVersion, items: parsed.data.items.length };
   });

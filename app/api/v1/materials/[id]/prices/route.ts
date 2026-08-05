@@ -8,6 +8,7 @@ import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 
 /**
  * Records a new purchase price, spec CST-004. Append-only by construction: this
@@ -79,6 +80,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       },
       requestId: requestIdentifier,
     });
+
+    await recordCompletedServiceCostEvents(tx, actor);
 
     return version;
   });

@@ -1,10 +1,12 @@
 import { hash as argon2Hash, verify as argon2Verify, type Algorithm } from "@node-rs/argon2";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { z } from "zod";
 
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { getServerEnv } from "@/env";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { resolvePasswordResetDelivery } from "@/lib/password-reset-delivery";
 
 const env = getServerEnv();
@@ -41,6 +43,44 @@ export const auth = betterAuth({
     schema,
     usePlural: true,
   }),
+  user: {
+    additionalFields: {
+      legalAccepted: {
+        type: "boolean",
+        required: true,
+        returned: false,
+        validator: { input: z.literal(true) },
+      },
+      termsVersion: {
+        type: "string",
+        required: false,
+        input: false,
+        returned: false,
+        defaultValue: TERMS_VERSION,
+      },
+      termsAcceptedAt: {
+        type: "date",
+        required: false,
+        input: false,
+        returned: false,
+        defaultValue: () => new Date(),
+      },
+      privacyVersion: {
+        type: "string",
+        required: false,
+        input: false,
+        returned: false,
+        defaultValue: PRIVACY_VERSION,
+      },
+      privacyAcknowledgedAt: {
+        type: "date",
+        required: false,
+        input: false,
+        returned: false,
+        defaultValue: () => new Date(),
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,

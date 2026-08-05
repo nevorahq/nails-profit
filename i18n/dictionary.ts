@@ -19,6 +19,7 @@ const ru = {
   "nav.specialists": "Мастера",
   "nav.import": "Импорт",
   "nav.settings": "Настройки",
+  "nav.primary": "Основная навигация",
 
   "landing.eyebrow": "Profit layer для вашей системы записи",
   "landing.hero": "Реальная себестоимость. Понятная маржа. Прибыль в час.",
@@ -36,6 +37,7 @@ const ru = {
   "common.saving": "Сохраняем…",
   "common.line": "Строка",
   "common.noAccess": "У вашей роли нет доступа к этому разделу.",
+  "common.skipToContent": "Перейти к содержимому",
 
   "settings.title": "Настройки",
   "settings.language": "Язык интерфейса",
@@ -44,6 +46,25 @@ const ru = {
   "settings.currencyHint":
     "Валюта новых цен и расчётов. Уже сохранённые суммы остаются в своей валюте — пересчёта по курсу здесь нет.",
   "settings.saved": "Сохранено",
+  "settings.dataTitle": "Данные организации",
+  "settings.dataHint": "Owner может получить переносимую JSON-выгрузку или удалить организацию с анонимизацией PII.",
+  "settings.export": "Скачать данные",
+  "settings.ownerOnly": "Экспорт и удаление доступны только Owner.",
+  "settings.deleteTitle": "Удаление организации",
+  "settings.deleteHint": "Это отключит всех участников и анонимизирует организацию. Для подтверждения введите «{name}».",
+  "settings.confirmName": "Название организации",
+  "settings.deleteAction": "Удалить организацию",
+  "settings.deleteFailed": "Не удалось удалить организацию",
+
+  "auth.legalPrefix": "Я принимаю",
+  "auth.legalAnd": "и ознакомился(-ась) с",
+  "legal.termsLink": "условиями использования",
+  "legal.privacyLink": "уведомлением о конфиденциальности",
+  "legal.back": "Вернуться",
+  "legal.updated": "Версия от {date}",
+  "legal.pilotReview": "Текст для закрытого пилота. Перед production-запуском требуется юридическое утверждение.",
+  "legal.privacyTitle": "Уведомление о конфиденциальности",
+  "legal.termsTitle": "Условия использования",
 
   "auth.repeatPassword": "Повторите пароль",
   "auth.requestNewLink": "Запросить новую ссылку",
@@ -287,6 +308,9 @@ const ru = {
 
   "dashboard.eyebrow": "Studio Ledger",
   "dashboard.noAccess": "У вашей роли нет доступа к отчётам.",
+  "pilot.accessTitle": "Доступ к пилоту ещё не открыт",
+  "pilot.accessBody":
+    "Организация создана, но её волна пилота ещё ожидает проверки или временно приостановлена. Данные сохранены; обратитесь к оператору пилота.",
   "dashboard.emptyTitle": "Пока нет закрытых визитов",
   "dashboard.emptyBody":
     "Отчёт строится из завершённых визитов. Закройте первый — и здесь появятся выручка, маржа и прибыль в час.",
@@ -440,6 +464,7 @@ const ro: Record<MessageKey, Message> = {
   "nav.specialists": "Maeștri",
   "nav.import": "Import",
   "nav.settings": "Setări",
+  "nav.primary": "Navigare principală",
 
   "landing.eyebrow": "Profit layer pentru sistemul dvs. de programări",
   "landing.hero": "Cost real. Marjă clară. Profit pe oră.",
@@ -457,6 +482,7 @@ const ro: Record<MessageKey, Message> = {
   "common.saving": "Se salvează…",
   "common.line": "Rând",
   "common.noAccess": "Rolul dvs. nu are acces la această secțiune.",
+  "common.skipToContent": "Sari la conținut",
 
   "settings.title": "Setări",
   "settings.language": "Limba interfeței",
@@ -465,6 +491,25 @@ const ro: Record<MessageKey, Message> = {
   "settings.currencyHint":
     "Moneda prețurilor și calculelor noi. Sumele deja salvate rămân în moneda lor — nu se face conversie la curs.",
   "settings.saved": "Salvat",
+  "settings.dataTitle": "Datele organizației",
+  "settings.dataHint": "Owner poate descărca un export JSON portabil sau poate șterge organizația cu anonimizarea PII.",
+  "settings.export": "Descarcă datele",
+  "settings.ownerOnly": "Exportul și ștergerea sunt disponibile numai pentru Owner.",
+  "settings.deleteTitle": "Ștergerea organizației",
+  "settings.deleteHint": "Aceasta va elimina accesul membrilor și va anonimiza organizația. Pentru confirmare introduceți „{name}”.",
+  "settings.confirmName": "Numele organizației",
+  "settings.deleteAction": "Șterge organizația",
+  "settings.deleteFailed": "Organizația nu a putut fi ștearsă",
+
+  "auth.legalPrefix": "Accept",
+  "auth.legalAnd": "și confirm că am citit",
+  "legal.termsLink": "condițiile de utilizare",
+  "legal.privacyLink": "notificarea de confidențialitate",
+  "legal.back": "Înapoi",
+  "legal.updated": "Versiunea din {date}",
+  "legal.pilotReview": "Text pentru pilotul închis. Este necesară aprobarea juridică înainte de lansarea în producție.",
+  "legal.privacyTitle": "Notificare de confidențialitate",
+  "legal.termsTitle": "Condiții de utilizare",
 
   "auth.repeatPassword": "Repetați parola",
   "auth.requestNewLink": "Cereți un link nou",
@@ -708,6 +753,9 @@ const ro: Record<MessageKey, Message> = {
 
   "dashboard.eyebrow": "Studio Ledger",
   "dashboard.noAccess": "Rolul dvs. nu are acces la rapoarte.",
+  "pilot.accessTitle": "Accesul la pilot nu este încă deschis",
+  "pilot.accessBody":
+    "Organizația a fost creată, dar valul pilot așteaptă verificarea sau este întrerupt temporar. Datele sunt păstrate; contactați operatorul pilotului.",
   "dashboard.emptyTitle": "Încă nu există vizite finalizate",
   "dashboard.emptyBody":
     "Raportul se construiește din vizite finalizate. Finalizați prima — și aici vor apărea încasările, marja și profitul pe oră.",
@@ -859,9 +907,10 @@ const en: Record<MessageKey, Message> = {
   "nav.specialists": "Specialists",
   "nav.import": "Import",
   "nav.settings": "Settings",
+  "nav.primary": "Primary navigation",
 
   "landing.eyebrow": "A profit layer for your booking system",
-  "landing.hero": "Real cost. Clear margin. Profit per hour.",
+  "landing.hero": "Real cost. \nClear margin. \nProfit per hour.",
   "landing.tagline":
     "Understand the profit of every service. Fresha, DIKIDI, YCLIENTS and Stilio stay where they already work.",
   "landing.start": "Start costing",
@@ -876,6 +925,7 @@ const en: Record<MessageKey, Message> = {
   "common.saving": "Saving…",
   "common.line": "Row",
   "common.noAccess": "Your role has no access to this section.",
+  "common.skipToContent": "Skip to content",
 
   "settings.title": "Settings",
   "settings.language": "Interface language",
@@ -884,6 +934,25 @@ const en: Record<MessageKey, Message> = {
   "settings.currencyHint":
     "The currency of new prices and calculations. Amounts already saved keep their own currency — nothing is converted at a rate here.",
   "settings.saved": "Saved",
+  "settings.dataTitle": "Organization data",
+  "settings.dataHint": "An Owner can download a portable JSON export or delete the organization with PII anonymization.",
+  "settings.export": "Download data",
+  "settings.ownerOnly": "Export and deletion are available only to an Owner.",
+  "settings.deleteTitle": "Delete organization",
+  "settings.deleteHint": "This removes member access and anonymizes the organization. Enter “{name}” to confirm.",
+  "settings.confirmName": "Organization name",
+  "settings.deleteAction": "Delete organization",
+  "settings.deleteFailed": "The organization could not be deleted",
+
+  "auth.legalPrefix": "I accept the",
+  "auth.legalAnd": "and confirm that I have read the",
+  "legal.termsLink": "terms of use",
+  "legal.privacyLink": "privacy notice",
+  "legal.back": "Back",
+  "legal.updated": "Version dated {date}",
+  "legal.pilotReview": "Closed-pilot text. Legal approval is required before the production launch.",
+  "legal.privacyTitle": "Privacy notice",
+  "legal.termsTitle": "Terms of use",
 
   "auth.repeatPassword": "Repeat the password",
   "auth.requestNewLink": "Request a new link",
@@ -1123,6 +1192,9 @@ const en: Record<MessageKey, Message> = {
 
   "dashboard.eyebrow": "Studio Ledger",
   "dashboard.noAccess": "Your role has no access to reports.",
+  "pilot.accessTitle": "Pilot access is not open yet",
+  "pilot.accessBody":
+    "The organization exists, but its pilot wave is awaiting review or temporarily paused. Its data is preserved; contact the pilot operator.",
   "dashboard.emptyTitle": "No closed visits yet",
   "dashboard.emptyBody":
     "The report is built from completed visits. Close the first one and revenue, margin and profit per hour will appear here.",

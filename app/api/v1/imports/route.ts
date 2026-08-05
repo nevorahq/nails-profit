@@ -9,6 +9,7 @@ import { canImport, MAX_IMPORT_BYTES, previewFor, serializePreview, templateFiel
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
 import { callerKey, checkRateLimit, IMPORT_UPLOAD_RULE } from "@/lib/rate-limit";
 import { getActiveMembership } from "@/lib/membership";
+import { recordPilotProductEvent } from "@/lib/pilot-events";
 import type { AppLocale } from "@/i18n/messages";
 
 /**
@@ -94,6 +95,17 @@ export async function POST(request: Request) {
         createdBy: actor.userId,
       })
       .returning({ id: importJobs.id, createdAt: importJobs.createdAt });
+
+    await recordPilotProductEvent(tx, {
+      organizationId: actor.organizationId,
+      eventName: "import_started",
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      source: "import",
+      entityType: "import_job",
+      entityId: created.id,
+      metadata: { rows: parsed.rows.length, bytes: file.size },
+    });
     return { ...created, currency: organization.currency, locale: organization.locale };
   });
 

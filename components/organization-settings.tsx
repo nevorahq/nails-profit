@@ -113,9 +113,15 @@ export function OrganizationSettings({
       <p className="muted">{t("settings.languageHint")}</p>
       <p className="muted">{t("settings.currencyHint")}</p>
 
-      {pending && <p className="muted">{t("common.saving")}</p>}
-      {saved && !pending && <p className="muted">{t("settings.saved")}</p>}
-      {error && <p className="form-error">{error}</p>}
+      <div aria-live="polite" aria-atomic="true">
+        {pending && <p className="muted">{t("common.saving")}</p>}
+        {saved && !pending && <p className="muted">{t("settings.saved")}</p>}
+      </div>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
       {!canEdit && <p className="warning-banner">{t("common.noAccess")}</p>}
     </section>
   );

@@ -8,6 +8,7 @@ import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 
 /**
  * Adds a commission rule, spec RES-005 and CST-009.
@@ -117,6 +118,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       },
       requestId: requestIdentifier,
     });
+
+    await recordCompletedServiceCostEvents(tx, actor);
 
     return { rule };
   });

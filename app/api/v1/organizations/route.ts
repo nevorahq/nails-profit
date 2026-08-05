@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { memberships, organizations } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { recordPilotProductEvent } from "@/lib/pilot-events";
 
 const createOrganizationSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -85,6 +86,19 @@ export async function POST(request: Request) {
       role: "owner",
       createdBy: session.user.id,
       updatedBy: session.user.id,
+    });
+
+    // Pilot telemetry is tenant-protected, so establish the tenant only after
+    // the organization and its first membership exist in this transaction.
+    await tx.execute(sql`select set_config('app.current_organization_id', ${created.id}::text, true)`);
+    await recordPilotProductEvent(tx, {
+      organizationId: created.id,
+      eventName: "onboarding_started",
+      actorUserId: session.user.id,
+      actorRole: "owner",
+      source: "api",
+      entityType: "organization",
+      entityId: created.id,
     });
     return created;
   });

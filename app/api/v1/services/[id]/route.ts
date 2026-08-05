@@ -8,6 +8,7 @@ import { supportedLocales } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 import { loadServiceCosting } from "@/lib/service-costing";
 
 const patchServiceSchema = z.object({
@@ -123,6 +124,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       after: { price_minor: service.priceMinor, duration_minutes: service.durationMinutes },
       requestId: requestIdentifier,
     });
+
+    await recordCompletedServiceCostEvents(tx, actor);
 
     const specialistId =
       (

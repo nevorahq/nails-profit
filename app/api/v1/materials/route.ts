@@ -8,6 +8,7 @@ import { baseUnitCostMinor, materialUnits, toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 
 const createMaterialSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -145,6 +146,8 @@ export async function POST(request: Request) {
       after: { name: created.name, base_unit: created.baseUnit },
       requestId: id,
     });
+
+    await recordCompletedServiceCostEvents(tx, actor);
 
     return created;
   });

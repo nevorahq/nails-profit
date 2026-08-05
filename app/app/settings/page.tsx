@@ -1,4 +1,5 @@
 import { AppNav } from "@/components/app-nav";
+import { DataManagement } from "@/components/data-management";
 import { OrganizationSettings } from "@/components/organization-settings";
 import { can } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
@@ -22,6 +23,12 @@ export default async function SettingsPage() {
         locale={locale}
         currency={currency}
         canEdit={can(membership.role, "organization_settings", "write")}
+      />
+      <DataManagement
+        locale={locale}
+        organizationName={organizationName}
+        canExport={can(membership.role, "data_export", "read")}
+        canDelete={can(membership.role, "data_export", "write")}
       />
     </main>
   );

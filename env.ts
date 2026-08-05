@@ -13,3 +13,10 @@ export function getServerEnv() {
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
   });
 }
+
+export function isPilotAccessEnforced() {
+  const value = process.env.PILOT_ACCESS_ENFORCEMENT;
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error("PILOT_ACCESS_ENFORCEMENT must be true or false");
+}

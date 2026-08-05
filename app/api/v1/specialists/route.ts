@@ -9,6 +9,7 @@ import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 
 /**
  * Specialists and their commission rules, spec RES-001, RES-004 and RES-005.
@@ -177,9 +178,10 @@ export async function POST(request: Request) {
       requestId: id,
     });
 
+    await recordCompletedServiceCostEvents(tx, actor);
+
     return created;
   });
 
   return apiSuccess({ id: specialist.id, name: specialist.name }, id, 201);
 }
-

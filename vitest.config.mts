@@ -11,7 +11,7 @@ export default defineConfig({
     environment: "node",
     // Unit tests must run with nothing but Node. Anything needing PostgreSQL
     // lives in tests/integration or tests/e2e and has its own config.
-    include: ["**/*.test.ts"],
+    include: ["**/*.test.ts", "**/*.test.mjs"],
     exclude: ["node_modules/**", ".next/**", "tests/integration/**", "tests/e2e/**"],
     coverage: {
       reporter: ["text", "html"],

@@ -1,7 +1,16 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { invitations, memberships, organizations } from "@/db/schema";
+import {
+  auditEvents,
+  clients,
+  externalReferences,
+  importJobs,
+  invitations,
+  memberships,
+  organizations,
+  specialists,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
@@ -17,9 +26,9 @@ import { getActiveMembership } from "@/lib/membership";
  * What it does NOT do is drop rows. Section 15.3 says deletion anonymizes PII
  * while required financial records are kept, and the financial tables reference
  * the organization with ON DELETE RESTRICT for exactly that reason. So the
- * organization is anonymized and marked deleted, every membership is removed and
- * every pending invitation is revoked — an invitation is a live credential and
- * would otherwise outlive the organization it grants access to.
+ * organization and its PII-bearing tenant rows are anonymized, every membership
+ * is removed and every pending invitation is revoked — an invitation is a live
+ * credential and would otherwise outlive the organization it grants access to.
  */
 const deleteSchema = z.object({
   confirmation_name: z.string().trim().min(1).max(100),
@@ -60,12 +69,59 @@ export async function POST(request: Request) {
       .update(invitations)
       .set({
         status: "revoked",
+        email: sql`concat('deleted-', ${invitations.id}::text, '@invalid.local')`,
         updatedBy: actor.userId,
         updatedAt: new Date(),
         version: sql`${invitations.version} + 1`,
       })
-      .where(eq(invitations.status, "pending"))
+      .where(eq(invitations.organizationId, actor.organizationId))
       .returning({ id: invitations.id });
+
+    const anonymizedClients = await tx
+      .update(clients)
+      .set({
+        name: sql`concat('Deleted client ', left(${clients.id}::text, 8))`,
+        normalizedPhone: null,
+        email: null,
+        locale: null,
+        anonymizedAt: new Date(),
+        updatedBy: actor.userId,
+        updatedAt: new Date(),
+        version: sql`${clients.version} + 1`,
+      })
+      .where(eq(clients.organizationId, actor.organizationId))
+      .returning({ id: clients.id });
+
+    const anonymizedSpecialists = await tx
+      .update(specialists)
+      .set({
+        name: sql`concat('Deleted specialist ', left(${specialists.id}::text, 8))`,
+        userId: null,
+        updatedBy: actor.userId,
+        updatedAt: new Date(),
+        version: sql`${specialists.version} + 1`,
+      })
+      .where(eq(specialists.organizationId, actor.organizationId))
+      .returning({ id: specialists.id });
+
+    await tx
+      .update(importJobs)
+      .set({ fileName: "deleted-import.csv", sourceText: null, issues: [] })
+      .where(eq(importJobs.organizationId, actor.organizationId));
+
+    // Provider identifiers are synchronization metadata, not financial history,
+    // and can contain a source-system contact or natural key.
+    await tx
+      .delete(externalReferences)
+      .where(eq(externalReferences.organizationId, actor.organizationId));
+
+    // Older invitation/specialist events can contain names or email addresses.
+    // Keep the immutable event identity and timestamp, but remove free-form
+    // payloads before appending the PII-free deletion event below.
+    await tx
+      .update(auditEvents)
+      .set({ before: { redacted: true }, after: { redacted: true } })
+      .where(eq(auditEvents.organizationId, actor.organizationId));
 
     const removed = await tx
       .delete(memberships)
@@ -81,7 +137,12 @@ export async function POST(request: Request) {
       eventType: "organization.deleted",
       entityType: "organization",
       entityId: actor.organizationId,
-      after: { memberships_removed: removed.length, invitations_revoked: revoked.length },
+      after: {
+        memberships_removed: removed.length,
+        invitations_revoked: revoked.length,
+        clients_anonymized: anonymizedClients.length,
+        specialists_anonymized: anonymizedSpecialists.length,
+      },
       requestId: id,
     });
 
@@ -96,7 +157,12 @@ export async function POST(request: Request) {
       })
       .where(and(eq(organizations.id, actor.organizationId), isNull(organizations.deletedAt)));
 
-    return { memberships_removed: removed.length, invitations_revoked: revoked.length };
+    return {
+      memberships_removed: removed.length,
+      invitations_revoked: revoked.length,
+      clients_anonymized: anonymizedClients.length,
+      specialists_anonymized: anonymizedSpecialists.length,
+    };
   });
 
   if ("failure" in outcome) {

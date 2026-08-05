@@ -8,10 +8,11 @@ import { OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
-import { memberships, organizations, specialists } from "@/db/schema";
+import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { starterMaterials } from "@/domain/import-templates";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { isPilotAccessEnforced } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -53,7 +54,10 @@ export default async function AppPage({
   if (!session) redirect("/login");
 
   const [membership] = await db
-    .select({ organization: organizations, role: memberships.role })
+    .select({
+      organization: organizations,
+      role: memberships.role,
+    })
     .from(memberships)
     .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
     .where(eq(memberships.userId, session.user.id))
@@ -67,6 +71,29 @@ export default async function AppPage({
 
   const locale = membership.organization.locale as AppLocale;
   const t = getTranslator(locale);
+
+  const pilotStatus =
+    isPilotAccessEnforced()
+      ? await withTenant(membership.organization.id, async (tx) => {
+          const [enrollment] = await tx
+            .select({ status: pilotEnrollments.status })
+            .from(pilotEnrollments)
+            .limit(1);
+          return enrollment?.status ?? null;
+        })
+      : null;
+
+  if (isPilotAccessEnforced() && pilotStatus !== "active") {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card workspace-card" aria-labelledby="pilot-access-title">
+          <span className="brand">Nail Profit OS</span>
+          <h1 id="pilot-access-title">{t("pilot.accessTitle")}</h1>
+          <p>{t("pilot.accessBody")}</p>
+        </section>
+      </main>
+    );
+  }
 
   if (!can(membership.role, "dashboard", "read")) {
     return (

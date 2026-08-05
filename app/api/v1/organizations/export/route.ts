@@ -1,16 +1,33 @@
 import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
-import { db } from "@/db";
 import {
+  addOns,
   auditEvents,
+  clients,
+  commissionRules,
+  consumptions,
+  externalReferences,
+  financialSnapshots,
+  importJobs,
   invitations,
   materialPriceVersions,
   materials,
   memberships,
   organizations,
+  pilotEnrollments,
+  pilotInteractions,
+  pilotIssues,
+  pilotProductEvents,
+  recipeItems,
+  recipes,
+  serviceAddOns,
+  serviceCategories,
   services,
+  specialists,
   users,
+  visitLines,
+  visits,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { effectiveInvitationStatus } from "@/domain/invitation";
@@ -49,7 +66,7 @@ export async function GET(request: Request) {
       .where(eq(organizations.id, actor.organizationId))
       .limit(1);
 
-    const members = await db
+    const members = await tx
       .select({
         email: users.email,
         name: users.name,
@@ -79,6 +96,45 @@ export async function GET(request: Request) {
       .from(materialPriceVersions)
       .orderBy(asc(materialPriceVersions.validFrom));
     const serviceRows = await tx.select().from(services).orderBy(asc(services.createdAt));
+    const serviceCategoryRows = await tx
+      .select()
+      .from(serviceCategories)
+      .orderBy(asc(serviceCategories.createdAt));
+    const addOnRows = await tx.select().from(addOns).orderBy(asc(addOns.createdAt));
+    const serviceAddOnRows = await tx
+      .select()
+      .from(serviceAddOns)
+      .orderBy(asc(serviceAddOns.createdAt));
+    const specialistRows = await tx.select().from(specialists).orderBy(asc(specialists.createdAt));
+    const commissionRuleRows = await tx
+      .select()
+      .from(commissionRules)
+      .orderBy(asc(commissionRules.createdAt));
+    const recipeRows = await tx.select().from(recipes).orderBy(asc(recipes.createdAt));
+    const recipeItemRows = await tx.select().from(recipeItems).orderBy(asc(recipeItems.createdAt));
+    const clientRows = await tx.select().from(clients).orderBy(asc(clients.createdAt));
+    const visitRows = await tx.select().from(visits).orderBy(asc(visits.createdAt));
+    const visitLineRows = await tx.select().from(visitLines).orderBy(asc(visitLines.createdAt));
+    const consumptionRows = await tx.select().from(consumptions).orderBy(asc(consumptions.createdAt));
+    const financialSnapshotRows = await tx
+      .select()
+      .from(financialSnapshots)
+      .orderBy(asc(financialSnapshots.createdAt));
+    const externalReferenceRows = await tx
+      .select()
+      .from(externalReferences)
+      .orderBy(asc(externalReferences.createdAt));
+    const importJobRows = await tx.select().from(importJobs).orderBy(asc(importJobs.createdAt));
+    const pilotEnrollmentRows = await tx.select().from(pilotEnrollments);
+    const pilotEventRows = await tx
+      .select()
+      .from(pilotProductEvents)
+      .orderBy(asc(pilotProductEvents.occurredAt));
+    const pilotInteractionRows = await tx
+      .select()
+      .from(pilotInteractions)
+      .orderBy(asc(pilotInteractions.occurredAt));
+    const pilotIssueRows = await tx.select().from(pilotIssues).orderBy(asc(pilotIssues.detectedAt));
     const auditRows = await tx.select().from(auditEvents).orderBy(asc(auditEvents.createdAt));
 
     await recordAuditEvent(tx, {
@@ -91,6 +147,8 @@ export async function GET(request: Request) {
         members: members.length,
         materials: materialRows.length,
         services: serviceRows.length,
+        clients: clientRows.length,
+        visits: visitRows.length,
       },
       requestId: id,
     });
@@ -108,7 +166,25 @@ export async function GET(request: Request) {
       })),
       materials: materialRows,
       material_price_versions: priceRows,
+      service_categories: serviceCategoryRows,
       services: serviceRows,
+      add_ons: addOnRows,
+      service_add_ons: serviceAddOnRows,
+      specialists: specialistRows,
+      commission_rules: commissionRuleRows,
+      recipes: recipeRows,
+      recipe_items: recipeItemRows,
+      clients: clientRows,
+      visits: visitRows,
+      visit_lines: visitLineRows,
+      consumptions: consumptionRows,
+      financial_snapshots: financialSnapshotRows,
+      external_references: externalReferenceRows,
+      import_jobs: importJobRows,
+      pilot_enrollment: pilotEnrollmentRows,
+      pilot_product_events: pilotEventRows,
+      pilot_interactions: pilotInteractionRows,
+      pilot_issues: pilotIssueRows,
       audit_events: auditRows,
     };
   });

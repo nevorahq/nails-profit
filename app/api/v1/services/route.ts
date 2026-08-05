@@ -8,6 +8,7 @@ import { supportedLocales } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 import { loadServiceCosting } from "@/lib/service-costing";
 
 // partialRecord, not record: `z.record` with an enum key demands every locale,
@@ -132,6 +133,8 @@ export async function POST(request: Request) {
       after: { price_minor: created.priceMinor, duration_minutes: created.durationMinutes },
       requestId: id,
     });
+
+    await recordCompletedServiceCostEvents(tx, actor);
 
     return created;
   });

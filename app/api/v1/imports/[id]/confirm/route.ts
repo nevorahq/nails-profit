@@ -14,6 +14,10 @@ import { callerKey, checkRateLimit, IMPORT_CONFIRM_RULE } from "@/lib/rate-limit
 import { canImport, previewFor } from "@/lib/import-flow";
 import { applyImport } from "@/lib/import-service";
 import { getActiveMembership } from "@/lib/membership";
+import {
+  recordCompletedServiceCostEvents,
+  recordPilotProductEvent,
+} from "@/lib/pilot-events";
 
 /**
  * Confirm and result, the last two steps of INT-002.
@@ -127,6 +131,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       after: { entity: job.entityType, file_name: job.fileName, ...counts },
       requestId: id,
     });
+
+    await recordPilotProductEvent(tx, {
+      organizationId: actor.organizationId,
+      eventName: "import_completed",
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      source: "import",
+      entityType: "import_job",
+      entityId: jobId,
+      metadata: counts,
+    });
+    await recordCompletedServiceCostEvents(tx, actor);
 
     return { counts, issues };
   });

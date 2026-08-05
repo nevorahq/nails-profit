@@ -2,8 +2,10 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
-import { memberships, organizations } from "@/db/schema";
+import { memberships, organizations, pilotEnrollments } from "@/db/schema";
+import { withTenant } from "@/db/tenant";
 import type { MemberRole } from "@/domain/rbac";
+import { isPilotAccessEnforced } from "@/env";
 import { auth } from "@/lib/auth";
 
 export type ActiveMembership = Readonly<{
@@ -34,16 +36,29 @@ export async function getActiveMembership(): Promise<
     .orderBy(asc(memberships.createdAt), asc(memberships.id))
     .limit(1);
 
+  const pilotStatus =
+    row && isPilotAccessEnforced()
+      ? await withTenant(row.organizationId, async (tx) => {
+          const [enrollment] = await tx
+            .select({ status: pilotEnrollments.status })
+            .from(pilotEnrollments)
+            .limit(1);
+          return enrollment?.status ?? null;
+        })
+      : null;
+
   return {
     session: true,
     userId: session.user.id,
-    membership: row
+    membership:
+      row &&
+      (!isPilotAccessEnforced() || pilotStatus === "active")
       ? {
           userId: session.user.id,
           userEmail: session.user.email,
           organizationId: row.organizationId,
           role: row.role,
         }
-      : null,
+        : null,
   };
 }

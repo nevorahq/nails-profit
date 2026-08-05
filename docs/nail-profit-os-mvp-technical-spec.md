@@ -1,9 +1,9 @@
 # Техническое задание: Nail Profit OS MVP
 
-**Версия:** 1.1  
+**Версия:** 1.2\
 **Статус:** Draft for estimation  
-**Дата:** 1 августа 2026  
-**Целевой релиз:** MVP Pilot  
+**Дата:** 5 августа 2026\
+**Целевой релиз:** MVP Pilot + Post-MVP Phase 7\
 **Основной рынок:** Молдова  
 **Языки:** русский, румынский, английский  
 **Валюты:** MDL, EUR
@@ -21,6 +21,8 @@ MVP должен доказать три гипотезы:
 3. продукт рассчитывает себестоимость услуги и показывает реальную contribution margin.
 
 MVP не должен заменять Fresha, Booksy, YCLIENTS или другую полноценную систему записи. Он реализуется как **Nail Profit Layer**: самостоятельный web-продукт с минимальным контуром визитов и открытым слоем импорта, который можно использовать поверх действующей системы записи.
+
+После подтверждения MVP отдельная Фаза 7 добавляет собственный Online Booking для конкретной организации. Она не создаёт marketplace и не входит в Gate 0–6. Требования Online Booking применяются только после прохождения Entry Gate 7 из roadmap.
 
 ### 1.1. Текущее состояние
 
@@ -287,7 +289,7 @@ MVP не должен заменять Fresha, Booksy, YCLIENTS или друг�
 
 | ID | Приоритет | Требование |
 |---|:---:|---|
-| VIS-001 | P0 | Статусы записи: `tentative`, `confirmed`, `completed`, `cancelled`, `no_show`. |
+| VIS-001 | P0 | Статусы записи: `pending_confirmation`, `confirmed`, `completed`, `cancelled`, `no_show`; инициатор и причина отмены хранятся отдельно. |
 | VIS-002 | P0 | Запись содержит клиента, локацию, специалиста, рабочее место, начало, конец, услуги и add-ons. |
 | VIS-003 | P0 | Пользователь может создать, перенести, отменить и завершить запись. |
 | VIS-004 | P0 | Завершение создаёт финансовый snapshot и фактическое списание материалов. |
@@ -298,7 +300,12 @@ MVP не должен заменять Fresha, Booksy, YCLIENTS или друг�
 | VIS-009 | P1 | Изображения автоматически получают безопасное имя, thumbnail и удалённые EXIF-координаты. |
 | VIS-010 | P0 | Нельзя удалить завершённый визит: допускается только корректировка с audit record. |
 | VIS-011 | P0 | Availability API строит свободные слоты из рабочего времени, длительности услуги, занятости специалиста и рабочего места. |
-| VIS-012 | P0 | Публичный booking flow доступен только по персональной rebooking/slot-offer ссылке; общий marketplace-каталог не создаётся. |
+| VIS-012 | P0 | После Gate 6 публичный booking flow доступен на странице конкретной организации и по персональным rebooking/slot-offer ссылкам; общий marketplace-каталог не создаётся. |
+| VIS-013 | P0 | Выбранный слот удерживается не более пяти минут; истёкший hold не блокирует доступность. |
+| VIS-014 | P0 | Пересечение активных записей одного мастера или рабочего места запрещено PostgreSQL constraint и проверяется транзакционно. |
+| VIS-015 | P0 | Клиент может подтвердить, перенести или отменить запись без аккаунта по purpose-bound токену, raw-значение которого не хранится в БД. |
+| VIS-016 | P0 | `instant` подтверждает запись после verification; `manual` создаёт `pending_confirmation` и автоматически отменяет её после location TTL. |
+| VIS-017 | P0 | Для «любой доступный» мастер выбирается по минимуму booked minutes за локальный день, затем по стабильному sort order. |
 
 ### 8.6. Retention и rebooking
 
@@ -608,12 +615,17 @@ Slot Protection
 | Membership | user_id, organization_id, role | Unique user + organization |
 | Specialist | user_id?, name, cooperation_type, status | M:N с Location и Service |
 | Workplace | location_id, name, status | Уникальное имя в Location |
+| BookingSettings | location_id, public status, slot step, lead/advance limits, buffers, confirmation mode/TTL | Одна активная конфигурация на Location |
+| ScheduleRule | specialist_id, location_id, weekday, local start/end, effective range | Допускает несколько рабочих интервалов в день |
+| AvailabilityException | specialist_id, location_id, interval, type, reason | Разовая доступность, блокировка, отпуск или выходной |
 | Client | name, normalized_phone?, email?, locale, tags, consent flags | Unique partial indexes на normalized contacts внутри tenant |
 | ServiceCategory | localized_name, sort_order | 1:N Service |
 | Service | localized_name, duration_min, price_minor, currency, return settings | M:N Specialist |
 | AddOn | localized_name, price_delta_minor, duration_delta_min | M:N Service |
-| Booking | client_id, specialist_id, workplace_id, starts_at, ends_at, status, source | Содержит BookingLine snapshots |
+| BookingHold | specialist_id, workplace_id?, starts_at, ends_at, token_hash, status, expires_at | `active/converted/expired/released`; TTL пять минут |
+| Booking | client_id, specialist_id, location_id, workplace_id?, starts_at, ends_at, status, source, version | Содержит BookingLine snapshots; optimistic locking |
 | BookingLine | booking_id, service/add_on refs, name, price, duration snapshots | Историческая неизменность |
+| BookingAccessToken | booking_id, purpose, token_hash, expires_at, used_at | Raw token не хранится; purpose и TTL обязательны |
 | Visit | booking_id?, client_id, actual start/end, financial status | 1:N VisitLine, Consumption |
 | VisitLine | service/add-on snapshot, qty, unit price, discount | Финансовый snapshot |
 | NailDesign | visit_id, shape, length, colors, technique, complexity, notes | 0:1 с Visit |
@@ -643,6 +655,11 @@ Slot Protection
 - `booking(organization_id, starts_at, status)`;
 - `booking(specialist_id, starts_at, ends_at)` для активных статусов;
 - `booking(workplace_id, starts_at, ends_at)` для активных статусов;
+- exclusion constraint по `specialist_id + tstzrange(starts_at, ends_at, '[)')` для активных booking-статусов;
+- exclusion constraint по `workplace_id + tstzrange(starts_at, ends_at, '[)')` для активных booking-статусов;
+- `booking_hold(specialist_id, starts_at, ends_at, expires_at)`;
+- `schedule_rule(specialist_id, location_id, weekday, effective_from, effective_to)`;
+- `availability_exception(specialist_id, starts_at, ends_at)`;
 - `client(organization_id, normalized_phone)` partial unique where not null;
 - `client(organization_id, lower(email))` partial unique where not null;
 - `retention_forecast(organization_id, status, expected_at)`;
@@ -701,9 +718,23 @@ Slot Protection
 | `GET/POST /services` | Услуги |
 | `GET/POST /add-ons` | Add-ons |
 | `GET/POST /bookings` | Список/создание записей |
-| `PATCH /bookings/{id}` | Перенос/изменение записи |
+| `GET/PATCH /bookings/{id}` | Карточка/optimistic update записи |
+| `POST /bookings/{id}/confirm` | Подтверждение pending-записи |
+| `POST /bookings/{id}/reschedule` | Транзакционный перенос записи |
 | `POST /bookings/{id}/cancel` | Отмена с применением policy |
+| `POST /bookings/{id}/no-show` | Отметка неявки |
 | `POST /bookings/{id}/complete` | Завершение визита |
+| `GET/PUT /availability/rules` | Рабочие графики специалистов |
+| `GET/POST/DELETE /availability/exceptions` | Отпуска, блокировки и исключения |
+| `GET /public/booking/{slug}` | Настройки публичной страницы организации |
+| `GET /public/booking/{slug}/catalog` | Доступные услуги, add-ons и мастера |
+| `GET /public/booking/{slug}/availability` | Свободные слоты по локальной дате и фильтрам |
+| `POST /public/booking/{slug}/holds` | Временное удержание выбранного слота |
+| `POST /public/booking/{slug}/bookings` | Атомарное подтверждение записи |
+| `POST /public/booking/{slug}/verify` | Подтверждение контакта кодом/ссылкой |
+| `GET /public/bookings/{token}` | Безопасное представление записи для клиента |
+| `POST /public/bookings/{token}/reschedule` | Перенос клиентом |
+| `POST /public/bookings/{token}/cancel` | Отмена клиентом |
 | `POST /visits/{id}/adjust` | Версионированная корректировка |
 | `POST /visits/{id}/media` | Получение signed upload URL |
 | `GET /retention/forecast` | Список прогнозов |
@@ -730,11 +761,22 @@ Slot Protection
 | `GET /imports/{id}` | Статус и результат |
 | `POST /integrations/import/events` | Универсальный Import API |
 
-### 12.3. Public booking link
+### 12.3. Public booking и персональные ссылки
 
-Публичные ссылки должны:
+Публичная booking-страница организации должна:
 
-- использовать случайный одноразовый токен, в БД хранить только hash;
+- использовать стабильный slug без раскрытия внутреннего `organization_id`;
+- отдавать только опубликованные услуги, мастеров, локации и агрегированные свободные слоты;
+- поддерживать выбор конкретного мастера и «любой доступный»;
+- удерживать выбранный слот не более пяти минут;
+- повторно проверять доступность в транзакции перед подтверждением;
+- возвращать `SLOT_UNAVAILABLE` и ближайшие альтернативы при конфликте;
+- применять отдельные rate limits к availability, holds, create и verification;
+- требовать bot challenge после порога подозрительной активности.
+
+Персональные ссылки управления, rebooking и slot offer должны:
+
+- использовать случайный purpose-bound токен, в БД хранить только hash;
 - не раскрывать ID клиента и внутренние данные;
 - ограничивать число попыток;
 - иметь срок действия;
@@ -927,7 +969,7 @@ API / Backend for Frontend
 
 ---
 
-## 17. Критерии приёмки MVP
+## 17. Критерии приёмки MVP и Post-MVP Phase 7
 
 ### 17.1. Сквозной сценарий A: прибыльность
 
@@ -943,7 +985,19 @@ API / Backend for Frontend
 - profit per hour: 216.67 MDL;
 - те же значения доступны в визите и Dashboard.
 
-### 17.2. Сквозной сценарий B: rebooking
+### 17.2. Сквозной сценарий B: public online booking
+
+**Given** организация опубликовала услугу длительностью 90 минут, мастер работает с 09:00 до 18:00 в `Europe/Chisinau`, а 10:30 свободно\
+**When** клиент выбирает услугу и слот 10:30, проходит verification и подтверждает запись\
+**Then** создаётся один `confirmed` booking, клиент получает manage link, а слот исчезает из availability.
+
+**When** 100 параллельных запросов пытаются подтвердить тот же слот\
+**Then** ровно один запрос получает подтверждённую запись, остальные получают `SLOT_UNAVAILABLE` с альтернативами.
+
+**When** клиент переносит запись по manage link\
+**Then** старый интервал освобождается, новый занимается атомарно, версия booking увеличивается, уведомление и audit event создаются один раз.
+
+### 17.3. Сквозной сценарий C: rebooking
 
 **Given** у услуги цикл 28 дней и у клиента нет достаточной истории  
 **When** визит завершён 1 августа 2026  
@@ -952,7 +1006,7 @@ API / Backend for Frontend
 **When** клиент открывает действующую ссылку и выбирает свободный слот  
 **Then** создаётся запись с source `rebooking`, повторное подтверждение не создаёт дубль, forecast получает статус `rebooked`.
 
-### 17.3. Сквозной сценарий C: Slot Protection
+### 17.4. Сквозной сценарий D: Slot Protection
 
 **Given** запись на 15:00 отменена в пределах late cancellation window и есть два waitlist-кандидата  
 **When** Manager запускает предложение  
@@ -964,19 +1018,19 @@ API / Backend for Frontend
 **When** замещающий визит завершён на 700 MDL  
 **Then** `realized recovered revenue` увеличивается на 700 MDL.
 
-### 17.4. Сквозной сценарий D: импорт
+### 17.5. Сквозной сценарий E: импорт
 
 **Given** CSV содержит 1 000 валидных и 20 невалидных строк  
 **When** пользователь валидирует и подтверждает импорт  
 **Then** 1 000 строк обработаны, 20 ошибок доступны с номером строки и причиной, а повторный импорт того же файла не создаёт дубли.
 
-### 17.5. Сквозной сценарий E: локализация
+### 17.6. Сквозной сценарий F: локализация
 
 **Given** организация использует `ro-MD`, timezone `Europe/Chisinau`, currency `MDL`  
 **When** пользователь открывает Dashboard  
 **Then** строки отображаются на румынском, сумма форматируется как MDL, локальная дата соответствует часовому поясу, а сохранённые UTC timestamps не изменяются.
 
-### 17.6. Release gate
+### 17.7. Release gate
 
 Релиз допускается, если:
 

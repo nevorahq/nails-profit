@@ -35,6 +35,7 @@ export function LoginForm({
             email,
             password,
             name: String(data.get("name")),
+            legalAccepted: data.get("legalAccepted") === "on",
             callbackURL: "/app",
           })
         : await authClient.signIn.email({ email, password, callbackURL: "/app" });
@@ -70,7 +71,16 @@ export function LoginForm({
           {t("auth.password")}
           <input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={10} />
         </label>
-        {error && <div className="form-error">{error}</div>}
+        {mode === "signup" && (
+          <div className="consent-field">
+            <input id="legalAccepted" name="legalAccepted" type="checkbox" required />
+            <label htmlFor="legalAccepted">
+              {t("auth.legalPrefix")} <Link href="/terms">{t("legal.termsLink")}</Link>{" "}
+              {t("auth.legalAnd")} <Link href="/privacy">{t("legal.privacyLink")}</Link>.
+            </label>
+          </div>
+        )}
+        {error && <div className="form-error" role="alert">{error}</div>}
         <button className="primary-button" type="submit" disabled={pending}>
           {pending ? t("auth.wait") : mode === "signup" ? t("auth.signUp") : t("auth.signIn")}
         </button>
@@ -83,6 +93,10 @@ export function LoginForm({
           {t("auth.forgot")}
         </Link>
       )}
+      <footer className="legal-footer">
+        <Link href="/privacy">{t("legal.privacyLink")}</Link>
+        <Link href="/terms">{t("legal.termsLink")}</Link>
+      </footer>
     </section>
   );
 }

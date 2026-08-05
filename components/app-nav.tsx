@@ -24,7 +24,7 @@ export function AppNav({ active, locale }: { active: string; locale: AppLocale }
   const t = getTranslator(locale);
 
   return (
-    <nav className="tab-nav">
+    <nav className="tab-nav" aria-label={t("nav.primary")}>
       {TABS.map((tab) => (
         <Link
           key={tab.href}

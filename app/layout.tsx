@@ -25,10 +25,18 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await resolveLocale();
+  const t = getTranslator(locale);
 
   return (
     <html lang={localeTag(locale)}>
-      <body className={onest.className}>{children}</body>
+      <body className={onest.className}>
+        <a className="skip-link" href="#main-content">
+          {t("common.skipToContent")}
+        </a>
+        <div id="main-content" tabIndex={-1}>
+          {children}
+        </div>
+      </body>
     </html>
   );
 }

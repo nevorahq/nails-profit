@@ -187,7 +187,7 @@ export const TEST_PASSWORD = "orchid-lacquer-42-crown";
 export async function signUp(email: string, name = "Test"): Promise<Actor> {
   const { auth } = await import("@/lib/auth");
   const response = await auth.api.signUpEmail({
-    body: { name, email, password: TEST_PASSWORD },
+    body: { name, email, password: TEST_PASSWORD, legalAccepted: true },
     asResponse: true,
   });
 

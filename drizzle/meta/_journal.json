@@ -71,6 +71,20 @@
       "when": 1785942745351,
       "tag": "0009_young_alex_wilder",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785948081654,
+      "tag": "0010_heavy_retro_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785952482817,
+      "tag": "0011_talented_lionheart",
+      "breakpoints": true
     }
   ]
 }

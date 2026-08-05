@@ -32,6 +32,17 @@ export const users = pgTable("user", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
+  /**
+   * Versioned legal acceptance for pilot accounts. Existing development users
+   * remain `false/null`; every new email signup is required by Better Auth to
+   * submit `legalAccepted=true`, while the server supplies the trusted version
+   * and timestamp rather than accepting those values from the browser.
+   */
+  legalAccepted: boolean("legal_accepted").notNull().default(false),
+  termsVersion: text("terms_version"),
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  privacyVersion: text("privacy_version"),
+  privacyAcknowledgedAt: timestamp("privacy_acknowledged_at", { withTimezone: true }),
   image: text("image"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -737,6 +748,168 @@ export const importJobs = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [index("import_job_org_created_idx").on(table.organizationId, table.createdAt)],
+);
+
+/**
+ * Phase 6 rollout state. It is deliberately separate from Organization: a
+ * workspace remains valid domain data after a pilot pauses or finishes, and a
+ * commercial status must never become an authorization shortcut.
+ */
+export const pilotWave = pgEnum("pilot_wave", [
+  "demo",
+  "design_partner",
+  "first_paid",
+  "extended",
+]);
+export const pilotEnrollmentStatus = pgEnum("pilot_enrollment_status", [
+  "pending",
+  "active",
+  "paused",
+  "completed",
+  "withdrawn",
+]);
+
+export const pilotEnrollments = pgTable(
+  "pilot_enrollment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    wave: pilotWave("wave").notNull(),
+    status: pilotEnrollmentStatus("status").notNull().default("pending"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    monthlyPriceMinor: bigint("monthly_price_minor", { mode: "number" }),
+    billingCurrency: currency("billing_currency"),
+    renewedSecondMonth: boolean("renewed_second_month"),
+    renewalRecordedAt: timestamp("renewal_recorded_at", { withTimezone: true }),
+    operatorRef: text("operator_ref").notNull(),
+    enrolledAt: timestamp("enrolled_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pilot_enrollment_org_idx").on(table.organizationId),
+    check(
+      "pilot_enrollment_payment_shape",
+      sql`(${table.monthlyPriceMinor} is null and ${table.billingCurrency} is null)
+        or (${table.monthlyPriceMinor} >= 0 and ${table.billingCurrency} is not null and ${table.paidAt} is not null)`,
+    ),
+  ],
+);
+
+/**
+ * Versioned, PII-free product telemetry for Gate 6. `entity_id` is always an
+ * internal identifier (or the organization id for lifecycle events), making
+ * the unique index an idempotency key rather than an analytics guess.
+ */
+export const pilotProductEvents = pgTable(
+  "pilot_product_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    eventName: text("event_name").notNull(),
+    eventVersion: integer("event_version").notNull().default(1),
+    actorUserId: text("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    actorRole: memberRole("actor_role"),
+    source: text("source").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pilot_product_event_dedupe_idx").on(
+      table.organizationId,
+      table.eventName,
+      table.entityType,
+      table.entityId,
+    ),
+    index("pilot_product_event_org_time_idx").on(table.organizationId, table.occurredAt),
+    check("pilot_product_event_version_positive", sql`${table.eventVersion} > 0`),
+  ],
+);
+
+export const pilotInteractionKind = pgEnum("pilot_interaction_kind", [
+  "onboarding",
+  "interview",
+  "profit_review",
+  "support",
+  "decision",
+]);
+export const pilotDecisionType = pgEnum("pilot_decision_type", [
+  "price",
+  "service_composition",
+  "material_consumption",
+]);
+
+/** Founder/operator work is entered through the local operator CLI, never a
+ * tenant-facing endpoint. There is intentionally no notes field: support logs
+ * measure time and outcome without becoming a second store for client PII. */
+export const pilotInteractions = pgTable(
+  "pilot_interaction",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    kind: pilotInteractionKind("kind").notNull(),
+    durationMinutes: integer("duration_minutes"),
+    decisionType: pilotDecisionType("decision_type"),
+    recordedBy: text("recorded_by").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("pilot_interaction_org_time_idx").on(table.organizationId, table.occurredAt),
+    check(
+      "pilot_interaction_shape",
+      sql`(${table.durationMinutes} is null or ${table.durationMinutes} > 0)
+        and ((${table.kind} = 'decision' and ${table.decisionType} is not null)
+          or (${table.kind} <> 'decision' and ${table.decisionType} is null))`,
+    ),
+  ],
+);
+
+export const pilotIssueCategory = pgEnum("pilot_issue_category", [
+  "financial",
+  "technical",
+  "privacy",
+  "support",
+]);
+export const pilotIssueStatus = pgEnum("pilot_issue_status", ["open", "resolved"]);
+
+/** Structured pilot issue register. `issue_code` is a non-PII identifier that
+ * links to the incident tracker; free-form descriptions stay in that system. */
+export const pilotIssues = pgTable(
+  "pilot_issue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    issueCode: text("issue_code").notNull(),
+    category: pilotIssueCategory("category").notNull(),
+    severity: integer("severity").notNull(),
+    status: pilotIssueStatus("status").notNull().default("open"),
+    recordedBy: text("recorded_by").notNull(),
+    resolvedBy: text("resolved_by"),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pilot_issue_org_code_idx").on(table.organizationId, table.issueCode),
+    index("pilot_issue_org_status_idx").on(table.organizationId, table.status),
+    check("pilot_issue_severity", sql`${table.severity} between 1 and 3`),
+    check(
+      "pilot_issue_resolution_shape",
+      sql`(${table.status} = 'open' and ${table.resolvedAt} is null and ${table.resolvedBy} is null)
+        or (${table.status} = 'resolved' and ${table.resolvedAt} is not null and ${table.resolvedBy} is not null)`,
+    ),
+  ],
 );
 
 export const organizationRelations = relations(organizations, ({ many }) => ({

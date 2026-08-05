@@ -35,6 +35,8 @@ type Case = Readonly<{
   route: string;
   method: Method;
   allowed: readonly MemberRole[];
+  /** Public infrastructure endpoints are still listed so route coverage cannot hide them. */
+  public?: boolean;
   /** The section 6.1 cell this encodes, or why the endpoint has no cell. */
   note: string;
   request: (fixture: Fixture) => Promise<{ path: string; body?: Record<string, unknown> }>;
@@ -70,6 +72,14 @@ async function freshInvitation(fixture: Fixture) {
 }
 
 const cases: readonly Case[] = [
+  {
+    route: "/api/health",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Public liveness/readiness probe; response contains no tenant or deployment data",
+    request: async () => ({ path: "/api/health" }),
+  },
   {
     route: "/api/v1/organizations",
     method: "GET",
@@ -496,10 +506,10 @@ describe("RBAC and tenant isolation", () => {
 
   describe("without a session", () => {
     for (const entry of cases) {
-      test(`${entry.method} ${entry.route} is refused`, async () => {
+      test(`${entry.method} ${entry.route} ${entry.public ? "is public" : "is refused"}`, async () => {
         const { path, body } = await entry.request(fixture);
         const response = await send(anonymous, entry.method, path, body);
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(entry.public ? 200 : 401);
       });
     }
   });
