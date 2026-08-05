@@ -11,6 +11,7 @@ import {
 } from "@/domain/invitation";
 import { can, canManageRole, memberRoles } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 import { db } from "@/db";
@@ -160,20 +161,4 @@ export async function POST(request: Request) {
     }
     throw error;
   }
-}
-
-/**
- * Drizzle wraps driver errors in a "Failed query" Error and hangs the real
- * PostgresError off `cause`, so the SQLSTATE has to be looked for down the
- * chain rather than on the object that was thrown.
- */
-function isUniqueViolation(error: unknown, constraint: string) {
-  for (let current = error; current != null; current = (current as { cause?: unknown }).cause) {
-    if (typeof current !== "object") break;
-    const candidate = current as { code?: string; constraint_name?: string };
-    if (candidate.code === "23505" && (candidate.constraint_name ?? "").includes(constraint)) {
-      return true;
-    }
-  }
-  return false;
 }

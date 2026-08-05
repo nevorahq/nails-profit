@@ -1,0 +1,288 @@
+import { randomUUID } from "node:crypto";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+import {
+  commissionRules,
+  invitations,
+  materialPriceVersions,
+  memberships,
+  recipeItems,
+  recipes,
+  services,
+} from "@/db/schema";
+import { PG_ERROR } from "@/lib/db-errors";
+import { adminDb, assertCleanupCoversEveryTable, resetDatabase } from "../helpers/database";
+import { expectDatabaseError } from "../helpers/expect-database-error";
+import {
+  createMaterial,
+  createOrganization,
+  createRecipe,
+  createService,
+  createSpecialist,
+  createUser,
+} from "../helpers/factories";
+
+/**
+ * Constraints are the layer that survives a buggy handler, so they are checked
+ * against a real PostgreSQL rather than mocked. Until now every one of these was
+ * verified by hand in psql, which meant the verification vanished with the
+ * session.
+ */
+describe("database constraints", () => {
+  let organizationId: string;
+
+  beforeAll(assertCleanupCoversEveryTable);
+
+  beforeEach(async () => {
+    await resetDatabase();
+    organizationId = (await createOrganization()).id;
+  });
+
+  it("refuses a recipe item with a non-positive quantity", async () => {
+    const material = await createMaterial(organizationId);
+    const service = await createService(organizationId);
+    const recipe = await createRecipe(organizationId, service.id, []);
+
+    await expectDatabaseError(
+      adminDb.insert(recipeItems).values({
+        organizationId,
+        recipeId: recipe.id,
+        materialId: material.id,
+        normativeQuantityMilliUnits: 0,
+      }),
+      { code: PG_ERROR.check, constraint: "recipe_item_quantity_positive" },
+    );
+  });
+
+  it("refuses the same material twice in one recipe", async () => {
+    const material = await createMaterial(organizationId);
+    const service = await createService(organizationId);
+    const recipe = await createRecipe(organizationId, service.id, [
+      { materialId: material.id, quantity: 1 },
+    ]);
+
+    await expectDatabaseError(
+      adminDb.insert(recipeItems).values({
+        organizationId,
+        recipeId: recipe.id,
+        materialId: material.id,
+        normativeQuantityMilliUnits: 2_000,
+      }),
+      { code: PG_ERROR.unique, constraint: "recipe_item_material_idx" },
+    );
+  });
+
+  it("refuses a recipe with no target and a recipe with two", async () => {
+    const service = await createService(organizationId);
+
+    await expectDatabaseError(adminDb.insert(recipes).values({ organizationId }), {
+      code: PG_ERROR.check,
+      constraint: "recipe_single_target",
+    });
+
+    const [addOn] = await adminDb
+      .insert(await import("@/db/schema").then((schema) => schema.addOns))
+      .values({ organizationId, name: { ru: "Add-on" } })
+      .returning();
+
+    await expectDatabaseError(
+      adminDb.insert(recipes).values({ organizationId, serviceId: service.id, addOnId: addOn.id }),
+      { code: PG_ERROR.check, constraint: "recipe_single_target" },
+    );
+  });
+
+  it("refuses a commission rule whose shape contradicts its type", async () => {
+    const specialist = await createSpecialist(organizationId);
+
+    // Fixed rule carrying a rate.
+    await expectDatabaseError(
+      adminDb.insert(commissionRules).values({
+        organizationId,
+        specialistId: specialist.id,
+        type: "fixed",
+        basisPoints: 4_000,
+        fixedAmountMinor: 5_000,
+      }),
+      { code: PG_ERROR.check, constraint: "commission_rule_shape" },
+    );
+
+    // Percentage rule carrying an amount instead of a rate.
+    await expectDatabaseError(
+      adminDb.insert(commissionRules).values({
+        organizationId,
+        specialistId: specialist.id,
+        type: "percentage",
+        fixedAmountMinor: 5_000,
+      }),
+      { code: PG_ERROR.check, constraint: "commission_rule_shape" },
+    );
+  });
+
+  it("accepts each well-formed commission rule shape", async () => {
+    const specialist = await createSpecialist(organizationId);
+
+    for (const values of [
+      { type: "percentage" as const, basisPoints: 4_000, fixedAmountMinor: null },
+      { type: "percentage_after_materials" as const, basisPoints: 3_500, fixedAmountMinor: null },
+      { type: "fixed" as const, basisPoints: null, fixedAmountMinor: 12_000 },
+    ]) {
+      const [rule] = await adminDb
+        .insert(commissionRules)
+        .values({ organizationId, specialistId: specialist.id, ...values })
+        .returning();
+      expect(rule.type).toBe(values.type);
+    }
+  });
+
+  it("refuses a negative commission", async () => {
+    const specialist = await createSpecialist(organizationId);
+
+    await expectDatabaseError(
+      adminDb.insert(commissionRules).values({
+        organizationId,
+        specialistId: specialist.id,
+        type: "percentage",
+        basisPoints: -1,
+      }),
+      { code: PG_ERROR.check, constraint: "commission_rule_non_negative" },
+    );
+  });
+
+  it("refuses a zero duration and a negative price on a service", async () => {
+    await expectDatabaseError(
+      adminDb.insert(services).values({ organizationId, name: { ru: "X" }, durationMinutes: 0 }),
+      { code: PG_ERROR.check, constraint: "service_duration_positive" },
+    );
+
+    await expectDatabaseError(
+      adminDb.insert(services).values({ organizationId, name: { ru: "X" }, priceMinor: -1 }),
+      { code: PG_ERROR.check, constraint: "service_price_non_negative" },
+    );
+  });
+
+  it("allows a service with no price or duration yet", async () => {
+    // SRV-007 wants the gap flagged, not the row rejected.
+    const service = await createService(organizationId, { priceMinor: null, durationMinutes: null });
+    expect(service.priceMinor).toBeNull();
+    expect(service.durationMinutes).toBeNull();
+  });
+
+  it("refuses a non-positive package size on a purchase price", async () => {
+    // Spec 18.2 edge case: an unknown package size must never reach the costing.
+    const material = await createMaterial(organizationId);
+    const user = await createUser();
+
+    await expectDatabaseError(
+      adminDb.insert(materialPriceVersions).values({
+        organizationId,
+        materialId: material.id,
+        packagePriceMinor: 10_000,
+        packageSizeMilliUnits: 0,
+        currency: "MDL",
+        createdBy: user.id,
+      }),
+      { code: PG_ERROR.check, constraint: "material_package_size_positive" },
+    );
+  });
+
+  it("refuses a negative purchase price", async () => {
+    const material = await createMaterial(organizationId);
+    const user = await createUser();
+
+    await expectDatabaseError(
+      adminDb.insert(materialPriceVersions).values({
+        organizationId,
+        materialId: material.id,
+        packagePriceMinor: -1,
+        packageSizeMilliUnits: 15_000,
+        currency: "MDL",
+        createdBy: user.id,
+      }),
+      { code: PG_ERROR.check, constraint: "material_price_non_negative" },
+    );
+  });
+
+  it("requires a purchase price to record who entered it", async () => {
+    // Financial history without an actor cannot be audited.
+    const material = await createMaterial(organizationId);
+
+    await expectDatabaseError(
+      adminDb.insert(materialPriceVersions).values({
+        organizationId,
+        materialId: material.id,
+        packagePriceMinor: 10_000,
+        packageSizeMilliUnits: 15_000,
+        currency: "MDL",
+        createdBy: null as unknown as string,
+      }),
+      { code: PG_ERROR.notNull },
+    );
+  });
+
+  it("refuses the same user joining one organization twice", async () => {
+    const user = await createUser();
+    await adminDb.insert(memberships).values({ organizationId, userId: user.id, role: "owner" });
+
+    await expectDatabaseError(
+      adminDb.insert(memberships).values({ organizationId, userId: user.id, role: "master" }),
+      { code: PG_ERROR.unique, constraint: "membership_org_user_idx" },
+    );
+  });
+
+  it("allows only one pending invitation per address, but re-inviting after revoke", async () => {
+    const base = {
+      organizationId,
+      email: "master@example.com",
+      role: "master" as const,
+      expiresAt: new Date(Date.now() + 86_400_000),
+    };
+
+    const [first] = await adminDb
+      .insert(invitations)
+      .values({ ...base, tokenHash: randomUUID() })
+      .returning();
+
+    await expectDatabaseError(
+      adminDb.insert(invitations).values({ ...base, tokenHash: randomUUID() }),
+      { code: PG_ERROR.unique, constraint: "invitation_pending_email_idx" },
+    );
+
+    // Revoking frees the address: the unique index is partial on status.
+    await adminDb
+      .update(invitations)
+      .set({ status: "revoked" })
+      .where(await import("drizzle-orm").then(({ eq }) => eq(invitations.id, first.id)));
+
+    const [second] = await adminDb
+      .insert(invitations)
+      .values({ ...base, tokenHash: randomUUID() })
+      .returning();
+    expect(second.status).toBe("pending");
+  });
+
+  it("refuses two invitations sharing a token hash", async () => {
+    const other = await createOrganization({ name: "Other" });
+    const tokenHash = randomUUID();
+    const base = { role: "master" as const, expiresAt: new Date(Date.now() + 86_400_000), tokenHash };
+
+    await adminDb.insert(invitations).values({ ...base, organizationId, email: "a@example.com" });
+
+    await expectDatabaseError(
+      adminDb.insert(invitations).values({ ...base, organizationId: other.id, email: "b@example.com" }),
+      { code: PG_ERROR.unique, constraint: "invitation_token_hash_idx" },
+    );
+  });
+
+  it("keeps financial history alive by refusing to delete an organization that has any", async () => {
+    // Section 15.3: erasure anonymizes rather than deletes, and the FKs are what
+    // make that the only option.
+    await createMaterial(organizationId);
+    const { organizations } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await expectDatabaseError(
+      adminDb.delete(organizations).where(eq(organizations.id, organizationId)),
+      { code: PG_ERROR.foreignKey },
+    );
+  });
+});
