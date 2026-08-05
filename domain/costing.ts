@@ -1,5 +1,9 @@
 import { roundRatio, type Currency } from "@/domain/money";
 
+/** Section 8.8.1 commission forms. The database enum derives from this list. */
+export const commissionTypes = ["percentage", "fixed", "percentage_after_materials"] as const;
+export type CommissionType = (typeof commissionTypes)[number];
+
 export type Commission =
   | { type: "percentage"; basisPoints: number }
   | { type: "fixed"; amountMinor: number }
