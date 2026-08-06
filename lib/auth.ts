@@ -6,10 +6,16 @@ import { z } from "zod";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { getServerEnv } from "@/env";
+import { lazyProxy } from "@/lib/lazy";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { resolvePasswordResetDelivery } from "@/lib/password-reset-delivery";
 
-const env = getServerEnv();
+/**
+ * Built on first use, not on import. `next build` loads this module while
+ * collecting page data, and a build machine has no `BETTER_AUTH_SECRET` — see
+ * `lib/lazy.ts` for the deploy this comes from.
+ */
+let instance: ReturnType<typeof createAuth> | undefined;
 
 /**
  * Spec section 15.3 requires Argon2id or bcrypt. Better Auth defaults to scrypt,
@@ -31,7 +37,10 @@ const argon2Options = {
   parallelism: 1,
 } as const;
 
-export const auth = betterAuth({
+function createAuth() {
+  const env = getServerEnv();
+
+  return betterAuth({
   appName: "Nail Profit OS",
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
@@ -117,4 +126,7 @@ export const auth = betterAuth({
       "/reset-password": { window: 3600, max: 5 },
     },
   },
-});
+  });
+}
+
+export const auth: ReturnType<typeof createAuth> = lazyProxy(() => (instance ??= createAuth()));

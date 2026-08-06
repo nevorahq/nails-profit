@@ -17,7 +17,13 @@ import { localeFromHeader } from "@/i18n/accept-language";
  * from the browser is the only signal there is.
  */
 export async function resolveLocale(): Promise<AppLocale> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  // Read the request before touching anything else. `headers()` is what tells
+  // Next this render depends on the request, and it has to be the first thing
+  // that happens: a build has no request and no secrets, so reaching for the
+  // auth instance first would construct it — and fail — before the render had a
+  // chance to say it cannot be prerendered at all.
+  const requestHeaders = await headers();
+  const session = await auth.api.getSession({ headers: requestHeaders });
 
   if (session) {
     const [row] = await db
