@@ -25,6 +25,7 @@
     "ops:booking-maintenance": "node scripts/booking-maintenance.mjs",
     "ops:notifications": "node scripts/notifications.mjs",
     "ops:booking-metrics": "node scripts/booking-metrics.mjs",
+    "ops:log-events": "node scripts/log-events.mjs",
     "ops:booking-latency": "node scripts/booking-latency.mjs"
   },
   "dependencies": {
