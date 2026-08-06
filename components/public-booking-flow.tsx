@@ -67,6 +67,39 @@ function dateInZone(timezone: string) {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
+/**
+ * The proof of work section 7.9 asks a suspected bot for.
+ *
+ * Sixteen bits is about sixty-five thousand hashes — a fraction of a second on
+ * a phone, and a cost per attempt that a loop feels. It runs on the main thread
+ * on purpose: a worker would need its own file and a build step for something
+ * that finishes before the button finishes its transition.
+ */
+async function solveChallenge(nonce: string, bits: number): Promise<string | null> {
+  const encoder = new TextEncoder();
+  const wholeBytes = Math.floor(bits / 8);
+  const remainder = bits % 8;
+
+  for (let attempt = 0; attempt < 5_000_000; attempt += 1) {
+    const digest = new Uint8Array(
+      await crypto.subtle.digest("SHA-256", encoder.encode(`${nonce}:${attempt}`)),
+    );
+
+    let solved = true;
+    for (let index = 0; index < wholeBytes && solved; index += 1) solved = digest[index] === 0;
+    if (solved && remainder > 0) solved = digest[wholeBytes] >> (8 - remainder) === 0;
+    if (solved) return String(attempt);
+  }
+  return null;
+}
+
+type Challenge = { nonce: string; difficulty_bits: number };
+
+function challengeOf(body: unknown): Challenge | null {
+  const error = (body as { error?: { code?: string; details?: Challenge } })?.error;
+  return error?.code === "CHALLENGE_REQUIRED" && error.details?.nonce ? error.details : null;
+}
+
 function apiErrorMessage(body: unknown, fallback: string, t: ReturnType<typeof getTranslator>) {
   const code = (body as { error?: { code?: string } })?.error?.code;
   if (code === "SLOT_UNAVAILABLE") return t("publicBooking.slotUnavailable");
@@ -141,6 +174,29 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     };
   }, [service, addOnIds]);
 
+  /**
+   * A public mutation, with the challenge solved and retried once if the
+   * server asks for one. The client never sees a puzzle screen: section 7.9
+   * wants the cost paid by whoever is looping, not by whoever is booking.
+   */
+  async function postPublic(url: string, body: unknown, extraHeaders: Record<string, string> = {}) {
+    const send = (challengeHeader: Record<string, string> = {}) =>
+      fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...extraHeaders, ...challengeHeader },
+        body: JSON.stringify(body),
+      });
+
+    const first = await send();
+    if (first.status !== 403) return first;
+
+    const challenge = challengeOf(await first.clone().json().catch(() => null));
+    if (!challenge) return first;
+
+    const solution = await solveChallenge(challenge.nonce, challenge.difficulty_bits);
+    return solution ? send({ "x-booking-challenge": `${challenge.nonce}:${solution}` }) : first;
+  }
+
   async function findTimes(event: FormEvent) {
     event.preventDefault();
     if (!service) return;
@@ -172,16 +228,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (!service) return;
     setPending(true);
     setError(null);
-    const response = await fetch(`/api/v1/public/booking/${profile.slug}/holds`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        location_id: locationId,
-        service_id: service.id,
-        add_on_ids: addOnIds,
-        specialist_id: slot.specialist_id,
-        starts_at: slot.starts_at,
-      }),
+    const response = await postPublic(`/api/v1/public/booking/${profile.slug}/holds`, {
+      location_id: locationId,
+      service_id: service.id,
+      add_on_ids: addOnIds,
+      specialist_id: slot.specialist_id,
+      starts_at: slot.starts_at,
     });
     const body = await response.json().catch(() => null);
     setPending(false);
@@ -218,16 +270,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (!held) return false;
     setPending(true);
     setError(null);
-    const response = await fetch(`/api/v1/public/booking/${profile.slug}/verify`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "request",
-        hold_token: held.token,
-        phone: entered.phone,
-        email: entered.email,
-        locale: entered.locale,
-      }),
+    const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
+      action: "request",
+      hold_token: held.token,
+      phone: entered.phone,
+      email: entered.email,
+      locale: entered.locale,
     });
     const body = await response.json().catch(() => null);
     setPending(false);
@@ -244,10 +292,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     const code = String(new FormData(event.currentTarget).get("code") ?? "");
     setPending(true);
     setError(null);
-    const response = await fetch(`/api/v1/public/booking/${profile.slug}/verify`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "confirm", hold_token: held.token, code }),
+    const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
+      action: "confirm",
+      hold_token: held.token,
+      code,
     });
     const body = await response.json().catch(() => null);
     setPending(false);
@@ -262,10 +310,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (!service || !held) return;
     setPending(true);
     setError(null);
-    const response = await fetch(`/api/v1/public/booking/${profile.slug}/bookings`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
-      body: JSON.stringify({
+    const response = await postPublic(
+      `/api/v1/public/booking/${profile.slug}/bookings`,
+      {
         hold_token: held.token,
         service_id: service.id,
         add_on_ids: addOnIds,
@@ -274,8 +321,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         email: entered.email,
         locale: entered.locale,
         legal_accepted: entered.legalAccepted,
-      }),
-    });
+      },
+      { "idempotency-key": idempotencyKey },
+    );
     const body = await response.json().catch(() => null);
     setPending(false);
     if (!response.ok) {

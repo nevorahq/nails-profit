@@ -9,6 +9,7 @@ import { holdSlot, HOLD_TTL_MINUTES } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
+import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { loadPublicCatalog } from "@/lib/public-booking";
 import { loadPublicAvailability } from "@/lib/public-booking-availability";
 import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
@@ -26,7 +27,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, refused } = publicRequest(request, PUBLIC_BOOKING_HOLD_RULE, "public_booking.hold");
+  const { id, caller, refused } = publicRequest(request, PUBLIC_BOOKING_HOLD_RULE, "public_booking.hold", {
+    challenge: true,
+  });
   if (refused) return refused;
 
   const body = await request.json().catch(() => null);
@@ -58,6 +61,9 @@ export async function POST(
       slot.specialist_id === parsed.data.specialist_id,
   );
   if (!availability || !offered) {
+    // Asking to hold a time that was never offered is what a script does and
+    // what a form cannot.
+    recordSuspiciousActivity(caller);
     return apiError(409, "SLOT_UNAVAILABLE", "This slot is no longer free", id, {
       details: { alternatives: availability?.slots.slice(0, 6) ?? [] },
     });

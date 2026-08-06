@@ -17,6 +17,7 @@ import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
+import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { findPublicOrganization } from "@/lib/public-booking";
 import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_CREATE_RULE } from "@/lib/rate-limit";
@@ -93,10 +94,11 @@ async function handlePost(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, refused } = publicRequest(
+  const { id, caller, refused } = publicRequest(
     request,
     PUBLIC_BOOKING_CREATE_RULE,
     "public_booking.create",
+    { challenge: true },
   );
   if (refused) return refused;
 
@@ -289,6 +291,9 @@ async function handlePost(
     });
 
     if ("failure" in outcome) {
+      // A hold that expired, a slot that went, a contact never verified: one of
+      // these is an unlucky client, ten in ten minutes is a loop.
+      recordSuspiciousActivity(caller);
       switch (outcome.failure) {
         case "IDEMPOTENCY_CONFLICT":
           return apiError(409, "IDEMPOTENCY_KEY_REUSED", "This key belongs to another request", id);

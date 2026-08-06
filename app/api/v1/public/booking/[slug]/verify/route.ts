@@ -8,6 +8,7 @@ import { loadSlotContext } from "@/lib/availability-service";
 import { confirmVerification, liveHoldFor, requestVerification } from "@/lib/booking-verification";
 import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
 import { findPublicOrganization } from "@/lib/public-booking";
+import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_VERIFY_RULE } from "@/lib/rate-limit";
 
@@ -45,7 +46,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, refused } = publicRequest(request, PUBLIC_BOOKING_VERIFY_RULE, "public_booking.verify");
+  const { id, caller, refused } = publicRequest(request, PUBLIC_BOOKING_VERIFY_RULE, "public_booking.verify", {
+    challenge: true,
+  });
   if (refused) return refused;
 
   const body = await request.json().catch(() => null);
@@ -128,6 +131,11 @@ export async function POST(
   }
 
   if (outcome.verification.ok) return apiSuccess({ verified: true }, id);
+
+  // A wrong code is the cheapest thing for a script to produce and the rarest
+  // thing for a client to produce ten times, which is what section 7.9's
+  // threshold is about.
+  recordSuspiciousActivity(caller);
 
   switch (outcome.verification.reason) {
     case "expired":
