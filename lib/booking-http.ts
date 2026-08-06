@@ -62,7 +62,7 @@ export async function requireCalendarCaller(
   }
 
   const { organizationId, userId, role } = caller.membership;
-  const disabled = await bookingModuleRefusal(organizationId, requestIdentifier);
+  const disabled = await bookingModuleRefusal(organizationId, requestIdentifier, action);
   if (disabled) return { ok: false, response: disabled };
 
   return { ok: true, actor: { organizationId, userId, role } };
@@ -71,15 +71,26 @@ export async function requireCalendarCaller(
 /**
  * The per-organization rollout switch of section 7.11, as an endpoint sees it.
  *
- * `off` is the rollback state: appointments already made stay in the database
- * and stay visible through the visit history, but nothing in the booking module
- * answers. A 404 rather than a 403 — for this tenant the module is not a thing
- * they are forbidden from, it is a thing that is not there.
+ * `off` is the rollback state, and section 7's rollback list is specific about
+ * what it means: "уже подтверждённые записи остаются доступны сотрудникам в
+ * read-only/list mode". So the module stops taking work — no new appointment,
+ * no reschedule, no rota edit — and keeps showing the work already in it. The
+ * reason is the moment this switch is actually thrown: something is wrong and
+ * an operator turns booking off at nine in the morning, with twenty people
+ * expected today. Hiding the list then does not undo a single one of those
+ * appointments, it only means nobody at the desk knows who is coming.
+ *
+ * A 404 rather than a 403 on the write side: for this tenant the operation is
+ * not something they are forbidden from, it is something that is not there.
  */
 export async function bookingModuleRefusal(
   organizationId: string,
   requestIdentifier: string,
+  action: "read" | "write",
 ): Promise<Response | null> {
+  if (action === "read") return null;
+
+
   const [organization] = await db
     .select({ bookingAccess: organizations.bookingAccess })
     .from(organizations)

@@ -546,7 +546,8 @@ const ru = {
   "calendar.title": "Календарь",
   "calendar.card": "Запись",
   "calendar.noAccess": "У вашей роли нет доступа к календарю.",
-  "calendar.moduleOff": "Модуль записи выключен для этой организации. Уже созданные записи и визиты сохранены.",
+  "calendar.moduleOff":
+    "Модуль записи выключен для этой организации. Календарь доступен только для чтения: уже созданные записи и визиты сохранены, новые не создаются и не изменяются.",
   "calendar.notFound": "Запись не найдена или относится к другому мастеру.",
   "calendar.back": "← К календарю",
   "calendar.view": "Вид",
@@ -1180,7 +1181,8 @@ const ro: Record<MessageKey, Message> = {
   "calendar.title": "Calendar",
   "calendar.card": "Programare",
   "calendar.noAccess": "Rolul dumneavoastră nu are acces la calendar.",
-  "calendar.moduleOff": "Modulul de programări este dezactivat pentru această organizație. Programările și vizitele deja create sunt păstrate.",
+  "calendar.moduleOff":
+    "Modulul de programări este dezactivat pentru această organizație. Calendarul este disponibil doar pentru citire: programările și vizitele deja create sunt păstrate, dar nu pot fi create sau modificate altele noi.",
   "calendar.notFound": "Programarea nu a fost găsită sau aparține altui maestru.",
   "calendar.back": "← Înapoi la calendar",
   "calendar.view": "Vizualizare",
@@ -1802,7 +1804,8 @@ const en: Record<MessageKey, Message> = {
   "calendar.title": "Calendar",
   "calendar.card": "Appointment",
   "calendar.noAccess": "Your role has no access to the calendar.",
-  "calendar.moduleOff": "The booking module is switched off for this organization. Appointments and visits already made are kept.",
+  "calendar.moduleOff":
+    "The booking module is switched off for this organization. The calendar is read-only: appointments and visits already made are kept, and no new ones can be created or changed.",
   "calendar.notFound": "No such appointment, or it belongs to another specialist.",
   "calendar.back": "← Back to the calendar",
   "calendar.view": "View",

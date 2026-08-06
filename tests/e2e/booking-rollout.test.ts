@@ -138,12 +138,16 @@ describe("booking rollout levels", () => {
     expect((await studio.owner.get("/api/v1/bookings")).status).toBe(200);
   });
 
-  test("switching the module off closes the calendar too, without losing anything", async () => {
+  test("switching the module off stops the writing and not the reading", async () => {
     await setLevel("off");
 
+    // The rollback of section 7: "уже подтверждённые записи остаются доступны
+    // сотрудникам в read-only/list mode". The switch is thrown on a morning
+    // when clients are already expected, and the list is how the desk knows
+    // which ones.
     const list = await studio.owner.get("/api/v1/bookings");
-    expect(list.status).toBe(404);
-    expect(errorCodeOf(list)).toBe("BOOKING_DISABLED");
+    expect(list.status).toBe(200);
+    expect(dataOf<{ id: string }[]>(list).length).toBeGreaterThan(0);
 
     const created = await studio.owner.post(
       "/api/v1/bookings",
@@ -155,6 +159,7 @@ describe("booking rollout levels", () => {
       },
       { "idempotency-key": `off-${crypto.randomUUID()}` },
     );
+    expect(created.status).toBe(404);
     expect(errorCodeOf(created)).toBe("BOOKING_DISABLED");
 
     // Nothing was deleted: the visit history and everything else the studio
@@ -163,6 +168,69 @@ describe("booking rollout levels", () => {
 
     await setLevel("calendar");
     expect((await studio.owner.get("/api/v1/bookings")).status).toBe(200);
+  });
+
+  test("the schedule and its locations are behind the same switch", async () => {
+    // Section 7.11 puts every new calendar route behind the flag, not only the
+    // seven that say `booking` in the path. A rota, a location and a booking
+    // page's own settings decide what the module offers, so a module that is
+    // off cannot keep taking edits to them.
+    await setLevel("off");
+
+    const rota = await studio.owner.put("/api/v1/availability/rules", {
+      specialist_id: studio.specialistId,
+      location_id: locationId,
+      intervals: [{ weekday: 3, start: "08:00", end: "20:00" }],
+      effective_from: new Date().toISOString().slice(0, 10),
+    });
+    expect(errorCodeOf(rota)).toBe("BOOKING_DISABLED");
+
+    const exception = await studio.owner.post("/api/v1/availability/exceptions", {
+      specialist_id: studio.specialistId,
+      location_id: locationId,
+      starts_at: nextWednesday(3).toISOString(),
+      ends_at: new Date(nextWednesday(3).getTime() + 3_600_000).toISOString(),
+      kind: "unavailable",
+    });
+    expect(errorCodeOf(exception)).toBe("BOOKING_DISABLED");
+
+    const place = await studio.owner.post("/api/v1/locations", {
+      name: "Второй",
+      slug: "rollout-second",
+      timezone: "Europe/Chisinau",
+    });
+    expect(errorCodeOf(place)).toBe("BOOKING_DISABLED");
+
+    const settings = await studio.owner.put(`/api/v1/locations/${locationId}/booking-settings`, {
+      public_status: "published",
+      confirmation_mode: "instant",
+    });
+    expect(errorCodeOf(settings)).toBe("BOOKING_DISABLED");
+
+    const assignment = await studio.owner.put(
+      `/api/v1/specialists/${studio.specialistId}/locations`,
+      { location_ids: [locationId] },
+    );
+    expect(errorCodeOf(assignment)).toBe("BOOKING_DISABLED");
+
+    // Reading the rota is not taking work: the same page that shows today's
+    // appointments shows the hours they were placed against.
+    expect(
+      (await studio.owner.get(`/api/v1/availability/rules?specialist_id=${studio.specialistId}`))
+        .status,
+    ).toBe(200);
+
+    await setLevel("calendar");
+    expect(
+      (
+        await studio.owner.put("/api/v1/availability/rules", {
+          specialist_id: studio.specialistId,
+          location_id: locationId,
+          intervals: [{ weekday: 3, start: "07:00", end: "21:00" }],
+          effective_from: new Date().toISOString().slice(0, 10),
+        })
+      ).status,
+    ).toBe(201);
   });
 
   test("an owner may step the module down but not publish it themselves", async () => {

@@ -6,6 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { parseLocalDate, parseLocalTime, weekdays } from "@/domain/timezone";
 import { recordAuditEvent } from "@/lib/audit";
+import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
@@ -117,6 +118,8 @@ export async function PUT(request: Request) {
   if (!canManageCatalogue(actor.role, "bookings")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage schedules", id);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, id, "write");
+  if (disabled) return disabled;
 
   const body = await request.json().catch(() => null);
   const parsed = putRulesSchema.safeParse(body);

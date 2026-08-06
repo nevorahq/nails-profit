@@ -7,6 +7,7 @@ import { can } from "@/domain/rbac";
 import { checkSlug } from "@/domain/slug";
 import { isSupportedTimezone } from "@/domain/timezone";
 import { recordAuditEvent } from "@/lib/audit";
+import { bookingModuleRefusal } from "@/lib/booking-http";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -46,6 +47,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!can(actor.role, "organization_settings", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage locations", requestIdentifier);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, requestIdentifier, "write");
+  if (disabled) return disabled;
 
   const body = await request.json().catch(() => null);
   const parsed = patchLocationSchema.safeParse(body);

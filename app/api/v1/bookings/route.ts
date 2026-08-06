@@ -60,7 +60,7 @@ export async function GET(request: Request) {
   if (!can(actor.role, "bookings", "read")) {
     return apiError(403, "FORBIDDEN", "This role cannot read bookings", id);
   }
-  const disabled = await bookingModuleRefusal(actor.organizationId, id);
+  const disabled = await bookingModuleRefusal(actor.organizationId, id, "read");
   if (disabled) return disabled;
 
   const url = new URL(request.url);
@@ -140,7 +140,7 @@ async function handlePost(request: Request) {
   if (!can(actor.role, "bookings", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot create bookings", id);
   }
-  const disabled = await bookingModuleRefusal(actor.organizationId, id);
+  const disabled = await bookingModuleRefusal(actor.organizationId, id, "write");
   if (disabled) return disabled;
 
   // Section 7.5 requires the key on staff create. Required rather than

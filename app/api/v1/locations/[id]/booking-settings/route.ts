@@ -5,6 +5,7 @@ import { bookingSettings, locations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
@@ -59,6 +60,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (!can(actor.role, "organization_settings", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot change booking settings", requestIdentifier);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, requestIdentifier, "write");
+  if (disabled) return disabled;
 
   const body = await request.json().catch(() => null);
   const parsed = settingsSchema.safeParse(body);

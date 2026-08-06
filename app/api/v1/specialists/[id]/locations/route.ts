@@ -5,6 +5,7 @@ import { locations, specialistLocations, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
@@ -31,6 +32,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (!canManageCatalogue(actor.role, "bookings")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage specialist locations", requestIdentifier);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, requestIdentifier, "write");
+  if (disabled) return disabled;
 
   const body = await request.json().catch(() => null);
   const parsed = linkSchema.safeParse(body);

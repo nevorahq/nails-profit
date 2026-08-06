@@ -76,17 +76,6 @@ export default async function CalendarPage({
     );
   }
 
-  // Section 7.11's rollback state. The appointments are still in the database
-  // and the visits made from them still report; the calendar simply is not part
-  // of this organization's product right now.
-  if (bookingAccess === "off") {
-    return (
-      <main className="app-shell">
-        <p className="warning-banner">{t("calendar.moduleOff")}</p>
-      </main>
-    );
-  }
-
   const filters = await searchParams;
   const view: CalendarView = VIEWS.includes(filters.view as CalendarView)
     ? (filters.view as CalendarView)
@@ -222,7 +211,12 @@ export default async function CalendarPage({
   // Section 6.1: an Analyst reads client history «без телефонов и email». The
   // name stays — a calendar with nobody's name on it is not a calendar.
   const hideContacts = hasConstraint(membership.role, "clients", "exclude_pii");
-  const canWrite = can(membership.role, "bookings", "write");
+  // Section 7.11's rollback state, and section 7's rollback list is exact about
+  // what survives it: the appointments already made stay visible to staff in
+  // read-only mode. The module stops taking work; the day still has to be
+  // legible to whoever is standing at the desk when it is switched off.
+  const moduleOff = bookingAccess === "off";
+  const canWrite = can(membership.role, "bookings", "write") && !moduleOff;
 
   const calendar: CalendarBooking[] = data.rows
     .map((row) => {
@@ -269,6 +263,8 @@ export default async function CalendarPage({
         </div>
         <AppNav active="/app/calendar" locale={locale} />
       </header>
+
+      {moduleOff && <p className="warning-banner">{t("calendar.moduleOff")}</p>}
 
       <CalendarBoard
         view={view}

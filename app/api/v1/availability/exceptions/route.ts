@@ -5,6 +5,7 @@ import { availabilityExceptions, locations, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
@@ -112,6 +113,8 @@ export async function POST(request: Request) {
   if (!can(actor.role, "bookings", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage schedules", id);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, id, "write");
+  if (disabled) return disabled;
 
   const body = await request.json().catch(() => null);
   const parsed = createExceptionSchema.safeParse(body);
@@ -225,6 +228,8 @@ export async function DELETE(request: Request) {
   if (!can(actor.role, "bookings", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage schedules", id);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, id, "write");
+  if (disabled) return disabled;
 
   const exceptionId = new URL(request.url).searchParams.get("id");
   if (!exceptionId) {
