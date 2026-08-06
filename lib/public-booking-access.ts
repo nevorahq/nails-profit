@@ -44,6 +44,7 @@ export async function loadPublicBookingAccess(rawToken: string, now = new Date()
         booking: bookings,
         organizationName: organizations.name,
         organizationSlug: organizations.slug,
+        bookingAccess: organizations.bookingAccess,
         locale: organizations.locale,
         currency: organizations.currency,
         organizationDeletedAt: organizations.deletedAt,
@@ -58,7 +59,11 @@ export async function loadPublicBookingAccess(rawToken: string, now = new Date()
       .innerJoin(specialists, eq(specialists.id, bookings.specialistId))
       .where(eq(bookings.id, access.bookingId))
       .limit(1);
+    // Rolled back to the calendar, or off entirely: the client's link goes dark
+    // with the page it came from, rather than staying a way into a booking
+    // system the studio has stopped running.
     if (!row || row.organizationDeletedAt || !row.organizationSlug) return null;
+    if (row.bookingAccess !== "public") return null;
 
     const lines = await tx
       .select()

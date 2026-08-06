@@ -38,24 +38,62 @@ export type BookingLineInput = Readonly<{
   durationMinutes: number;
 }>;
 
+export type SlotResources = Readonly<{
+  specialistId: string;
+  workplaceId?: string | null;
+  at: Date;
+}>;
+
 /**
- * One lock per specialist per local day.
+ * One lock per contended resource per local day.
  *
- * Per specialist because that is the resource being competed for; per day
- * because a studio's whole calendar behind one lock would serialize unrelated
- * bookings in a busy salon. The lock is transaction-level, so it is released by
- * commit or rollback and never leaks.
+ * Per resource because that is what is competed for; per day because a studio's
+ * whole calendar behind one lock would serialize unrelated bookings in a busy
+ * salon. The locks are transaction-level, so they are released by commit or
+ * rollback and never leak.
+ *
+ * The workplace is locked as well as the specialist, and that is not symmetry
+ * for its own sake: two *different* specialists booking the one chair take two
+ * different specialist locks, walk into the insert together, and each waits on
+ * the other's uncommitted row while PostgreSQL checks the workplace exclusion
+ * constraint. That is a deadlock — 40P01, both transactions killed — where the
+ * studio should have seen one booking and one `SLOT_UNAVAILABLE`. A concurrency
+ * test for the shared chair is what found it.
+ *
+ * Keys are sorted before they are taken, for the same reason the reschedule
+ * below sorts its pair: two callers acquiring the same two locks in opposite
+ * orders is the other way to build a deadlock.
  */
-export async function lockSpecialistDay(
+export function resourceDayKeys(
+  organizationId: string,
+  resources: readonly SlotResources[],
+): string[] {
+  const keys = resources.flatMap((resource) => {
+    const day = resource.at.toISOString().slice(0, 10);
+    return [
+      `${organizationId}:specialist:${resource.specialistId}:${day}`,
+      ...(resource.workplaceId
+        ? [`${organizationId}:workplace:${resource.workplaceId}:${day}`]
+        : []),
+    ];
+  });
+
+  return [...new Set(keys)].sort();
+}
+
+export async function lockResourceDays(tx: TenantTransaction, keys: readonly string[]) {
+  for (const key of keys) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+  }
+}
+
+/** The common case: everything one slot touches, in one call. */
+export async function lockSlotResources(
   tx: TenantTransaction,
   organizationId: string,
-  specialistId: string,
-  startsAt: Date,
+  resources: SlotResources,
 ) {
-  const day = startsAt.toISOString().slice(0, 10);
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${`${organizationId}:${specialistId}:${day}`}, 0))`,
-  );
+  await lockResourceDays(tx, resourceDayKeys(organizationId, [resources]));
 }
 
 /**
@@ -176,7 +214,11 @@ export type HoldResult =
  * the loser of that race is told at the moment they pick a time.
  */
 export async function holdSlot(tx: TenantTransaction, input: HoldInput): Promise<HoldResult> {
-  await lockSpecialistDay(tx, input.organizationId, input.specialistId, input.interval.start);
+  await lockSlotResources(tx, input.organizationId, {
+    specialistId: input.specialistId,
+    workplaceId: input.workplaceId,
+    at: input.interval.start,
+  });
   await expireStaleHolds(tx, input.specialistId, input.now);
 
   const conflict = await findConflict(tx, {
@@ -249,7 +291,11 @@ export async function createBooking(
   tx: TenantTransaction,
   input: CreateBookingInput,
 ): Promise<CreateBookingResult> {
-  await lockSpecialistDay(tx, input.organizationId, input.specialistId, input.interval.start);
+  await lockSlotResources(tx, input.organizationId, {
+    specialistId: input.specialistId,
+    workplaceId: input.workplaceId,
+    at: input.interval.start,
+  });
   await expireStaleHolds(tx, input.specialistId, input.now);
 
   const conflict = await findConflict(tx, {
@@ -522,19 +568,15 @@ export async function rescheduleBooking(
 
   // Where it is now and where it is going: both have to be held, because the
   // slot being vacated becomes bookable the moment this commits. Deduplicated
-  // and sorted, so two reschedules trading a pair of days cannot deadlock by
-  // taking the same two locks in opposite orders.
-  const toLock = [
-    { specialistId: booking.specialistId, at: booking.startsAt },
-    { specialistId, at: input.interval.start },
-  ]
-    .map((target) => ({ ...target, key: `${target.specialistId}:${target.at.toISOString().slice(0, 10)}` }))
-    .filter((target, index, all) => all.findIndex((other) => other.key === target.key) === index)
-    .sort((left, right) => left.key.localeCompare(right.key));
-
-  for (const target of toLock) {
-    await lockSpecialistDay(tx, input.organizationId, target.specialistId, target.at);
-  }
+  // and sorted by `resourceDayKeys`, so two reschedules trading a pair of days
+  // cannot deadlock by taking the same two locks in opposite orders.
+  await lockResourceDays(
+    tx,
+    resourceDayKeys(input.organizationId, [
+      { specialistId: booking.specialistId, workplaceId: booking.workplaceId, at: booking.startsAt },
+      { specialistId, workplaceId, at: input.interval.start },
+    ]),
+  );
 
   await expireStaleHolds(tx, specialistId, input.now);
 

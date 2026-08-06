@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
-import { bookingHolds, bookings } from "@/db/schema";
+import { bookingHolds, bookings, workplaces } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import {
   ACTIVE_BOOKING_STATUSES,
@@ -9,9 +9,11 @@ import {
   expireUnconfirmedBookings,
   holdSlot,
   releaseHold,
+  rescheduleBooking,
   sweepExpiredHolds,
 } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
+import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
   createLocation,
@@ -381,6 +383,183 @@ describe("unanswered requests", () => {
       );
 
     expect(row.due?.toISOString()).toBe(SLOT.start.toISOString());
+  });
+});
+
+/**
+ * The three sets section 7.12 asks for that the ones above do not cover:
+ * a shared workplace, two moves onto one destination, and a retried request.
+ */
+describe("contended resources", () => {
+  let organizationId: string;
+  let locationId: string;
+  let firstSpecialist: string;
+  let secondSpecialist: string;
+  let workplaceId: string;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const user = await createUser();
+    organizationId = (await createOrganization({ ownerId: user.id })).id;
+    locationId = (await createLocation(organizationId)).id;
+    firstSpecialist = (await createSpecialist(organizationId)).id;
+    secondSpecialist = (await createSpecialist(organizationId, { name: "Второй мастер" })).id;
+    await createService(organizationId);
+
+    const [workplace] = await adminDb
+      .insert(workplaces)
+      .values({ organizationId, locationId, name: "Кресло 1" })
+      .returning();
+    workplaceId = workplace.id;
+  });
+
+  function attempt(specialistId: string, interval = SLOT, workplace: string | null = workplaceId) {
+    return withTenant(organizationId, (tx) =>
+      createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId,
+        workplaceId: workplace,
+        interval,
+        source: "staff",
+        confirmationMode: "instant",
+        lines: LINES,
+        actorUserId: null,
+        now: new Date("2026-09-01T09:00:00.000Z"),
+      }),
+    ).catch((error) => {
+      if (isExclusionViolation(error)) return { ok: false as const, conflict: "booking" as const };
+      throw error;
+    });
+  }
+
+  test("one chair cannot hold two clients, even with two specialists", async () => {
+    // The specialists are free — this is the resource constraint of section
+    // 7.5, and nothing about the specialist-based check would catch it.
+    const results = await Promise.all([
+      attempt(firstSpecialist),
+      attempt(secondSpecialist),
+    ]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    const rows = await adminDb
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.workplaceId, workplaceId));
+    expect(rows).toHaveLength(1);
+  });
+
+  test("twenty attempts on one chair leave one booking", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        attempt(index % 2 === 0 ? firstSpecialist : secondSpecialist),
+      ),
+    );
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+  });
+
+  test("two moves onto the same free slot: one lands, one is refused", async () => {
+    const morning = { start: SLOT.start, end: SLOT.end };
+    const midday = {
+      start: new Date(SLOT.start.getTime() + 4 * 60 * 60_000),
+      end: new Date(SLOT.end.getTime() + 4 * 60 * 60_000),
+    };
+    const destination = {
+      start: new Date(SLOT.start.getTime() + 8 * 60 * 60_000),
+      end: new Date(SLOT.end.getTime() + 8 * 60 * 60_000),
+    };
+
+    // Two appointments on one specialist, both moving to the same empty hour.
+    const first = await attempt(firstSpecialist, morning, null);
+    const second = await attempt(firstSpecialist, midday, null);
+    if (!first.ok || !second.ok) throw new Error("fixture bookings were refused");
+
+    const move = (bookingId: string) =>
+      withTenant(organizationId, (tx) =>
+        rescheduleBooking(tx, {
+          organizationId,
+          bookingId,
+          interval: destination,
+          expectedVersion: null,
+          actorUserId: null,
+          now: new Date("2026-09-01T09:00:00.000Z"),
+        }),
+      ).catch((error) => {
+        if (isExclusionViolation(error)) {
+          return { ok: false as const, failure: "conflict" as const };
+        }
+        throw error;
+      });
+
+    const results = await Promise.all([move(first.bookingId), move(second.bookingId)]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    const landed = await adminDb
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(and(eq(bookings.specialistId, firstSpecialist), eq(bookings.startsAt, destination.start)));
+    expect(landed).toHaveLength(1);
+  });
+
+  test("ten simultaneous retries of one request claim the key once", async () => {
+    // What a phone on a bad connection actually does. The claim is written
+    // before the booking and inside the same transaction, so the losers block
+    // on the unique index rather than reading a row that is not there yet.
+    const key = `retry-${crypto.randomUUID()}`;
+    const fingerprint = fingerprintOf({ slot: SLOT.start.toISOString() });
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        withTenant(organizationId, async (tx) => {
+          const claim = await claimIdempotencyKey(tx, {
+            organizationId,
+            scope: "booking.public_create",
+            key,
+            fingerprint,
+          });
+          if (claim.status !== "claimed") return claim;
+
+          const created = await createBooking(tx, {
+            organizationId,
+            locationId,
+            specialistId: firstSpecialist,
+            interval: SLOT,
+            source: "public_booking",
+            confirmationMode: "instant",
+            lines: LINES,
+            actorUserId: null,
+            now: new Date("2026-09-01T09:00:00.000Z"),
+          });
+          if (!created.ok) return { status: "conflict" as const };
+
+          await recordIdempotentResult(tx, claim.id, created.bookingId);
+          return { status: "claimed" as const, id: created.bookingId };
+        }).catch((error) => {
+          if (isExclusionViolation(error)) return { status: "conflict" as const };
+          throw error;
+        }),
+      ),
+    );
+
+    expect(results.filter((result) => result.status === "claimed")).toHaveLength(1);
+    const rows = await adminDb
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.organizationId, organizationId));
+    expect(rows).toHaveLength(1);
+
+    // And the retry that arrives afterwards is answered with that booking
+    // rather than making a second one.
+    const replay = await withTenant(organizationId, (tx) =>
+      claimIdempotencyKey(tx, {
+        organizationId,
+        scope: "booking.public_create",
+        key,
+        fingerprint,
+      }),
+    );
+    expect(replay).toEqual({ status: "replay", bookingId: rows[0].id });
   });
 });
 

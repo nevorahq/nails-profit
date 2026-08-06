@@ -1,4 +1,7 @@
-import type { bookingLines } from "@/db/schema";
+import { eq } from "drizzle-orm";
+
+import { db } from "@/db";
+import { organizations, type bookingLines } from "@/db/schema";
 import { can, type MemberRole } from "@/domain/rbac";
 import { apiError } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -59,7 +62,38 @@ export async function requireCalendarCaller(
   }
 
   const { organizationId, userId, role } = caller.membership;
+  const disabled = await bookingModuleRefusal(organizationId, requestIdentifier);
+  if (disabled) return { ok: false, response: disabled };
+
   return { ok: true, actor: { organizationId, userId, role } };
+}
+
+/**
+ * The per-organization rollout switch of section 7.11, as an endpoint sees it.
+ *
+ * `off` is the rollback state: appointments already made stay in the database
+ * and stay visible through the visit history, but nothing in the booking module
+ * answers. A 404 rather than a 403 — for this tenant the module is not a thing
+ * they are forbidden from, it is a thing that is not there.
+ */
+export async function bookingModuleRefusal(
+  organizationId: string,
+  requestIdentifier: string,
+): Promise<Response | null> {
+  const [organization] = await db
+    .select({ bookingAccess: organizations.bookingAccess })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+
+  return organization?.bookingAccess === "off"
+    ? apiError(
+        404,
+        "BOOKING_DISABLED",
+        "The booking module is not enabled for this organization",
+        requestIdentifier,
+      )
+    : null;
 }
 
 /**

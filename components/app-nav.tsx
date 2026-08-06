@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { requireWorkspace } from "@/lib/workspace";
 
 /**
  * One definition of the application's tabs.
@@ -21,12 +22,20 @@ const TABS: readonly { href: string; key: MessageKey }[] = [
   { href: "/app/settings", key: "nav.settings" },
 ];
 
-export function AppNav({ active, locale }: { active: string; locale: AppLocale }) {
+/**
+ * The booking flag is read here rather than passed in by ten pages. A prop that
+ * ten callers have to remember is a prop the eleventh page forgets, and the
+ * failure — a tab leading to a module this tenant does not have — looks like a
+ * broken product rather than a missing argument.
+ */
+export async function AppNav({ active, locale }: { active: string; locale: AppLocale }) {
   const t = getTranslator(locale);
+  const { bookingAccess } = await requireWorkspace();
+  const tabs = bookingAccess === "off" ? TABS.filter((tab) => tab.href !== "/app/calendar") : TABS;
 
   return (
     <nav className="tab-nav" aria-label={t("nav.primary")}>
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}

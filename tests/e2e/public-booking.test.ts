@@ -6,6 +6,7 @@ import {
   bookingVerifications,
   clients,
   notificationOutbox,
+  organizations,
 } from "@/db/schema";
 import { anonymous, dataOf, errorCodeOf } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -29,6 +30,12 @@ describe("public online booking", () => {
     await resetDatabase();
     studio = await createCanonicalStudio("public-owner@studio.example", "Green Nails");
     await studio.owner.patch("/api/v1/organizations/settings", { slug: "green-nails" });
+    // Section 7.11: the public page exists for a tenant only after the operator
+    // raises its rollout level. Everything below is what that unlocks.
+    await adminDb
+      .update(organizations)
+      .set({ bookingAccess: "public" })
+      .where(eq(organizations.id, studio.organizationId));
 
     locationId = dataOf<{ id: string }>(
       await studio.owner.post("/api/v1/locations", {

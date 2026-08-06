@@ -14,7 +14,7 @@ import {
 } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist, scopedSpecialistId } from "@/lib/booking-access";
-import { bookingPayload } from "@/lib/booking-http";
+import { bookingModuleRefusal, bookingPayload } from "@/lib/booking-http";
 import { notifyBooking, scheduleBookingReminder } from "@/lib/booking-notifications";
 import { bookingLinesOf, createBooking, type BookingStatus } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
@@ -60,6 +60,8 @@ export async function GET(request: Request) {
   if (!can(actor.role, "bookings", "read")) {
     return apiError(403, "FORBIDDEN", "This role cannot read bookings", id);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, id);
+  if (disabled) return disabled;
 
   const url = new URL(request.url);
   const from = url.searchParams.get("from");
@@ -138,6 +140,8 @@ export async function POST(request: Request) {
   if (!can(actor.role, "bookings", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot create bookings", id);
   }
+  const disabled = await bookingModuleRefusal(actor.organizationId, id);
+  if (disabled) return disabled;
 
   // Section 7.5 requires the key on staff create. Required rather than
   // optional: a retry that silently books a second appointment is the failure

@@ -117,6 +117,9 @@ const auditColumns = {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
+/** The rollout ladder of section 7.11: nothing, the staff calendar, the public page. */
+export const bookingAccessLevel = pgEnum("booking_access_level", ["off", "calendar", "public"]);
+
 export const organizations = pgTable(
   "organization",
   {
@@ -133,6 +136,21 @@ export const organizations = pgTable(
      * section 7.9 forbids exposing.
      */
     slug: text("slug"),
+    /**
+     * How far the booking module is rolled out for this tenant, roadmap
+     * section 7.11: "Все новые public и calendar routes закрыты feature flags
+     * до прохождения security и concurrency gates".
+     *
+     * Three levels rather than a boolean, because the pilot rollout has three
+     * states and the rollback plan needs the middle one: a studio gets the
+     * internal calendar first, the public page once its rota and prices are
+     * real, and `off` is how both are taken back without touching the
+     * appointments already made.
+     *
+     * `calendar` by default: every organization that exists today already has
+     * the calendar, and a default of `off` would take it from them on deploy.
+     */
+    bookingAccess: bookingAccessLevel("booking_access").notNull().default("calendar"),
     currency: currency("currency").notNull().default("MDL"),
     locale: locale("locale").notNull().default("ru"),
     timezone: text("timezone").notNull().default("Europe/Chisinau"),

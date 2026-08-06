@@ -10,6 +10,8 @@ export type Workspace = Readonly<{
   membership: ActiveMembership;
   organizationName: string;
   organizationSlug: string | null;
+  /** How far the booking module is rolled out here, roadmap section 7.11. */
+  bookingAccess: "off" | "calendar" | "public";
   locale: AppLocale;
   currency: string;
 }>;
@@ -28,6 +30,7 @@ export async function requireWorkspace(): Promise<Workspace> {
     .select({
       name: organizations.name,
       slug: organizations.slug,
+      bookingAccess: organizations.bookingAccess,
       locale: organizations.locale,
       currency: organizations.currency,
     })
@@ -39,6 +42,7 @@ export async function requireWorkspace(): Promise<Workspace> {
     membership: caller.membership,
     organizationName: organization?.name ?? "",
     organizationSlug: organization?.slug ?? null,
+    bookingAccess: organization?.bookingAccess ?? "calendar",
     locale: (organization?.locale ?? "ru") as AppLocale,
     currency: organization?.currency ?? "MDL",
   };

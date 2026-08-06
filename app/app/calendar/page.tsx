@@ -65,13 +65,24 @@ export default async function CalendarPage({
     status?: string;
   }>;
 }) {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, organizationName, bookingAccess, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "read")) {
     return (
       <main className="app-shell">
         <p className="warning-banner">{t("calendar.noAccess")}</p>
+      </main>
+    );
+  }
+
+  // Section 7.11's rollback state. The appointments are still in the database
+  // and the visits made from them still report; the calendar simply is not part
+  // of this organization's product right now.
+  if (bookingAccess === "off") {
+    return (
+      <main className="app-shell">
+        <p className="warning-banner">{t("calendar.moduleOff")}</p>
       </main>
     );
   }

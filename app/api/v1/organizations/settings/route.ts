@@ -17,6 +17,13 @@ const settingsSchema = z
     currency: z.enum(["MDL", "EUR"]).optional(),
     name: z.string().trim().min(2).max(100).optional(),
     slug: z.string().trim().toLowerCase().min(3).max(40).nullable().optional(),
+    /**
+     * Section 7.11's rollout switch. An owner may step it down — closing their
+     * own public page or the whole module is their decision to make at any
+     * hour — but stepping *up* to `public` is what the operator does after the
+     * security and concurrency gates, so it is refused here.
+     */
+    booking_access: z.enum(["off", "calendar"]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to change" });
 
@@ -67,15 +74,18 @@ export async function PATCH(request: Request) {
           locale: organizations.locale,
           currency: organizations.currency,
           slug: organizations.slug,
+          booking_access: organizations.bookingAccess,
         })
         .from(organizations)
         .where(eq(organizations.id, actor.organizationId))
         .limit(1);
 
+      const { booking_access: bookingAccess, ...columns } = parsed.data;
       const [row] = await tx
         .update(organizations)
         .set({
-          ...parsed.data,
+          ...columns,
+          ...(bookingAccess !== undefined ? { bookingAccess } : {}),
           updatedBy: actor.userId,
           updatedAt: new Date(),
           version: sql`${organizations.version} + 1`,
@@ -86,6 +96,7 @@ export async function PATCH(request: Request) {
           locale: organizations.locale,
           currency: organizations.currency,
           slug: organizations.slug,
+          booking_access: organizations.bookingAccess,
         });
 
       await recordAuditEvent(tx, {

@@ -1,0 +1,2 @@
+CREATE TYPE "public"."booking_access_level" AS ENUM('off', 'calendar', 'public');--> statement-breakpoint
+ALTER TABLE "organization" ADD COLUMN "booking_access" "booking_access_level" DEFAULT 'calendar' NOT NULL;

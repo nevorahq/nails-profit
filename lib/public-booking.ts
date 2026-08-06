@@ -38,7 +38,17 @@ export async function findPublicOrganization(slug: string): Promise<PublicOrgani
       currency: organizations.currency,
     })
     .from(organizations)
-    .where(and(eq(organizations.slug, slug), isNull(organizations.deletedAt)))
+    .where(
+      and(
+        eq(organizations.slug, slug),
+        isNull(organizations.deletedAt),
+        // Section 7.11 keeps every public route behind a per-organization flag
+        // until that tenant is through the security and concurrency gates. The
+        // environment flag above is the deployment-wide switch; this one is the
+        // studio-by-studio rollout the pilot actually runs.
+        eq(organizations.bookingAccess, "public"),
+      ),
+    )
     .limit(1);
 
   return organization?.slug

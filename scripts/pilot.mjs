@@ -8,6 +8,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const WAVES = new Set(["demo", "design_partner", "first_paid", "extended"]);
 const STATUSES = new Set(["pending", "active", "paused", "completed", "withdrawn"]);
 const INTERACTIONS = new Set(["onboarding", "interview", "profit_review", "support", "decision"]);
+const BOOKING_ACCESS_LEVELS = new Set(["off", "calendar", "public"]);
 const DECISIONS = new Set(["price", "service_composition", "material_consumption"]);
 const ISSUE_CATEGORIES = new Set(["financial", "technical", "privacy", "support"]);
 
@@ -234,6 +235,43 @@ async function resolveIssue(sql, values) {
   return row;
 }
 
+/**
+ * The rollout switch of roadmap section 7.11, moved by the operator.
+ *
+ * Stepping up to `public` is deliberately not something a studio can do from
+ * its own settings screen: it is the moment a page becomes reachable by
+ * strangers, and section 7.11 puts it after the security and concurrency gates
+ * rather than after an owner's click. Stepping down is available in both
+ * places — a rollback nobody can perform at 2am is not a rollback.
+ */
+async function setBookingAccess(sql, values) {
+  requireWriteApproval();
+  const organizationId = uuid(required(values, "organization"), "organization");
+  const level = oneOf(required(values, "level"), BOOKING_ACCESS_LEVELS, "level");
+  const operator = required(values, "operator");
+  await requireOrganization(sql, organizationId);
+
+  const [row] = await sql`
+    update organization
+       set booking_access = ${level}::booking_access_level, updated_at = now()
+     where id = ${organizationId} and deleted_at is null
+    returning id, booking_access
+  `;
+  if (!row) fail("Organization not found");
+
+  // The audit trail is the tenant's, so the change is visible to the studio
+  // whose product just changed, not only in an operator's shell history.
+  await sql`
+    insert into audit_event
+           (organization_id, actor_user_id, event_type, entity_type, entity_id, after, request_id)
+    values (${organizationId}, null, 'organization.booking_access_changed', 'organization',
+            ${organizationId}, ${sql.json({ booking_access: level, operator })},
+            ${`operator:${crypto.randomUUID()}`})
+  `;
+
+  return row;
+}
+
 async function report(sql, values) {
   const [enrollments, events, interactions, issues] = await Promise.all([
     sql`select organization_id, paid_at, monthly_price_minor, renewed_second_month, enrolled_at
@@ -277,6 +315,7 @@ function usage() {
   pilot:ops -- issue --organization UUID --issue-code CODE --category CATEGORY
                         --severity 1|2|3 --operator REF
   pilot:ops -- resolve-issue --issue UUID --operator REF
+  pilot:ops -- booking-access --organization UUID --level off|calendar|public --operator REF
 
 Write commands require ALLOW_PILOT_OPERATOR_WRITE=1.`;
 }
@@ -308,7 +347,9 @@ try {
               ? await recordIssue(sql, values)
               : command === "resolve-issue"
                 ? await resolveIssue(sql, values)
-                : fail(`Unknown command: ${command}`);
+                : command === "booking-access"
+                  ? await setBookingAccess(sql, values)
+                  : fail(`Unknown command: ${command}`);
   console.log(JSON.stringify(result, null, 2));
 } finally {
   await sql.end({ timeout: 5 });
