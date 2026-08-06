@@ -42,6 +42,11 @@ type ProductEventInput = Readonly<{
   entityId: string;
   /** Numbers and booleans only: product analytics is not a PII side channel. */
   metadata?: Readonly<Record<string, number | boolean | null>>;
+  /**
+   * The anonymous visit this happened in, for the public funnel. Absent for
+   * anything a member of staff or a job does — there is no visit behind it.
+   */
+  sessionKey?: string | null;
   occurredAt?: Date;
 }>;
 
@@ -62,6 +67,7 @@ export async function recordPilotProductEvent(tx: TenantTransaction, event: Prod
       entityType: event.entityType,
       entityId: event.entityId,
       metadata: event.metadata ?? {},
+      sessionKey: event.sessionKey ?? "",
       occurredAt: event.occurredAt ?? new Date(),
     })
     .onConflictDoNothing();

@@ -877,6 +877,24 @@ export const pilotProductEvents = pgTable(
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * One anonymous visit to the public booking page, so section 7.10's funnel
+     * can count visits instead of distinct entities.
+     *
+     * Without it the dedupe key below made `booking_page_viewed` mean "someone
+     * has opened this page at least once, ever" — one row per organization for
+     * all time — and `booking_availability_searched` one row per service. A
+     * funnel built on that measures the catalogue, not the clients.
+     *
+     * A random identifier the browser mints per visit and forgets. It is not a
+     * user id and not a device id: it never leaves this table, it is not joined
+     * to a client, and a second visit from the same phone is a second key.
+     *
+     * Empty rather than null for the events that have no visit behind them —
+     * staff actions, imports — because it is part of a unique index, and in one
+     * NULL is never equal to another.
+     */
+    sessionKey: text("session_key").notNull().default(""),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -885,8 +903,10 @@ export const pilotProductEvents = pgTable(
       table.eventName,
       table.entityType,
       table.entityId,
+      table.sessionKey,
     ),
     index("pilot_product_event_org_time_idx").on(table.organizationId, table.occurredAt),
+    index("pilot_product_event_session_idx").on(table.sessionKey, table.occurredAt),
     check("pilot_product_event_version_positive", sql`${table.eventVersion} > 0`),
   ],
 );

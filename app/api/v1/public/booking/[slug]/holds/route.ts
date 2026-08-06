@@ -12,7 +12,7 @@ import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { loadPublicCatalog } from "@/lib/public-booking";
 import { loadPublicAvailability } from "@/lib/public-booking-availability";
-import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
+import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_HOLD_RULE } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
@@ -123,6 +123,7 @@ export async function POST(
         source: "api",
         entityType: "booking_hold",
         entityId: held.holdId,
+        sessionKey: publicSessionKey(request),
       });
 
       return held;

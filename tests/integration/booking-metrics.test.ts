@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
 import { withTenant } from "@/db/tenant";
 import { notifyBooking } from "@/lib/booking-notifications";
+import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { createBooking, holdSlot } from "@/lib/booking-service";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
 import {
@@ -40,6 +41,7 @@ const LINES = [
 type Report = {
   verdict: string;
   metrics: Record<string, number | null | Record<string, number>>;
+  funnel: { step: string; visits: number; from_previous: number | null }[];
   criteria: { key: string; passed: boolean; actual: number | null }[];
 };
 
@@ -128,6 +130,55 @@ describe("booking metrics report", () => {
     expect(report.metrics.notification_delivery_rate).toBeNull();
     expect(report.verdict).toBe("NOT_READY");
     expect(bookingId).toBeTruthy();
+  });
+
+  test("walks the funnel a visit left behind and times it", async () => {
+    const visit = crypto.randomUUID();
+    const other = crypto.randomUUID();
+    const at = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
+
+    await withTenant(organizationId, async (tx) => {
+      // One visit that booked, one that looked and left. The funnel has to see
+      // both, and the median has to come from the one that finished.
+      for (const [name, entityId, when, session] of [
+        ["booking_page_viewed", organizationId, at(0), visit],
+        ["booking_service_selected", "service", at(1), visit],
+        ["booking_availability_searched", "service", at(1), visit],
+        ["booking_started", "booking-1", at(2), visit],
+        ["booking_confirmed", "booking-1", at(2.5), visit],
+        ["booking_page_viewed", organizationId, at(0), other],
+        ["booking_availability_searched", "service", at(1), other],
+      ] as const) {
+        await recordPilotProductEvent(tx, {
+          organizationId,
+          eventName: name,
+          actorUserId: null,
+          actorRole: null,
+          source: "api",
+          entityType: "public",
+          entityId,
+          sessionKey: session,
+          occurredAt: when,
+        });
+      }
+    });
+
+    const report = await metrics();
+
+    expect(report.funnel.map((step) => [step.step, step.visits])).toEqual([
+      ["page_viewed", 2],
+      ["availability_searched", 2],
+      ["booking_started", 1],
+      ["booking_confirmed", 1],
+      ["visit_completed", 0],
+    ]);
+    expect(report.funnel[2].from_previous).toBe(0.5);
+    // Ninety seconds from choosing the service to confirming it.
+    expect(report.metrics.time_to_book_median_seconds).toBe(90);
+    expect(report.criteria.find((row) => row.key === "time_to_book")).toMatchObject({
+      actual: 90,
+      passed: true,
+    });
   });
 
   test("reports zero overlapping appointments while the constraints hold", async () => {

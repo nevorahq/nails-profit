@@ -29,6 +29,106 @@ function countBy(rows, field) {
   return counts;
 }
 
+function median(values) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+/**
+ * The funnel of section 7.10: "page viewed → availability searched → booking
+ * started → booking confirmed → visit completed".
+ *
+ * Counted in visits, not in events. Each step is the number of distinct visit
+ * keys that reached it, so a client who searched four dates before booking is
+ * one visit in both steps — and a studio whose page is opened a hundred times a
+ * day is not one `booking_page_viewed` row for all time, which is what these
+ * events meant before they carried a visit.
+ *
+ * The last step is the exception and has to be: completing an appointment is
+ * something a member of staff does days later, with no visit around it. It is
+ * counted by booking instead, over the bookings that the visits in this window
+ * confirmed.
+ */
+function buildFunnel(events) {
+  const sessionsBy = (name) =>
+    new Set(
+      events
+        .filter((row) => row.event_name === name && row.session_key)
+        .map((row) => row.session_key),
+    );
+
+  const viewed = sessionsBy("booking_page_viewed");
+  const searched = sessionsBy("booking_availability_searched");
+  const started = sessionsBy("booking_started");
+  const confirmed = sessionsBy("booking_confirmed");
+
+  const confirmedBookings = new Set(
+    events
+      .filter((row) => row.event_name === "booking_confirmed" && row.session_key)
+      .map((row) => row.entity_id),
+  );
+  const completed = events.filter(
+    (row) => row.event_name === "booking_completed" && confirmedBookings.has(row.entity_id),
+  ).length;
+
+  const steps = [
+    { step: "page_viewed", visits: viewed.size },
+    { step: "availability_searched", visits: searched.size },
+    { step: "booking_started", visits: started.size },
+    { step: "booking_confirmed", visits: confirmed.size },
+    { step: "visit_completed", visits: completed },
+  ];
+
+  return steps.map((entry, index) => ({
+    ...entry,
+    // Two rates, because they answer different questions: where visits are lost
+    // between two screens, and how many of everyone who arrived got an
+    // appointment at all.
+    from_previous: index === 0 ? null : ratio(entry.visits, steps[index - 1].visits),
+    from_start: index === 0 ? null : ratio(entry.visits, steps[0].visits),
+  }));
+}
+
+/**
+ * Gate 7: "клиент завершает mobile booking за медиану ≤2 минут после выбора
+ * услуги". Measured per visit, from the first service selection to the
+ * confirmation in the same visit.
+ *
+ * Median rather than average: one client who left the tab open over lunch would
+ * move an average and says nothing about the flow.
+ */
+function timeToBookSeconds(events) {
+  const firstSelection = new Map();
+  const confirmation = new Map();
+
+  for (const row of events) {
+    if (!row.session_key) continue;
+    const at = asDate(row.occurred_at).getTime();
+
+    if (row.event_name === "booking_service_selected") {
+      const known = firstSelection.get(row.session_key);
+      if (known === undefined || at < known) firstSelection.set(row.session_key, at);
+    }
+    if (row.event_name === "booking_confirmed") {
+      const known = confirmation.get(row.session_key);
+      if (known === undefined || at > known) confirmation.set(row.session_key, at);
+    }
+  }
+
+  const durations = [];
+  for (const [session, confirmedAt] of confirmation) {
+    const selectedAt = firstSelection.get(session);
+    if (selectedAt === undefined || confirmedAt < selectedAt) continue;
+    durations.push(Math.round((confirmedAt - selectedAt) / 1_000));
+  }
+
+  return durations;
+}
+
 /**
  * @param bookings rows of `{ status, source, created_at }`
  * @param holds rows of `{ status }`
@@ -42,11 +142,15 @@ export function buildBookingMetricsReport({
   holds = [],
   notifications = [],
   verifications = [],
+  events = [],
   overlaps = 0,
   completions = { completed_bookings: 0, visits_from_bookings: 0 },
   now = new Date(),
 }) {
   const reportTime = asDate(now);
+  const funnel = buildFunnel(events);
+  const timeToBook = timeToBookSeconds(events);
+  const medianTimeToBook = median(timeToBook);
 
   const byStatus = countBy(bookings, "status");
   const bySource = countBy(bookings, "source");
@@ -148,6 +252,13 @@ export function buildBookingMetricsReport({
       300,
       lagSeconds <= 300,
     ),
+    criterion(
+      "time_to_book",
+      "Клиент завершает booking за медиану ≤2 минут после выбора услуги",
+      medianTimeToBook,
+      120,
+      medianTimeToBook !== null && medianTimeToBook <= 120,
+    ),
   ];
 
   return {
@@ -182,7 +293,12 @@ export function buildBookingMetricsReport({
       verification_success_rate: ratio(verified.length, verifications.length),
       verifications_locked_out: lockedOut.length,
       verifications_abandoned: abandoned.length,
+      booking_visits: funnel[0].visits,
+      booking_conversion_rate: funnel[3].from_start,
+      time_to_book_median_seconds: medianTimeToBook,
+      time_to_book_samples: timeToBook.length,
     },
+    funnel,
     criteria,
   };
 }

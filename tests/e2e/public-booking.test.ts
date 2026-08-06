@@ -7,6 +7,7 @@ import {
   clients,
   notificationOutbox,
   organizations,
+  pilotProductEvents,
 } from "@/db/schema";
 import { anonymous, dataOf, errorCodeOf } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -291,6 +292,89 @@ describe("public online booking", () => {
     );
 
     expect(new Date(moved.starts_at).toISOString()).toBe(fifteenLater);
+  });
+
+  test("one visit produces one walk through the funnel", async () => {
+    const visit = crypto.randomUUID();
+    const session = { "x-booking-session": visit };
+    const date = "2026-10-14";
+
+    async function eventsOfVisit() {
+      const rows = await adminDb
+        .select({ name: pilotProductEvents.eventName })
+        .from(pilotProductEvents)
+        .where(eq(pilotProductEvents.sessionKey, visit));
+      return rows.map((row) => row.name).sort();
+    }
+
+    await anonymous.get(
+      `/api/v1/public/booking/green-nails/catalog?location_id=${locationId}`,
+      session,
+    );
+    // Section 7.10 counts visits: opening the page twice is one visit, and the
+    // dedupe key is what makes that true rather than a convention.
+    await anonymous.get(
+      `/api/v1/public/booking/green-nails/catalog?location_id=${locationId}`,
+      session,
+    );
+    expect(await eventsOfVisit()).toEqual(["booking_page_viewed"]);
+
+    const availability = dataOf<{ slots: Slot[] }>(
+      await anonymous.get(
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${date}`,
+        session,
+      ),
+    );
+    const held = dataOf<{ hold_token: string }>(
+      await anonymous.post(
+        "/api/v1/public/booking/green-nails/holds",
+        {
+          location_id: locationId,
+          service_id: studio.serviceId,
+          add_on_ids: [],
+          specialist_id: availability.slots[0].specialist_id,
+          starts_at: availability.slots[0].starts_at,
+        },
+        session,
+      ),
+    );
+    await anonymous.post(
+      "/api/v1/public/booking/green-nails/bookings",
+      {
+        hold_token: held.hold_token,
+        service_id: studio.serviceId,
+        add_on_ids: [],
+        name: "Дарья",
+        phone: "+373 69 616 161",
+        email: null,
+        locale: "ru",
+        legal_accepted: true,
+      },
+      { ...session, "idempotency-key": `funnel-${crypto.randomUUID()}` },
+    );
+
+    expect(await eventsOfVisit()).toEqual([
+      "booking_availability_searched",
+      "booking_confirmed",
+      "booking_page_viewed",
+      "booking_service_selected",
+      "booking_slot_held",
+      "booking_started",
+    ]);
+
+    // A caller with no visit key is not a visit. It still books; it simply does
+    // not appear in a funnel that counts people who opened the page.
+    await anonymous.get(`/api/v1/public/booking/green-nails/catalog?location_id=${locationId}`);
+    const anonymousViews = await adminDb
+      .select({ name: pilotProductEvents.eventName })
+      .from(pilotProductEvents)
+      .where(
+        and(
+          eq(pilotProductEvents.eventName, "booking_page_viewed"),
+          eq(pilotProductEvents.sessionKey, ""),
+        ),
+      );
+    expect(anonymousViews).toEqual([]);
   });
 
   describe("with contact verification switched on", () => {

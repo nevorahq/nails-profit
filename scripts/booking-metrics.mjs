@@ -36,7 +36,7 @@ const sql = postgres(url, { max: 1, prepare: false });
 try {
   const since = sql`now() - ${`${days} days`}::interval`;
 
-  const [bookings, holds, notifications, verifications, overlapRows, completionRows] =
+  const [bookings, holds, notifications, verifications, events, overlapRows, completionRows] =
     await Promise.all([
       sql`select status, source, created_at from booking where created_at >= ${since}`,
       sql`select status from booking_hold where created_at >= ${since}`,
@@ -45,6 +45,16 @@ try {
             from notification_outbox where created_at >= ${since}`,
       sql`select verified_at, attempts, expires_at
             from booking_verification where created_at >= ${since}`,
+      /**
+       * The funnel of section 7.10. Only the events a public visit produced —
+       * the session key is what makes them countable per visit — plus the
+       * completions, which a member of staff records days later with no visit
+       * around them.
+       */
+      sql`select event_name, entity_id, session_key, occurred_at
+            from pilot_product_event
+           where occurred_at >= ${since}
+             and (session_key <> '' or event_name = 'booking_completed')`,
       /**
        * The invariant Gate 7 states outright: "ни одна пара активных bookings
        * не пересекается у одного мастера или рабочего места". The exclusion
@@ -77,6 +87,7 @@ try {
     holds,
     notifications,
     verifications,
+    events,
     // Each overlapping pair is counted from both sides.
     overlaps: Math.floor(overlapRows[0].overlaps / 2),
     completions: completionRows[0],

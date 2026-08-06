@@ -5,7 +5,7 @@ import { parseLocalDate } from "@/domain/timezone";
 import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { loadPublicAvailability } from "@/lib/public-booking-availability";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
-import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
+import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_AVAILABILITY_RULE } from "@/lib/rate-limit";
 
 const querySchema = z.object({
@@ -54,6 +54,7 @@ async function handleGet(
   });
   if (!result) return publicNotFound(id);
 
+  const sessionKey = publicSessionKey(request);
   await withTenant(result.organizationId, async (tx) => {
     await recordPilotProductEvent(tx, {
       organizationId: result.organizationId,
@@ -63,6 +64,7 @@ async function handleGet(
       source: "api",
       entityType: "service",
       entityId: parsed.data.service_id,
+      sessionKey,
     });
     await recordPilotProductEvent(tx, {
       organizationId: result.organizationId,
@@ -72,6 +74,7 @@ async function handleGet(
       source: "api",
       entityType: "service",
       entityId: parsed.data.service_id,
+      sessionKey,
     });
   });
 

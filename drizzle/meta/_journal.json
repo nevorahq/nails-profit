@@ -148,6 +148,13 @@
       "when": 1786006674545,
       "tag": "0020_striped_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786010901784,
+      "tag": "0021_lucky_elektra",
+      "breakpoints": true
     }
   ]
 }

@@ -20,7 +20,7 @@ import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { findPublicOrganization } from "@/lib/public-booking";
-import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
+import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_CREATE_RULE } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
@@ -135,6 +135,7 @@ async function handlePost(
   if (!organization || organization.id !== holdToken.organizationId) return publicNotFound(id);
 
   const now = new Date();
+  const sessionKey = publicSessionKey(request);
   const fingerprint = fingerprintOf(parsed.data);
 
   try {
@@ -262,6 +263,7 @@ async function handlePost(
         source: "api",
         entityType: "booking",
         entityId: created.bookingId,
+        sessionKey,
       });
       if (created.status === "confirmed") {
         await recordPilotProductEvent(tx, {
@@ -272,6 +274,7 @@ async function handlePost(
           source: "api",
           entityType: "booking",
           entityId: created.bookingId,
+          sessionKey,
         });
       }
 

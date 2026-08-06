@@ -62,6 +62,23 @@ export function publicRequest(
   return { id, caller, refused: null };
 }
 
+/**
+ * The visit a public request belongs to, for section 7.10's funnel.
+ *
+ * A UUID the browser mints when the booking page opens and sends back on every
+ * call it makes. Validated rather than trusted: this reaches a unique index and
+ * a report, and an arbitrary string from a caller has no business in either.
+ * Anything else — a script, a curl, a prefetch — simply has no visit, and the
+ * event is recorded without one rather than refused.
+ */
+const SESSION_KEY_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function publicSessionKey(request: Request): string | null {
+  const supplied = request.headers.get("x-booking-session")?.trim().toLowerCase();
+  return supplied && SESSION_KEY_PATTERN.test(supplied) ? supplied : null;
+}
+
 export function publicNotFound(id: string) {
   // Draft, paused, unknown and disabled are deliberately indistinguishable.
   return apiError(404, "BOOKING_PAGE_NOT_FOUND", "This booking page is not available", id);

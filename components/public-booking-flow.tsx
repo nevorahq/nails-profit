@@ -152,13 +152,22 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [codeError, setCodeError] = useState<string | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  /**
+   * One anonymous visit, for section 7.10's funnel. Minted here and forgotten
+   * when the tab closes: it identifies a sitting at this form, not a person and
+   * not a device, and the server records it only against product events.
+   */
+  const [sessionKey] = useState(() => crypto.randomUUID());
+  const sessionHeader = useMemo(() => ({ "x-booking-session": sessionKey }), [sessionKey]);
 
   const money = (amount: number) =>
     formatMoneyMinor(amount, profile.currency, localeTag(profile.locale));
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/v1/public/booking/${profile.slug}/catalog?location_id=${locationId}`)
+    fetch(`/api/v1/public/booking/${profile.slug}/catalog?location_id=${locationId}`, {
+      headers: { "x-booking-session": sessionKey },
+    })
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok) throw new Error(body?.error?.message ?? "catalog");
@@ -183,7 +192,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     return () => {
       active = false;
     };
-  }, [locationId, profile.slug, t]);
+  }, [locationId, profile.slug, sessionKey, t]);
 
   useEffect(() => {
     if (Object.keys(fieldErrors).length > 0 || codeError) errorSummaryRef.current?.focus();
@@ -209,7 +218,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     const send = (challengeHeader: Record<string, string> = {}) =>
       fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json", ...extraHeaders, ...challengeHeader },
+        headers: {
+          "content-type": "application/json",
+          ...sessionHeader,
+          ...extraHeaders,
+          ...challengeHeader,
+        },
         body: JSON.stringify(body),
       });
 
@@ -241,6 +255,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     try {
       const response = await fetch(
         `/api/v1/public/booking/${profile.slug}/availability?${query.toString()}`,
+        { headers: sessionHeader },
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
