@@ -5,8 +5,10 @@ import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import type { MemberRole } from "@/domain/rbac";
-import { isPilotAccessEnforced } from "@/env";
+import { getPublicAppUrl, isPilotAccessEnforced } from "@/env";
 import { auth } from "@/lib/auth";
+import { checkRequestOrigin } from "@/lib/csrf";
+import { logEvent } from "@/lib/logger";
 
 export type ActiveMembership = Readonly<{
   userId: string;
@@ -23,7 +25,26 @@ export type ActiveMembership = Readonly<{
 export async function getActiveMembership(): Promise<
   { session: false } | { session: true; membership: ActiveMembership | null; userId: string }
 > {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const requestHeaders = await headers();
+
+  // Section 7.6 applies CSRF protection to cookie-authenticated mutations. It
+  // lives here rather than in each of the twenty-six handlers because this is
+  // the one function all of them already call — including the multipart import
+  // upload, which is the request a cross-site form can actually forge.
+  if (checkRequestOrigin(requestHeaders, getPublicAppUrl()) === "refuse") {
+    logEvent(
+      "warn",
+      "security.cross_site_refused",
+      {},
+      { sec_fetch_site: requestHeaders.get("sec-fetch-site") },
+    );
+    // The session exists; it simply does not count for a request the browser
+    // says came from someone else's page. The caller answers 401 as it would
+    // for any request without one.
+    return { session: false };
+  }
+
+  const session = await auth.api.getSession({ headers: requestHeaders });
   if (!session) return { session: false };
 
   const [row] = await db
