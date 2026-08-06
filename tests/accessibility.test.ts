@@ -143,6 +143,7 @@ describe("localization", () => {
     "components/public-booking-flow.tsx",
     "components/public-booking-manage.tsx",
     "components/calendar-board.tsx",
+    "components/booking-setup.tsx",
   ];
 
   it("keeps the booking screens free of text the dictionary does not own", () => {
