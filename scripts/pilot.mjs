@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import postgres from "postgres";
-
 import { buildPilotGateReport, parsePilotArgs } from "./pilot-core.mjs";
+import { openOperatorConnection } from "./ops-connection.mjs";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WAVES = new Set(["demo", "design_partner", "first_paid", "extended"]);
@@ -320,19 +319,20 @@ function usage() {
 Write commands require ALLOW_PILOT_OPERATOR_WRITE=1.`;
 }
 
-const databaseUrl =
-  process.env.PILOT_DATABASE_URL ?? process.env.MIGRATION_DATABASE_URL;
-if (!databaseUrl) {
-  fail("PILOT_DATABASE_URL or MIGRATION_DATABASE_URL is required; the tenant app role cannot produce a global report");
-}
-
 const { command, values } = parsePilotArgs(process.argv.slice(2));
 if (!command || command === "help") {
   console.log(usage());
   process.exit(0);
 }
 
-const sql = postgres(databaseUrl, { max: 1, prepare: false });
+// Naming the variable is not enough on its own: pointed at the application's
+// role, every one of these commands would read an empty database and write
+// nothing that a policy lets through.
+const sql = await openOperatorConnection(process.env, [
+  "PILOT_DATABASE_URL",
+  "MIGRATION_DATABASE_URL",
+]);
+
 try {
   const result =
     command === "report"

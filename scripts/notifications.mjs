@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import postgres from "postgres";
+import { openOperatorConnection } from "./ops-connection.mjs";
 
 /**
  * The scheduler section 7.7 asks for: it drains the notification outbox.
@@ -19,12 +19,6 @@ import postgres from "postgres";
  *
  *   OPS_API_TOKEN=… node scripts/notifications.mjs [--dry-run] [--limit 50]
  */
-const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-if (!url) {
-  console.error("Set MIGRATION_DATABASE_URL or DATABASE_URL");
-  process.exit(2);
-}
-
 const token = process.env.OPS_API_TOKEN;
 const appUrl = (process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
 const dryRun = process.argv.includes("--dry-run");
@@ -48,7 +42,13 @@ if (!dryRun && (!token || !appUrl)) {
  */
 const STALE_PROCESSING_MINUTES = 15;
 
-const sql = postgres(url, { max: 1, prepare: false });
+let sql;
+try {
+  sql = await openOperatorConnection(process.env);
+} catch (error) {
+  console.error(error.message);
+  process.exit(2);
+}
 
 function line(event, fields) {
   console.log(JSON.stringify({ level: "info", event, timestamp: new Date().toISOString(), ...fields }));

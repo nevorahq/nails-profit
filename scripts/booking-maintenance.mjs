@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import postgres from "postgres";
+import { openOperatorConnection } from "./ops-connection.mjs";
 
 /**
  * The repair job section 7.5 asks for: "истёкшие holds освобождаются запросом и
@@ -21,14 +21,15 @@ import postgres from "postgres";
  *
  *   node scripts/booking-maintenance.mjs [--dry-run]
  */
-const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-if (!url) {
-  console.error("Set MIGRATION_DATABASE_URL or DATABASE_URL");
+const dryRun = process.argv.includes("--dry-run");
+
+let sql;
+try {
+  sql = await openOperatorConnection(process.env);
+} catch (error) {
+  console.error(error.message);
   process.exit(2);
 }
-
-const dryRun = process.argv.includes("--dry-run");
-const sql = postgres(url, { max: 1, prepare: false });
 
 function line(event, fields) {
   // The same one-line JSON the application logs, so one collector reads both.

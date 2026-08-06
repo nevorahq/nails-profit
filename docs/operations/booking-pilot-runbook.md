@@ -238,7 +238,7 @@ MIGRATION_DATABASE_URL='<privileged-operator-url>' npm run ops:booking-metrics -
 npm run ops:log-events -- <вчерашний редактированный экспорт>
 ```
 
-Переменную указывать явно. `ops:booking-metrics` — отчёт по всей базе, и при отсутствии `MIGRATION_DATABASE_URL` он молча берёт `DATABASE_URL`. Это tenant-scoped роль под forced RLS без выставленной организации: запросы вернут ноль строк, отчёт напечатает `bookings_total: 0` и `NOT_READY`, и это будет выглядеть как результат, а не как неверная конфигурация. Первое, что нужно проверить у неожиданно пустого отчёта, — какой URL он получил. `ops:log-events` в базу не ходит вообще.
+`ops:booking-metrics` читает всю базу и проверяет роль перед первым запросом: если подключение подпадает под tenant-политики, команда отказывается работать и называет переменную, а не отдаёт нули. То же у `ops:booking-maintenance`, `ops:notifications` и `pilot:ops`. `ops:log-events` в базу не ходит вообще.
 
 Что откуда:
 

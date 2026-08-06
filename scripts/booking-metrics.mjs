@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import postgres from "postgres";
-
 import { buildBookingMetricsReport } from "./booking-metrics-core.mjs";
+import { openOperatorConnection } from "./ops-connection.mjs";
 
 /**
  * The operator view of section 7.10, and the half of Gate 7 that can be
@@ -18,12 +17,6 @@ import { buildBookingMetricsReport } from "./booking-metrics-core.mjs";
  *
  *   node scripts/booking-metrics.mjs [--days 30]
  */
-const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-if (!url) {
-  console.error("Set MIGRATION_DATABASE_URL or DATABASE_URL");
-  process.exit(2);
-}
-
 const daysIndex = process.argv.indexOf("--days");
 const days = daysIndex === -1 ? 30 : Number(process.argv[daysIndex + 1]);
 if (!Number.isInteger(days) || days < 1 || days > 365) {
@@ -31,7 +24,13 @@ if (!Number.isInteger(days) || days < 1 || days > 365) {
   process.exit(2);
 }
 
-const sql = postgres(url, { max: 1, prepare: false });
+let sql;
+try {
+  sql = await openOperatorConnection(process.env);
+} catch (error) {
+  console.error(error.message);
+  process.exit(2);
+}
 
 try {
   const since = sql`now() - ${`${days} days`}::interval`;
