@@ -13,7 +13,7 @@ import {
 import { bookingLinesOf, loadBooking, rescheduleBooking } from "@/lib/booking-service";
 import { alternativeSlots, assertAssignable, describeAlternatives, loadSlotContext } from "@/lib/availability-service";
 import { isExclusionViolation } from "@/lib/db-errors";
-import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, requestId, toFieldErrors, timedRoute } from "@/lib/http";
 import { logEvent } from "@/lib/logger";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 
@@ -38,7 +38,7 @@ const rescheduleSchema = z.object({
   version: z.int().positive(),
 });
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+async function handlePost(request: Request, context: { params: Promise<{ id: string }> }) {
   const id = requestId(request);
   const caller = await requireCalendarCaller(id, "write");
   if (!caller.ok) return caller.response;
@@ -222,3 +222,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     throw error;
   }
 }
+
+/** Section 7.10 measures this route; see `timedRoute`. */
+export const POST = timedRoute("staff.booking.reschedule", handlePost);

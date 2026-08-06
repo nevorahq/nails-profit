@@ -13,7 +13,7 @@ import { notifyBooking, scheduleBookingReminder } from "@/lib/booking-notificati
 import { isContactVerified } from "@/lib/booking-verification";
 import { createBooking } from "@/lib/booking-service";
 import { isExclusionViolation, isUniqueViolation } from "@/lib/db-errors";
-import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
@@ -89,7 +89,7 @@ async function findOrCreateClient(
   return created.id;
 }
 
-export async function POST(
+async function handlePost(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
@@ -342,3 +342,6 @@ export async function POST(
     throw error;
   }
 }
+
+/** Section 7.10 measures this route; see `timedRoute`. */
+export const POST = timedRoute("public.booking.create", handlePost);

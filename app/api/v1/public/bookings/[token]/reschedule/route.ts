@@ -13,7 +13,7 @@ import {
 } from "@/lib/booking-notifications";
 import { loadBooking, rescheduleBooking } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
-import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { loadPublicBookingAccess } from "@/lib/public-booking-access";
@@ -27,7 +27,7 @@ const schema = z.object({
   version: z.int().positive(),
 });
 
-export async function POST(
+async function handlePost(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
@@ -248,3 +248,6 @@ export async function POST(
     throw error;
   }
 }
+
+/** Section 7.10 measures this route; see `timedRoute`. */
+export const POST = timedRoute("public.booking.reschedule", handlePost);

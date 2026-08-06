@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { withTenant } from "@/db/tenant";
 import { parseLocalDate } from "@/domain/timezone";
-import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { loadPublicAvailability } from "@/lib/public-booking-availability";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
@@ -16,7 +16,7 @@ const querySchema = z.object({
   date: z.string(),
 });
 
-export async function GET(
+async function handleGet(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
@@ -80,3 +80,6 @@ export async function GET(
     id,
   );
 }
+
+/** Section 7.10 measures this route; see `timedRoute`. */
+export const GET = timedRoute("public.availability", handleGet);

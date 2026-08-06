@@ -154,6 +154,29 @@ export function logEvent(
 }
 
 /**
+ * How long a request took, as one line a collector can build percentiles from.
+ *
+ * Roadmap section 7.10 asks for p50/p95 of availability and of booking
+ * mutations, and Gate 7 puts numbers on them. Neither can be recovered from the
+ * tables afterwards — a booking row does not remember how long it took to
+ * write — so the duration has to be emitted while it is still known. What is
+ * *not* here is a percentile: one process cannot compute the p95 of a fleet,
+ * and pretending otherwise would produce a number that looks like a measurement.
+ */
+export function logTiming(
+  route: string,
+  startedAt: number,
+  context: LogContext = {},
+  fields: Record<string, unknown> = {},
+) {
+  logEvent("info", "http.timing", context, {
+    route,
+    duration_ms: Math.round(performance.now() - startedAt),
+    ...fields,
+  });
+}
+
+/**
  * A path with its query string removed. Section 15.3 forbids PII in logs, and a
  * search or a filter parameter is the most ordinary way for a phone number to
  * end up in one.

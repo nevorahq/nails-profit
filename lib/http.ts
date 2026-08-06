@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { $ZodIssue } from "zod/v4/core";
 
-import { logEvent } from "@/lib/logger";
+import { logEvent, logTiming } from "@/lib/logger";
 
 /**
  * API envelope from spec section 12.1. Field names are snake_case because the
@@ -93,4 +93,30 @@ export function toFieldErrors(issues: readonly $ZodIssue[]): FieldError[] {
 
 export function apiSuccess<T>(data: T, id: string, status = 200) {
   return NextResponse.json({ data, request_id: id }, { status, headers: { "x-request-id": id } });
+}
+
+/**
+ * Wraps a handler so it says how long it took, roadmap section 7.10.
+ *
+ * Gate 7 puts numbers on the availability search and on booking mutations —
+ * p95 of 500 ms and 800 ms — and neither can be reconstructed from the tables
+ * afterwards. A wrapper rather than a line before each `return`, because these
+ * handlers refuse in a dozen places and the slow request is exactly the one
+ * that takes an unusual path out.
+ */
+export function timedRoute<A extends unknown[]>(
+  route: string,
+  handler: (...args: A) => Promise<Response>,
+) {
+  return async (...args: A): Promise<Response> => {
+    const startedAt = performance.now();
+    const response = await handler(...args);
+    logTiming(
+      route,
+      startedAt,
+      { requestId: response.headers.get("x-request-id") ?? undefined },
+      { status: response.status },
+    );
+    return response;
+  };
 }

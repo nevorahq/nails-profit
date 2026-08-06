@@ -4,7 +4,7 @@ import { withTenant } from "@/db/tenant";
 import { recordAuditEvent } from "@/lib/audit";
 import { cancelPendingNotifications, notifyBooking } from "@/lib/booking-notifications";
 import { transitionBooking } from "@/lib/booking-service";
-import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { loadPublicBookingAccess } from "@/lib/public-booking-access";
 import { publicNotFound, publicRequest } from "@/lib/public-booking-http";
@@ -12,7 +12,7 @@ import { PUBLIC_BOOKING_MANAGE_RULE } from "@/lib/rate-limit";
 
 const schema = z.object({ version: z.int().positive() });
 
-export async function POST(
+async function handlePost(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
@@ -83,3 +83,6 @@ export async function POST(
   }
   return apiSuccess({ status: outcome.booking.status, version: outcome.booking.version }, id);
 }
+
+/** Section 7.10 measures this route; see `timedRoute`. */
+export const POST = timedRoute("public.booking.cancel", handlePost);

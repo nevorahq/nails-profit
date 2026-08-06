@@ -18,7 +18,7 @@ import { bookingModuleRefusal, bookingPayload } from "@/lib/booking-http";
 import { notifyBooking, scheduleBookingReminder } from "@/lib/booking-notifications";
 import { bookingLinesOf, createBooking, type BookingStatus } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
-import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { apiError, apiSuccess, requestId, toFieldErrors, timedRoute } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { logEvent } from "@/lib/logger";
 import { getActiveMembership } from "@/lib/membership";
@@ -128,7 +128,7 @@ export async function GET(request: Request) {
   );
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const id = requestId(request);
   const caller = await getActiveMembership();
   if (!caller.session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
@@ -347,3 +347,6 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+
+/** Section 7.10 measures this route; see `timedRoute`. */
+export const POST = timedRoute("staff.booking.create", handlePost);
