@@ -5,7 +5,7 @@
 | Severity | Definition | Examples | Initial response |
 |---|---|---|---:|
 | SEV-1 | Data confidentiality/integrity risk or service unavailable for most users | Cross-tenant access, corrupted financial history, failed production database | 15 minutes |
-| SEV-2 | Critical flow unavailable with no safe workaround | Login, visit close, import confirmation or Owner export fails | 30 minutes |
+| SEV-2 | Critical flow unavailable with no safe workaround | Login, visit close, public booking/manage, staff calendar, notification delivery, import confirmation or Owner export fails | 30 minutes |
 | SEV-3 | Degraded noncritical flow with a workaround | One report/filter or locale issue | Next business day |
 
 ## First 15 minutes
@@ -34,6 +34,15 @@
 4. Restore into a new database and verify before switching traffic.
 5. Monitor health, 5xx and dashboard latency after recovery.
 
+## Online Booking or notification incident
+
+1. Stop expansion to the next pilot organization.
+2. For one tenant, lower `booking_access` to `calendar` or `off`; for a fleet incident disable `PUBLIC_BOOKING_ENABLED`.
+3. If the provider is failing, set `NOTIFICATIONS_ENABLED=false`. Preserve the outbox and do not replay dead letters until the failure is classified.
+4. Verify that existing bookings remain available to staff and the manual visit flow still works.
+5. Check active overlaps, holds, queue/job lag, audit trail and provider acceptance using internal IDs only.
+6. Resume public access tenant by tenant after regression tests, a production smoke test and release-owner approval.
+
 ## Communication template
 
 ```text
@@ -54,4 +63,3 @@ Never promise that no data was affected before the investigation proves it.
 - Add a regression test or monitor for the failure mode.
 - Assign every follow-up an owner and deadline.
 - Complete a blameless review within three business days for SEV-1/2.
-

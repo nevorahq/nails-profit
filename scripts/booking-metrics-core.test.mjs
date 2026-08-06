@@ -12,6 +12,8 @@ function message(overrides = {}) {
     next_attempt_at: new Date("2026-09-10T11:00:00.000Z"),
     scheduled_at: new Date("2026-09-10T11:00:00.000Z"),
     sent_at: new Date("2026-09-10T11:00:01.000Z"),
+    provider_status: "delivered",
+    provider_event_at: new Date("2026-09-10T11:00:02.000Z"),
     ...overrides,
   };
 }
@@ -38,22 +40,85 @@ describe("booking metrics", () => {
     expect(report.metrics.holds_active).toBe(1);
   });
 
-  it("reads the delivery rate from finished messages only", () => {
+  it("reads the on-time delivery rate from eligible messages only", () => {
     const report = buildBookingMetricsReport({
       notifications: [
         message(),
         message(),
-        message({ status: "dead_letter", attempts: 5 }),
+        message({ status: "dead_letter", attempts: 5, provider_status: null, provider_event_at: null }),
         // Still in the queue: it has neither succeeded nor failed, and counting
         // it either way would move the number for no reason.
-        message({ status: "pending", sent_at: null }),
+        message({
+          status: "pending",
+          scheduled_at: new Date("2026-09-10T13:00:00.000Z"),
+          next_attempt_at: new Date("2026-09-10T13:00:00.000Z"),
+          sent_at: null,
+          provider_status: null,
+          provider_event_at: null,
+        }),
       ],
       now: NOW,
     });
 
     expect(report.metrics.notification_delivery_rate).toBe(0.667);
+    expect(report.metrics.notification_provider_acceptance_rate).toBe(0.667);
+    expect(report.metrics.notification_mail_server_delivery_rate).toBe(1);
+    expect(report.metrics.notification_provider_statuses.delivered).toBe(2);
     expect(report.metrics.notifications_queued).toBe(1);
     expect(report.metrics.notifications_dead_letter).toBe(1);
+  });
+
+  it("separates provider acceptance from mail-server delivery outcomes", () => {
+    const report = buildBookingMetricsReport({
+      notifications: [
+        message(),
+        message({ provider_status: "bounced" }),
+        message({ provider_status: "failed" }),
+        message({ provider_status: "delayed" }),
+      ],
+      now: NOW,
+    });
+
+    expect(report.metrics.notification_provider_acceptance_rate).toBe(1);
+    expect(report.metrics.notification_mail_server_delivery_rate).toBe(0.333);
+    expect(report.metrics.notification_provider_statuses).toMatchObject({
+      delivered: 1,
+      bounced: 1,
+      failed: 1,
+      delayed: 1,
+    });
+  });
+
+  it("counts a message still queued after two minutes as a delivery miss", () => {
+    const report = buildBookingMetricsReport({
+      notifications: [
+        message(),
+        message({ status: "processing", sent_at: null }),
+      ],
+      now: NOW,
+    });
+
+    expect(report.metrics.notification_provider_acceptance_rate).toBe(1);
+    expect(report.metrics.notification_delivery_rate).toBe(0.5);
+    expect(report.metrics.notifications_overdue_delivery).toBe(1);
+  });
+
+  it("does not count a late provider handoff toward the two-minute gate", () => {
+    const report = buildBookingMetricsReport({
+      notifications: [
+        message(),
+        message({ sent_at: new Date("2026-09-10T11:02:01.000Z") }),
+      ],
+      now: NOW,
+    });
+
+    expect(report.metrics.notification_provider_acceptance_rate).toBe(1);
+    expect(report.metrics.notification_delivery_rate).toBe(0.5);
+    expect(report.metrics.notifications_sent_within_two_minutes).toBe(1);
+    expect(report.criteria.find((row) => row.key === "notification_delivery_rate")).toMatchObject({
+      actual: 0.5,
+      passed: false,
+    });
   });
 
   it("has no delivery rate before anything has been sent", () => {

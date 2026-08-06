@@ -3,6 +3,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { bookingHolds, bookingVerifications } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { normalizePhone } from "@/domain/phone";
+import { getPublicNotificationChannel } from "@/env";
 import {
   generateVerificationCode,
   hashVerificationCode,
@@ -48,19 +49,20 @@ export type VerificationChallenge = Readonly<{
 /**
  * Issues (or replaces) the code for a hold.
  *
- * SMS when there is a phone, which for this flow is always: the public form
- * requires one and an email is optional. Replacing rather than adding, because
- * two live codes for one slot means the older SMS — the one that arrived
- * first — silently stops working.
+ * The configured provider decides which contact is proved. Resend is email,
+ * while the development log adapter keeps the historical SMS-first path.
+ * Replacing rather than adding, because two live codes for one slot means the
+ * older message — the one that arrived first — silently stops working.
  */
 export async function requestVerification(
   tx: TenantTransaction,
   input: VerificationRequestInput,
 ): Promise<VerificationChallenge | null> {
   const phone = normalizePhone(input.phone);
-  const destination = phone ?? input.email?.trim().toLowerCase() ?? null;
+  const email = input.email?.trim().toLowerCase() || null;
+  const channel = getPublicNotificationChannel();
+  const destination = channel === "email" ? email : phone;
   if (!destination) return null;
-  const channel = phone ? "sms" : "email";
 
   const code = generateVerificationCode();
   const expiresAt = new Date(input.now.getTime() + input.ttlMinutes * 60_000);

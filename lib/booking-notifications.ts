@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { bookingSettings, bookings, clients, notificationOutbox } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { reminderTimeFor } from "@/domain/notification-schedule";
+import { getNotificationProviderName } from "@/env";
 import type { BookingNotificationTemplate } from "@/lib/notification-message";
 
 export type { BookingNotificationTemplate };
@@ -141,10 +142,15 @@ export async function notifyBooking(
     .limit(1);
   if (!client) return [] as Channel[];
 
-  const channels: Channel[] = [
-    ...(client.phone ? (["sms"] as const) : []),
-    ...(client.email ? (["email"] as const) : []),
-  ];
+  const channels: Channel[] =
+    getNotificationProviderName() === "resend"
+      ? client.email
+        ? ["email"]
+        : []
+      : [
+          ...(client.phone ? (["sms"] as const) : []),
+          ...(client.email ? (["email"] as const) : []),
+        ];
 
   for (const channel of channels) {
     await enqueueBookingNotification(tx, {

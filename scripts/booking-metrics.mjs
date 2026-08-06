@@ -40,7 +40,8 @@ try {
     await Promise.all([
       sql`select status, source, created_at from booking where created_at >= ${since}`,
       sql`select status from booking_hold where created_at >= ${since}`,
-      sql`select status, template, attempts, next_attempt_at, scheduled_at, sent_at
+      sql`select status, template, attempts, next_attempt_at, scheduled_at, sent_at,
+                 provider_status, provider_event_at
             from notification_outbox where created_at >= ${since}`,
       sql`select verified_at, attempts, expires_at
             from booking_verification where created_at >= ${since}`,

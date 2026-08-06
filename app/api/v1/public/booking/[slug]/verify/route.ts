@@ -4,6 +4,7 @@ import { withTenant } from "@/db/tenant";
 import { parseBookingToken } from "@/domain/booking-token";
 import { normalizeVerificationCode } from "@/domain/verification-code";
 import { supportedLocales } from "@/i18n/messages";
+import { getPublicNotificationChannel } from "@/env";
 import { loadSlotContext } from "@/lib/availability-service";
 import { confirmVerification, liveHoldFor, requestVerification } from "@/lib/booking-verification";
 import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
@@ -114,9 +115,13 @@ export async function POST(
       case "NOT_REQUIRED":
         return apiError(409, "VERIFICATION_NOT_REQUIRED", "This page does not verify contacts", id);
       case "INVALID_CONTACT":
-        return apiError(422, "INVALID_PHONE", "The phone number is invalid", id, {
-          fieldErrors: [{ field: "phone", code: "invalid_format", message: "Invalid phone number" }],
-        });
+        return getPublicNotificationChannel() === "email"
+          ? apiError(422, "INVALID_EMAIL", "A valid email is required", id, {
+              fieldErrors: [{ field: "email", code: "invalid_format", message: "Invalid email" }],
+            })
+          : apiError(422, "INVALID_PHONE", "The phone number is invalid", id, {
+              fieldErrors: [{ field: "phone", code: "invalid_format", message: "Invalid phone number" }],
+            });
       case "NOT_FOUND":
         return publicNotFound(id);
     }

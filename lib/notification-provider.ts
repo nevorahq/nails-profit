@@ -1,4 +1,4 @@
-import { getNotificationProviderName } from "@/env";
+import { getNotificationProviderName, getResendConfig } from "@/env";
 import { logEvent } from "@/lib/logger";
 
 /**
@@ -22,6 +22,8 @@ export type OutgoingMessage = Readonly<{
   body: string;
   /** Handed to the provider so its own deduplication sees a retry as a retry. */
   idempotencyKey: string;
+  /** Non-PII routing metadata echoed by Resend in signed webhook events. */
+  tags?: readonly Readonly<{ name: string; value: string }>[];
 }>;
 
 export type DeliveryResult =
@@ -62,6 +64,71 @@ export const logNotificationProvider: NotificationProvider = {
   },
 };
 
+type ResendError = Readonly<{ name?: unknown }>;
+
+function resendErrorCode(body: ResendError | null, status: number) {
+  const name = typeof body?.name === "string" ? body.name : `http_${status}`;
+  return `resend_${name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80)}`;
+}
+
+function resendFailureIsRetryable(status: number, body: ResendError | null) {
+  if (body?.name === "concurrent_idempotent_requests") return true;
+  return status === 408 || status === 429 || status >= 500;
+}
+
+/**
+ * Resend's REST adapter. Kept behind the existing provider interface so the
+ * transactional outbox, retry schedule and dead-letter policy remain the
+ * source of truth. Resend receives the same logical idempotency key on every
+ * attempt; it retains those keys for 24 hours while our outbox prevents a
+ * logical send from being recreated later.
+ */
+export function createResendNotificationProvider(
+  config: Readonly<{ apiKey: string; from: string }>,
+  fetchImpl: typeof fetch = fetch,
+): NotificationProvider {
+  return {
+    name: "resend",
+    async send(message) {
+      if (message.channel !== "email") {
+        return { ok: false, code: "resend_unsupported_channel", retryable: false };
+      }
+
+      const response = await fetchImpl("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${config.apiKey}`,
+          "content-type": "application/json",
+          "idempotency-key": message.idempotencyKey,
+          "user-agent": "nail-profit-os/0.1",
+        },
+        body: JSON.stringify({
+          from: config.from,
+          to: [message.destination],
+          subject: message.subject,
+          text: message.body,
+          ...(message.tags ? { tags: message.tags } : {}),
+        }),
+      });
+
+      const body = (await response.json().catch(() => null)) as
+        | Readonly<{ id?: unknown; name?: unknown }>
+        | null;
+      if (response.ok) {
+        return typeof body?.id === "string" && body.id.length > 0
+          ? { ok: true, providerMessageId: body.id }
+          : { ok: false, code: "resend_invalid_response", retryable: true };
+      }
+
+      return {
+        ok: false,
+        code: resendErrorCode(body, response.status),
+        retryable: resendFailureIsRetryable(response.status, body),
+      };
+    },
+  };
+}
+
 let override: NotificationProvider | null = null;
 
 /** Tests install a provider that fails on purpose; nothing else calls this. */
@@ -71,6 +138,7 @@ export function setNotificationProvider(provider: NotificationProvider | null) {
 
 export function notificationProvider(): NotificationProvider {
   if (override) return override;
-  getNotificationProviderName();
-  return logNotificationProvider;
+  return getNotificationProviderName() === "resend"
+    ? createResendNotificationProvider(getResendConfig())
+    : logNotificationProvider;
 }

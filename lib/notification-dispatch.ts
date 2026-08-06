@@ -198,6 +198,7 @@ async function finalize(
           ? {
               sentAt: now,
               providerMessageId: outcome.providerMessageId,
+              providerStatus: "accepted",
               lastErrorCode: null,
               // The one-time code has left the building; it must not outlive
               // the send it was written for.
@@ -256,6 +257,10 @@ async function prepare(
       subject: rendered.subject,
       body: rendered.body,
       idempotencyKey: row.idempotencyKey,
+      tags: [
+        { name: "organization_id", value: organizationId },
+        { name: "notification_id", value: row.id },
+      ],
     },
   };
 }

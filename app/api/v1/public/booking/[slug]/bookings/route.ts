@@ -6,6 +6,7 @@ import { withTenant, type TenantTransaction } from "@/db/tenant";
 import { normalizePhone } from "@/domain/phone";
 import { parseBookingToken } from "@/domain/booking-token";
 import { supportedLocales } from "@/i18n/messages";
+import { getPublicNotificationChannel } from "@/env";
 import { loadBookingDraft, loadSlotContext } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
 import { issueManageLink, managePath } from "@/lib/booking-manage-link";
@@ -112,6 +113,11 @@ async function handlePost(
   if (!parsed.success) {
     return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
       fieldErrors: toFieldErrors(parsed.error.issues),
+    });
+  }
+  if (getPublicNotificationChannel() === "email" && !parsed.data.email) {
+    return apiError(422, "INVALID_EMAIL", "A valid email is required", id, {
+      fieldErrors: [{ field: "email", code: "required", message: "Email is required" }],
     });
   }
   const normalizedPhone = normalizePhone(parsed.data.phone);

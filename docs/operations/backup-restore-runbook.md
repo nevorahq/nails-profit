@@ -32,9 +32,9 @@ Backup restore drill passed. Temporary database will now be removed.
 1. Record incident/change ID, backup timestamp and expected RPO.
 2. Restore into a new staging database, never over the source.
 3. Apply no new migrations until the restored version is identified.
-4. Verify migration count, tenant count and counts for `financial_snapshot`, `visit`, `service` and `material`.
+4. Verify migration count, tenant count and counts for `financial_snapshot`, `visit`, `service`, `material`, `booking`, `booking_line`, `booking_hold`, `booking_access_token`, `notification_outbox` and `notification_provider_event`.
 5. Run `npm run test:integration` against the restored database.
-6. Start the application against the restored database and verify login, one dashboard, one historical visit and an Owner export.
+6. Start the application against the restored database and verify login, one dashboard, one historical visit, one booking with its lines/audit history, staff calendar/list and an Owner export. Never send restored notifications to a real provider.
 7. Record start/end time, achieved RPO/RTO, backup ID and any errors.
 8. Destroy the restored copy after the evidence is retained without PII.
 
@@ -52,4 +52,3 @@ For every drill record:
 - row-count fingerprint;
 - elapsed dump, restore and validation time;
 - pass/fail and follow-up owner.
-

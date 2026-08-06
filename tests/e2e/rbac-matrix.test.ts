@@ -150,6 +150,14 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/ops/notifications", body: {} }),
   },
   {
+    route: "/api/v1/webhooks/resend",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Provider callback authenticated by a Svix signature, not a user session; absent without its secret",
+    request: async () => ({ path: "/api/v1/webhooks/resend", body: {} }),
+  },
+  {
     route: "/api/v1/public/bookings/[token]",
     method: "GET",
     allowed: ALL_ROLES,

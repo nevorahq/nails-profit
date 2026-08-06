@@ -32,7 +32,7 @@ function countBy(rows, field) {
 /**
  * @param bookings rows of `{ status, source, created_at }`
  * @param holds rows of `{ status }`
- * @param notifications rows of `{ status, template, attempts, next_attempt_at, scheduled_at, sent_at }`
+ * @param notifications rows of `{ status, template, attempts, next_attempt_at, scheduled_at, sent_at, provider_status, provider_event_at }`
  * @param verifications rows of `{ verified_at, attempts, expires_at }`
  * @param overlaps the count of active bookings sharing a specialist or a chair
  * @param completions `{ completed_bookings, visits_from_bookings }`
@@ -57,11 +57,24 @@ export function buildBookingMetricsReport({
   const converted = holdsByStatus.converted ?? 0;
   const finishedHolds = converted + (holdsByStatus.expired ?? 0) + (holdsByStatus.released ?? 0);
 
-  const queued = notifications.filter((row) => row.status === "pending" || row.status === "retry");
+  const queued = notifications.filter(
+    (row) => row.status === "pending" || row.status === "retry" || row.status === "processing",
+  );
   const due = queued.filter((row) => asDate(row.next_attempt_at) <= reportTime);
   const sent = notifications.filter((row) => row.status === "sent");
   const deadLetters = notifications.filter((row) => row.status === "dead_letter");
   const finishedMessages = sent.length + deadLetters.length;
+  const sentWithinTwoMinutes = sent.filter((row) => {
+    if (row.sent_at === null || row.sent_at === undefined) return false;
+    const elapsed = asDate(row.sent_at).getTime() - asDate(row.scheduled_at).getTime();
+    return elapsed >= 0 && elapsed <= 120_000;
+  });
+  // A message that is still queued after its two-minute delivery window is
+  // already a miss. Excluding it until it eventually succeeds or dead-letters
+  // would make a stopped scheduler look better precisely while it is stopped.
+  const overdueUnfinished = queued.filter(
+    (row) => reportTime.getTime() - asDate(row.scheduled_at).getTime() > 120_000,
+  );
 
   // Job lag: how long the oldest message that should already have gone has been
   // waiting. A scheduler that stops running shows up here and nowhere else.
@@ -76,7 +89,22 @@ export function buildBookingMetricsReport({
     (row) => row.verified_at === null && row.attempts === 0 && asDate(row.expires_at) <= reportTime,
   );
 
-  const deliveryRate = ratio(sent.length, finishedMessages);
+  const providerAcceptanceRate = ratio(sent.length, finishedMessages);
+  const providerStatuses = countBy(
+    notifications.filter((row) => row.provider_status),
+    "provider_status",
+  );
+  const providerFinished =
+    (providerStatuses.delivered ?? 0) +
+    (providerStatuses.bounced ?? 0) +
+    (providerStatuses.complained ?? 0) +
+    (providerStatuses.failed ?? 0) +
+    (providerStatuses.suppressed ?? 0);
+  const mailServerDeliveryRate = ratio(providerStatuses.delivered ?? 0, providerFinished);
+  const onTimeDeliveryRate = ratio(
+    sentWithinTwoMinutes.length,
+    finishedMessages + overdueUnfinished.length,
+  );
   const criteria = [
     criterion(
       "no_overlapping_bookings",
@@ -101,10 +129,10 @@ export function buildBookingMetricsReport({
     ),
     criterion(
       "notification_delivery_rate",
-      "Минимум 95% transactional-уведомлений переданы provider",
-      deliveryRate,
+      "Минимум 95% transactional-уведомлений переданы provider в течение двух минут",
+      onTimeDeliveryRate,
       0.95,
-      deliveryRate !== null && deliveryRate >= 0.95,
+      onTimeDeliveryRate !== null && onTimeDeliveryRate >= 0.95,
     ),
     criterion(
       "no_dead_letters",
@@ -139,9 +167,14 @@ export function buildBookingMetricsReport({
       hold_conversion_rate: ratio(converted, finishedHolds),
       notifications_queued: queued.length,
       notifications_due: due.length,
+      notifications_overdue_delivery: overdueUnfinished.length,
       notifications_sent: sent.length,
+      notifications_sent_within_two_minutes: sentWithinTwoMinutes.length,
       notifications_dead_letter: deadLetters.length,
-      notification_delivery_rate: deliveryRate,
+      notification_provider_acceptance_rate: providerAcceptanceRate,
+      notification_provider_statuses: providerStatuses,
+      notification_mail_server_delivery_rate: mailServerDeliveryRate,
+      notification_delivery_rate: onTimeDeliveryRate,
       notification_job_lag_seconds: lagSeconds,
       notification_retry_backlog: queued.filter((row) => row.status === "retry").length,
       verifications_issued: verifications.length,

@@ -99,10 +99,15 @@ describe("public online booking", () => {
   }
 
   test("profile and catalogue expose only the published booking DTO", async () => {
-    const profile = dataOf<{ name: string; locations: { id: string }[] }>(
+    const profile = dataOf<{
+      name: string;
+      notification_channel: string;
+      locations: { id: string }[];
+    }>(
       await anonymous.get("/api/v1/public/booking/green-nails"),
     );
     expect(profile.name).toBe("Green Nails");
+    expect(profile.notification_channel).toBe("sms");
     expect(profile.locations).toEqual([expect.objectContaining({ id: locationId })]);
 
     const catalog = dataOf<{ services: { id: string; name: string; price_minor: number }[] }>(
@@ -425,6 +430,60 @@ describe("public online booking", () => {
       // Section 7.9: verification binds a contact, not merely a session.
       const refused = await createWith({ phone: "+373 69 111 222" });
       expect(errorCodeOf(refused)).toBe("VERIFICATION_REQUIRED");
+    });
+
+    test("Resend verifies email and never queues an SMS", async () => {
+      process.env.NOTIFICATION_PROVIDER = "resend";
+      try {
+        await holdOne("2026-10-14");
+        const requested = await anonymous.post("/api/v1/public/booking/green-nails/verify", {
+          action: "request",
+          hold_token: holdToken,
+          phone: "+373 69 555 777",
+          email: "maria@example.com",
+          locale: "ru",
+        });
+        expect(requested.status).toBe(202);
+        expect(dataOf<{ channel: string }>(requested).channel).toBe("email");
+
+        const [queued] = await adminDb
+          .select()
+          .from(notificationOutbox)
+          .where(
+            and(
+              eq(notificationOutbox.template, "booking.verification_code"),
+              eq(notificationOutbox.status, "pending"),
+            ),
+          )
+          .orderBy(desc(notificationOutbox.createdAt))
+          .limit(1);
+        expect(queued.channel).toBe("email");
+
+        const [challenge] = await adminDb
+          .select()
+          .from(bookingVerifications)
+          .where(eq(bookingVerifications.id, queued.verificationId!));
+        expect(challenge.destination).toBe("maria@example.com");
+
+        await anonymous.post("/api/v1/public/booking/green-nails/verify", {
+          action: "confirm",
+          hold_token: holdToken,
+          code: queued.payload!.code!,
+        });
+        const created = dataOf<{ id: string; status: string }>(
+          await createWith({ email: "maria@example.com" }),
+        );
+        expect(created.status).toBe("confirmed");
+
+        const rows = await adminDb
+          .select({ channel: notificationOutbox.channel })
+          .from(notificationOutbox)
+          .where(eq(notificationOutbox.bookingId, created.id));
+        expect(rows.length).toBeGreaterThan(0);
+        expect(rows.every((row) => row.channel === "email")).toBe(true);
+      } finally {
+        delete process.env.NOTIFICATION_PROVIDER;
+      }
     });
   });
 });

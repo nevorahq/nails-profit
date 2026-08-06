@@ -44,6 +44,7 @@ type Profile = {
   name: string;
   locale: AppLocale;
   currency: "MDL" | "EUR";
+  notification_channel: "email" | "sms";
   locations: Location[];
 };
 
@@ -502,7 +503,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                   code must find what they typed still typed. */}
               <label>{t("publicBooking.name")}<input name="name" autoComplete="name" required minLength={2} defaultValue={contact?.name ?? ""} /></label>
               <label>{t("publicBooking.phone")}<input name="phone" type="tel" autoComplete="tel" required defaultValue={contact?.phone ?? ""} /></label>
-              <label>{t("publicBooking.email")}<input name="email" type="email" autoComplete="email" defaultValue={contact?.email ?? ""} /></label>
+              <label>{t("publicBooking.email")}<input name="email" type="email" autoComplete="email" required={profile.notification_channel === "email"} defaultValue={contact?.email ?? ""} /></label>
               <label>
                 {t("publicBooking.language")}
                 <select name="locale" defaultValue={contact?.locale ?? profile.locale}>

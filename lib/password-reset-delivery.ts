@@ -1,16 +1,19 @@
+import { createHash } from "node:crypto";
+
+import { getNotificationProviderName } from "@/env";
+import { notificationProvider } from "@/lib/notification-provider";
+
 /**
  * Delivery for password reset links, spec section 4.3 ("восстановление доступа").
  *
- * The MVP has no mail transport, and unlike an invitation token this one cannot
- * be handed back through the API: anyone could request a reset for an address
- * they do not own and read the token out of the response. So the link is only
- * ever delivered out of band.
+ * Unlike an invitation token, a reset link cannot be handed back through the
+ * API: anyone could request a reset for an address they do not own and read the
+ * token out of the response. So the link is only ever delivered out of band.
  *
  * In development it goes to the server log. That is deliberately confined to
  * development — spec section 15.3 forbids secrets in logs, and a reset URL is a
- * bearer credential. In production, with no transport wired, the flow fails
- * loudly rather than pretending to have sent something: a recovery that
- * silently does nothing is worse than one that visibly errors.
+ * bearer credential. In production Resend delivers it; any other configured
+ * provider fails loudly rather than pretending to send it.
  *
  * The check happens per request, not at module load, because `next build`
  * evaluates this module with NODE_ENV=production while collecting page data;
@@ -54,8 +57,26 @@ export const productionRefusalDelivery: PasswordResetDelivery = {
   },
 };
 
+/** Production account recovery through the provider chosen for Phase 7. */
+export const resendPasswordResetDelivery: PasswordResetDelivery = {
+  async send({ email, url }) {
+    const result = await notificationProvider().send({
+      channel: "email",
+      destination: email,
+      subject: "Reset your Nail Profit OS password",
+      body: `A password reset was requested for your Nail Profit OS account.\n\n${url}\n\nIf you did not request it, ignore this email. The link expires in one hour.`,
+      // The URL contains a unique bearer token. Hashing keeps that secret out
+      // of Resend's idempotency metadata while preserving retry identity.
+      idempotencyKey: `password-reset/${createHash("sha256").update(url).digest("hex")}`,
+    });
+    if (!result.ok) throw new Error(`PASSWORD_RESET_DELIVERY_FAILED:${result.code}`);
+  },
+};
+
 export function resolvePasswordResetDelivery(
   nodeEnv: string | undefined = process.env.NODE_ENV,
+  provider: "log" | "resend" = getNotificationProviderName(),
 ): PasswordResetDelivery {
-  return nodeEnv === "production" ? productionRefusalDelivery : consolePasswordResetDelivery;
+  if (nodeEnv !== "production") return consolePasswordResetDelivery;
+  return provider === "resend" ? resendPasswordResetDelivery : productionRefusalDelivery;
 }

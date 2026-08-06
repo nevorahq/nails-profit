@@ -18,6 +18,13 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 | Database connections | 5 minutes | ≥70% pool/plan | ≥90% pool/plan | Stop nonessential jobs and inspect slow queries |
 | Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check that `ops:booking-maintenance` is running each minute |
 | Booking slot conflicts | 10 minutes | ≥10 `booking.slot_conflict` | ≥50 | Normal under load; a spike with no traffic means stale availability |
+| Notification job lag | 5 minutes | >120 seconds | >300 seconds | Check `ops:notifications`, provider health and the oldest due row |
+| Notification dead letters | 10 minutes | ≥1 new | ≥5 new | Classify provider response; do not retry permanent address failures blindly |
+| Notification provider acceptance | 30 minutes | <97% with ≥20 finished | <95% with ≥20 finished | Pause rollout; inspect retries/dead letters and Resend API health |
+| Notification mail-server delivery | 30 minutes | <97% with ≥20 outcomes | <95% with ≥20 outcomes | Inspect bounce/failed/suppressed mix and Resend delivery events |
+| Notification complaints | 24 hours | ≥1 | ≥3 | Pause affected template/campaign and investigate consent/content |
+| Verification lockouts | 10 minutes | ≥10 | ≥30 | Check abuse, delivery delay and a broken client retry loop |
+| Bot challenges | 10 minutes | ≥20 | ≥100 | Correlate with rate-limit buckets; do not log the caller address |
 | Exclusion violations | 1 hour | ≥1 `booking.exclusion_violation` | ≥5 | The application check was bypassed or raced — investigate before the next release |
 | Unanswered requests | 1 hour | ≥5 cancelled as `confirmation_expired` | ≥20 | The studio is not seeing its pending requests, or the confirmation TTL is too short |
 | Duplicate completion attempts | 1 hour | ≥1 `BOOKING_ALREADY_COMPLETED` | ≥5 | Two people closed one appointment; the unique index held, but the calendar is showing stale state |
@@ -31,6 +38,8 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 - `booking.slot_conflict` and `booking.exclusion_violation` from booking creation and rescheduling;
 - `booking.confirmed`, `booking.cancelled`, `booking.no_show` and `booking.completed` from the lifecycle endpoints, which carry the booking id and nothing about the client;
 - `booking.maintenance_completed` from the hold sweep, which must appear every minute;
+- `notification.delivered`, `notification.dispatched`, `notification.dead_letter`, signed `notification.webhook_received`/rejected events and the operator job's `notification.dispatch_completed` summary;
+- `http.timing` for the six Gate 7 routes; fleet percentiles are calculated with `npm run ops:booking-latency`;
 - `health.database_failed` from the public health check;
 - audit events in PostgreSQL for export, deletion, invitations and financial changes.
 
@@ -38,7 +47,7 @@ Never alert on raw email, phone, client name, note text, tokens or query strings
 
 ## Dashboard
 
-The minimum operational dashboard shows request count, 4xx/5xx ratio, p50/p95 latency, health status, rate-limit count, database connection usage and timestamp of the latest successful backup/restore drill. Product analytics must remain separate and contain no PII.
+The minimum operational dashboard shows request count, 4xx/5xx ratio, p50/p95 latency, health status, rate-limit count, database connection usage, notification queue/delivery/job lag and timestamp of the latest successful backup/restore drill. Product analytics must remain separate and contain no PII.
 
 ## Verification
 
@@ -48,4 +57,3 @@ Before pilot rollout:
 2. Point the app at an unavailable test database and confirm `503`, `retry-after: 30` and a `health.database_failed` log.
 3. Trigger a controlled application error and confirm `request.error` contains no submitted email/phone.
 4. Trigger a test alert and confirm the on-call recipient acknowledges it.
-

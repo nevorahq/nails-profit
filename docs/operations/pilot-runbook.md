@@ -6,6 +6,8 @@ Phase 6 validates the existing Costing product with real paying organizations. I
 
 Gate 5 must remain healthy throughout the pilot: no open Severity 1–2 defect, financial/RBAC/E2E checks green, alert route acknowledged and a recent restore drill recorded.
 
+After Gate 6, Online Booking is rolled out under its own entry criteria and evidence. Use the separate [Phase 7.5 Online Booking pilot runbook](./booking-pilot-runbook.md); this Phase 6 document does not authorize public booking.
+
 ## Production configuration
 
 Set these only in the server/operator environment:

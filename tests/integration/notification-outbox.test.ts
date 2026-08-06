@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { notificationOutbox } from "@/db/schema";
+import { notificationOutbox, notificationProviderEvents } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { MAX_DELIVERY_ATTEMPTS } from "@/domain/notification-schedule";
 import {
@@ -16,6 +16,7 @@ import {
   type DeliveryResult,
   type OutgoingMessage,
 } from "@/lib/notification-provider";
+import { handleVerifiedResendWebhook } from "@/lib/resend-webhook";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
   createClient,
@@ -108,6 +109,7 @@ describe("notification outbox", () => {
   afterEach(() => {
     setNotificationProvider(null);
     delete process.env.NOTIFICATIONS_ENABLED;
+    delete process.env.NOTIFICATION_PROVIDER;
   });
 
   afterAll(async () => {
@@ -133,6 +135,18 @@ describe("notification outbox", () => {
     expect(sent.every((message) => message.body.includes("Green Nails"))).toBe(true);
   });
 
+  test("Resend queues email only instead of dead-lettering an impossible SMS", async () => {
+    process.env.NOTIFICATION_PROVIDER = "resend";
+    const sent = fakeProvider([]);
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+
+    const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
+    expect(summary).toMatchObject({ claimed: 1, sent: 1, deadLettered: 0 });
+    expect(sent).toEqual([expect.objectContaining({ channel: "email", destination: "client@example.com" })]);
+  });
+
   test("a sent message is not sent again", async () => {
     const sent = fakeProvider([]);
     await withTenant(organizationId, (tx) =>
@@ -150,6 +164,57 @@ describe("notification outbox", () => {
     expect(second.claimed).toBe(0);
     expect(sent).toHaveLength(2);
     expect(await rows()).toHaveLength(2);
+  });
+
+  test("signed provider events are deduplicated and cannot rewind delivery state", async () => {
+    process.env.NOTIFICATION_PROVIDER = "resend";
+    setNotificationProvider({
+      name: "resend-test",
+      async send(message) {
+        return { ok: true, providerMessageId: `resend-${message.channel}` };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    await dispatchDueNotifications({ organizationId, now });
+
+    const [email] = (await rows()).filter((row) => row.channel === "email");
+    const event = (type: string, createdAt: string) => ({
+      type,
+      created_at: createdAt,
+      data: {
+        email_id: "resend-email",
+        tags: { organization_id: organizationId, notification_id: email.id },
+      },
+    });
+
+    await expect(
+      handleVerifiedResendWebhook(event("email.delivered", "2026-09-01T09:02:00.000Z"), "evt-delivered"),
+    ).resolves.toBe("recorded");
+    await expect(
+      handleVerifiedResendWebhook(event("email.delivered", "2026-09-01T09:02:00.000Z"), "evt-delivered"),
+    ).resolves.toBe("duplicate");
+    // A late-arriving historical bounce is retained for diagnosis but must not
+    // replace the chronologically newer delivered summary.
+    await expect(
+      handleVerifiedResendWebhook(event("email.bounced", "2026-09-01T09:01:00.000Z"), "evt-bounced-old"),
+    ).resolves.toBe("recorded");
+
+    const [after] = await rows();
+    expect(after.providerStatus).toBe("delivered");
+    expect(after.providerEventAt?.toISOString()).toBe("2026-09-01T09:02:00.000Z");
+    expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(2);
+  });
+
+  test("provider events without trusted routing tags or message match are acknowledged but ignored", async () => {
+    const common = {
+      type: "email.delivered",
+      created_at: "2026-09-01T09:02:00.000Z",
+      data: { email_id: "unknown", tags: {} },
+    };
+    await expect(handleVerifiedResendWebhook(common, "evt-no-tags")).resolves.toBe("unmatched");
+    expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
   });
 
   test("a temporary failure comes back later, with a growing gap", async () => {

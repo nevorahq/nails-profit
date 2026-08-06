@@ -28,6 +28,7 @@ const TABLES_IN_DELETE_ORDER = [
   "pilot_interaction",
   "pilot_product_event",
   "pilot_enrollment",
+  "notification_provider_event",
   "notification_outbox",
   "booking_verification",
   "booking_access_token",

@@ -1465,6 +1465,16 @@ export const notificationStatus = pgEnum("notification_status", [
   "retry",
   "dead_letter",
 ]);
+export const notificationProviderStatus = pgEnum("notification_provider_status", [
+  "accepted",
+  "sent",
+  "delivered",
+  "delayed",
+  "bounced",
+  "complained",
+  "failed",
+  "suppressed",
+]);
 
 /**
  * A one-time code proving the contact belongs to whoever is booking, section
@@ -1544,6 +1554,9 @@ export const notificationOutbox = pgTable(
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     providerMessageId: text("provider_message_id"),
+    /** Latest chronologically observed provider state, never recipient PII. */
+    providerStatus: notificationProviderStatus("provider_status"),
+    providerEventAt: timestamp("provider_event_at", { withTimezone: true }),
     lastErrorCode: text("last_error_code"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1558,6 +1571,36 @@ export const notificationOutbox = pgTable(
     check(
       "notification_outbox_target",
       sql`(${table.bookingId} is not null) <> (${table.verificationId} is not null)`,
+    ),
+  ],
+);
+
+/**
+ * Resend delivers webhooks at least once and does not guarantee ordering.
+ * Keeping only the provider event id/type/time gives us durable deduplication
+ * and an audit trail without copying recipient, subject or message body.
+ */
+export const notificationProviderEvents = pgTable(
+  "notification_provider_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    notificationId: uuid("notification_id")
+      .notNull()
+      .references(() => notificationOutbox.id, { onDelete: "cascade" }),
+    providerEventId: text("provider_event_id").notNull(),
+    providerMessageId: text("provider_message_id").notNull(),
+    eventType: notificationProviderStatus("event_type").notNull(),
+    eventCreatedAt: timestamp("event_created_at", { withTimezone: true }).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("notification_provider_event_provider_id_idx").on(table.providerEventId),
+    index("notification_provider_event_notification_idx").on(
+      table.notificationId,
+      table.eventCreatedAt,
     ),
   ],
 );

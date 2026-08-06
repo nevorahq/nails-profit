@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { withTenant } from "@/db/tenant";
-import { isPublicBookingEnabled } from "@/env";
+import { getPublicNotificationChannel, isPublicBookingEnabled } from "@/env";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 
@@ -99,6 +99,7 @@ export async function loadPublicProfile(slug: string) {
       name: organization.name,
       locale: organization.locale,
       currency: organization.currency,
+      notification_channel: getPublicNotificationChannel(),
       locations: published satisfies PublicLocation[],
     },
   };
