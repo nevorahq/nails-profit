@@ -55,6 +55,18 @@
 
 .skip-link:focus { transform: translateY(0); }
 
+.sr-only {
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  margin: -1rem;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /*
  * 1rem is one unit of the design, so a value written here is the number from
  * the mock. The mocks are 390 wide on mobile and 1920 on desktop, and both
@@ -292,8 +304,9 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-options label { display: grid; grid-template-columns: 22rem 1fr auto; align-items: center; gap: 10rem; min-height: 44rem; font-size: 15rem; cursor: pointer; }
 .public-booking-options input { width: 20rem; height: 20rem; }
 .public-booking-options small { color: var(--muted); }
-.public-booking-quote { display: flex; align-items: baseline; justify-content: space-between; gap: 18rem; padding: 18rem 20rem; border-radius: 18rem; background: var(--forest-950); color: var(--on-accent); }
+.public-booking-quote { display: flex; align-items: center; justify-content: space-between; gap: 18rem; padding: 18rem 20rem; border-radius: 18rem; background: var(--forest-950); color: var(--on-accent); }
 .public-booking-quote strong { font-family: var(--font-display, inherit); font-size: 30rem; }
+.public-booking-quote div { display: grid; gap: 3rem; text-align: right; }
 .public-booking-quote span { color: var(--sage-300); font-size: 14rem; }
 .public-booking-slots { margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
 .public-booking-slots h2 { margin: 0 0 16rem; }
@@ -305,7 +318,31 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-summary div { display: flex; align-items: baseline; justify-content: space-between; gap: 18rem; }
 .public-booking-summary span, .public-booking-summary p { color: var(--sage-300); font-size: 13rem; }
 .public-booking-summary p { margin: 0; }
-.public-booking-consent { margin: 0; font-size: 14rem; }
+.public-booking-consent { grid-template-columns: 44rem 1fr; align-items: center; margin: 0; font-size: 14rem; cursor: pointer; }
+.public-booking-consent input { appearance: none; display: grid; place-items: center; width: 44rem; height: 44rem; margin: 0; border: 1rem solid var(--sage-600); border-radius: 12rem; background: var(--surface-strong); cursor: pointer; }
+.public-booking-consent input::after { content: ""; width: 9rem; height: 17rem; border: solid var(--on-accent); border-width: 0 3rem 3rem 0; transform: rotate(45deg) scale(0); transition: transform 120ms ease; }
+.public-booking-consent input:checked { background: var(--accent); }
+.public-booking-consent input:checked::after { transform: rotate(45deg) scale(1); }
+.public-booking-consent a { display: inline-flex; min-height: 44rem; align-items: center; margin-block: -12rem; }
+.field-error { color: var(--danger); font-size: 13rem; font-weight: 650; line-height: 1.4; }
+.public-booking-grid [aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
+.public-booking-consent-error { grid-column: 2; }
+.form-error-summary { display: grid; gap: 8rem; padding: 16rem 18rem; border: 1rem solid var(--danger); border-radius: 14rem; background: var(--danger-soft); color: var(--danger); }
+.form-error-summary strong { font-size: 16rem; }
+.form-error-summary ul { margin: 0; padding-left: 20rem; }
+.form-error-summary a { display: inline-flex; align-items: center; min-height: 44rem; color: inherit; font-size: 14rem; font-weight: 650; text-underline-offset: 3rem; }
+.public-booking-status { margin: 22rem 0 0; padding: 14rem 16rem; border-radius: 14rem; background: var(--sage-300); color: var(--forest-950); font-weight: 700; }
+.public-booking-loading { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
+.public-booking-loading > span:not(.sr-only) { min-height: 60rem; border-radius: 14rem; background: linear-gradient(100deg, var(--sage-300) 20%, var(--surface-strong) 45%, var(--sage-300) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
+@keyframes booking-skeleton { to { background-position-x: -220%; } }
+.public-booking-nearest, .public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 20rem; background: var(--surface-strong); }
+.public-booking-nearest h2 { margin: 0 0 16rem; font-size: 22rem; }
+.public-booking-nearest > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; }
+.public-booking-nearest button { display: grid; place-items: center; gap: 3rem; min-height: 64rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 14rem; background: var(--surface); color: var(--ink); cursor: pointer; }
+.public-booking-nearest button:hover { background: var(--sage-300); }
+.public-booking-nearest button span { color: var(--muted); font-size: 12rem; }
+.public-booking-nearest p, .public-booking-empty p { margin-bottom: 0; }
+.public-booking-empty strong { font-size: 18rem; }
 .public-booking-success { margin-top: 14vh; text-align: center; }
 .public-booking-success p { color: var(--muted); margin-bottom: 26rem; }
 .booking-manage-card { display: grid; gap: 22rem; }
@@ -341,10 +378,15 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .public-booking-card { padding: 22rem 16rem; border-radius: 24rem; }
   .public-booking-grid { grid-template-columns: 1fr; }
   .public-booking-slots > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-booking-loading { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-booking-nearest > div { grid-template-columns: 1fr; }
+  .public-booking-quote { align-items: flex-start; }
+  .public-booking-quote div { text-align: right; }
   .public-booking-summary div { display: grid; gap: 2rem; }
   .booking-manage-facts div { grid-template-columns: 1fr; gap: 4rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+  .public-booking-loading > span:not(.sr-only) { animation: none !important; }
 }

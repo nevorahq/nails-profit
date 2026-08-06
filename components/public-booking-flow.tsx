@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { AppLocale } from "@/i18n/messages";
 import { formatMoneyMinor } from "@/lib/format";
+import {
+  validatePublicContact,
+  type PublicContactError,
+  type PublicContactField,
+} from "@/lib/public-booking-ux";
 
 type Location = {
   id: string;
@@ -38,6 +43,9 @@ type Slot = {
   duration_minutes: number;
   price_minor: number;
 };
+
+type NearestDate = { date: string; slot_count: number };
+type PendingAction = "catalog" | "availability" | "hold" | "verification" | "booking" | null;
 
 type Profile = {
   slug: string;
@@ -102,13 +110,17 @@ function challengeOf(body: unknown): Challenge | null {
 }
 
 function apiErrorMessage(body: unknown, fallback: string, t: ReturnType<typeof getTranslator>) {
-  const code = (body as { error?: { code?: string } })?.error?.code;
+  const code = apiErrorCode(body);
   if (code === "SLOT_UNAVAILABLE") return t("publicBooking.slotUnavailable");
   if (code === "HOLD_EXPIRED") return t("publicBooking.holdExpired");
   if (code === "VERIFICATION_FAILED") return t("publicBooking.verifyFailed");
   if (code === "VERIFICATION_EXPIRED") return t("publicBooking.verifyExpired");
   if (code === "VERIFICATION_LOCKED") return t("publicBooking.verifyLocked");
   return fallback;
+}
+
+function apiErrorCode(body: unknown) {
+  return (body as { error?: { code?: string } })?.error?.code ?? null;
 }
 
 export function PublicBookingFlow({ profile }: { profile: Profile }) {
@@ -122,6 +134,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [specialistId, setSpecialistId] = useState("any");
   const [date, setDate] = useState(() => dateInZone(location.timezone));
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [nearestDates, setNearestDates] = useState<NearestDate[]>([]);
   const [searched, setSearched] = useState(false);
   const [held, setHeld] = useState<{ token: string; expiresAt: string; slot: Slot } | null>(null);
   /**
@@ -132,8 +145,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [contact, setContact] = useState<Contact | null>(null);
   const [stage, setStage] = useState<"contact" | "code">("contact");
   const [result, setResult] = useState<{ status: string; manageUrl: string } | null>(null);
-  const [pending, setPending] = useState(true);
+  const [pendingAction, setPendingAction] = useState<PendingAction>("catalog");
+  const pending = pendingAction !== null;
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<PublicContactField, string>>>({});
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const errorSummaryRef = useRef<HTMLDivElement>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const money = (amount: number) =>
@@ -154,15 +171,23 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         setAddOnIds([]);
         setSpecialistId("any");
         setSlots([]);
+        setNearestDates([]);
         setSearched(false);
         setHeld(null);
       })
-      .catch(() => active && setError(t("publicBooking.error")))
-      .finally(() => active && setPending(false));
+      .catch((reason: unknown) => {
+        if (!active) return;
+        setError(reason instanceof TypeError ? t("publicBooking.offline") : t("publicBooking.error"));
+      })
+      .finally(() => active && setPendingAction(null));
     return () => {
       active = false;
     };
   }, [locationId, profile.slug, t]);
+
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length > 0 || codeError) errorSummaryRef.current?.focus();
+  }, [fieldErrors, codeError]);
 
   const quote = useMemo(() => {
     if (!service) return { price: 0, duration: 0 };
@@ -198,52 +223,91 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     return solution ? send({ "x-booking-challenge": `${challenge.nonce}:${solution}` }) : first;
   }
 
-  async function findTimes(event: FormEvent) {
-    event.preventDefault();
+  async function loadTimes(nextDate: string) {
     if (!service) return;
-    setPending(true);
+    setPendingAction("availability");
     setError(null);
     setHeld(null);
     setSearched(false);
+    setSlots([]);
+    setNearestDates([]);
     const query = new URLSearchParams({
       location_id: locationId,
       service_id: service.id,
       add_on_ids: addOnIds.join(","),
       specialist_id: specialistId,
-      date,
+      date: nextDate,
     });
-    const response = await fetch(
-      `/api/v1/public/booking/${profile.slug}/availability?${query.toString()}`,
-    );
-    const body = await response.json().catch(() => null);
-    setPending(false);
-    if (!response.ok) {
-      setError(apiErrorMessage(body, t("publicBooking.error"), t));
-      return;
+    try {
+      const response = await fetch(
+        `/api/v1/public/booking/${profile.slug}/availability?${query.toString()}`,
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        return;
+      }
+      setSlots(body.data.slots);
+      setNearestDates(body.data.nearest_dates ?? []);
+      setSearched(true);
+    } catch {
+      setError(t("publicBooking.offline"));
+    } finally {
+      setPendingAction(null);
     }
-    setSlots(body.data.slots);
-    setSearched(true);
+  }
+
+  async function findTimes(event: FormEvent) {
+    event.preventDefault();
+    await loadTimes(date);
+  }
+
+  async function chooseNearestDate(nextDate: string) {
+    setDate(nextDate);
+    await loadTimes(nextDate);
   }
 
   async function chooseSlot(slot: Slot) {
     if (!service) return;
-    setPending(true);
+    setPendingAction("hold");
     setError(null);
-    const response = await postPublic(`/api/v1/public/booking/${profile.slug}/holds`, {
-      location_id: locationId,
-      service_id: service.id,
-      add_on_ids: addOnIds,
-      specialist_id: slot.specialist_id,
-      starts_at: slot.starts_at,
-    });
-    const body = await response.json().catch(() => null);
-    setPending(false);
-    if (!response.ok) {
-      setError(apiErrorMessage(body, t("publicBooking.error"), t));
-      return;
+    try {
+      const response = await postPublic(`/api/v1/public/booking/${profile.slug}/holds`, {
+        location_id: locationId,
+        service_id: service.id,
+        add_on_ids: addOnIds,
+        specialist_id: slot.specialist_id,
+        starts_at: slot.starts_at,
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        return;
+      }
+      setHeld({ token: body.data.hold_token, expiresAt: body.data.expires_at, slot: body.data.slot });
+      setIdempotencyKey(crypto.randomUUID());
+    } catch {
+      setError(t("publicBooking.offline"));
+    } finally {
+      setPendingAction(null);
     }
-    setHeld({ token: body.data.hold_token, expiresAt: body.data.expires_at, slot: body.data.slot });
-    setIdempotencyKey(crypto.randomUUID());
+  }
+
+  function validationMessage(field: PublicContactField, issue: PublicContactError) {
+    if (field === "name" && issue === "nameTooShort") return t("publicBooking.nameTooShort");
+    if (field === "phone" && issue === "phoneInvalid") return t("publicBooking.phoneInvalid");
+    if (field === "email" && issue === "emailInvalid") return t("publicBooking.emailInvalid");
+    if (field === "legalAccepted") return t("publicBooking.consentRequired");
+    return t("publicBooking.required");
+  }
+
+  function clearFieldError(field: PublicContactField) {
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   }
 
   async function submitContact(event: FormEvent<HTMLFormElement>) {
@@ -251,12 +315,28 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (!service || !held) return;
     const data = new FormData(event.currentTarget);
     const entered: Contact = {
-      name: String(data.get("name") ?? ""),
-      phone: String(data.get("phone") ?? ""),
-      email: String(data.get("email") ?? "") || null,
+      name: String(data.get("name") ?? "").trim(),
+      phone: String(data.get("phone") ?? "").trim(),
+      email: String(data.get("email") ?? "").trim() || null,
       locale: String(data.get("locale") ?? profile.locale),
       legalAccepted: data.get("legalAccepted") === "on",
     };
+    const issues = validatePublicContact(
+      { ...entered, email: entered.email ?? "" },
+      profile.notification_channel === "email",
+    );
+    if (Object.keys(issues).length > 0) {
+      setFieldErrors(
+        Object.fromEntries(
+          Object.entries(issues).map(([field, issue]) => [
+            field,
+            validationMessage(field as PublicContactField, issue as PublicContactError),
+          ]),
+        ),
+      );
+      return;
+    }
+    setFieldErrors({});
     setContact(entered);
 
     if (location.verification_mode === "code") {
@@ -269,69 +349,99 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   /** Section 7.2 step 7: the studio asked for the contact to be proven. */
   async function requestCode(entered: Contact) {
     if (!held) return false;
-    setPending(true);
+    setPendingAction("verification");
     setError(null);
-    const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
-      action: "request",
-      hold_token: held.token,
-      phone: entered.phone,
-      email: entered.email,
-      locale: entered.locale,
-    });
-    const body = await response.json().catch(() => null);
-    setPending(false);
-    if (!response.ok) {
-      setError(apiErrorMessage(body, t("publicBooking.error"), t));
+    try {
+      const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
+        action: "request",
+        hold_token: held.token,
+        phone: entered.phone,
+        email: entered.email,
+        locale: entered.locale,
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        const code = apiErrorCode(body);
+        if (code === "HOLD_EXPIRED") setHeld(null);
+        setError(
+          response.status >= 500
+            ? t("publicBooking.providerFailure")
+            : apiErrorMessage(body, t("publicBooking.error"), t),
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      setError(t("publicBooking.offline"));
       return false;
+    } finally {
+      setPendingAction(null);
     }
-    return true;
   }
 
   async function confirmCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!held || !contact) return;
     const code = String(new FormData(event.currentTarget).get("code") ?? "");
-    setPending(true);
-    setError(null);
-    const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
-      action: "confirm",
-      hold_token: held.token,
-      code,
-    });
-    const body = await response.json().catch(() => null);
-    setPending(false);
-    if (!response.ok) {
-      setError(apiErrorMessage(body, t("publicBooking.error"), t));
+    if (!code.trim()) {
+      setCodeError(t("publicBooking.required"));
       return;
+    }
+    setCodeError(null);
+    setPendingAction("verification");
+    setError(null);
+    try {
+      const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
+        action: "confirm",
+        hold_token: held.token,
+        code,
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (apiErrorCode(body) === "HOLD_EXPIRED") setHeld(null);
+        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        return;
+      }
+    } catch {
+      setError(t("publicBooking.offline"));
+      return;
+    } finally {
+      setPendingAction(null);
     }
     await createBooking(contact);
   }
 
   async function createBooking(entered: Contact) {
     if (!service || !held) return;
-    setPending(true);
+    setPendingAction("booking");
     setError(null);
-    const response = await postPublic(
-      `/api/v1/public/booking/${profile.slug}/bookings`,
-      {
-        hold_token: held.token,
-        service_id: service.id,
-        add_on_ids: addOnIds,
-        name: entered.name,
-        phone: entered.phone,
-        email: entered.email,
-        locale: entered.locale,
-        legal_accepted: entered.legalAccepted,
-      },
-      { "idempotency-key": idempotencyKey },
-    );
-    const body = await response.json().catch(() => null);
-    setPending(false);
-    if (!response.ok) {
-      setError(apiErrorMessage(body, t("publicBooking.error"), t));
-      return;
+    try {
+      const response = await postPublic(
+        `/api/v1/public/booking/${profile.slug}/bookings`,
+        {
+          hold_token: held.token,
+          service_id: service.id,
+          add_on_ids: addOnIds,
+          name: entered.name,
+          phone: entered.phone,
+          email: entered.email,
+          locale: entered.locale,
+          legal_accepted: entered.legalAccepted,
+        },
+        { "idempotency-key": idempotencyKey },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (apiErrorCode(body) === "HOLD_EXPIRED") setHeld(null);
+        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        return;
+      }
+      setResult({ status: body.data.status, manageUrl: body.data.manage_url });
+    } catch {
+      setError(t("publicBooking.offline"));
+    } finally {
+      setPendingAction(null);
     }
-    setResult({ status: body.data.status, manageUrl: body.data.manage_url });
   }
 
   if (result) {
@@ -363,11 +473,11 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
       <section className="public-booking-card" aria-busy={pending}>
         {!held ? (
-          <form onSubmit={findTimes}>
+          <form onSubmit={findTimes} noValidate>
             <div className="public-booking-grid">
               <label>
                 {t("publicBooking.location")}
-                <select value={locationId} onChange={(event) => { setPending(true); setError(null); setLocationId(event.target.value); }}>
+                <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); setError(null); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
                   {profile.locations.map((entry) => (
                     <option key={entry.id} value={entry.id}>{entry.name}</option>
                   ))}
@@ -377,11 +487,13 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 {t("publicBooking.service")}
                 <select
                   value={serviceId}
+                  disabled={pending}
                   onChange={(event) => {
                     setServiceId(event.target.value);
                     setAddOnIds([]);
                     setSpecialistId("any");
                     setSlots([]);
+                    setNearestDates([]);
                     setSearched(false);
                   }}
                 >
@@ -392,7 +504,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </label>
               <label>
                 {t("publicBooking.specialist")}
-                <select value={specialistId} onChange={(event) => { setSpecialistId(event.target.value); setSearched(false); }}>
+                <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }}>
                   <option value="any">{t("publicBooking.anySpecialist")}</option>
                   {service?.specialists.map((person) => (
                     <option key={person.id} value={person.id}>{person.name}</option>
@@ -401,7 +513,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </label>
               <label>
                 {t("publicBooking.date")}
-                <input type="date" value={date} min={dateInZone(location.timezone)} onChange={(event) => { setDate(event.target.value); setSearched(false); }} required />
+                <input type="date" value={date} min={dateInZone(location.timezone)} disabled={pending} onChange={(event) => { setDate(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }} required />
               </label>
             </div>
 
@@ -413,9 +525,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                     <input
                       type="checkbox"
                       checked={addOnIds.includes(addOn.id)}
+                      disabled={pending}
                       onChange={(event) =>
                         setAddOnIds((current) => {
                           setSearched(false);
+                          setSlots([]);
+                          setNearestDates([]);
                           return event.target.checked
                             ? [...current, addOn.id]
                             : current.filter((id) => id !== addOn.id);
@@ -431,14 +546,19 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
             <div className="public-booking-quote">
               <strong>{money(quote.price)}</strong>
-              <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
+              <div>
+                <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
+                <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
+              </div>
             </div>
             <button className="primary-button" type="submit" disabled={pending || !service}>
-              {t("publicBooking.findTime")}
+              {pendingAction === "availability" || pendingAction === "catalog"
+                ? t("publicBooking.loadingAvailability")
+                : t("publicBooking.findTime")}
             </button>
           </form>
         ) : stage === "code" ? (
-          <form onSubmit={confirmCode}>
+          <form onSubmit={confirmCode} noValidate>
             <div className="public-booking-summary">
               <div>
                 <span>{t("publicBooking.yourChoice")}</span>
@@ -451,16 +571,27 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             </div>
             <h2>{t("publicBooking.verifyTitle")}</h2>
             <p className="muted">{t("publicBooking.verifyHint")}</p>
+            {codeError && (
+              <div className="form-error-summary" role="alert" tabIndex={-1} ref={errorSummaryRef}>
+                <strong>{t("publicBooking.errorSummary")}</strong>
+                <a href="#booking-code">{codeError}</a>
+              </div>
+            )}
             <div className="public-booking-grid">
-              <label>
+              <label htmlFor="booking-code">
                 {t("publicBooking.verifyCode")}
                 <input
+                  id="booking-code"
                   name="code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={8}
+                  aria-invalid={Boolean(codeError)}
+                  aria-describedby={codeError ? "booking-code-error" : undefined}
+                  onChange={() => setCodeError(null)}
                   required
                 />
+                {codeError && <span id="booking-code-error" className="field-error">{codeError}</span>}
               </label>
             </div>
             <div className="button-row">
@@ -486,7 +617,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             </div>
           </form>
         ) : (
-          <form onSubmit={submitContact}>
+          <form onSubmit={submitContact} noValidate>
             <div className="public-booking-summary">
               <div>
                 <span>{t("publicBooking.yourChoice")}</span>
@@ -498,22 +629,45 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
               <p>{t("publicBooking.heldUntil", { time: new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, timeStyle: "short" }).format(new Date(held.expiresAt)) })}</p>
             </div>
+            {Object.keys(fieldErrors).length > 0 && (
+              <div className="form-error-summary" role="alert" tabIndex={-1} ref={errorSummaryRef}>
+                <strong>{t("publicBooking.errorSummary")}</strong>
+                <ul>
+                  {Object.entries(fieldErrors).map(([field, message]) => (
+                    <li key={field}><a href={`#booking-${field}`}>{message}</a></li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="public-booking-grid">
               {/* Defaults, not placeholders: a client sent back here by a wrong
                   code must find what they typed still typed. */}
-              <label>{t("publicBooking.name")}<input name="name" autoComplete="name" required minLength={2} defaultValue={contact?.name ?? ""} /></label>
-              <label>{t("publicBooking.phone")}<input name="phone" type="tel" autoComplete="tel" required defaultValue={contact?.phone ?? ""} /></label>
-              <label>{t("publicBooking.email")}<input name="email" type="email" autoComplete="email" required={profile.notification_channel === "email"} defaultValue={contact?.email ?? ""} /></label>
-              <label>
+              <label htmlFor="booking-name">
+                {t("publicBooking.name")}
+                <input id="booking-name" name="name" autoComplete="name" required minLength={2} defaultValue={contact?.name ?? ""} aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? "booking-name-error" : undefined} onChange={() => clearFieldError("name")} />
+                {fieldErrors.name && <span id="booking-name-error" className="field-error">{fieldErrors.name}</span>}
+              </label>
+              <label htmlFor="booking-phone">
+                {t("publicBooking.phone")}
+                <input id="booking-phone" name="phone" type="tel" autoComplete="tel" required defaultValue={contact?.phone ?? ""} aria-invalid={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? "booking-phone-error" : undefined} onChange={() => clearFieldError("phone")} />
+                {fieldErrors.phone && <span id="booking-phone-error" className="field-error">{fieldErrors.phone}</span>}
+              </label>
+              <label htmlFor="booking-email">
+                {t(profile.notification_channel === "email" ? "publicBooking.emailRequired" : "publicBooking.email")}
+                <input id="booking-email" name="email" type="email" autoComplete="email" required={profile.notification_channel === "email"} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
+                {fieldErrors.email && <span id="booking-email-error" className="field-error">{fieldErrors.email}</span>}
+              </label>
+              <label htmlFor="booking-locale">
                 {t("publicBooking.language")}
-                <select name="locale" defaultValue={contact?.locale ?? profile.locale}>
+                <select id="booking-locale" name="locale" defaultValue={contact?.locale ?? profile.locale}>
                   <option value="ru">Русский</option><option value="ro">Română</option><option value="en">English</option>
                 </select>
               </label>
             </div>
             <label className="consent-field public-booking-consent">
-              <input name="legalAccepted" type="checkbox" required />
+              <input id="booking-legalAccepted" name="legalAccepted" type="checkbox" required aria-invalid={Boolean(fieldErrors.legalAccepted)} aria-describedby={fieldErrors.legalAccepted ? "booking-consent-error" : undefined} onChange={() => clearFieldError("legalAccepted")} />
               <span>{t("publicBooking.consent")} <Link href="/terms">{t("legal.termsLink")}</Link> · <Link href="/privacy">{t("legal.privacyLink")}</Link></span>
+              {fieldErrors.legalAccepted && <span id="booking-consent-error" className="field-error public-booking-consent-error">{fieldErrors.legalAccepted}</span>}
             </label>
             <div className="button-row">
               <button
@@ -537,6 +691,18 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           </form>
         )}
 
+        {!held && pendingAction === "availability" && (
+          <div className="public-booking-loading" role="status" aria-live="polite">
+            <span className="sr-only">{t("publicBooking.loadingAvailability")}</span>
+            {Array.from({ length: 6 }, (_, index) => <span key={index} aria-hidden="true" />)}
+          </div>
+        )}
+        {pendingAction === "hold" && (
+          <p className="public-booking-status" role="status" aria-live="polite">
+            {t("publicBooking.holdingSlot")}
+          </p>
+        )}
+
         {!held && slots.length > 0 && (
           <div className="public-booking-slots">
             <h2>{t("publicBooking.chooseTime")}</h2>
@@ -550,8 +716,25 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             </div>
           </div>
         )}
-        {!pending && !held && searched && service && slots.length === 0 && date && (
-          <p className="muted">{t("publicBooking.noSlots")}</p>
+        {!pending && !held && searched && service && slots.length === 0 && date && nearestDates.length > 0 && (
+          <section className="public-booking-nearest" aria-labelledby="nearest-dates-title">
+            <h2 id="nearest-dates-title">{t("publicBooking.nearestDates")}</h2>
+            <div>
+              {nearestDates.map((entry) => (
+                <button key={entry.date} type="button" onClick={() => chooseNearestDate(entry.date)}>
+                  <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${entry.date}T12:00:00Z`))}</strong>
+                  <span>{t("publicBooking.slotCount", { count: entry.slot_count })}</span>
+                </button>
+              ))}
+            </div>
+            <p className="muted">{t("publicBooking.noSlots")}</p>
+          </section>
+        )}
+        {!pending && !held && searched && service && slots.length === 0 && date && nearestDates.length === 0 && (
+          <div className="public-booking-empty" role="status">
+            <strong>{t("publicBooking.noSlotsTitle")}</strong>
+            <p className="muted">{t("publicBooking.noSlots")}</p>
+          </div>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
       </section>

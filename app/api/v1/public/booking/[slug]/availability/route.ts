@@ -76,7 +76,12 @@ async function handleGet(
   });
 
   return apiSuccess(
-    { timezone: result.timezone, currency: result.currency, slots: result.slots },
+    {
+      timezone: result.timezone,
+      currency: result.currency,
+      slots: result.slots,
+      nearest_dates: result.nearestDates,
+    },
     id,
   );
 }

@@ -2,6 +2,7 @@ import type { TenantTransaction } from "@/db/tenant";
 import { withTenant } from "@/db/tenant";
 import { addLocalDays, localToUtc, type LocalDate } from "@/domain/timezone";
 import {
+  alternativeSlots,
   loadBookingDraft,
   loadSlotContext,
   slotsFor,
@@ -108,6 +109,7 @@ export async function loadPublicAvailability(
       currency: string;
       confirmationMode: "instant" | "manual";
       slots: PublicSlot[];
+      nearestDates: { date: string; slot_count: number }[];
     }>
   | null
 > {
@@ -164,12 +166,59 @@ export async function loadPublicAvailability(
     const context = await loadSlotContext(tx, input.locationId);
     if (!context || context.publicStatus !== "published") return null;
 
+    const nearestDates =
+      slots.length > 0
+        ? []
+        : Array.from(
+            (
+              await Promise.all(
+                people.map(async (person) => {
+                  const draft = await loadBookingDraft(tx, {
+                    serviceId: input.serviceId,
+                    addOnIds: input.addOnIds,
+                    specialistId: person.id,
+                  });
+                  if (!draft) return [];
+
+                  const alternatives = await alternativeSlots(
+                    tx,
+                    {
+                      locationId: input.locationId,
+                      specialistId: person.id,
+                      durationMinutes: draft.durationMinutes,
+                      date: input.date,
+                      excludeBookingId: input.excludeBookingId ?? null,
+                      now: input.now,
+                    },
+                    context,
+                    { limit: 3 },
+                  );
+                  return alternatives.map((entry) => ({
+                    date: entry.date,
+                    starts: entry.slots.map((slot) => slot.start.toISOString()),
+                  }));
+                }),
+              )
+            )
+              .flat()
+              .reduce((byDate, entry) => {
+                const starts = byDate.get(entry.date) ?? new Set<string>();
+                entry.starts.forEach((start) => starts.add(start));
+                byDate.set(entry.date, starts);
+                return byDate;
+              }, new Map<string, Set<string>>()),
+          )
+            .sort(([left], [right]) => left.localeCompare(right))
+            .slice(0, 3)
+            .map(([date, starts]) => ({ date, slot_count: starts.size }));
+
     return {
       organizationId: catalogue.organization.id,
       timezone: catalogue.location.timezone,
       currency: catalogue.organization.currency,
       confirmationMode: context.confirmationMode,
       slots,
+      nearestDates,
     };
   });
 }
