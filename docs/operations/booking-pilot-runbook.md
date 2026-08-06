@@ -107,7 +107,10 @@ DATABASE_URL='<app-role-url>' npm run db:verify-rls
 - workplace, reschedule race, expired hold и idempotent retry;
 - cross-tenant IDs, token purpose/TTL/revocation, enumeration, rate limits и CSRF;
 - public create/verify/manage, staff create/complete и booking → visit → profit parity;
-- RU/RO/EN critical keys и автоматический accessibility audit.
+- RU/RO/EN critical keys и автоматический accessibility audit;
+- property-набор движка доступности: слот внутри открытого времени, lead time, буферы, локальная сетка и дни перевода часов;
+- покрытие rollout-флага: каждый public и calendar route достижимо доходит до `organizations.booking_access`;
+- совместимость миграций для отката приложения (см. раздел «Инцидент и rollback»).
 
 ### 2. Backup и восстановление
 
@@ -131,9 +134,11 @@ npm run ops:notifications
 
 Проверить `/api/health`, тестовый alert и наличие событий `booking.maintenance_completed`. У очереди не должно быть растущего backlog, `dead_letter` или job lag более 300 секунд. Пороговые значения: [Monitoring and alerts](./monitoring.md).
 
-### 4. Latency evidence
+### 4. Evidence из логов
 
-Экспортировать из централизованного collector только редактированные JSONL-строки приложения за окно проверки. Не копировать raw request, query string, телефон, email, имя или token. Затем выполнить:
+Экспортировать из централизованного collector только редактированные JSONL-строки приложения за окно проверки. Не копировать raw request, query string, телефон, email, имя или token. Один и тот же экспорт читают два отчёта; они отвечают на разные половины одного вопроса и оба нужны.
+
+Latency:
 
 ```bash
 npm run ops:booking-latency -- --file redacted-timings.jsonl --min-samples 30
@@ -143,6 +148,20 @@ npm run ops:booking-latency -- --file redacted-timings.jsonl --min-samples 30
 
 - p95 `public.availability` ≤500 ms;
 - общий p95 public/staff booking mutations ≤800 ms.
+
+События, которых нет в базе:
+
+```bash
+npm run ops:log-events -- redacted-timings.jsonl
+```
+
+Отказ не пишет строку: rate limit, который сработал, — это ровно тот запрос, которого не было, а challenge, который никто не решил, не виден нигде, кроме строки лога. Отчёт возвращает conflict rate (к числу попыток мутации, а не к общему трафику), попытки двойного бронирования, дошедшие до exclusion constraint, rate-limit blocks по бакетам, challenges по вердиктам, cross-site отказы, что диспетчер claimed/sent/retried/dead-lettered, и запросы по маршрутам, разделённые на отказы и ошибки. `NOT_READY` дают три критерия: exclusion violations, отказы самой job и любые 5xx.
+
+Скрипт читает файлы или stdin и не ходит в базу, поэтому работает по вчерашнему ротированному файлу или по `docker logs`:
+
+```bash
+docker compose logs --no-color app | npm run ops:log-events --silent
+```
 
 Production collector остаётся источником истины: локальный быстрый прогон не заменяет fleet-level измерение пилотного объёма.
 
@@ -192,7 +211,8 @@ ALLOW_PILOT_OPERATOR_WRITE=1 npm run pilot:ops -- booking-access \
 8. убедиться, что client/staff emails приняты Resend один раз с одним provider message id;
 9. проверить audit trail и отсутствие PII/raw tokens в логах;
 10. понизить до `calendar` и убедиться, что public/manage закрыты, данные остались;
-11. вернуть `public` только после записи результатов smoke test.
+11. понизить до `off` и убедиться, что смена всё ещё видит сегодняшний список и карточку, а любая попытка создать, перенести или отменить получает 404 `BOOKING_DISABLED`. Это единственный шаг, который проверяет сам откат, а не продукт; если он не пройден, публичную страницу открывать нельзя, потому что выключить её будет нечем;
+12. вернуть `public` только после записи результатов smoke test.
 
 Тестовые контакты не смешивать с реальными метриками Gate 7.
 
@@ -211,21 +231,32 @@ ALLOW_PILOT_OPERATOR_WRITE=1 npm run pilot:ops -- booking-access \
 
 ## Ежедневная эксплуатация
 
-В начале и конце рабочего дня:
+В начале и конце рабочего дня — два отчёта, потому что половина пилотных чисел не существует в виде строк базы:
 
 ```bash
-npm run ops:booking-metrics -- --days 30
+MIGRATION_DATABASE_URL='<privileged-operator-url>' npm run ops:booking-metrics -- --days 30
+npm run ops:log-events -- <вчерашний редактированный экспорт>
 ```
 
-Проверить:
+Переменную указывать явно. `ops:booking-metrics` — отчёт по всей базе, и при отсутствии `MIGRATION_DATABASE_URL` он молча берёт `DATABASE_URL`. Это tenant-scoped роль под forced RLS без выставленной организации: запросы вернут ноль строк, отчёт напечатает `bookings_total: 0` и `NOT_READY`, и это будет выглядеть как результат, а не как неверная конфигурация. Первое, что нужно проверить у неожиданно пустого отчёта, — какой URL он получил. `ops:log-events` в базу не ходит вообще.
 
-- health, 5xx и p95 по route;
-- active/expired holds и работу maintenance;
-- queue depth, retries, dead letters, provider acceptance, mail-server delivery/bounce/complaint и job lag;
-- verification lockouts, rate limits и bot challenges;
-- booking conflicts и отсутствие активных overlaps;
-- booking → completed visit conversion;
-- новые Severity issues и обращения пилотных организаций.
+Что откуда:
+
+| Проверить | Источник |
+|---|---|
+| Активные overlaps, active/expired holds, booking → visit conversion | `ops:booking-metrics` |
+| Queue depth, retries, dead letters, provider acceptance, mail-server delivery/bounce/complaint, job lag | `ops:booking-metrics` |
+| Медиана времени записи и вся воронка «страница → поиск слотов → начало → подтверждение» | `ops:booking-metrics`, блок `funnel` и критерий `time_to_book` |
+| Conflict rate, попытки, дошедшие до exclusion constraint | `ops:log-events` |
+| Rate-limit blocks по бакетам, bot challenges по вердиктам, cross-site отказы | `ops:log-events` |
+| 5xx по маршрутам, отдельно от отказов | `ops:log-events` |
+| p95 по route | `ops:booking-latency` (еженедельно или при подозрении) |
+| Health и алерты | `/api/health` и канал алертов |
+| Новые Severity issues и обращения студий | pilot issue register |
+
+Оба отчёта возвращают ненулевой exit code при `NOT_READY` и годятся как шаг проверки, который обязан краснеть.
+
+Воронка считает уникальные сессии по заголовку `x-booking-session`, который публичная страница генерирует сама. Если прокси или CDN режет неизвестные заголовки, воронка схлопнется в нули при работающем продукте — это первое, что нужно проверить, когда `time_to_book` вдруг стал `null` при живом трафике.
 
 Раз в неделю повторять latency report, RLS/security targeted tests и `profit_review`. Restore drill — после каждого schema release и не реже раза в месяц.
 
@@ -237,9 +268,10 @@ npm run ops:booking-metrics -- --days 30
 |---|---|
 | 3 организации и 100/30 bookings/visits | `ops:booking-metrics` + enrolment/payment evidence |
 | Нет активных overlaps | `ops:booking-metrics` |
+| Нет сработавших exclusion constraint, conflict rate | `ops:log-events` за то же окно |
 | 100 попыток → 1 booking | concurrency test artifact текущего SHA |
 | p95 500/800 ms | `ops:booking-latency` из production collector |
-| Median mobile flow ≤2 минут | 10+ PII-free UX timings после выбора услуги |
+| Median mobile flow ≤2 минут | `ops:booking-metrics`, критерий `time_to_book` (медиана от `booking_service_selected` до `booking_confirmed` по сессии) |
 | ≥95% provider acceptance ≤2 минут | metrics + Resend dashboard/export |
 | Audit/no duplicates/profit parity | E2E artifacts + выборочная audit проверка |
 | RU/RO/EN и accessibility | automated audit + manual screen-reader checklist |
@@ -269,7 +301,18 @@ ALLOW_PILOT_OPERATOR_WRITE=1 npm run pilot:ops -- booking-access \
 
 При массовом инциденте выключить `PUBLIC_BOOKING_ENABLED` в окружении. При сбое provider установить `NOTIFICATIONS_ENABLED=false`: outbox сохраняется и не удаляется. После изменения проверить public/manage access, staff list/read-only, ручной visit flow, health и audit event.
 
-Не удалять bookings, holds, notifications или audit history. Не откатывать несовместимую схему. Возвращать `public` только после устранения причины, зелёных regression tests, smoke test и решения release owner.
+Не удалять bookings, holds, notifications или audit history.
+
+Откат — это откат приложения, а не базы: миграция уже применена и обратно не поедет. Совместимость проверяется в CI (`tests/migration-compatibility.test.ts`): миграция либо оставляет предыдущую версию работающей, либо несёт строку `-- not-backward-compatible: <причина>`. Перед откатом на предыдущий SHA посмотреть миграции, применённые между ним и текущим: если ни одна не объявлена несовместимой — откат безопасен и занимает минуты. Если объявлена — откат приложения не поможет, и это уже сценарий из [Backup and restore runbook](./backup-restore-runbook.md), а не из этого раздела.
+
+```bash
+git diff --name-only <предыдущий-SHA> HEAD -- 'drizzle/*.sql'
+git grep -l "not-backward-compatible" HEAD -- 'drizzle/*.sql'
+```
+
+Первая команда даёт миграции в диапазоне отката, вторая — все объявленные несовместимыми. Пустое пересечение означает, что предыдущая сборка поднимется на текущей схеме. На сегодня вторая команда не находит ничего.
+
+Возвращать `public` только после устранения причины, зелёных regression tests, smoke test и решения release owner.
 
 ## Решение Gate 7
 
