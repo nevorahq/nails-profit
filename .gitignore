@@ -11,3 +11,6 @@ next-env.d.ts
 *.tsbuildinfo
 
 .gstack/
+
+# Local Netlify folder
+.netlify
