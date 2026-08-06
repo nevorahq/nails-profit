@@ -161,7 +161,7 @@ export function ServiceDetail({
         </div>
       </header>
 
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
 
       <section className="panel">
         <h2>{t("services.priceAndDuration")}</h2>
@@ -221,6 +221,9 @@ export function ServiceDetail({
                       </td>
                       <td>
                         <input
+                          // The visible label is the row: a screen reader reads cells
+                          // in isolation, so the name travels on the control.
+                          aria-label={`${t("services.norm")} — ${material.name}`}
                           name={`qty-${material.id}`}
                           type="number"
                           step="0.001"

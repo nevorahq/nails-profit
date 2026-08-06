@@ -226,6 +226,7 @@ export function VisitCloseForm({
                   </td>
                   <td>
                     <input
+                      aria-label={`${t("closeVisit.actual")} — ${material.name}`}
                       name={`actual-${material.id}`}
                       type="number"
                       step="0.001"
@@ -244,7 +245,7 @@ export function VisitCloseForm({
         </p>
       </section>
 
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
 
       <button className="primary-button" type="submit" disabled={pending}>
         {pending ? t("common.saving") : t("closeVisit.title")}

@@ -183,7 +183,7 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
             {pending ? t("import.reading") : t("import.submit")}
           </button>
         </form>
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
         <p className="muted">
 {t("import.hint")}{" "}
           <a className="text-link" href={`/api/v1/imports/templates/${entity}`}>
@@ -224,6 +224,7 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
                 </td>
                 <td>
                   <select
+                    aria-label={`${t("import.column")} — ${field.label}`}
                     value={job.mapping[field.key] ?? ""}
                     disabled={pending}
                     onChange={(event) =>
@@ -369,7 +370,7 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
         </div>
       )}
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
 
       <div className="button-row">
         <button

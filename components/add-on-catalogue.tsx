@@ -122,7 +122,7 @@ export function AddOnCatalogue({
         </section>
       )}
 
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
 
       <table className="data-table">
         <thead>
@@ -223,6 +223,7 @@ export function AddOnCatalogue({
                         </td>
                         <td>
                           <input
+                            aria-label={`${t("services.norm")} — ${material.name}`}
                             name={`qty-${material.id}`}
                             type="number"
                             step="0.001"

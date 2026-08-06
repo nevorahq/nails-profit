@@ -61,7 +61,7 @@ export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLoca
             {t("workspace.currency")}
             <select name="currency" defaultValue="MDL"><option value="MDL">MDL</option><option value="EUR">EUR</option></select>
           </label>
-          {error && <div className="form-error">{error}</div>}
+          {error && <div className="form-error" role="alert">{error}</div>}
           <button className="primary-button" disabled={pending}>{pending ? t("workspace.creating") : t("workspace.continue")}</button>
         </form>
       </section>

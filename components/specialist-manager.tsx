@@ -202,7 +202,7 @@ export function SpecialistManager({
         </section>
       )}
 
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
 
       <table className="data-table">
         <thead>

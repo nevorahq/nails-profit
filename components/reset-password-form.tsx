@@ -85,7 +85,7 @@ export function ResetPasswordForm({
             minLength={10}
           />
         </label>
-        {error && <div className="form-error">{error}</div>}
+        {error && <div className="form-error" role="alert">{error}</div>}
         <button className="primary-button" type="submit" disabled={pending}>
           {pending ? t("common.saving") : t("auth.savePassword")}
         </button>

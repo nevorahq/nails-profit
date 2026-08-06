@@ -102,7 +102,7 @@ export function MaterialCatalogue({
           {pending ? t("common.saving") : t("common.add")}
         </button>
       </form>
-      {error && <div className="form-error">{error}</div>}
+      {error && <div className="form-error" role="alert">{error}</div>}
 
       <table className="data-table">
         <thead>
