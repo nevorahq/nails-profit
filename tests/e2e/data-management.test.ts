@@ -32,6 +32,16 @@ describe("Owner data export and erasure", () => {
       }),
     ).id;
 
+    await adminDb
+      .update(clients)
+      .set({
+        locale: "ro",
+        termsVersion: "2026-08-01",
+        privacyVersion: "2026-08-01",
+        consentedAt: new Date("2026-08-01T12:00:00.000Z"),
+      })
+      .where(eq(clients.id, clientId));
+
     await studio.owner.post("/api/v1/visits", {
       service_id: studio.serviceId,
       specialist_id: studio.specialistId,
@@ -124,9 +134,17 @@ describe("Owner data export and erasure", () => {
     expect(organization.deletedAt).toBeInstanceOf(Date);
     expect(organization.name).not.toContain("Privacy Studio");
     expect(clientRows).toHaveLength(1);
-    expect(clientRows[0]).toMatchObject({ normalizedPhone: null, email: null, locale: null });
+    expect(clientRows[0]).toMatchObject({
+      normalizedPhone: null,
+      email: null,
+      locale: null,
+      termsVersion: null,
+      privacyVersion: null,
+      consentedAt: null,
+    });
     expect(clientRows[0].name).not.toContain("Private Client");
     expect(clientRows[0].anonymizedAt).toBeInstanceOf(Date);
+    expect(clientRows[0].archivedAt).toBeInstanceOf(Date);
     expect(specialistRows[0].name).not.toBe("Мастер");
     expect(specialistRows[0].userId).toBeNull();
     expect(invitationRows[0].status).toBe("revoked");

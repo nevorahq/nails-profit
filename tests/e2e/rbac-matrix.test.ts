@@ -409,6 +409,15 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/clients", body: { name: `Клиент ${crypto.randomUUID()}` } }),
   },
   {
+    route: "/api/v1/clients/[id]",
+    method: "DELETE",
+    allowed: ["owner", "manager"],
+    note: "privacy erasure requires organization-wide client scope; a Master's scope is own",
+    // A missing UUID exercises authorization without mutating the shared client
+    // that the scope checks later in this suite rely on.
+    request: async () => ({ path: `/api/v1/clients/${crypto.randomUUID()}` }),
+  },
+  {
     route: "/api/v1/invitations",
     method: "GET",
     allowed: CATALOGUE_MANAGERS,
@@ -895,6 +904,11 @@ describe("RBAC and tenant isolation", () => {
         label: "visit adjustment",
         path: (f) => `/api/v1/visits/${f.visitId}/adjust`,
         body: { actual_duration_minutes: 90 },
+      },
+      {
+        method: "DELETE",
+        label: "client erasure",
+        path: (f) => `/api/v1/clients/${f.clientId}`,
       },
       {
         method: "GET",
