@@ -5,6 +5,11 @@ import { toZonedParts } from "@/domain/timezone";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "@/lib/booking-http";
+import {
+  cancelPendingNotifications,
+  notifyBooking,
+  scheduleBookingReminder,
+} from "@/lib/booking-notifications";
 import { bookingLinesOf, loadBooking, rescheduleBooking } from "@/lib/booking-service";
 import { alternativeSlots, assertAssignable, describeAlternatives, loadSlotContext } from "@/lib/availability-service";
 import { isExclusionViolation } from "@/lib/db-errors";
@@ -109,6 +114,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
                 date: (({ year, month, day }) => ({ year, month, day }))(
                   toZonedParts(startsAt, context.timezone),
                 ),
+                // Offering the appointment's current hour back is the whole
+                // point when the move it is being offered instead of failed.
+                excludeBookingId: existing.id,
                 now,
               },
               context,
@@ -145,6 +153,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         source: "api",
         entityType: "booking",
         entityId: moved.booking.id,
+      });
+
+      // Section 7.7's "дата, время, мастер или услуга изменены": the client
+      // agreed to a time, and the studio changing it is precisely the case
+      // where they must not find out on arrival.
+      await notifyBooking(tx, {
+        organizationId: actor.organizationId,
+        bookingId: moved.booking.id,
+        template: "booking.rescheduled",
+        occurrence: String(moved.booking.version),
+      });
+      await cancelPendingNotifications(tx, moved.booking.id);
+      await scheduleBookingReminder(tx, {
+        organizationId: actor.organizationId,
+        bookingId: moved.booking.id,
+        locationId: moved.booking.locationId,
+        startsAt: moved.booking.startsAt,
+        now,
       });
 
       return { ok: true as const, booking: moved.booking, lines: await bookingLinesOf(tx, moved.booking.id) };

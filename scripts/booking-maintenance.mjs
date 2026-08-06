@@ -67,12 +67,54 @@ try {
        where status = 'pending_confirmation'
          and confirmation_due_at is not null
          and confirmation_due_at <= now()
-      returning id
+      returning id, organization_id, client_id, version
+    `;
+
+    /**
+     * A client who was told "the studio will confirm" has to be told that it
+     * did not. The same outbox and the same key shape the application writes,
+     * so a message queued here is indistinguishable from one queued by a route
+     * — including its idempotency, which is what makes running this twice a
+     * minute harmless.
+     */
+    let cancellations = 0;
+    for (const booking of lapsed) {
+      const queued = await sql`
+        insert into notification_outbox
+              (organization_id, booking_id, channel, template, idempotency_key, scheduled_at, next_attempt_at)
+        select ${booking.organization_id}, ${booking.id}, channel.name::notification_channel, 'booking.cancelled',
+               ${booking.id}::text || ':booking.cancelled:' || channel.name || ':' || ${String(booking.version)},
+               now(), now()
+          from client
+          cross join lateral (values ('sms', client.normalized_phone), ('email', client.email))
+               as channel(name, destination)
+         where client.id = ${booking.client_id}
+           and channel.destination is not null
+        on conflict do nothing
+        returning id
+      `;
+      cancellations += queued.length;
+
+      // A reminder for an appointment that will not happen.
+      await sql`
+        delete from notification_outbox
+         where booking_id = ${booking.id}
+           and template = 'booking.reminder'
+           and status in ('pending', 'retry')
+      `;
+    }
+
+    // A challenge nobody completed keeps a phone number for no reason; section
+    // 7.9 keeps contact data only while it is doing something.
+    const verifications = await sql`
+      delete from booking_verification where expires_at <= now() - interval '1 day' returning id
     `;
 
     line("booking.maintenance_completed", {
       expired_holds: holds.length,
       lapsed_requests: lapsed.length,
+      queued_cancellations: cancellations,
+      purged_verifications: verifications.length,
     });
   }
 } finally {

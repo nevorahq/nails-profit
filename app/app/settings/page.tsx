@@ -6,7 +6,7 @@ import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SettingsPage() {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, organizationName, organizationSlug, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   return (
@@ -22,6 +22,7 @@ export default async function SettingsPage() {
       <OrganizationSettings
         locale={locale}
         currency={currency}
+        slug={organizationSlug}
         canEdit={can(membership.role, "organization_settings", "write")}
       />
       <DataManagement

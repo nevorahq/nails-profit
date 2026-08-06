@@ -94,6 +94,86 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/health" }),
   },
   {
+    route: "/api/v1/public/booking/[slug]",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Public booking profile; an unknown slug is deliberately a 404",
+    request: async () => ({ path: "/api/v1/public/booking/unknown-studio" }),
+  },
+  {
+    route: "/api/v1/public/booking/[slug]/catalog",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Public catalogue; identifiers are validated before tenant data is read",
+    request: async () => ({ path: "/api/v1/public/booking/unknown-studio/catalog?location_id=00000000-0000-4000-8000-000000000000" }),
+  },
+  {
+    route: "/api/v1/public/booking/[slug]/availability",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Public availability is rate-limited and needs no account session",
+    request: async () => ({ path: "/api/v1/public/booking/unknown-studio/availability" }),
+  },
+  {
+    route: "/api/v1/public/booking/[slug]/holds",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "A public client may hold a slot before identifying themselves",
+    request: async () => ({ path: "/api/v1/public/booking/unknown-studio/holds", body: {} }),
+  },
+  {
+    route: "/api/v1/public/booking/[slug]/bookings",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Public creation uses a hold and idempotency key, not authentication",
+    request: async () => ({ path: "/api/v1/public/booking/unknown-studio/bookings", body: {} }),
+  },
+  {
+    route: "/api/v1/public/booking/[slug]/verify",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Contact verification is what a public visitor does before they have any account",
+    request: async () => ({ path: "/api/v1/public/booking/unknown-studio/verify", body: {} }),
+  },
+  {
+    route: "/api/v1/ops/notifications",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Operator job authenticated by a shared secret, not a session; absent without one",
+    request: async () => ({ path: "/api/v1/ops/notifications", body: {} }),
+  },
+  {
+    route: "/api/v1/public/bookings/[token]",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Possession of a purpose-bound token grants access to one booking",
+    request: async () => ({ path: "/api/v1/public/bookings/invalid-token" }),
+  },
+  {
+    route: "/api/v1/public/bookings/[token]/cancel",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "A client cancels through the manage token, without a Nail Profit account",
+    request: async () => ({ path: "/api/v1/public/bookings/invalid-token/cancel", body: {} }),
+  },
+  {
+    route: "/api/v1/public/bookings/[token]/reschedule",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "A client reschedules through the same scoped manage token",
+    request: async () => ({ path: "/api/v1/public/bookings/invalid-token/reschedule", body: {} }),
+  },
+  {
     route: "/api/v1/organizations",
     method: "GET",
     allowed: ALL_ROLES,
@@ -563,6 +643,13 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/bookings/[id]/manage-link",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; the reissued link goes to the client, never to the caller",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/manage-link` }),
+  },
+  {
     route: "/api/v1/bookings/[id]/cancel",
     method: "POST",
     allowed: ["owner", "manager", "master"],
@@ -737,7 +824,8 @@ describe("RBAC and tenant isolation", () => {
       test(`${entry.method} ${entry.route} ${entry.public ? "is public" : "is refused"}`, async () => {
         const { path, body } = await entry.request(fixture);
         const response = await send(anonymous, entry.method, path, body);
-        expect(response.status).toBe(entry.public ? 200 : 401);
+        if (entry.public) expect(response.status).not.toBe(401);
+        else expect(response.status).toBe(401);
       });
     }
   });

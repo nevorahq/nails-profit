@@ -129,6 +129,10 @@ export type SlotContext = Readonly<{
   settings: AvailabilitySettings;
   confirmationMode: "instant" | "manual";
   confirmationTtlMinutes: number;
+  /** Section 7.2 step 7: whether a public booking has to prove its contact. */
+  verificationMode: "off" | "code";
+  verificationTtlMinutes: number;
+  reminderLeadMinutes: number;
   publicStatus: "draft" | "published" | "paused";
 }>;
 
@@ -149,6 +153,9 @@ export async function loadSlotContext(
       bufferAfterMinutes: bookingSettings.bufferAfterMinutes,
       confirmationMode: bookingSettings.confirmationMode,
       confirmationTtlMinutes: bookingSettings.confirmationTtlMinutes,
+      verificationMode: bookingSettings.verificationMode,
+      verificationTtlMinutes: bookingSettings.verificationTtlMinutes,
+      reminderLeadMinutes: bookingSettings.reminderLeadMinutes,
     })
     .from(locations)
     .innerJoin(bookingSettings, eq(bookingSettings.locationId, locations.id))
@@ -168,6 +175,9 @@ export async function loadSlotContext(
     },
     confirmationMode: row.confirmationMode,
     confirmationTtlMinutes: row.confirmationTtlMinutes,
+    verificationMode: row.verificationMode,
+    verificationTtlMinutes: row.verificationTtlMinutes,
+    reminderLeadMinutes: row.reminderLeadMinutes,
     publicStatus: row.publicStatus,
   };
 }
@@ -229,6 +239,12 @@ export type SlotQuery = Readonly<{
   specialistId: string;
   durationMinutes: number;
   date: LocalDate;
+  /**
+   * The booking being moved. It occupies the time it is being moved *from*,
+   * and counting that as busy hides every slot overlapping its own hour —
+   * which is most of the ways a client wants to shift an appointment.
+   */
+  excludeBookingId?: string | null;
   now: Date;
 }>;
 
@@ -254,7 +270,7 @@ export async function loadSlotSearch(
   const [rules, exceptions, bookedIntervals, heldIntervals] = await Promise.all([
     loadRules(tx, query.specialistId, query.locationId),
     loadExceptions(tx, query.specialistId, query.locationId, window),
-    activeBookingIntervals(tx, query.specialistId, window),
+    activeBookingIntervals(tx, query.specialistId, window, query.excludeBookingId ?? null),
     activeHoldIntervals(tx, query.specialistId, query.now),
   ]);
 

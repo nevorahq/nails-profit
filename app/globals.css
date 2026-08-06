@@ -275,6 +275,54 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-facts dt { color: var(--muted); font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .calendar-facts dd { margin: 0; font-size: 15rem; }
 
+/* --- Phase 7.3: public booking --- */
+
+.public-booking-shell { min-height: 100vh; padding: 22rem clamp(18rem, 5vw, 72rem) 72rem; }
+.public-booking-header { max-width: 960rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16rem; padding-bottom: 20rem; border-bottom: 1rem solid var(--line); }
+.public-booking-intro { max-width: 760rem; margin: 72rem auto 32rem; text-align: center; }
+.public-booking-intro h1, .public-booking-success h1 { font-size: clamp(38rem, 6vw, 64rem); }
+.public-booking-intro p { max-width: 580rem; margin: 0 auto; color: var(--muted); font-size: 18rem; }
+.public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 30rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
+.public-booking-card form { display: grid; gap: 24rem; }
+.public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
+.public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
+.public-booking-grid input, .public-booking-grid select { width: 100%; min-height: 48rem; padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 13rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
+.public-booking-options { display: grid; gap: 8rem; margin: 0; padding: 16rem; border: 1rem solid var(--line); border-radius: 16rem; }
+.public-booking-options legend { padding: 0 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
+.public-booking-options label { display: grid; grid-template-columns: 22rem 1fr auto; align-items: center; gap: 10rem; min-height: 44rem; font-size: 15rem; cursor: pointer; }
+.public-booking-options input { width: 20rem; height: 20rem; }
+.public-booking-options small { color: var(--muted); }
+.public-booking-quote { display: flex; align-items: baseline; justify-content: space-between; gap: 18rem; padding: 18rem 20rem; border-radius: 18rem; background: var(--forest-950); color: var(--on-accent); }
+.public-booking-quote strong { font-family: var(--font-display, inherit); font-size: 30rem; }
+.public-booking-quote span { color: var(--sage-300); font-size: 14rem; }
+.public-booking-slots { margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
+.public-booking-slots h2 { margin: 0 0 16rem; }
+.public-booking-slots > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; }
+.public-booking-slots button { min-height: 60rem; display: grid; place-items: center; gap: 2rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 14rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+.public-booking-slots button:hover:not(:disabled) { background: var(--sage-300); }
+.public-booking-slots button span { color: var(--muted); font-size: 12rem; }
+.public-booking-summary { display: grid; gap: 14rem; padding: 20rem; border-radius: 20rem; background: var(--forest-950); color: var(--on-accent); }
+.public-booking-summary div { display: flex; align-items: baseline; justify-content: space-between; gap: 18rem; }
+.public-booking-summary span, .public-booking-summary p { color: var(--sage-300); font-size: 13rem; }
+.public-booking-summary p { margin: 0; }
+.public-booking-consent { margin: 0; font-size: 14rem; }
+.public-booking-success { margin-top: 14vh; text-align: center; }
+.public-booking-success p { color: var(--muted); margin-bottom: 26rem; }
+.booking-manage-card { display: grid; gap: 22rem; }
+.booking-manage-facts { display: grid; margin: 0; }
+.booking-manage-facts div { display: grid; grid-template-columns: 150rem 1fr; gap: 20rem; padding: 16rem 0; border-bottom: 1rem solid var(--line); }
+.booking-manage-facts dt { color: var(--muted); font-size: 12rem; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; }
+.booking-manage-facts dd { margin: 0; font-size: 16rem; font-weight: 650; }
+.booking-manage-notice { margin: 0; padding: 14rem 16rem; border-radius: 14rem; background: var(--sage-300); color: var(--forest-950); }
+.booking-manage-action { border: 1rem solid var(--line); border-radius: 18rem; padding: 16rem; }
+.booking-manage-action summary { min-height: 44rem; display: flex; align-items: center; color: var(--accent); font-size: 16rem; font-weight: 750; cursor: pointer; }
+.booking-manage-action .inline-form { margin: 12rem 0 0; }
+.booking-manage-action .public-booking-slots { margin-top: 18rem; padding-top: 18rem; }
+.booking-cancel-area { padding-top: 4rem; text-align: center; }
+.booking-cancel-area .inline-action { margin: 0; color: var(--danger); }
+.booking-cancel-area .warning-banner { text-align: left; margin: 0; }
+.booking-cancel-area .warning-banner p { margin-top: 0; }
+
 /* Same trap as the block above: media queries take px. */
 @media (max-width: 680px) {
   .app-header { flex-direction: column; align-items: flex-start; gap: 14rem; }
@@ -288,6 +336,13 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
      column must stay readable. */
   .data-table { display: block; overflow-x: auto; white-space: nowrap; }
   .metric-grid { grid-template-columns: 1fr; }
+  .public-booking-shell { padding: 18rem 14rem 48rem; }
+  .public-booking-intro { margin: 46rem auto 24rem; text-align: left; }
+  .public-booking-card { padding: 22rem 16rem; border-radius: 24rem; }
+  .public-booking-grid { grid-template-columns: 1fr; }
+  .public-booking-slots > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .public-booking-summary div { display: grid; gap: 2rem; }
+  .booking-manage-facts div { grid-template-columns: 1fr; gap: 4rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

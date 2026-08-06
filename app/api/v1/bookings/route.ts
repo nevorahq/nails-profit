@@ -15,6 +15,7 @@ import {
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist, scopedSpecialistId } from "@/lib/booking-access";
 import { bookingPayload } from "@/lib/booking-http";
+import { notifyBooking, scheduleBookingReminder } from "@/lib/booking-notifications";
 import { bookingLinesOf, createBooking, type BookingStatus } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -266,6 +267,21 @@ export async function POST(request: Request) {
           entityId: created.bookingId,
         });
       }
+
+      // A booking made at the desk is still an appointment the client should
+      // have in writing, with the link that lets them move it without calling.
+      await notifyBooking(tx, {
+        organizationId: actor.organizationId,
+        bookingId: created.bookingId,
+        template: "booking.confirmed",
+      });
+      await scheduleBookingReminder(tx, {
+        organizationId: actor.organizationId,
+        bookingId: created.bookingId,
+        locationId: parsed.data.location_id,
+        startsAt: interval.start,
+        now,
+      });
 
       const [booking] = await tx.select().from(bookings).where(eq(bookings.id, created.bookingId)).limit(1);
       return { booking, lines: await bookingLinesOf(tx, created.bookingId) };

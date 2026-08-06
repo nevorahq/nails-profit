@@ -22,7 +22,8 @@
     "db:studio": "drizzle-kit studio",
     "ops:backup-drill": "./scripts/backup-restore-drill.sh",
     "pilot:ops": "node scripts/pilot.mjs",
-    "ops:booking-maintenance": "node scripts/booking-maintenance.mjs"
+    "ops:booking-maintenance": "node scripts/booking-maintenance.mjs",
+    "ops:notifications": "node scripts/notifications.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

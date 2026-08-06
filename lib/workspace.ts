@@ -9,6 +9,7 @@ import type { AppLocale } from "@/i18n/messages";
 export type Workspace = Readonly<{
   membership: ActiveMembership;
   organizationName: string;
+  organizationSlug: string | null;
   locale: AppLocale;
   currency: string;
 }>;
@@ -24,7 +25,12 @@ export async function requireWorkspace(): Promise<Workspace> {
   if (!caller.membership) redirect("/app");
 
   const [organization] = await db
-    .select({ name: organizations.name, locale: organizations.locale, currency: organizations.currency })
+    .select({
+      name: organizations.name,
+      slug: organizations.slug,
+      locale: organizations.locale,
+      currency: organizations.currency,
+    })
     .from(organizations)
     .where(eq(organizations.id, caller.membership.organizationId))
     .limit(1);
@@ -32,6 +38,7 @@ export async function requireWorkspace(): Promise<Workspace> {
   return {
     membership: caller.membership,
     organizationName: organization?.name ?? "",
+    organizationSlug: organization?.slug ?? null,
     locale: (organization?.locale ?? "ru") as AppLocale,
     currency: organization?.currency ?? "MDL",
   };

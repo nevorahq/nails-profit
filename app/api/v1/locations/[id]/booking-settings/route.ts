@@ -38,6 +38,9 @@ const settingsSchema = z
     buffer_after_minutes: z.int().min(0).max(240).optional(),
     confirmation_mode: z.enum(["instant", "manual"]).optional(),
     confirmation_ttl_minutes: z.int().min(15).max(1_440).optional(),
+    verification_mode: z.enum(["off", "code"]).optional(),
+    verification_ttl_minutes: z.int().min(3).max(60).optional(),
+    reminder_lead_minutes: z.int().min(0).max(10_080).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to change" });
 
@@ -103,6 +106,15 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         ...(parsed.data.confirmation_ttl_minutes !== undefined
           ? { confirmationTtlMinutes: parsed.data.confirmation_ttl_minutes }
           : {}),
+        ...(parsed.data.verification_mode !== undefined
+          ? { verificationMode: parsed.data.verification_mode }
+          : {}),
+        ...(parsed.data.verification_ttl_minutes !== undefined
+          ? { verificationTtlMinutes: parsed.data.verification_ttl_minutes }
+          : {}),
+        ...(parsed.data.reminder_lead_minutes !== undefined
+          ? { reminderLeadMinutes: parsed.data.reminder_lead_minutes }
+          : {}),
         updatedBy: actor.userId,
         updatedAt: new Date(),
         version: sql`${bookingSettings.version} + 1`,
@@ -118,8 +130,16 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       eventType: "booking_settings.updated",
       entityType: "booking_settings",
       entityId: settings.id,
-      before: { public_status: existing.publicStatus, confirmation_mode: existing.confirmationMode },
-      after: { public_status: settings.publicStatus, confirmation_mode: settings.confirmationMode },
+      before: {
+        public_status: existing.publicStatus,
+        confirmation_mode: existing.confirmationMode,
+        verification_mode: existing.verificationMode,
+      },
+      after: {
+        public_status: settings.publicStatus,
+        confirmation_mode: settings.confirmationMode,
+        verification_mode: settings.verificationMode,
+      },
       requestId: requestIdentifier,
     });
 
@@ -141,6 +161,9 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       buffer_after_minutes: updated.bufferAfterMinutes,
       confirmation_mode: updated.confirmationMode,
       confirmation_ttl_minutes: updated.confirmationTtlMinutes,
+      verification_mode: updated.verificationMode,
+      verification_ttl_minutes: updated.verificationTtlMinutes,
+      reminder_lead_minutes: updated.reminderLeadMinutes,
       version: updated.version,
     },
     requestIdentifier,

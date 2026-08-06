@@ -22,6 +22,10 @@ export type PilotEventName =
    * stage.
    */
   | "booking_started"
+  | "booking_page_viewed"
+  | "booking_service_selected"
+  | "booking_availability_searched"
+  | "booking_slot_held"
   | "booking_confirmed"
   | "booking_rescheduled"
   | "booking_cancelled"

@@ -5,6 +5,7 @@ import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "@/lib/booking-http";
+import { cancelPendingNotifications } from "@/lib/booking-notifications";
 import { bookingLinesOf, loadBooking, transitionBooking } from "@/lib/booking-service";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -109,6 +110,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         after: { status: moved.booking.status, visit_id: recorded.visit.id },
         requestId: id,
       });
+
+      // The appointment happened; a reminder for it is now a message about the
+      // past. Dropped here rather than left for the dispatcher's guard, which
+      // would count it as an undeliverable message in section 7.10's numbers.
+      await cancelPendingNotifications(tx, moved.booking.id);
 
       await recordPilotProductEvent(tx, {
         organizationId: actor.organizationId,

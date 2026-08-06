@@ -314,6 +314,8 @@ export const specialists = pgTable(
     // Optional: a studio records masters who have no login of their own.
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     name: text("name").notNull(),
+    /** Stable tie-breaker for the public “any available” assignment. */
+    sortOrder: integer("sort_order").notNull().default(0),
     cooperationType: cooperationType("cooperation_type").notNull().default("commission"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...auditColumns,
@@ -482,6 +484,17 @@ export const clients = pgTable(
     normalizedPhone: text("normalized_phone"),
     email: text("email"),
     locale: locale("locale"),
+    /**
+     * What a client agreed to when they booked themselves, section 7.2.
+     *
+     * Versioned, like the account-side columns above and for the same reason:
+     * "they ticked a box once" is not an answer to which terms they were shown.
+     * Null for everyone a studio entered by hand — staff cannot consent on
+     * somebody else's behalf, and a default would claim they had.
+     */
+    termsVersion: text("terms_version"),
+    privacyVersion: text("privacy_version"),
+    consentedAt: timestamp("consented_at", { withTimezone: true }),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...auditColumns,
@@ -947,6 +960,8 @@ export const locationStatus = pgEnum("location_status", ["active", "archived"]);
 export const workplaceStatus = pgEnum("workplace_status", ["active", "archived"]);
 export const bookingPublicStatus = pgEnum("booking_public_status", ["draft", "published", "paused"]);
 export const bookingConfirmationMode = pgEnum("booking_confirmation_mode", ["instant", "manual"]);
+/** `code` sends a one-time code to the contact before a booking may be created. */
+export const bookingVerificationMode = pgEnum("booking_verification_mode", ["off", "code"]);
 export const availabilityExceptionKind = pgEnum("availability_exception_kind", ["available", "unavailable"]);
 
 /**
@@ -1090,6 +1105,15 @@ export const bookingSettings = pgTable(
     confirmationMode: bookingConfirmationMode("confirmation_mode").notNull().default("instant"),
     /** How long a manually confirmed booking may hold a slot before it lapses. */
     confirmationTtlMinutes: integer("confirmation_ttl_minutes").notNull().default(120),
+    /**
+     * Whether a public booking has to prove the contact belongs to whoever is
+     * typing it, section 7.2 step 7. Off by default: a studio without a
+     * messaging provider would otherwise publish a page nobody can book on.
+     */
+    verificationMode: bookingVerificationMode("verification_mode").notNull().default("off"),
+    verificationTtlMinutes: integer("verification_ttl_minutes").notNull().default(10),
+    /** Section 7.7's reminder interval; zero switches reminders off. */
+    reminderLeadMinutes: integer("reminder_lead_minutes").notNull().default(1_440),
     ...auditColumns,
   },
   (table) => [
@@ -1102,6 +1126,8 @@ export const bookingSettings = pgTable(
       sql`${table.bufferBeforeMinutes} between 0 and 240 and ${table.bufferAfterMinutes} between 0 and 240`,
     ),
     check("booking_settings_ttl", sql`${table.confirmationTtlMinutes} between 15 and 1440`),
+    check("booking_settings_verification_ttl", sql`${table.verificationTtlMinutes} between 3 and 60`),
+    check("booking_settings_reminder_lead", sql`${table.reminderLeadMinutes} between 0 and 10080`),
   ],
 );
 
@@ -1382,6 +1408,139 @@ export const bookingIdempotencyKeys = pgTable(
       table.idempotencyKey,
     ),
     index("booking_idempotency_created_idx").on(table.createdAt),
+  ],
+);
+
+/* --- Phase 7.4: client manage links and transactional notification outbox --- */
+
+export const bookingAccessPurpose = pgEnum("booking_access_purpose", ["manage", "verify"]);
+
+/** Raw public tokens are returned once; only a purpose-bound SHA-256 hash lives here. */
+export const bookingAccessTokens = pgTable(
+  "booking_access_token",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    purpose: bookingAccessPurpose("purpose").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("booking_access_token_hash_idx").on(table.tokenHash),
+    index("booking_access_token_booking_idx").on(table.bookingId, table.purpose),
+    index("booking_access_token_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const notificationChannel = pgEnum("notification_channel", ["email", "sms"]);
+export const notificationStatus = pgEnum("notification_status", [
+  "pending",
+  "processing",
+  "sent",
+  "retry",
+  "dead_letter",
+]);
+
+/**
+ * A one-time code proving the contact belongs to whoever is booking, section
+ * 7.2 step 7.
+ *
+ * It hangs off the hold rather than off a booking: verification happens before
+ * there is a booking, and tying it to the hold is what stops a code obtained
+ * for one slot from being replayed against another. Only the hash of the code
+ * is stored, for the same reason no raw access token ever is.
+ *
+ * The destination is kept in the clear because a message cannot be sent to a
+ * hash — and it is the only copy, deleted with the hold once the challenge has
+ * served its purpose.
+ */
+export const bookingVerifications = pgTable(
+  "booking_verification",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    holdId: uuid("hold_id")
+      .notNull()
+      .references(() => bookingHolds.id, { onDelete: "cascade" }),
+    channel: notificationChannel("channel").notNull(),
+    destination: text("destination").notNull(),
+    locale: text("locale").notNull().default("ru"),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // One live challenge per hold: asking for a new code replaces the old one
+    // rather than leaving two codes that both open the same slot.
+    uniqueIndex("booking_verification_hold_idx").on(table.holdId),
+    index("booking_verification_expiry_idx").on(table.expiresAt),
+    check("booking_verification_attempts", sql`${table.attempts} >= 0`),
+  ],
+);
+
+/**
+ * Transactional outbox. It points to a booking/client instead of copying a
+ * phone or email into payload JSON, keeping PII out of the queue and logs.
+ *
+ * Exactly one target: a booking for everything a client is told about their
+ * appointment, a verification for the code that has to arrive before an
+ * appointment exists at all.
+ */
+export const notificationOutbox = pgTable(
+  "notification_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "cascade" }),
+    verificationId: uuid("verification_id").references(() => bookingVerifications.id, {
+      onDelete: "cascade",
+    }),
+    channel: notificationChannel("channel").notNull(),
+    template: text("template").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    /**
+     * The one thing a message cannot be rebuilt from the database without: the
+     * one-time code, which is stored nowhere else in the clear. It is written
+     * for verification messages only and cleared the moment the row leaves the
+     * queue, so a code lives here for minutes rather than for the history's
+     * lifetime.
+     */
+    payload: jsonb("payload").$type<{ code?: string }>(),
+    status: notificationStatus("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull().defaultNow(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    providerMessageId: text("provider_message_id"),
+    lastErrorCode: text("last_error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("notification_outbox_idempotency_idx").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("notification_outbox_delivery_idx").on(table.status, table.nextAttemptAt),
+    check("notification_outbox_attempts", sql`${table.attempts} >= 0`),
+    check(
+      "notification_outbox_target",
+      sql`(${table.bookingId} is not null) <> (${table.verificationId} is not null)`,
+    ),
   ],
 );
 

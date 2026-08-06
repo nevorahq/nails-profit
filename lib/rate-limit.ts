@@ -30,6 +30,14 @@ export const IMPORT_UPLOAD_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_6
 export const IMPORT_CONFIRM_RULE: RateLimitRule = { limit: 20, windowSeconds: 3_600 };
 /** An invitation token is 256 bits, so this is about cost, not about guessing odds. */
 export const INVITATION_ACCEPT_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
+/** Public booking has separate buckets so slot browsing cannot consume create allowance. */
+export const PUBLIC_BOOKING_READ_RULE: RateLimitRule = { limit: 120, windowSeconds: 60 };
+export const PUBLIC_BOOKING_AVAILABILITY_RULE: RateLimitRule = { limit: 60, windowSeconds: 60 };
+export const PUBLIC_BOOKING_HOLD_RULE: RateLimitRule = { limit: 20, windowSeconds: 600 };
+export const PUBLIC_BOOKING_CREATE_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
+/** Its own bucket, section 7.9: guessing codes must not be paid for out of the create budget. */
+export const PUBLIC_BOOKING_VERIFY_RULE: RateLimitRule = { limit: 15, windowSeconds: 3_600 };
+export const PUBLIC_BOOKING_MANAGE_RULE: RateLimitRule = { limit: 30, windowSeconds: 3_600 };
 
 type Window = { count: number; resetAt: number };
 

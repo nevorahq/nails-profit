@@ -136,7 +136,12 @@ export async function findConflict(
     .from(bookingHolds)
     .where(
       and(
-        eq(bookingHolds.specialistId, query.specialistId),
+        query.workplaceId
+          ? or(
+              eq(bookingHolds.specialistId, query.specialistId),
+              eq(bookingHolds.workplaceId, query.workplaceId),
+            )
+          : eq(bookingHolds.specialistId, query.specialistId),
         eq(bookingHolds.status, "active"),
         gt(bookingHolds.expiresAt, query.now),
         lt(bookingHolds.startsAt, end),
@@ -342,6 +347,8 @@ export async function activeBookingIntervals(
   tx: TenantTransaction,
   specialistId: string,
   window: Interval,
+  /** A booking being moved does not compete with itself; see `SlotQuery`. */
+  excludeBookingId: string | null = null,
 ): Promise<Interval[]> {
   const rows = await tx
     .select({ start: bookings.startsAt, end: bookings.endsAt })
@@ -352,6 +359,7 @@ export async function activeBookingIntervals(
         inArray(bookings.status, [...ACTIVE_BOOKING_STATUSES]),
         lt(bookings.startsAt, window.end),
         gt(bookings.endsAt, window.start),
+        excludeBookingId ? ne(bookings.id, excludeBookingId) : undefined,
       ),
     );
 

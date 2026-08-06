@@ -4,8 +4,10 @@ import { z } from "zod";
 import { organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
+import { checkSlug } from "@/domain/slug";
 import { supportedLocales } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
@@ -14,6 +16,7 @@ const settingsSchema = z
     locale: z.enum(supportedLocales).optional(),
     currency: z.enum(["MDL", "EUR"]).optional(),
     name: z.string().trim().min(2).max(100).optional(),
+    slug: z.string().trim().toLowerCase().min(3).max(40).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to change" });
 
@@ -47,45 +50,63 @@ export async function PATCH(request: Request) {
     });
   }
 
-  const updated = await withTenant(actor.organizationId, async (tx) => {
-    const [before] = await tx
-      .select({
-        name: organizations.name,
-        locale: organizations.locale,
-        currency: organizations.currency,
-      })
-      .from(organizations)
-      .where(eq(organizations.id, actor.organizationId))
-      .limit(1);
+  if (parsed.data.slug) {
+    const problem = checkSlug(parsed.data.slug);
+    if (problem) {
+      return apiError(422, "INVALID_SLUG", "The public booking slug cannot be used", id, {
+        fieldErrors: [{ field: "slug", code: problem, message: "Invalid public slug" }],
+      });
+    }
+  }
 
-    const [row] = await tx
-      .update(organizations)
-      .set({
-        ...parsed.data,
-        updatedBy: actor.userId,
-        updatedAt: new Date(),
-        version: sql`${organizations.version} + 1`,
-      })
-      .where(eq(organizations.id, actor.organizationId))
-      .returning({
-        name: organizations.name,
-        locale: organizations.locale,
-        currency: organizations.currency,
+  try {
+    const updated = await withTenant(actor.organizationId, async (tx) => {
+      const [before] = await tx
+        .select({
+          name: organizations.name,
+          locale: organizations.locale,
+          currency: organizations.currency,
+          slug: organizations.slug,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, actor.organizationId))
+        .limit(1);
+
+      const [row] = await tx
+        .update(organizations)
+        .set({
+          ...parsed.data,
+          updatedBy: actor.userId,
+          updatedAt: new Date(),
+          version: sql`${organizations.version} + 1`,
+        })
+        .where(eq(organizations.id, actor.organizationId))
+        .returning({
+          name: organizations.name,
+          locale: organizations.locale,
+          currency: organizations.currency,
+          slug: organizations.slug,
+        });
+
+      await recordAuditEvent(tx, {
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        eventType: "organization.settings_changed",
+        entityType: "organization",
+        entityId: actor.organizationId,
+        before,
+        after: row,
+        requestId: id,
       });
 
-    await recordAuditEvent(tx, {
-      organizationId: actor.organizationId,
-      actorUserId: actor.userId,
-      eventType: "organization.settings_changed",
-      entityType: "organization",
-      entityId: actor.organizationId,
-      before,
-      after: row,
-      requestId: id,
+      return row;
     });
 
-    return row;
-  });
-
-  return apiSuccess(updated, id);
+    return apiSuccess(updated, id);
+  } catch (error) {
+    if (isUniqueViolation(error, "organization_slug_idx")) {
+      return apiError(409, "SLUG_TAKEN", "This public booking address is already used", id);
+    }
+    throw error;
+  }
 }

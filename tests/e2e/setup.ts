@@ -7,18 +7,11 @@
  * into. Nothing else about the handlers is stubbed — the session, the RBAC
  * check, the tenant transaction and the SQL are the ones that ship.
  */
-import { existsSync } from "node:fs";
 import { beforeEach, vi } from "vitest";
 
-if (existsSync(".env")) {
-  process.loadEnvFile(".env");
-}
+import { configureTestDatabase } from "../test-database-env";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "E2E tests need DATABASE_URL. Run `cp .env.example .env`, `docker compose up -d` and `npm run db:migrate` first.",
-  );
-}
+configureTestDatabase();
 
 /**
  * Rate limit counters are process-global, so without this a test's verdict

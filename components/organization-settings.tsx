@@ -39,10 +39,12 @@ function currencyName(code: string, locale: AppLocale): string {
 export function OrganizationSettings({
   locale,
   currency,
+  slug,
   canEdit,
 }: {
   locale: AppLocale;
   currency: string;
+  slug: string | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -50,8 +52,9 @@ export function OrganizationSettings({
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publicSlug, setPublicSlug] = useState(slug ?? "");
 
-  async function change(patch: { locale?: AppLocale; currency?: string }) {
+  async function change(patch: { locale?: AppLocale; currency?: string; slug?: string | null }) {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -112,6 +115,34 @@ export function OrganizationSettings({
 
       <p className="muted">{t("settings.languageHint")}</p>
       <p className="muted">{t("settings.currencyHint")}</p>
+
+      <form
+        className="inline-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void change({ slug: publicSlug.trim() || null });
+        }}
+      >
+        <label>
+          {t("settings.bookingSlug")}
+          <input
+            value={publicSlug}
+            disabled={!canEdit || pending}
+            placeholder="studio-name"
+            autoComplete="off"
+            onChange={(event) => setPublicSlug(event.target.value.toLowerCase())}
+          />
+        </label>
+        <button className="secondary-button" type="submit" disabled={!canEdit || pending}>
+          {t("settings.bookingSlugSave")}
+        </button>
+      </form>
+      <p className="muted">{t("settings.bookingSlugHint")}</p>
+      {slug && (
+        <a className="text-link" href={`/book/${slug}`} target="_blank" rel="noreferrer">
+          /book/{slug}
+        </a>
+      )}
 
       <div aria-live="polite" aria-atomic="true">
         {pending && <p className="muted">{t("common.saving")}</p>}

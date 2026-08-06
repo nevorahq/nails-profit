@@ -1,6 +1,11 @@
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTransaction } from "@/db/tenant";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
+import {
+  cancelPendingNotifications,
+  notifyBooking,
+  scheduleBookingReminder,
+} from "@/lib/booking-notifications";
 import type { CalendarCaller } from "@/lib/booking-http";
 import {
   bookingLinesOf,
@@ -40,6 +45,53 @@ export type TransitionOutcome =
       lines: readonly (typeof bookingLines.$inferSelect)[];
     }>
   | MutationFailure;
+
+/**
+ * What the client is told when the studio changes a booking, section 7.7.
+ *
+ * The templates the roadmap lists are about the appointment, not about who
+ * touched it: "запись подтверждена" is the same message whether the studio
+ * pressed confirm or the client's instant booking confirmed itself. Sitting in
+ * the transition rather than in each route is what keeps a fourth staff action
+ * from quietly shipping without it.
+ *
+ * A no-show and a completion end the appointment without anything left to say
+ * to the client — but both make a pending reminder wrong, so it goes.
+ */
+async function notifyTransition(
+  tx: TenantTransaction,
+  organizationId: string,
+  booking: BookingRow,
+  now: Date,
+) {
+  if (booking.status === "confirmed") {
+    await notifyBooking(tx, {
+      organizationId,
+      bookingId: booking.id,
+      template: "booking.confirmed",
+      occurrence: String(booking.version),
+    });
+    await scheduleBookingReminder(tx, {
+      organizationId,
+      bookingId: booking.id,
+      locationId: booking.locationId,
+      startsAt: booking.startsAt,
+      now,
+    });
+    return;
+  }
+
+  if (booking.status === "cancelled") {
+    await notifyBooking(tx, {
+      organizationId,
+      bookingId: booking.id,
+      template: "booking.cancelled",
+      occurrence: String(booking.version),
+    });
+  }
+
+  await cancelPendingNotifications(tx, booking.id);
+}
 
 export async function applyStaffTransition(
   actor: CalendarCaller,
@@ -89,6 +141,8 @@ export async function applyStaffTransition(
       entityType: "booking",
       entityId: moved.booking.id,
     });
+
+    await notifyTransition(tx, actor.organizationId, moved.booking, now);
 
     return { ok: true, booking: moved.booking, lines: await bookingLinesOf(tx, moved.booking.id) };
   });
