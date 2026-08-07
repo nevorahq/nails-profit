@@ -70,10 +70,11 @@ export function SpecialistManager({
   async function send(url: string, payload: unknown, form?: HTMLFormElement, method = "POST") {
     setPending(true);
     setError(null);
+    const hasBody = method !== "DELETE" && payload !== null;
     const response = await fetch(url, {
       method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
+      headers: hasBody ? { "content-type": "application/json" } : undefined,
+      body: hasBody ? JSON.stringify(payload) : undefined,
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
@@ -141,6 +142,10 @@ export function SpecialistManager({
 
   async function unlinkAccount(specialistId: string) {
     await send(`/api/v1/specialists/${specialistId}`, { user_id: null }, undefined, "PATCH");
+  }
+
+  async function deleteSpecialist(specialistId: string) {
+    await send(`/api/v1/specialists/${specialistId}`, null, undefined, "DELETE");
   }
 
   const withoutRule = specialists.filter(
@@ -283,7 +288,19 @@ export function SpecialistManager({
                     )}
                   </>
                 ) : (
-                  <span className="badge-warning">{t("specialists.notLinked")}</span>
+                  <div className="inline-actions">
+                    <span className="badge-warning">{t("specialists.notLinked")}</span>
+                    {canManage && (
+                      <button
+                        className="inline-action danger"
+                        type="button"
+                        disabled={pending}
+                        onClick={() => deleteSpecialist(person.id)}
+                      >
+                        {t("common.delete")}
+                      </button>
+                    )}
+                  </div>
                 )}
               </td>
             </tr>

@@ -11,12 +11,15 @@ import { authClient } from "@/lib/auth-client";
 export function LoginForm({
   initialMode = "signin",
   locale,
+  next,
 }: {
   initialMode?: "signin" | "signup";
   locale: AppLocale;
+  next?: string;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
+  const redirectTo = next ?? "/app";
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -36,16 +39,16 @@ export function LoginForm({
             password,
             name: String(data.get("name")),
             legalAccepted: data.get("legalAccepted") === "on",
-            callbackURL: "/app",
+            callbackURL: redirectTo,
           })
-        : await authClient.signIn.email({ email, password, callbackURL: "/app" });
+        : await authClient.signIn.email({ email, password, callbackURL: redirectTo });
 
     if (result.error) {
       setError(result.error.message ?? t("auth.signInFailed"));
       setPending(false);
       return;
     }
-    router.push("/app");
+    router.push(redirectTo);
     router.refresh();
   }
 

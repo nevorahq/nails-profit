@@ -1,9 +1,11 @@
-import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
+import { Fragment } from "react";
 
 import { AppNav } from "@/components/app-nav";
 import { PeriodFilter } from "@/components/period-filter";
-import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
+import { type AdjustMaterial, VisitAdjustForm } from "@/components/visit-adjust-form";
+import { clients, consumptions, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
@@ -82,12 +84,32 @@ export default async function VisitsPage({
       }),
     );
 
-    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null };
+    const incompleteIds = detailed
+      .filter((d) => !d.snapshot || d.snapshot.contributionMarginMinor === null)
+      .map((d) => d.visit.id);
+
+    const consumptionRows =
+      incompleteIds.length > 0
+        ? await tx
+            .select()
+            .from(consumptions)
+            .where(inArray(consumptions.visitId, incompleteIds))
+        : [];
+
+    const consumptionsByVisit = new Map<string, typeof consumptionRows>();
+    for (const row of consumptionRows) {
+      consumptionsByVisit.set(row.visitId, [...(consumptionsByVisit.get(row.visitId) ?? []), row]);
+    }
+
+    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null, consumptionsByVisit };
   });
 
   const withMargin = data.detailed.filter(
     (row) => row.snapshot && row.snapshot.contributionMarginMinor !== null,
   ).length;
+
+  const totalRevenue = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.revenueMinor ?? 0), 0);
+  const totalCommission = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.commissionMinor ?? 0), 0);
 
   return (
     <main className="app-shell">
@@ -98,12 +120,6 @@ export default async function VisitsPage({
         </div>
         <AppNav active="/app/visits" locale={locale} />
       </header>
-
-      <div className="button-row">
-        <Link className="primary-button" href="/app/visits/new">
-          {t("visits.close")}
-        </Link>
-      </div>
 
       <PeriodFilter
         locale={locale}
@@ -146,42 +162,72 @@ export default async function VisitsPage({
           {data.detailed.map(({ visit, snapshot, lines, clientName }) => {
             const serviceLine = lines.find((line) => line.kind === "service");
             const incomplete = !snapshot || snapshot.contributionMarginMinor === null;
+            const visitConsumptions = data.consumptionsByVisit.get(visit.id) ?? [];
+            const adjustMaterials: AdjustMaterial[] = visitConsumptions.map((c) => ({
+              materialId: c.materialId,
+              materialName: c.materialNameSnapshot,
+              baseUnit: c.baseUnitSnapshot,
+              normativeQuantityMilliUnits: c.normativeQuantityMilliUnits,
+              actualQuantityMilliUnits: c.actualQuantityMilliUnits,
+            }));
             return (
-              <tr key={visit.id}>
-                <td>{visit.completedAt.toLocaleDateString(localeTag(locale))}</td>
-                <td>
-                  {serviceLine
-                    ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
-                    : "—"}
-                  {lines.length > 1 && <span className="unit-hint">+{lines.length - 1}</span>}
-                  {visit.status === "adjusted" && <span className="badge-warning">{t("visits.adjusted")}</span>}
-                </td>
-                <td>{clientName ?? <span className="muted">—</span>}</td>
-                <td>{snapshot ? money(snapshot.revenueMinor) : "—"}</td>
-                {incomplete ? (
-                  <td colSpan={3}>
-                    <span className="badge-warning">
-                      {(snapshot?.incompleteReasons ?? [])
-                        .map((reason) => t(`reason.${reason}` as MessageKey))
-                        .join("; ") || t("visits.noCalculation")}
-                    </span>
+              <Fragment key={visit.id}>
+                <tr>
+                  <td>{visit.completedAt.toLocaleDateString(localeTag(locale))}</td>
+                  <td>
+                    {serviceLine
+                      ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
+                      : "—"}
+                    {lines.length > 1 && <span className="unit-hint">+{lines.length - 1}</span>}
+                    {visit.status === "adjusted" && <span className="badge-warning">{t("visits.adjusted")}</span>}
                   </td>
-                ) : (
-                  <>
-                    <td className={snapshot!.contributionMarginMinor! < 0 ? "metric-negative" : ""}>
-                      {money(snapshot!.contributionMarginMinor!)}
+                  <td>{clientName ?? <span className="muted">—</span>}</td>
+                  <td>{snapshot ? money(snapshot.revenueMinor) : "—"}</td>
+                  {incomplete ? (
+                    <td colSpan={3}>
+                      <div className="inline-actions">
+                      <span className="badge-warning">
+                        {(snapshot?.incompleteReasons ?? [])
+                          .map((reason) => t(`reason.${reason}` as MessageKey))
+                          .join("; ") || t("visits.noCalculation")}
+                      </span>
+                      <VisitAdjustForm
+                        visitId={visit.id}
+                        materials={adjustMaterials}
+                        plannedDurationMinutes={visit.plannedDurationMinutes}
+                        actualDurationMinutes={visit.actualDurationMinutes}
+                        locale={locale}
+                      />
+                      </div>
                     </td>
-                    <td>{formatBasisPoints(snapshot!.marginBasisPoints, localeTag(locale))}</td>
-                    <td className={snapshot!.profitPerHourMinor! < 0 ? "metric-negative" : ""}>
-                      {money(snapshot!.profitPerHourMinor!)}
-                      {snapshot!.estimatedDuration && <span className="unit-hint">{t("visits.estimate")}</span>}
-                    </td>
-                  </>
-                )}
-              </tr>
+                  ) : (
+                    <>
+                      <td className={snapshot!.contributionMarginMinor! < 0 ? "metric-negative" : ""}>
+                        {money(snapshot!.contributionMarginMinor!)}
+                      </td>
+                      <td>{formatBasisPoints(snapshot!.marginBasisPoints, localeTag(locale))}</td>
+                      <td className={snapshot!.profitPerHourMinor! < 0 ? "metric-negative" : ""}>
+                        {money(snapshot!.profitPerHourMinor!)}
+                        {snapshot!.estimatedDuration && <span className="unit-hint">{t("visits.estimate")}</span>}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              </Fragment>
             );
           })}
         </tbody>
+        {data.detailed.length > 0 && (
+          <tfoot>
+            <tr>
+              <td colSpan={3}>{t("visits.total")}</td>
+              <td>{money(totalRevenue)}</td>
+              <td colSpan={3}>
+                {t("visits.masterEarnings")}: <strong>{money(totalCommission)}</strong>
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
     </main>
   );

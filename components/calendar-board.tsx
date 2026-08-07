@@ -61,6 +61,15 @@ const CANCELLATION_REASONS = ["client_request", "studio_request", "no_contact", 
 
 type Alternative = Readonly<{ date: string; slots: string[] }>;
 
+type RecipeMaterial = {
+  material_id: string;
+  material_name: string;
+  base_unit: string;
+  normative_quantity_milli_units: number;
+};
+
+type BookingRecipe = { durationMinutes: number; materials: RecipeMaterial[] };
+
 export function CalendarBoard({
   view,
   days,
@@ -102,6 +111,7 @@ export function CalendarBoard({
   const t = getTranslator(locale);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recipes, setRecipes] = useState<Record<string, BookingRecipe | "loading" | "error">>({});
   // The alternatives arrive as UTC instants and have to be read back in the
   // zone of the location they belong to, so the zone travels with them.
   const [alternatives, setAlternatives] = useState<{ zone: string; entries: Alternative[] }>({
@@ -293,6 +303,37 @@ export function CalendarBoard({
     });
   }
 
+  async function loadRecipe(bookingId: string) {
+    if (recipes[bookingId]) return;
+    setRecipes((prev) => ({ ...prev, [bookingId]: "loading" }));
+    const response = await fetch(`/api/v1/bookings/${bookingId}/recipe`);
+    if (response.ok) {
+      const body = (await response.json()) as { data: BookingRecipe };
+      setRecipes((prev) => ({ ...prev, [bookingId]: body.data }));
+    } else {
+      setRecipes((prev) => ({ ...prev, [bookingId]: "error" }));
+    }
+  }
+
+  async function complete(booking: CalendarBooking, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const recipe = recipes[booking.id];
+    const materials = typeof recipe === "object" && recipe !== null ? recipe.materials : [];
+
+    const durationRaw = String(data.get("actual_duration") ?? "").trim();
+    const consumption = materials.map((m) => ({
+      material_id: m.material_id,
+      actual_quantity: Number(String(data.get(`actual-${m.material_id}`) ?? "").trim()),
+    }));
+
+    await send(`/api/v1/bookings/${booking.id}/complete`, {
+      version: booking.version,
+      ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
+      consumption,
+    });
+  }
+
   const grouped = groupBookings(view, days, bookings, specialists);
 
   /**
@@ -471,18 +512,83 @@ export function CalendarBoard({
                           )}
                           {booking.status === "confirmed" && (
                             <>
-                              <button
-                                type="button"
-                                className="primary-button"
-                                disabled={pending}
-                                onClick={() =>
-                                  send(`/api/v1/bookings/${booking.id}/complete`, {
-                                    version: booking.version,
-                                  })
-                                }
+                              <details
+                                className="calendar-subform"
+                                onToggle={(e) => {
+                                  if ((e.currentTarget as HTMLDetailsElement).open) {
+                                    loadRecipe(booking.id);
+                                  }
+                                }}
                               >
-                                {t("calendar.complete")}
-                              </button>
+                                <summary>{t("calendar.complete")}</summary>
+                                <form className="inline-form" onSubmit={(e) => complete(booking, e)}>
+                                  {(() => {
+                                    const r = recipes[booking.id];
+                                    const dur = typeof r === "object" && r !== null ? r.durationMinutes : undefined;
+                                    return (
+                                      <label>
+                                        {t("closeVisit.actualMinutes")}
+                                        <input
+                                          key={dur ?? "pending"}
+                                          name="actual_duration"
+                                          type="number"
+                                          min="1"
+                                          step="1"
+                                          defaultValue={dur}
+                                        />
+                                      </label>
+                                    );
+                                  })()}
+                                  {recipes[booking.id] === "loading" && (
+                                    <p className="muted">{t("calendar.loadingRecipe")}</p>
+                                  )}
+                                  {recipes[booking.id] === "error" && (
+                                    <p className="muted">{t("closeVisit.noRecipe")}</p>
+                                  )}
+                                  {typeof recipes[booking.id] === "object" && recipes[booking.id] !== null && (
+                                    (() => {
+                                      const recipe = recipes[booking.id] as BookingRecipe;
+                                      return recipe.materials.length > 0 ? (
+                                        <table className="data-table">
+                                          <thead>
+                                            <tr>
+                                              <th>{t("common.material")}</th>
+                                              <th>{t("closeVisit.norm")}</th>
+                                              <th>{t("closeVisit.actual")}</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {recipe.materials.map((m) => (
+                                              <tr key={m.material_id}>
+                                                <td>{m.material_name}</td>
+                                                <td className="muted">
+                                                  {m.normative_quantity_milli_units / 1000} {m.base_unit}
+                                                </td>
+                                                <td>
+                                                  <input
+                                                    aria-label={`${t("closeVisit.actual")} — ${m.material_name}`}
+                                                    name={`actual-${m.material_id}`}
+                                                    type="number"
+                                                    step="0.001"
+                                                    min="0"
+                                                    defaultValue={m.normative_quantity_milli_units / 1000}
+                                                  />
+                                                  <span className="unit-hint">{m.base_unit}</span>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      ) : (
+                                        <p className="muted">{t("closeVisit.noRecipe")}</p>
+                                      );
+                                    })()
+                                  )}
+                                  <button className="primary-button" type="submit" disabled={pending}>
+                                    {pending ? t("common.saving") : t("calendar.complete")}
+                                  </button>
+                                </form>
+                              </details>
                               <button
                                 type="button"
                                 className="secondary-button"

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -126,4 +126,56 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     throw error;
   }
+}
+
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const requestIdentifier = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) {
+    return apiError(401, "UNAUTHENTICATED", "Authentication is required", requestIdentifier);
+  }
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", requestIdentifier);
+  }
+
+  const actor = caller.membership;
+  if (!canManageCatalogue(actor.role, "commissions")) {
+    return apiError(403, "FORBIDDEN", "This role cannot manage specialists", requestIdentifier);
+  }
+
+  const { id } = await context.params;
+
+  const archived = await withTenant(actor.organizationId, async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(specialists)
+      .where(and(eq(specialists.id, id), isNull(specialists.archivedAt)))
+      .limit(1);
+    if (!existing) return null;
+    if (existing.userId) return { blocked: true } as const;
+
+    const [specialist] = await tx
+      .update(specialists)
+      .set({ archivedAt: new Date(), updatedBy: actor.userId, updatedAt: new Date(), version: sql`${specialists.version} + 1` })
+      .where(eq(specialists.id, id))
+      .returning({ id: specialists.id });
+
+    await recordAuditEvent(tx, {
+      organizationId: actor.organizationId,
+      actorUserId: actor.userId,
+      eventType: "specialist.archived",
+      entityType: "specialist",
+      entityId: specialist.id,
+      before: { name: existing.name },
+      after: { archived_at: new Date().toISOString() },
+      requestId: requestIdentifier,
+    });
+
+    return specialist;
+  });
+
+  if (!archived) return apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", requestIdentifier);
+  if ("blocked" in archived) return apiError(409, "SPECIALIST_HAS_ACCOUNT", "Cannot delete a specialist with a linked account", requestIdentifier);
+
+  return apiSuccess({ id: archived.id }, requestIdentifier);
 }
