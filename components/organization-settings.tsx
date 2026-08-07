@@ -52,6 +52,7 @@ export function OrganizationSettings({
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [publicSlug, setPublicSlug] = useState(slug ?? "");
 
   async function change(patch: { locale?: AppLocale; currency?: string; slug?: string | null }) {
@@ -78,6 +79,20 @@ export function OrganizationSettings({
   }
 
   return (
+    <>
+      <div className="add-form-toggle">
+        {settingsOpen ? (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button className="btn-toggle-close" type="button" onClick={() => setSettingsOpen(false)} aria-label={t("common.cancel")}>−</button>
+          </div>
+        ) : (
+          <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setSettingsOpen(true)}>
+            {t("settings.title")}
+          </button>
+        )}
+      </div>
+      <div className={`add-form-wrap${settingsOpen ? "" : " add-form-closed"}`}>
+        <div className="add-form-inner">
     <section className="panel">
       <h2>{t("settings.title")}</h2>
 
@@ -155,5 +170,8 @@ export function OrganizationSettings({
       )}
       {!canEdit && <p className="warning-banner">{t("common.noAccess")}</p>}
     </section>
+        </div>
+      </div>
+    </>
   );
 }

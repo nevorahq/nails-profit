@@ -147,6 +147,56 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   return apiSuccess(serialize(updated.service, updated.costing), requestIdentifier);
 }
 
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const requestIdentifier = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) {
+    return apiError(401, "UNAUTHENTICATED", "Authentication is required", requestIdentifier);
+  }
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", requestIdentifier);
+  }
+
+  const actor = caller.membership;
+  if (!can(actor.role, "services", "write")) {
+    return apiError(403, "FORBIDDEN", "This role cannot manage services", requestIdentifier);
+  }
+
+  const { id } = await context.params;
+
+  const archived = await withTenant(actor.organizationId, async (tx) => {
+    const [existing] = await tx.select().from(services).where(eq(services.id, id)).limit(1);
+    if (!existing || existing.archivedAt) return null;
+
+    const [service] = await tx
+      .update(services)
+      .set({ archivedAt: new Date(), updatedBy: actor.userId, updatedAt: new Date() })
+      .where(eq(services.id, id))
+      .returning();
+
+    await recordAuditEvent(tx, {
+      organizationId: actor.organizationId,
+      actorUserId: actor.userId,
+      eventType: "service.archived",
+      entityType: "service",
+      entityId: service.id,
+      before: { name: existing.name },
+      after: { archived: true },
+      requestId: requestIdentifier,
+    });
+
+    await recordCompletedServiceCostEvents(tx, actor);
+
+    return service;
+  });
+
+  if (!archived) {
+    return apiError(404, "SERVICE_NOT_FOUND", "No service with this ID", requestIdentifier);
+  }
+
+  return apiSuccess({ id: archived.id }, requestIdentifier);
+}
+
 function serialize(
   service: typeof services.$inferSelect,
   costing: Awaited<ReturnType<typeof loadServiceCosting>>,

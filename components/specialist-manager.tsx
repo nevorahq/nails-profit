@@ -63,6 +63,9 @@ export function SpecialistManager({
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [exceptionOpen, setExceptionOpen] = useState(false);
 
   async function send(url: string, payload: unknown, form?: HTMLFormElement, method = "POST") {
     setPending(true);
@@ -165,41 +168,58 @@ export function SpecialistManager({
       )}
 
       {canManage && (
-        <section className="panel">
-          <h2>{t("specialists.add")}</h2>
-          <form className="inline-form" onSubmit={createSpecialist}>
-            <label>
-              {t("specialists.name")}
-              <input name="name" required maxLength={200} placeholder={t("specialists.namePlaceholder")} />
-            </label>
-            <label>
-              {t("specialists.cooperation")}
-              <select name="cooperation_type" defaultValue="commission">
-                <option value="commission">{t("cooperation.commission")}</option>
-                <option value="rent">{t("cooperation.rent")}</option>
-                <option value="staff">{t("cooperation.staff")}</option>
-              </select>
-            </label>
-            <label>
-              {t("specialists.commissionType")}
-              <select name="rule_type" defaultValue="percentage">
-                <option value="percentage">{t("commissionType.percentage")}</option>
-                <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
-                <option value="fixed">{t("commissionType.fixed")}</option>
-              </select>
-            </label>
-            <label>
-              {t("specialists.value")}
-              <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("common.add")}
-            </button>
-          </form>
-          <p className="muted">
-            {t("specialists.valueHint", { currency })}
-          </p>
-        </section>
+        <>
+          <div className="add-form-toggle">
+            {addOpen ? (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button className="btn-toggle-close" type="button" onClick={() => setAddOpen(false)} aria-label={t("common.cancel")}>−</button>
+              </div>
+            ) : (
+              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setAddOpen(true)}>
+                {t("specialists.add")}
+              </button>
+            )}
+          </div>
+          <div className={`add-form-wrap${addOpen ? "" : " add-form-closed"}`}>
+            <div className="add-form-inner">
+              <section className="panel">
+                <h2>{t("specialists.add")}</h2>
+                <form className="inline-form" onSubmit={createSpecialist}>
+                  <label>
+                    {t("specialists.name")}
+                    <input name="name" required maxLength={200} placeholder={t("specialists.namePlaceholder")} />
+                  </label>
+                  <label>
+                    {t("specialists.cooperation")}
+                    <select name="cooperation_type" defaultValue="commission">
+                      <option value="commission">{t("cooperation.commission")}</option>
+                      <option value="rent">{t("cooperation.rent")}</option>
+                      <option value="staff">{t("cooperation.staff")}</option>
+                    </select>
+                  </label>
+                  <label>
+                    {t("specialists.commissionType")}
+                    <select name="rule_type" defaultValue="percentage">
+                      <option value="percentage">{t("commissionType.percentage")}</option>
+                      <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
+                      <option value="fixed">{t("commissionType.fixed")}</option>
+                    </select>
+                  </label>
+                  <label>
+                    {t("specialists.value")}
+                    <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={pending}>
+                    {pending ? t("common.saving") : t("common.add")}
+                  </button>
+                </form>
+                <p className="muted">
+                  {t("specialists.valueHint", { currency })}
+                </p>
+              </section>
+            </div>
+          </div>
+        </>
       )}
 
       {error && <div className="form-error" role="alert">{error}</div>}
@@ -272,85 +292,119 @@ export function SpecialistManager({
       </table>
 
       {canManage && specialists.length > 0 && (
-        <section className="panel">
-          <h2>{t("specialists.linkAccount")}</h2>
-          <p className="muted">{t("specialists.linkHint")}</p>
-          {unlinkedMembers.length === 0 ? (
-            <p className="muted">{t("specialists.noMembers")}</p>
-          ) : (
-            <form className="inline-form" onSubmit={linkAccount}>
-              <label>
-                {t("specialists.specialist")}
-                <select name="specialist_id">
-                  {specialists.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("specialists.member")}
-                <select name="user_id">
-                  {unlinkedMembers.map((member) => (
-                    <option key={member.user_id} value={member.user_id}>
-                      {member.email} — {t(`roles.${member.role}` as MessageKey)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="primary-button" type="submit" disabled={pending}>
-                {pending ? t("common.saving") : t("specialists.link")}
+        <>
+          <div className="add-form-toggle">
+            {linkOpen ? (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button className="btn-toggle-close" type="button" onClick={() => setLinkOpen(false)} aria-label={t("common.cancel")}>−</button>
+              </div>
+            ) : (
+              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setLinkOpen(true)}>
+                {t("specialists.linkAccount")}
               </button>
-            </form>
-          )}
-        </section>
+            )}
+          </div>
+          <div className={`add-form-wrap${linkOpen ? "" : " add-form-closed"}`}>
+            <div className="add-form-inner">
+              <section className="panel">
+                <h2>{t("specialists.linkAccount")}</h2>
+                <p className="muted">{t("specialists.linkHint")}</p>
+                {unlinkedMembers.length === 0 ? (
+                  <p className="muted">{t("specialists.noMembers")}</p>
+                ) : (
+                  <form className="inline-form" onSubmit={linkAccount}>
+                    <label>
+                      {t("specialists.specialist")}
+                      <select name="specialist_id">
+                        {specialists.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t("specialists.member")}
+                      <select name="user_id">
+                        {unlinkedMembers.map((member) => (
+                          <option key={member.user_id} value={member.user_id}>
+                            {member.email} — {t(`roles.${member.role}` as MessageKey)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="primary-button" type="submit" disabled={pending}>
+                      {pending ? t("common.saving") : t("specialists.link")}
+                    </button>
+                  </form>
+                )}
+              </section>
+            </div>
+          </div>
+        </>
       )}
 
       {canManage && specialists.length > 0 && services.length > 0 && (
-        <section className="panel">
-          <h2>{t("specialists.serviceException")}</h2>
-          <p className="muted">
+        <>
+          <div className="add-form-toggle">
+            {exceptionOpen ? (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button className="btn-toggle-close" type="button" onClick={() => setExceptionOpen(false)} aria-label={t("common.cancel")}>−</button>
+              </div>
+            ) : (
+              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setExceptionOpen(true)}>
+                {t("specialists.serviceException")}
+              </button>
+            )}
+          </div>
+          <div className={`add-form-wrap${exceptionOpen ? "" : " add-form-closed"}`}>
+            <div className="add-form-inner">
+              <section className="panel">
+                <h2>{t("specialists.serviceException")}</h2>
+                <p className="muted">
 {t("specialists.exceptionHint")}
-          </p>
-          <form className="inline-form" onSubmit={addException}>
-            <label>
-              {t("specialists.specialist")}
-              <select name="specialist_id">
-                {specialists.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("services.service")}
-              <select name="service_id">
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("specialists.type")}
-              <select name="rule_type" defaultValue="percentage">
-                <option value="percentage">{t("commissionType.percentage")}</option>
-                <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
-                <option value="fixed">{t("commissionType.fixed")}</option>
-              </select>
-            </label>
-            <label>
-              {t("specialists.value")}
-              <input name="rule_value" type="number" step="0.01" min="0" placeholder="50" required />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {t("specialists.saveException")}
-            </button>
-          </form>
-        </section>
+                </p>
+                <form className="inline-form" onSubmit={addException}>
+                  <label>
+                    {t("specialists.specialist")}
+                    <select name="specialist_id">
+                      {specialists.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {t("services.service")}
+                    <select name="service_id">
+                      {services.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {t("specialists.type")}
+                    <select name="rule_type" defaultValue="percentage">
+                      <option value="percentage">{t("commissionType.percentage")}</option>
+                      <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
+                      <option value="fixed">{t("commissionType.fixed")}</option>
+                    </select>
+                  </label>
+                  <label>
+                    {t("specialists.value")}
+                    <input name="rule_value" type="number" step="0.01" min="0" placeholder="50" required />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={pending}>
+                    {t("specialists.saveException")}
+                  </button>
+                </form>
+              </section>
+            </div>
+          </div>
+        </>
       )}
     </>
   );

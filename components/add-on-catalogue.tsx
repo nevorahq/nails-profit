@@ -39,6 +39,7 @@ export function AddOnCatalogue({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   async function send(url: string, method: string, payload: unknown, form?: HTMLFormElement) {
     setPending(true);
@@ -97,29 +98,46 @@ export function AddOnCatalogue({
   return (
     <>
       {canManage && (
-        <section className="panel">
-          <h2>{t("addOns.add")}</h2>
-          <form className="inline-form" onSubmit={createAddOn}>
-            <label>
-              {t("addOns.name")}
-              <input name="name" required maxLength={200} placeholder={t("addOns.namePlaceholder")} />
-            </label>
-            <label>
-              {t("addOns.priceDelta", { currency })}
-              <input name="price" type="number" step="0.01" placeholder="100" />
-            </label>
-            <label>
-              {t("addOns.timeDelta")}
-              <input name="duration" type="number" step="1" placeholder="20" />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("common.add")}
-            </button>
-          </form>
-          <p className="muted">
+        <>
+          <div className="add-form-toggle">
+            {formOpen ? (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button className="btn-toggle-close" type="button" onClick={() => setFormOpen(false)} aria-label={t("common.cancel")}>−</button>
+              </div>
+            ) : (
+              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setFormOpen(true)}>
+                {t("addOns.add")}
+              </button>
+            )}
+          </div>
+          <div className={`add-form-wrap${formOpen ? "" : " add-form-closed"}`}>
+            <div className="add-form-inner">
+              <section className="panel">
+                <h2>{t("addOns.add")}</h2>
+                <form className="inline-form" onSubmit={createAddOn}>
+                  <label>
+                    {t("addOns.name")}
+                    <input name="name" required maxLength={200} placeholder={t("addOns.namePlaceholder")} />
+                  </label>
+                  <label>
+                    {t("addOns.priceDelta", { currency })}
+                    <input name="price" type="number" step="0.01" placeholder="100" />
+                  </label>
+                  <label>
+                    {t("addOns.timeDelta")}
+                    <input name="duration" type="number" step="1" placeholder="20" />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={pending}>
+                    {pending ? t("common.saving") : t("common.add")}
+                  </button>
+                </form>
+                <p className="muted">
 {t("addOns.negativeHint")}
-          </p>
-        </section>
+                </p>
+              </section>
+            </div>
+          </div>
+        </>
       )}
 
       {error && <div className="form-error" role="alert">{error}</div>}
