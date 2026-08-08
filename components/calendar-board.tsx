@@ -19,6 +19,19 @@ import { formatMoneyMinor } from "@/lib/format";
 
 export type { CalendarView };
 
+export type CalendarException = Readonly<{
+  id: string;
+  localDate: string;
+  localStart: string;
+  localEnd: string;
+  timezone: string;
+  specialistId: string;
+  specialistName: string;
+  locationId: string | null;
+  locationName: string | null;
+  reason: string | null;
+}>;
+
 /**
  * The staff calendar's interactive half, roadmap section 7.2.
  *
@@ -83,7 +96,9 @@ export function CalendarBoard({
   clients,
   filters,
   ownSpecialistId,
+  exceptions,
   canWrite,
+  showFilters,
   canFilterBySpecialist,
   currency,
   localeTag,
@@ -101,7 +116,9 @@ export function CalendarBoard({
   clients: readonly Option[];
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
+  exceptions: readonly CalendarException[];
   canWrite: boolean;
+  showFilters: boolean;
   canFilterBySpecialist: boolean;
   currency: string;
   localeTag: string;
@@ -336,6 +353,21 @@ export function CalendarBoard({
 
   const grouped = groupBookings(view, days, bookings, specialists);
 
+  // For the day view, specialists who have a blocked slot but no bookings that
+  // day won't appear in `grouped` (which only shows people with appointments).
+  // Add a group for each such specialist so their block is visible.
+  const allGroups = [...grouped];
+  if (view === "day") {
+    const covered = new Set(grouped.map((g) => g.key));
+    const seen = new Set<string>();
+    for (const exc of exceptions) {
+      if (exc.localDate === days[0] && !covered.has(exc.specialistId) && !seen.has(exc.specialistId)) {
+        seen.add(exc.specialistId);
+        allGroups.push({ key: exc.specialistId, title: exc.specialistName, bookings: [] });
+      }
+    }
+  }
+
   /**
    * Only the people who actually work at the chosen address are offered.
    * The endpoint refuses the rest with `SPECIALIST_NOT_AT_LOCATION`, and a
@@ -387,49 +419,51 @@ export function CalendarBoard({
         </div>
       </nav>
 
-      <form className="inline-form" method="get">
-        <input type="hidden" name="view" value={view} />
-        <input type="hidden" name="date" value={days[0]} />
-        <label>
-          {t("calendar.location")}
-          <select name="location" defaultValue={filters.location}>
-            <option value="">{t("calendar.allLocations")}</option>
-            {locations.map((place) => (
-              <option key={place.id} value={place.id}>
-                {place.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {canFilterBySpecialist && (
+      {showFilters && (
+        <form className="inline-form" method="get">
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="date" value={days[0]} />
           <label>
-            {t("calendar.specialist")}
-            <select name="specialist" defaultValue={filters.specialist}>
-              <option value="">{t("calendar.allSpecialists")}</option>
-              {specialists.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
+            {t("calendar.location")}
+            <select name="location" defaultValue={filters.location}>
+              <option value="">{t("calendar.allLocations")}</option>
+              {locations.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        <label>
-          {t("calendar.status")}
-          <select name="status" defaultValue={filters.status}>
-            <option value="">{t("calendar.allStatuses")}</option>
-            <option value="pending_confirmation,confirmed">{t("calendar.statusLive")}</option>
-            <option value="pending_confirmation">{t("bookingStatus.pending_confirmation")}</option>
-            <option value="confirmed">{t("bookingStatus.confirmed")}</option>
-            <option value="cancelled">{t("bookingStatus.cancelled")}</option>
-            <option value="completed">{t("bookingStatus.completed")}</option>
-            <option value="no_show">{t("bookingStatus.no_show")}</option>
-          </select>
-        </label>
-        <button className="secondary-button" type="submit">
-          {t("calendar.apply")}
-        </button>
-      </form>
+          {canFilterBySpecialist && (
+            <label>
+              {t("calendar.specialist")}
+              <select name="specialist" defaultValue={filters.specialist}>
+                <option value="">{t("calendar.allSpecialists")}</option>
+                {specialists.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label>
+            {t("calendar.status")}
+            <select name="status" defaultValue={filters.status}>
+              <option value="">{t("calendar.allStatuses")}</option>
+              <option value="pending_confirmation,confirmed">{t("calendar.statusLive")}</option>
+              <option value="pending_confirmation">{t("bookingStatus.pending_confirmation")}</option>
+              <option value="confirmed">{t("bookingStatus.confirmed")}</option>
+              <option value="cancelled">{t("bookingStatus.cancelled")}</option>
+              <option value="completed">{t("bookingStatus.completed")}</option>
+              <option value="no_show">{t("bookingStatus.no_show")}</option>
+            </select>
+          </label>
+          <button className="secondary-button" type="submit">
+            {t("calendar.apply")}
+          </button>
+        </form>
+      )}
 
       {error && (
         <div className="form-error" role="alert">
@@ -447,14 +481,78 @@ export function CalendarBoard({
         </div>
       )}
 
-      {grouped.map((group) => (
+      {allGroups.map((group) => {
+        const groupExceptions =
+          view === "day"
+            ? exceptions.filter((e) => e.specialistId === group.key && e.localDate === days[0])
+            : view === "week"
+              ? exceptions.filter((e) => e.localDate === group.key)
+              : exceptions;
+
+        type GroupItem =
+          | { kind: "booking"; data: CalendarBooking }
+          | { kind: "exception"; data: CalendarException };
+
+        const items: GroupItem[] = [
+          ...group.bookings.map((b) => ({ kind: "booking" as const, data: b })),
+          ...groupExceptions.map((e) => ({ kind: "exception" as const, data: e })),
+        ].sort((a, b) => a.data.localStart.localeCompare(b.data.localStart));
+
+        return (
         <section className="panel calendar-group" key={group.key}>
           <h2>{group.title}</h2>
-          {group.bookings.length === 0 ? (
+          {items.length === 0 ? (
             <p className="muted">{t("calendar.emptyDay")}</p>
           ) : (
             <ul className="calendar-list">
-              {group.bookings.map((booking) => (
+              {items.map((item) => {
+                if (item.kind === "exception") {
+                  const exc = item.data;
+                  return (
+                    <li key={exc.id} className="calendar-entry status-blocked">
+                      <details>
+                        <summary>
+                          <span className="calendar-time">
+                            {exc.localStart}–{exc.localEnd}
+                          </span>
+                          <span className="calendar-what">
+                            {t("calendar.blockedLabel")}
+                            {exc.reason && <span className="unit-hint">{exc.reason}</span>}
+                          </span>
+                          {view !== "day" && (
+                            <span className="calendar-who">{exc.specialistName}</span>
+                          )}
+                        </summary>
+                        <div className="calendar-detail">
+                          <p className="muted">
+                            {exc.locationName ?? t("calendar.allLocations")}
+                            {" · "}
+                            {exc.specialistName}
+                          </p>
+                          <p className="muted">{t("calendar.inZone", { zone: exc.timezone })}</p>
+                          {canWrite && (
+                            <button
+                              className="danger-button"
+                              type="button"
+                              disabled={pending}
+                              onClick={() =>
+                                send(
+                                  `/api/v1/availability/exceptions?id=${exc.id}`,
+                                  undefined,
+                                  { method: "DELETE" },
+                                )
+                              }
+                            >
+                              {pending ? t("common.saving") : t("calendar.unblock")}
+                            </button>
+                          )}
+                        </div>
+                      </details>
+                    </li>
+                  );
+                }
+                const booking = item.data;
+                return (
                 <li key={booking.id} className={`calendar-entry status-${booking.status}`}>
                   <details>
                     <summary>
@@ -666,11 +764,13 @@ export function CalendarBoard({
                     </div>
                   </details>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </section>
-      ))}
+        );
+      })}
 
       {canWrite && locations.length > 0 && services.length > 0 && (
         <section className="panel">

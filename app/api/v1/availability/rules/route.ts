@@ -113,9 +113,9 @@ export async function PUT(request: Request) {
   }
 
   const actor = caller.membership;
-  // A rota is not a personal preference: it decides which clients can reach
-  // whom, so it takes the organization-wide bookings scope.
-  if (!canManageCatalogue(actor.role, "bookings")) {
+  const canManageAll = canManageCatalogue(actor.role, "bookings");
+  const canManageOwn = can(actor.role, "bookings", "write") && scopeFor(actor.role, "bookings") === "own";
+  if (!canManageAll && !canManageOwn) {
     return apiError(403, "FORBIDDEN", "This role cannot manage schedules", id);
   }
   const disabled = await bookingModuleRefusal(actor.organizationId, id, "write");
@@ -127,6 +127,20 @@ export async function PUT(request: Request) {
     return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
       fieldErrors: toFieldErrors(parsed.error.issues),
     });
+  }
+
+  // Section 6.1: a Master may only update their own schedule.
+  if (canManageOwn && !canManageAll) {
+    const [own] = await withTenant(actor.organizationId, (tx) =>
+      tx
+        .select({ id: specialists.id })
+        .from(specialists)
+        .where(eq(specialists.userId, actor.userId))
+        .limit(1),
+    );
+    if (!own || own.id !== parsed.data.specialist_id) {
+      return apiError(403, "FORBIDDEN", "Masters can only manage their own schedule", id);
+    }
   }
 
   const effectiveFrom = parseLocalDate(parsed.data.effective_from);

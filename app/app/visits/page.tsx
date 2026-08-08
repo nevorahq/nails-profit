@@ -118,7 +118,7 @@ export default async function VisitsPage({
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("visits.title")}</h1>
         </div>
-        <AppNav active="/app/visits" locale={locale} />
+        <AppNav active="/app/visits" locale={locale} role={membership.role} />
       </header>
 
       <PeriodFilter

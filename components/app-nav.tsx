@@ -2,18 +2,14 @@ import Link from "next/link";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import type { MemberRole } from "@/domain/rbac";
 
-/**
- * One definition of the application's tabs.
- *
- * Previously each page carried its own copy, which is how the Import tab had to
- * be added in eight places and how a ninth page would quietly ship without it.
- */
 const TABS: readonly { href: string; key: MessageKey }[] = [
   { href: "/app", key: "nav.dashboard" },
   { href: "/app/calendar", key: "nav.calendar" },
   { href: "/app/booking", key: "nav.booking" },
   { href: "/app/visits", key: "nav.visits" },
+  { href: "/app/clients", key: "nav.clients" },
   { href: "/app/services", key: "nav.services" },
   { href: "/app/add-ons", key: "nav.addOns" },
   { href: "/app/materials", key: "nav.materials" },
@@ -22,19 +18,32 @@ const TABS: readonly { href: string; key: MessageKey }[] = [
   { href: "/app/settings", key: "nav.settings" },
 ];
 
-/**
- * The calendar tab stays even when the booking module is switched off. Section
- * 7's rollback keeps the appointments already made visible to staff, so the tab
- * leads to a real, read-only page rather than to nothing — and hiding it would
- * be the wrong help on the one morning it matters, when somebody has to find
- * out who is still expected today.
- */
-export async function AppNav({ active, locale }: { active: string; locale: AppLocale }) {
+// Tabs hidden from the master role.
+const MASTER_HIDDEN: ReadonlySet<string> = new Set([
+  "/app/import",
+  "/app/specialists",
+  "/app/materials",
+  "/app/add-ons",
+  "/app/clients",
+  "/app/visits",
+]);
+
+export async function AppNav({
+  active,
+  locale,
+  role,
+}: {
+  active: string;
+  locale: AppLocale;
+  role?: MemberRole;
+}) {
   const t = getTranslator(locale);
+  const tabs =
+    role === "master" ? TABS.filter((tab) => !MASTER_HIDDEN.has(tab.href)) : TABS;
 
   return (
     <nav className="tab-nav" aria-label={t("nav.primary")}>
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}

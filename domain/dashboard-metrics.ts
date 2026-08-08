@@ -14,6 +14,7 @@ export type VisitMetricRow = Readonly<{
   serviceId: string | null;
   serviceName: string;
   revenueMinor: number;
+  commissionMinor: number | null;
   /** Null when the visit could not be costed; never read as zero. */
   contributionMarginMinor: number | null;
   materialCostMinor: number | null;
@@ -27,6 +28,7 @@ export type ServiceRanking = Readonly<{
   serviceName: string;
   visits: number;
   revenueMinor: number;
+  commissionMinor: number;
   contributionMarginMinor: number;
   marginBasisPoints: number | null;
   profitPerHourMinor: number | null;
@@ -130,6 +132,7 @@ function rankServices(costed: readonly VisitMetricRow[]): ServiceRanking[] {
   return [...groups.values()]
     .map((rows) => {
       const revenueMinor = rows.reduce((total, row) => total + row.revenueMinor, 0);
+      const commissionMinor = rows.reduce((total, row) => total + (row.commissionMinor ?? 0), 0);
       const contributionMarginMinor = rows.reduce(
         (total, row) => total + (row.contributionMarginMinor ?? 0),
         0,
@@ -141,6 +144,7 @@ function rankServices(costed: readonly VisitMetricRow[]): ServiceRanking[] {
         serviceName: rows[0].serviceName,
         visits: rows.length,
         revenueMinor,
+        commissionMinor,
         contributionMarginMinor,
         marginBasisPoints:
           revenueMinor === 0 ? null : roundRatio(contributionMarginMinor * 10_000, revenueMinor),

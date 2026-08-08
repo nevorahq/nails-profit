@@ -88,10 +88,10 @@ html {
   position: relative;
   scroll-behavior: smooth;
 
-  font-size: min(calc(100vw / 390), 1px);
+  font-size: calc(100vw / (390 * 1));
 
-  @media screen and (min-width: 1920px) {
-    font-size: calc(100vw / 1920);
+  @media screen and (min-width: 640px) {
+    font-size: calc(100vw / (1920 * 1));
   }
 }
 
@@ -277,6 +277,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-entry.status-confirmed { border-left-color: var(--accent); }
 .calendar-entry.status-pending_confirmation { border-left-color: var(--warning-border); }
 .calendar-entry.status-cancelled, .calendar-entry.status-no_show { border-left-color: var(--danger); }
+.calendar-entry.status-blocked { border-left-color: var(--muted); }
 
 .calendar-entry summary { display: flex; flex-wrap: wrap; gap: 6rem 14rem; align-items: baseline; padding: 14rem 16rem; cursor: pointer; min-height: 44rem; }
 .calendar-entry summary::marker { color: var(--muted); }

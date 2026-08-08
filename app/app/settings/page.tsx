@@ -14,12 +14,18 @@ export default async function SettingsPage() {
   const { membership, organizationName, organizationSlug, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
-  const members: TeamMember[] = await db
-    .select({ user_id: memberships.userId, email: users.email, role: memberships.role })
-    .from(memberships)
-    .innerJoin(users, eq(memberships.userId, users.id))
-    .where(eq(memberships.organizationId, membership.organizationId))
-    .orderBy(asc(memberships.createdAt));
+  const canReadTeam = can(membership.role, "user_management", "read");
+  const canReadOrg = can(membership.role, "organization_settings", "read");
+  const canReadData = can(membership.role, "data_export", "read");
+
+  const members: TeamMember[] = canReadTeam
+    ? await db
+        .select({ user_id: memberships.userId, email: users.email, role: memberships.role })
+        .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
+        .where(eq(memberships.organizationId, membership.organizationId))
+        .orderBy(asc(memberships.createdAt))
+    : [];
 
   return (
     <main className="app-shell">
@@ -28,26 +34,32 @@ export default async function SettingsPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("settings.title")}</h1>
         </div>
-        <AppNav active="/app/settings" locale={locale} />
+        <AppNav active="/app/settings" locale={locale} role={membership.role} />
       </header>
 
-      <OrganizationSettings
-        locale={locale}
-        currency={currency}
-        slug={organizationSlug}
-        canEdit={can(membership.role, "organization_settings", "write")}
-      />
-      <TeamManager
-        members={members}
-        canManage={can(membership.role, "user_management", "write")}
-        locale={locale}
-      />
-      <DataManagement
-        locale={locale}
-        organizationName={organizationName}
-        canExport={can(membership.role, "data_export", "read")}
-        canDelete={can(membership.role, "data_export", "write")}
-      />
+      {canReadOrg && (
+        <OrganizationSettings
+          locale={locale}
+          currency={currency}
+          slug={organizationSlug}
+          canEdit={can(membership.role, "organization_settings", "write")}
+        />
+      )}
+      {canReadTeam && (
+        <TeamManager
+          members={members}
+          canManage={can(membership.role, "user_management", "write")}
+          locale={locale}
+        />
+      )}
+      {canReadData && (
+        <DataManagement
+          locale={locale}
+          organizationName={organizationName}
+          canExport={can(membership.role, "data_export", "read")}
+          canDelete={can(membership.role, "data_export", "write")}
+        />
+      )}
     </main>
   );
 }

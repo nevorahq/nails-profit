@@ -77,7 +77,7 @@ export default async function AddOnsPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("addOns.title")}</h1>
         </div>
-        <AppNav active="/app/add-ons" locale={locale} />
+        <AppNav active="/app/add-ons" locale={locale} role={membership.role} />
       </header>
       <AddOnCatalogue
         addOns={rows}

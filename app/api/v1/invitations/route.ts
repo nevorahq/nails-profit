@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { invitations, memberships, organizations, users } from "@/db/schema";
+import { invitations, memberships, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import {
   createInvitationToken,
@@ -12,11 +12,8 @@ import {
 import { can, canManageRole, memberRoles } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { isUniqueViolation } from "@/lib/db-errors";
-import { getPublicAppUrl } from "@/env";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
-import { logEvent } from "@/lib/logger";
 import { getActiveMembership } from "@/lib/membership";
-import { notificationProvider } from "@/lib/notification-provider";
 import { db } from "@/db";
 
 const createInvitationSchema = z.object({
@@ -143,35 +140,6 @@ export async function POST(request: Request) {
 
       return created;
     });
-
-    const [org] = await db
-      .select({ name: organizations.name })
-      .from(organizations)
-      .where(eq(organizations.id, actor.organizationId))
-      .limit(1);
-
-    const joinUrl = `${getPublicAppUrl()}/join?token=${encodeURIComponent(token)}`;
-    const orgName = org?.name ?? "Nail Profit OS";
-
-    const delivery = await notificationProvider().send({
-      channel: "email",
-      destination: email,
-      subject: `Приглашение в ${orgName}`,
-      body: [
-        `Вас пригласили присоединиться к ${orgName}.`,
-        "",
-        `Перейдите по ссылке, чтобы принять приглашение:`,
-        joinUrl,
-        "",
-        `Ссылка действительна 48 часов и привязана к этому email-адресу.`,
-        `Войдите или зарегистрируйтесь с адресом: ${email}`,
-      ].join("\n"),
-      idempotencyKey: `invitation:${invitation.id}`,
-    });
-
-    if (!delivery.ok) {
-      logEvent("warn", "invitation.email_failed", {}, { code: delivery.code, invitation_id: invitation.id });
-    }
 
     return apiSuccess(
       {

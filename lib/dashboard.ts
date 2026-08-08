@@ -49,6 +49,7 @@ export async function loadDashboard(
       visitId: financialSnapshots.visitId,
       serviceId: visits.serviceId,
       revenueMinor: financialSnapshots.revenueMinor,
+      commissionMinor: financialSnapshots.commissionMinor,
       contributionMarginMinor: financialSnapshots.contributionMarginMinor,
       materialCostMinor: financialSnapshots.materialCostMinor,
       normativeMaterialCostMinor: financialSnapshots.normativeMaterialCostMinor,
@@ -88,6 +89,7 @@ export async function loadDashboard(
           ? (resolveLocalizedText(nameSnapshot, locale, locale) ?? "Без названия")
           : "Без названия",
         revenueMinor: snapshot.revenueMinor,
+        commissionMinor: snapshot.commissionMinor,
         contributionMarginMinor: snapshot.contributionMarginMinor,
         materialCostMinor: snapshot.materialCostMinor,
         normativeMaterialCostMinor: snapshot.normativeMaterialCostMinor,

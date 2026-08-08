@@ -30,7 +30,7 @@ export default async function MaterialsPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("materials.title")}</h1>
         </div>
-        <AppNav active="/app/materials" locale={locale} />
+        <AppNav active="/app/materials" locale={locale} role={membership.role} />
       </header>
       <MaterialCatalogue materials={rows} locale={locale} />
     </main>

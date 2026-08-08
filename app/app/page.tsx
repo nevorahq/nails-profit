@@ -147,7 +147,14 @@ export default async function AppPage({
     };
   });
 
+  const isMaster = membership.role === "master";
   const { metrics } = data;
+  const rankingTotals = {
+    visits: metrics.ranking.reduce((s, e) => s + e.visits, 0),
+    revenueMinor: metrics.ranking.reduce((s, e) => s + e.revenueMinor, 0),
+    contributionMarginMinor: metrics.ranking.reduce((s, e) => s + e.contributionMarginMinor, 0),
+    commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),
+  };
   const period =
     filters.from || filters.to
       ? `${filters.from ?? t("filters.periodStart")} — ${filters.to ?? t("filters.periodToday")}`
@@ -162,7 +169,7 @@ export default async function AppPage({
           </span>
           <h1>{membership.organization.name}</h1>
         </div>
-        <AppNav active="/app" locale={locale} />
+        <AppNav active="/app" locale={locale} role={membership.role} />
       </header>
 
       <PeriodFilter
@@ -223,39 +230,41 @@ export default async function AppPage({
             </div>
           )}
 
-          <section className="panel insight-panel">
-            <h2>{t("dashboard.periodTotals")}</h2>
-            <div className="metric-grid">
-              <Metric
-                label={t("dashboard.revenue")}
-                value={money(metrics.revenueMinor)}
-                formula={t("dashboard.revenueFormula", { visits: metrics.visits })}
-              />
-              <Metric
-                label={t("dashboard.youKeep")}
-                value={money(metrics.contributionMarginMinor)}
-                formula={t("dashboard.marginFormula", { visits: metrics.costedVisits })}
-                strong
-                negative={metrics.contributionMarginMinor < 0}
-              />
-              <Metric
-                label={t("dashboard.margin")}
-                value={formatBasisPoints(metrics.marginBasisPoints, localeTag(locale))}
-                formula={`${money(metrics.contributionMarginMinor)} ÷ ${money(metrics.costedRevenueMinor)}`}
-                negative={(metrics.marginBasisPoints ?? 0) < 0}
-              />
-              <Metric
-                label={t("dashboard.perHour")}
-                value={metrics.profitPerHourMinor === null ? "—" : money(metrics.profitPerHourMinor)}
-                formula={t("dashboard.perHourFormula", {
-                  hours: Math.round(metrics.costedDurationMinutes / 60),
-                })}
-                negative={(metrics.profitPerHourMinor ?? 0) < 0}
-              />
-            </div>
-          </section>
+          {!isMaster && (
+            <section className="panel insight-panel">
+              <h2>{t("dashboard.periodTotals")}</h2>
+              <div className="metric-grid">
+                <Metric
+                  label={t("dashboard.revenue")}
+                  value={money(metrics.revenueMinor)}
+                  formula={t("dashboard.revenueFormula", { visits: metrics.visits })}
+                />
+                <Metric
+                  label={t("dashboard.youKeep")}
+                  value={money(metrics.contributionMarginMinor)}
+                  formula={t("dashboard.marginFormula", { visits: metrics.costedVisits })}
+                  strong
+                  negative={metrics.contributionMarginMinor < 0}
+                />
+                <Metric
+                  label={t("dashboard.margin")}
+                  value={formatBasisPoints(metrics.marginBasisPoints, localeTag(locale))}
+                  formula={`${money(metrics.contributionMarginMinor)} ÷ ${money(metrics.costedRevenueMinor)}`}
+                  negative={(metrics.marginBasisPoints ?? 0) < 0}
+                />
+                <Metric
+                  label={t("dashboard.perHour")}
+                  value={metrics.profitPerHourMinor === null ? "—" : money(metrics.profitPerHourMinor)}
+                  formula={t("dashboard.perHourFormula", {
+                    hours: Math.round(metrics.costedDurationMinutes / 60),
+                  })}
+                  negative={(metrics.profitPerHourMinor ?? 0) < 0}
+                />
+              </div>
+            </section>
+          )}
 
-          <section className="panel">
+          {!isMaster && <section className="panel">
             <h2>{t("dashboard.materialsTitle")}</h2>
             <div className="metric-grid">
               <Metric
@@ -280,7 +289,7 @@ export default async function AppPage({
                 {t("dashboard.overspend", { amount: money(metrics.materialDeviationMinor) })}
               </p>
             )}
-          </section>
+          </section>}
 
           <section className="panel">
             <h2>{t("dashboard.rankingTitle")}</h2>
@@ -290,9 +299,10 @@ export default async function AppPage({
                 <tr>
                   <th>{t("dashboard.service")}</th>
                   <th>{t("dashboard.visitCount")}</th>
-                  <th>{t("dashboard.revenue")}</th>
-                  <th>{t("dashboard.keeps")}</th>
-                  <th>{t("dashboard.margin")}</th>
+                  {!isMaster && <th>{t("dashboard.revenue")}</th>}
+                  {!isMaster && <th>{t("dashboard.masterEarnings")}</th>}
+                  <th>{isMaster ? t("dashboard.commission") : t("dashboard.keeps")}</th>
+                  {!isMaster && <th>{t("dashboard.margin")}</th>}
                   <th>{t("dashboard.hourly")}</th>
                 </tr>
               </thead>
@@ -301,17 +311,39 @@ export default async function AppPage({
                   <tr key={entry.serviceId ?? entry.serviceName}>
                     <td>{entry.serviceName}</td>
                     <td>{entry.visits}</td>
-                    <td>{money(entry.revenueMinor)}</td>
-                    <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                      {money(entry.contributionMarginMinor)}
-                    </td>
-                    <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>
+                    {!isMaster && <td>{money(entry.revenueMinor)}</td>}
+                    {!isMaster && <td>{money(entry.commissionMinor)}</td>}
+                    {isMaster ? (
+                      <td>{money(entry.commissionMinor)}</td>
+                    ) : (
+                      <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
+                        {money(entry.contributionMarginMinor)}
+                      </td>
+                    )}
+                    {!isMaster && <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>}
                     <td className={(entry.profitPerHourMinor ?? 0) < 0 ? "metric-negative" : ""}>
                       {entry.profitPerHourMinor === null ? "—" : money(entry.profitPerHourMinor)}
                     </td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr>
+                  <th>{t("visits.total")}</th>
+                  <td>{rankingTotals.visits}</td>
+                  {!isMaster && <td>{money(rankingTotals.revenueMinor)}</td>}
+                  {!isMaster && <td>{money(rankingTotals.commissionMinor)}</td>}
+                  {isMaster ? (
+                    <td>{money(rankingTotals.commissionMinor)}</td>
+                  ) : (
+                    <td className={rankingTotals.contributionMarginMinor < 0 ? "metric-negative" : ""}>
+                      {money(rankingTotals.contributionMarginMinor)}
+                    </td>
+                  )}
+                  {!isMaster && <td />}
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           </section>
         </>

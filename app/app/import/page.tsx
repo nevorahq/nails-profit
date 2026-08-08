@@ -51,7 +51,7 @@ export default async function ImportPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("import.title")}</h1>
         </div>
-        <AppNav active="/app/import" locale={locale} />
+        <AppNav active="/app/import" locale={locale} role={membership.role} />
       </header>
 
       <ImportWizard entities={allowed} locale={locale} />

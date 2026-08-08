@@ -123,7 +123,7 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("calendar.card")}</h1>
         </div>
-        <AppNav active="/app/calendar" locale={locale} />
+        <AppNav active="/app/calendar" locale={locale} role={membership.role} />
       </header>
 
       <p>

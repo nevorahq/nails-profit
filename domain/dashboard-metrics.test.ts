@@ -7,6 +7,7 @@ function row(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitMet
     serviceId: "service-a",
     serviceName: "Маникюр",
     revenueMinor: 60_000,
+    commissionMinor: null,
     contributionMarginMinor: 34_000,
     materialCostMinor: 2_000,
     normativeMaterialCostMinor: 2_000,

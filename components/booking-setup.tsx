@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import type { MemberRole } from "@/domain/rbac";
 
 export type LocationRow = {
   id: string;
@@ -80,6 +81,9 @@ export function BookingSetup({
   bookingAccess,
   canManage,
   canPublish,
+  canSaveRota,
+  role,
+  ownSpecialistId,
   locale,
 }: {
   locations: LocationRow[];
@@ -89,6 +93,9 @@ export function BookingSetup({
   bookingAccess: "off" | "calendar" | "public";
   canManage: boolean;
   canPublish: boolean;
+  canSaveRota?: boolean;
+  role?: MemberRole;
+  ownSpecialistId?: string | null;
   locale: AppLocale;
 }) {
   const router = useRouter();
@@ -96,9 +103,19 @@ export function BookingSetup({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const isMaster = role === "master";
+
   const [settingsFor, setSettingsFor] = useState(locations[0]?.id ?? "");
-  const [rotaSpecialist, setRotaSpecialist] = useState(specialists[0]?.id ?? "");
-  const [rotaLocation, setRotaLocation] = useState(locations[0]?.id ?? "");
+  const [rotaSpecialist, setRotaSpecialist] = useState(
+    ownSpecialistId ?? specialists[0]?.id ?? "",
+  );
+  const [rotaLocation, setRotaLocation] = useState(() => {
+    if (ownSpecialistId) {
+      const assigned = assignments.find((a) => a.specialist_id === ownSpecialistId);
+      if (assigned) return assigned.location_id;
+    }
+    return locations[0]?.id ?? "";
+  });
 
   const timezones = useMemo(() => knownTimezones(), []);
   const settingsLocation = locations.find((place) => place.id === settingsFor) ?? null;
@@ -246,24 +263,24 @@ export function BookingSetup({
         </p>
       )}
 
-      <section className="panel">
-        <h2>{t("bookingSetup.checklistTitle")}</h2>
-        {blockers.length === 0 ? (
-          <p className="muted">{t("bookingSetup.checklistDone")}</p>
-        ) : (
-          // The same styling as every other "you are not finished" banner, so a
-          // half-configured studio reads as a warning rather than as a list.
-          <div className="warning-banner">
-            <ul>
-              {blockers.map((key) => (
-                <li key={key}>{t(key)}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
+      {!isMaster && (
+        <section className="panel">
+          <h2>{t("bookingSetup.checklistTitle")}</h2>
+          {blockers.length === 0 ? (
+            <p className="muted">{t("bookingSetup.checklistDone")}</p>
+          ) : (
+            <div className="warning-banner">
+              <ul>
+                {blockers.map((key) => (
+                  <li key={key}>{t(key)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
-      <section className="panel">
+      {!isMaster && <section className="panel">
         <h2>{t("bookingSetup.locationsTitle")}</h2>
         <p className="muted">{t("bookingSetup.locationsHint")}</p>
 
@@ -338,9 +355,9 @@ export function BookingSetup({
             </button>
           </form>
         )}
-      </section>
+      </section>}
 
-      {settingsLocation && (
+      {!isMaster && settingsLocation && (
         <section className="panel">
           <h2>{t("bookingSetup.settingsTitle")}</h2>
           <p className="muted">{t("bookingSetup.settingsHint")}</p>
@@ -492,70 +509,76 @@ export function BookingSetup({
         </section>
       )}
 
-      <section className="panel">
-        <h2>{t("bookingSetup.assignmentTitle")}</h2>
-        <p className="muted">{t("bookingSetup.assignmentHint")}</p>
+      {!isMaster && (
+        <section className="panel">
+          <h2>{t("bookingSetup.assignmentTitle")}</h2>
+          <p className="muted">{t("bookingSetup.assignmentHint")}</p>
 
-        {specialists.length === 0 && <p className="muted">{t("bookingSetup.noSpecialists")}</p>}
+          {specialists.length === 0 && <p className="muted">{t("bookingSetup.noSpecialists")}</p>}
 
-        {specialists.map((person) => (
-          <form
-            key={person.id}
-            onSubmit={(event) => saveAssignment(event, person.id)}
-            className="inline-form"
-          >
-            <h3>{person.name}</h3>
-            <div className="public-booking-options">
-              {active.map((place) => (
-                <label key={place.id}>
-                  <input
-                    type="checkbox"
-                    name="location_ids"
-                    value={place.id}
-                    defaultChecked={assignments.some(
-                      (row) => row.specialist_id === person.id && row.location_id === place.id,
-                    )}
-                  />
-                  {place.name}
-                </label>
-              ))}
-            </div>
-            <button type="submit" className="secondary-button" disabled={!canManage || pending}>
-              {t("common.save")}
-            </button>
-          </form>
-        ))}
-      </section>
+          {specialists.map((person) => (
+            <form
+              key={person.id}
+              onSubmit={(event) => saveAssignment(event, person.id)}
+              className="inline-form"
+            >
+              <h3>{person.name}</h3>
+              <div className="public-booking-options">
+                {active.map((place) => (
+                  <label key={place.id}>
+                    <input
+                      type="checkbox"
+                      name="location_ids"
+                      value={place.id}
+                      defaultChecked={assignments.some(
+                        (row) => row.specialist_id === person.id && row.location_id === place.id,
+                      )}
+                    />
+                    {place.name}
+                  </label>
+                ))}
+              </div>
+              <button type="submit" className="secondary-button" disabled={!canManage || pending}>
+                {t("common.save")}
+              </button>
+            </form>
+          ))}
+        </section>
+      )}
 
       {specialists.length > 0 && active.length > 0 && (
         <section className="panel">
           <h2>{t("bookingSetup.rotaTitle")}</h2>
           <p className="muted">{t("bookingSetup.rotaHint")}</p>
 
-          <label>
-            {t("bookingSetup.specialist")}
-            <select
-              value={rotaSpecialist}
-              onChange={(event) => setRotaSpecialist(event.target.value)}
-            >
-              {specialists.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isMaster && (
+            <label>
+              {t("bookingSetup.specialist")}
+              <select
+                value={rotaSpecialist}
+                onChange={(event) => setRotaSpecialist(event.target.value)}
+              >
+                {specialists.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
-          <label>
-            {t("bookingSetup.location")}
-            <select value={rotaLocation} onChange={(event) => setRotaLocation(event.target.value)}>
-              {active.map((place) => (
-                <option key={place.id} value={place.id}>
-                  {place.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isMaster && (
+            <label>
+              {t("bookingSetup.location")}
+              <select value={rotaLocation} onChange={(event) => setRotaLocation(event.target.value)}>
+                {active.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <form
             key={`${rotaSpecialist}:${rotaLocation}`}
@@ -600,7 +623,11 @@ export function BookingSetup({
             </label>
             <p className="muted">{t("bookingSetup.effectiveFromHint")}</p>
 
-            <button type="submit" className="primary-button" disabled={!canManage || pending}>
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={!(isMaster ? canSaveRota : canManage) || pending}
+            >
               {t("bookingSetup.saveRota")}
             </button>
           </form>

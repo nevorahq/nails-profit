@@ -13,6 +13,7 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
+import type { MemberRole } from "@/domain/rbac";
 
 /**
  * Setting the booking module up, roadmap sections 7.1 and 7.4.
@@ -42,6 +43,18 @@ export default async function BookingSetupPage() {
         <p className="warning-banner">{t("bookingSetup.noAccess")}</p>
       </main>
     );
+  }
+
+  let ownSpecialistId: string | null = null;
+  if (membership.role === "master") {
+    const [own] = await withTenant(membership.organizationId, (tx) =>
+      tx
+        .select({ id: specialists.id })
+        .from(specialists)
+        .where(eq(specialists.userId, membership.userId))
+        .limit(1),
+    );
+    ownSpecialistId = own?.id ?? null;
   }
 
   const data = await withTenant(membership.organizationId, async (tx) => {
@@ -109,7 +122,7 @@ export default async function BookingSetupPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("bookingSetup.title")}</h1>
         </div>
-        <AppNav active="/app/booking" locale={locale} />
+        <AppNav active="/app/booking" locale={locale} role={membership.role} />
       </header>
 
       <BookingSetup
@@ -120,6 +133,9 @@ export default async function BookingSetupPage() {
         bookingAccess={bookingAccess}
         canManage={canManageCatalogue(membership.role, "bookings")}
         canPublish={can(membership.role, "organization_settings", "write")}
+        canSaveRota={can(membership.role, "bookings", "write")}
+        role={membership.role as MemberRole}
+        ownSpecialistId={ownSpecialistId}
         locale={locale}
       />
     </main>

@@ -121,7 +121,7 @@ export default async function SpecialistsPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("specialists.title")}</h1>
         </div>
-        <AppNav active="/app/specialists" locale={locale} />
+        <AppNav active="/app/specialists" locale={locale} role={membership.role} />
       </header>
       <SpecialistManager
         specialists={people}

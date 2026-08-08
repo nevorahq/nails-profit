@@ -66,7 +66,7 @@ export default async function ServicesPage() {
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("services.title")}</h1>
         </div>
-        <AppNav active="/app/services" locale={locale} />
+        <AppNav active="/app/services" locale={locale} role={membership.role} />
       </header>
       <ServiceList services={rows} locale={locale} />
     </main>

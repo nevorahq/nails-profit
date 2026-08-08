@@ -1,9 +1,15 @@
 import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 
 import { AppNav } from "@/components/app-nav";
-import { CalendarBoard, type CalendarBooking, type CalendarView } from "@/components/calendar-board";
+import {
+  CalendarBoard,
+  type CalendarBooking,
+  type CalendarException,
+  type CalendarView,
+} from "@/components/calendar-board";
 import {
   addOns,
+  availabilityExceptions,
   bookingLines,
   bookings,
   clients,
@@ -192,6 +198,29 @@ export default async function CalendarPage({
       .orderBy(asc(clients.name))
       .limit(500);
 
+    const exceptionsRaw = await tx
+      .select({
+        id: availabilityExceptions.id,
+        specialistId: availabilityExceptions.specialistId,
+        locationId: availabilityExceptions.locationId,
+        startsAt: availabilityExceptions.startsAt,
+        endsAt: availabilityExceptions.endsAt,
+        reason: availabilityExceptions.reason,
+      })
+      .from(availabilityExceptions)
+      .where(
+        and(
+          ownSpecialistId
+            ? eq(availabilityExceptions.specialistId, ownSpecialistId)
+            : filters.specialist
+              ? eq(availabilityExceptions.specialistId, filters.specialist)
+              : undefined,
+          gte(availabilityExceptions.endsAt, windowStart),
+          lt(availabilityExceptions.startsAt, windowEnd),
+        ),
+      )
+      .orderBy(asc(availabilityExceptions.startsAt));
+
     return {
       rows,
       lines,
@@ -201,6 +230,8 @@ export default async function CalendarPage({
       extras,
       assignments,
       roster,
+      exceptionsRaw,
+      anchorZone,
       today: formatLocalDate(today),
       days: days.map(formatLocalDate),
       dayKeys,
@@ -217,6 +248,31 @@ export default async function CalendarPage({
   // legible to whoever is standing at the desk when it is switched off.
   const moduleOff = bookingAccess === "off";
   const canWrite = can(membership.role, "bookings", "write") && !moduleOff;
+
+  const exceptions: CalendarException[] = data.exceptionsRaw
+    .map((exc) => {
+      const timezone =
+        exc.locationId
+          ? (data.places.find((p) => p.id === exc.locationId)?.timezone ?? data.anchorZone)
+          : data.anchorZone;
+      const startParts = toZonedParts(exc.startsAt, timezone);
+      const endParts = toZonedParts(exc.endsAt, timezone);
+      return {
+        id: exc.id,
+        localDate: formatLocalDate({ year: startParts.year, month: startParts.month, day: startParts.day }),
+        localStart: formatLocalTime(startParts.minutes),
+        localEnd: formatLocalTime(endParts.minutes),
+        timezone,
+        specialistId: exc.specialistId,
+        specialistName: data.people.find((p) => p.id === exc.specialistId)?.name ?? "",
+        locationId: exc.locationId,
+        locationName: exc.locationId
+          ? (data.places.find((p) => p.id === exc.locationId)?.name ?? null)
+          : null,
+        reason: exc.reason,
+      };
+    })
+    .filter((e) => data.dayKeys.has(e.localDate));
 
   const calendar: CalendarBooking[] = data.rows
     .map((row) => {
@@ -261,7 +317,7 @@ export default async function CalendarPage({
           <span className="eyebrow">{organizationName}</span>
           <h1>{t("calendar.title")}</h1>
         </div>
-        <AppNav active="/app/calendar" locale={locale} />
+        <AppNav active="/app/calendar" locale={locale} role={membership.role} />
       </header>
 
       {moduleOff && <p className="warning-banner">{t("calendar.moduleOff")}</p>}
@@ -290,7 +346,9 @@ export default async function CalendarPage({
           status: filters.status ?? "",
         }}
         ownSpecialistId={data.ownSpecialistId}
+        exceptions={exceptions}
         canWrite={canWrite}
+        showFilters={scopeFor(membership.role, "bookings") !== "own"}
         canFilterBySpecialist={scopeFor(membership.role, "bookings") !== "own"}
         currency={currency}
         localeTag={localeTag(locale)}
