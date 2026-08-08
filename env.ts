@@ -45,7 +45,7 @@ export function areNotificationsEnabled() {
  * uses Resend after its sending domain and credentials pass the runbook.
  */
 export function getNotificationProviderName() {
-  const value = process.env.NOTIFICATION_PROVIDER ?? "log";
+  const value = (process.env.NOTIFICATION_PROVIDER ?? "log").trim();
   if (value === "log" || value === "resend") return value;
   throw new Error("NOTIFICATION_PROVIDER must be log or resend");
 }
