@@ -45,6 +45,10 @@ const ru = {
   "clients.anonymizeButton": "Удалить данные",
   "clients.anonymizeConfirm": "Безвозвратно удалить контактные данные клиента {name}?",
   "clients.anonymizeFailed": "Не удалось удалить данные",
+  "clients.notFound": "Клиент не найден",
+  "clients.contact": "Контакты",
+  "clients.visitHistory": "История визитов",
+  "clients.specialist": "Мастер",
 
   "landing.eyebrow": "Profit layer для вашей системы записи",
   "landing.hero": "Реальная себестоимость. Понятная маржа. Прибыль в час.",
@@ -829,6 +833,10 @@ const ro: Record<MessageKey, Message> = {
   "clients.anonymizeButton": "Ștergeți datele",
   "clients.anonymizeConfirm": "Ștergeți definitiv datele de contact ale clientului {name}?",
   "clients.anonymizeFailed": "Nu s-au putut șterge datele",
+  "clients.notFound": "Clientul nu a fost găsit",
+  "clients.contact": "Contacte",
+  "clients.visitHistory": "Istoricul vizitelor",
+  "clients.specialist": "Maestru",
 
   "landing.eyebrow": "Profit layer pentru sistemul dvs. de programări",
   "landing.hero": "Cost real. Marjă clară. Profit pe oră.",
@@ -1616,6 +1624,10 @@ const en: Record<MessageKey, Message> = {
   "clients.anonymizeButton": "Remove data",
   "clients.anonymizeConfirm": "Permanently remove contact data for {name}?",
   "clients.anonymizeFailed": "Could not remove data",
+  "clients.notFound": "Client not found",
+  "clients.contact": "Contacts",
+  "clients.visitHistory": "Visit history",
+  "clients.specialist": "Specialist",
 
   "landing.eyebrow": "A profit layer for your booking system",
   "landing.hero": "Real cost. \nClear margin. \nProfit per hour.",

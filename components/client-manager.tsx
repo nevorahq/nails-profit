@@ -202,7 +202,13 @@ export function ClientManager({
           {clients.map((client) => {
             const isEditing = edit?.id === client.id;
             return (
-              <tr key={client.id}>
+              <tr
+                key={client.id}
+                onClick={() => {
+                  if (!isEditing && !client.anonymized) router.push(`/app/clients/${client.id}`);
+                }}
+                style={!isEditing && !client.anonymized ? { cursor: "pointer" } : undefined}
+              >
                 <td>
                   {client.anonymized ? (
                     <span className="muted">{t("clients.anonymized")}</span>
@@ -247,7 +253,7 @@ export function ClientManager({
                 <td>{client.visitCount > 0 ? client.visitCount : <span className="muted">0</span>}</td>
                 <td>{client.totalSpent ?? <span className="muted">—</span>}</td>
                 {canWrite && (
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     {client.anonymized ? null : isEditing ? (
                       <div className="inline-actions">
                         <button
