@@ -11,10 +11,12 @@ function JoinForm() {
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wrongAccount, setWrongAccount] = useState(false);
 
   async function accept() {
     setPending(true);
     setError(null);
+    setWrongAccount(false);
     const response = await fetch("/api/v1/invitations/accept", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -28,6 +30,10 @@ function JoinForm() {
       const code = body?.error?.code;
       if (code === "UNAUTHENTICATED") {
         router.push(`/login?mode=signup&next=${encodeURIComponent(`/join?token=${token}`)}`);
+        return;
+      }
+      if (code === "INVITATION_EMAIL_MISMATCH") {
+        setWrongAccount(true);
         return;
       }
       setError(body?.error?.message ?? "Недействительная или истёкшая ссылка");
@@ -60,7 +66,20 @@ function JoinForm() {
           {error}
         </div>
       )}
-      {!token ? (
+      {wrongAccount ? (
+        <>
+          <div className="form-error" role="alert" style={{ marginBottom: "16rem" }}>
+            Это приглашение выдано на другой email-адрес. Выйдите из текущего аккаунта и войдите с адресом, на который было отправлено приглашение.
+          </div>
+          <a
+            className="primary-button"
+            href={`/login?mode=signup&next=${encodeURIComponent(`/join?token=${token}`)}`}
+            style={{ display: "block", textAlign: "center" }}
+          >
+            Войти с другим аккаунтом
+          </a>
+        </>
+      ) : !token ? (
         <p className="muted">Ссылка недействительна — токен отсутствует.</p>
       ) : (
         <button className="primary-button" onClick={accept} disabled={pending} style={{ width: "100%" }}>
