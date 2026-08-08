@@ -10,8 +10,104 @@ import {
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
-import { apiError, apiSuccess, requestId } from "@/lib/http";
+import { isUniqueViolation } from "@/lib/db-errors";
+import { normalizePhone } from "@/domain/phone";
+import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+
+const patchClientSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  phone: z.string().trim().max(40).nullable().optional(),
+  email: z.string().trim().toLowerCase().pipe(z.email().max(254)).nullable().optional(),
+  archived: z.boolean().optional(),
+});
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const id = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
+  }
+
+  const actor = caller.membership;
+  if (!can(actor.role, "clients", "write")) {
+    return apiError(403, "FORBIDDEN", "This role cannot manage clients", id);
+  }
+
+  const { id: clientId } = await context.params;
+  if (!z.uuid().safeParse(clientId).success) {
+    return apiError(404, "CLIENT_NOT_FOUND", "No client with this ID", id);
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = patchClientSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
+      fieldErrors: toFieldErrors(parsed.error.issues),
+    });
+  }
+
+  const { name, phone, email, archived } = parsed.data;
+
+  let normalizedPhone: string | null | undefined = undefined;
+  if (phone !== undefined) {
+    if (phone === null || phone === "") {
+      normalizedPhone = null;
+    } else {
+      normalizedPhone = normalizePhone(phone);
+      if (normalizedPhone === null) {
+        return apiError(422, "INVALID_PHONE", "The phone number is not valid", id, {
+          fieldErrors: [{ field: "phone", code: "invalid_format", message: "Invalid phone number" }],
+        });
+      }
+    }
+  }
+
+  try {
+    const updated = await withTenant(actor.organizationId, async (tx) => {
+      const [existing] = await tx
+        .select({ id: clients.id })
+        .from(clients)
+        .where(and(eq(clients.id, clientId), isNull(clients.anonymizedAt)))
+        .limit(1);
+      if (!existing) return null;
+
+      const now = new Date();
+      const patch: Record<string, unknown> = {
+        updatedBy: actor.userId,
+        updatedAt: now,
+        version: sql`${clients.version} + 1`,
+      };
+      if (name !== undefined) patch.name = name;
+      if (normalizedPhone !== undefined) patch.normalizedPhone = normalizedPhone;
+      if (email !== undefined) patch.email = email;
+      if (archived === true) patch.archivedAt = now;
+
+      const [row] = await tx
+        .update(clients)
+        .set(patch)
+        .where(eq(clients.id, clientId))
+        .returning({ id: clients.id, name: clients.name });
+
+      return row ?? null;
+    });
+
+    if (!updated) {
+      return apiError(404, "CLIENT_NOT_FOUND", "No client with this ID", id);
+    }
+
+    return apiSuccess({ id: updated.id, name: updated.name }, id);
+  } catch (error) {
+    if (isUniqueViolation(error, "client_org_phone_idx")) {
+      return apiError(409, "CLIENT_PHONE_EXISTS", "A client with this phone already exists", id);
+    }
+    if (isUniqueViolation(error, "client_org_email_idx")) {
+      return apiError(409, "CLIENT_EMAIL_EXISTS", "A client with this email already exists", id);
+    }
+    throw error;
+  }
+}
 
 /**
  * Privacy erasure for one client (roadmap 7.9).

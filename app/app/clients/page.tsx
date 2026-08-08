@@ -139,10 +139,6 @@ export default async function ClientsPage() {
       <ClientManager
         clients={rows}
         canWrite={can(membership.role, "clients", "write")}
-        canAnonymize={
-          can(membership.role, "clients", "write") &&
-          scopeFor(membership.role, "clients") === "all"
-        }
         currency={currency}
         locale={locale}
       />
