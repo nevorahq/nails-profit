@@ -1,12 +1,12 @@
 import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 
-import { AppNav } from "@/components/app-nav";
 import {
   CalendarBoard,
   type CalendarBooking,
   type CalendarException,
   type CalendarView,
 } from "@/components/calendar-board";
+import { ToolIcon } from "@/components/icons";
 import {
   addOns,
   availabilityExceptions,
@@ -71,7 +71,7 @@ export default async function CalendarPage({
     status?: string;
   }>;
 }) {
-  const { membership, organizationName, bookingAccess, locale, currency } = await requireWorkspace();
+  const { membership, bookingAccess, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "read")) {
@@ -313,11 +313,28 @@ export default async function CalendarPage({
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("calendar.title")}</h1>
-        </div>
-        <AppNav active="/app/calendar" locale={locale} role={membership.role} />
+        {/*
+          The compose action, on a phone. It lives in the title row rather than
+          the toolbar because at 288 a full-width button pushed the day itself
+          further down, and it points at the same form the toolbar's button
+          does — one place a booking is made, shown in two shapes. Only ever one
+          of the two is displayed, so the anchor is not offered twice.
+
+          The condition mirrors the toolbar's: writable, and there is somewhere
+          and something to book.
+        */}
+        {canWrite && data.places.length > 0 && data.catalogue.length > 0 && (
+          <a
+            className="header-action"
+            href="#new-booking"
+            aria-label={t("calendar.newBooking")}
+            data-label-closed={t("calendar.newBooking")}
+            data-label-open={t("calendar.hideNewBooking")}
+          >
+            <ToolIcon name="plus" />
+            <ToolIcon name="minus" />
+          </a>
+        )}
       </header>
 
       {moduleOff && <p className="warning-banner">{t("calendar.moduleOff")}</p>}

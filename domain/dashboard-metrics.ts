@@ -21,6 +21,7 @@ export type VisitMetricRow = Readonly<{
   normativeMaterialCostMinor: number | null;
   durationMinutes: number | null;
   incompleteReasons: readonly string[];
+  completedAt: Date;
 }>;
 
 export type ServiceRanking = Readonly<{
@@ -153,4 +154,46 @@ function rankServices(costed: readonly VisitMetricRow[]): ServiceRanking[] {
       };
     })
     .sort((a, b) => b.contributionMarginMinor - a.contributionMarginMinor);
+}
+
+export type ProfitTrendPoint = Readonly<{
+  /** `YYYY-MM-DD` or `YYYY-MM`, matching `granularity`; sorts correctly as a string. */
+  key: string;
+  profitMinor: number;
+}>;
+
+export type ProfitTrend = Readonly<{
+  granularity: "day" | "month";
+  points: readonly ProfitTrendPoint[];
+}>;
+
+/**
+ * The dashboard's profit-over-time chart, bucketed by day when the selected
+ * period reads as one (up to a month of it) and by month once it is long
+ * enough that a point per day would be a line nobody could read — a year on
+ * the "all time" filter draws twelve points instead of three hundred and
+ * sixty-five. Locale-free on purpose: turning a bucket key into a displayed
+ * label is the page's job, the same split `aggregateVisitMetrics` already
+ * keeps from `money()` formatting.
+ */
+export function buildProfitTrend(rows: readonly VisitMetricRow[]): ProfitTrend {
+  const costed = rows.filter(isCosted);
+  if (costed.length === 0) return { granularity: "day", points: [] };
+
+  const times = costed.map((row) => row.completedAt.getTime());
+  const spanDays = (Math.max(...times) - Math.min(...times)) / 86_400_000;
+  const granularity: "day" | "month" = spanDays <= 31 ? "day" : "month";
+
+  const buckets = new Map<string, number>();
+  for (const row of costed) {
+    const iso = row.completedAt.toISOString();
+    const key = granularity === "day" ? iso.slice(0, 10) : iso.slice(0, 7);
+    buckets.set(key, (buckets.get(key) ?? 0) + (row.contributionMarginMinor ?? 0));
+  }
+
+  const points = [...buckets.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, profitMinor]) => ({ key, profitMinor }));
+
+  return { granularity, points };
 }

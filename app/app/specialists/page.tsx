@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { AppNav } from "@/components/app-nav";
 
+import { ToolIcon } from "@/components/icons";
 import { db } from "@/db";
 import { commissionRules, memberships, services, specialists, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -12,7 +12,7 @@ import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "commissions", "read")) {
@@ -114,14 +114,38 @@ export default async function SpecialistsPage() {
         .orderBy(asc(memberships.createdAt))
     : [];
 
+  const canManage = canManageCatalogue(membership.role, "commissions");
+
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("specialists.title")}</h1>
-        </div>
-        <AppNav active="/app/specialists" locale={locale} role={membership.role} />
+        {/*
+          The compose action. Two shapes of the one control, exactly as the
+          calendar's own toolbar and round button are (`app/app/calendar/page.tsx`):
+          a labelled toggle for a desktop, a round one for a phone. Both point
+          at the add-specialist `<details>` `components/specialist-manager.tsx`
+          renders further down the page; the click handling that opens (and,
+          for either anchor, closes) it lives there, since this is a Server
+          Component and cannot hold it.
+        */}
+        {canManage && (
+          <a className="primary-button calendar-create" href="#add-specialist">
+            <ToolIcon name="plus" />
+            {t("specialists.add")}
+          </a>
+        )}
+        {canManage && (
+          <a
+            className="header-action"
+            href="#add-specialist"
+            aria-label={t("specialists.add")}
+            data-label-closed={t("specialists.add")}
+            data-label-open={t("specialists.hideAddTitle")}
+          >
+            <ToolIcon name="plus" />
+            <ToolIcon name="minus" />
+          </a>
+        )}
       </header>
       <SpecialistManager
         specialists={people}
@@ -129,7 +153,7 @@ export default async function SpecialistsPage() {
         members={members}
         currency={currency}
         locale={locale}
-        canManage={canManageCatalogue(membership.role, "commissions")}
+        canManage={canManage}
       />
     </main>
   );

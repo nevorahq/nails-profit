@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -20,8 +21,11 @@ export type Workspace = Readonly<{
  * Server-side guard for the /app pages. Redirects rather than rendering an
  * error: a signed-out visitor belongs on the login page, and someone with no
  * organization belongs in the setup flow.
+ *
+ * Memoized per request alongside `getActiveMembership`, because the shell and
+ * the page it wraps both need the organization's name and locale.
  */
-export async function requireWorkspace(): Promise<Workspace> {
+async function loadWorkspace(): Promise<Workspace> {
   const caller = await getActiveMembership();
   if (!caller.session) redirect("/login");
   if (!caller.membership) redirect("/app");
@@ -47,3 +51,5 @@ export async function requireWorkspace(): Promise<Workspace> {
     currency: organization?.currency ?? "MDL",
   };
 }
+
+export const requireWorkspace = cache(loadWorkspace);

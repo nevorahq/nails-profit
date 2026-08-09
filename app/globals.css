@@ -20,6 +20,7 @@
   --focus-ring: rgba(55, 85, 52, 0.22);
   --danger: #8b2f3f;
   --danger-soft: #f8e8eb;
+  --positive: var(--sage-600);
   --warning: #6f5018;
   --warning-border: #d4bd83;
   --warning-soft: #f8f0dc;
@@ -119,8 +120,17 @@ small { font-size: 12rem; }
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(8px); }
 }
-.topbar, .app-header { display: flex; align-items: center; justify-content: space-between; }
-.app-header { margin-bottom: 28rem; }
+.topbar { display: flex; align-items: center; justify-content: space-between; }
+/* The title that used to live here now lives in the global `.app-topbar`
+   (`components/app-shell.tsx`), so `.app-header` on a page is usually empty or
+   holds one compose action — flex-end puts that action on the trailing edge
+   without a second flex item to balance it against. */
+.app-header { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 28rem; }
+.app-header:empty { display: none; margin: 0; }
+/* The one header that still carries both a title and its own link (the
+   close-visit form's «back to Визиты») rather than a compose action. */
+.app-header-split { justify-content: space-between; }
+.report-period { margin: 0 0 14rem; }
 .brand { font-size: 21rem; font-weight: 700; text-decoration: none; letter-spacing: -0.02em; }
 .text-link { color: var(--muted); font-size: 16rem; text-underline-offset: 5rem; }
 
@@ -184,6 +194,172 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .auth-card h1 { font-size: 36rem; }
 }
 
+/*
+ * /visits, section reference 2: one card per visit, grouped under the master
+ * who did the work — the same shape at every width, rather than a table that
+ * only survives on a desktop. `.visit-groups` is the grid that turns three
+ * masters into side-by-side columns on a wide screen and stacks them on a
+ * phone; nothing here is conditional on viewport beyond that reflow.
+ */
+/*
+ * `.calendar-filters` normally floats its panel right-aligned to the trigger
+ * (see the shared rule below). On /visits and the /app report page the
+ * trigger sits at the toolbar's own left edge, next to the sidebar, so a
+ * right-aligned panel wide enough for two dates and a select ran under the
+ * sidebar rather than beside it. Dropping it into the flow instead sidesteps
+ * the math entirely.
+ */
+.app-shell .visit-filters > .inline-form,
+.app-shell .report-filters > .inline-form {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin: 12rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.visit-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280rem, 1fr)); gap: 20rem; align-items: start; margin: 8rem 0 18rem; }
+
+.visit-group-head { display: flex; align-items: center; gap: 12rem; margin: 0 0 14rem; }
+.visit-group-head h2 { margin: 0; }
+
+/*
+ * The master's avatar, section reference 2. No photo field exists on a
+ * specialist row — a studio can record a master with no login of their own —
+ * so this falls back to their initial the same way `.sidebar-avatar` does for
+ * the signed-in account; a linked login's own picture is used when there is
+ * one. Sized in the design's own `rem` unit, so it scales with everything
+ * else across the fluid range rather than needing its own breakpoint.
+ */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 40rem;
+  height: 40rem;
+  flex: none;
+  overflow: hidden;
+  border-radius: 999rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 16rem;
+  font-weight: 750;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.visit-cards { display: grid; gap: 12rem; margin: 0; padding: 0; list-style: none; }
+
+.visit-card {
+  border: 1rem solid var(--line);
+  border-left-width: 4rem;
+  border-left-color: var(--accent);
+  border-radius: 16rem;
+  background: var(--surface);
+  padding: 14rem 16rem;
+}
+.visit-card.is-incomplete { border-left-color: var(--warning-border); }
+
+.visit-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; }
+.visit-card-date { font-weight: 700; font-size: 15rem; font-variant-numeric: tabular-nums; }
+
+.visit-card-service { margin: 8rem 0 2rem; font-size: 15rem; }
+.visit-card-client { margin: 0 0 10rem; }
+
+.visit-card-revenue {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 10rem;
+  padding-top: 10rem;
+  border-top: 1rem solid var(--line);
+  font-size: 14rem;
+  color: var(--muted);
+}
+.visit-card-revenue strong { color: var(--ink); font-size: 15rem; }
+
+.visit-card-warning { display: grid; gap: 10rem; }
+.visit-card-warning .badge-warning { margin-left: 0; }
+
+.visit-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10rem 16rem;
+  padding-top: 10rem;
+  border-top: 1rem solid var(--line);
+}
+.visit-card-metrics div { display: grid; gap: 2rem; }
+.visit-card-metrics span { color: var(--muted); font-size: 11rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.visit-card-metrics strong { font-size: 15rem; }
+
+.visit-card-total {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rem 24rem;
+  margin: 6rem 0 6rem;
+  padding: 14rem 16rem;
+  border: 1rem solid var(--line);
+  border-radius: 16rem;
+  background: var(--surface-strong);
+  font-size: 14rem;
+}
+.visit-card-total strong { font-size: 16rem; }
+
+/*
+ * /clients on a phone: cards instead of the table, the same swap /visits
+ * already makes and for the same reason — five columns don't survive a
+ * horizontal scroll. Below 680 `.clients-table` is swapped for `.client-cards`
+ * outright; the two markups share the same rows and only one is ever in the
+ * accessibility tree.
+ */
+.client-cards { display: none; }
+
+@media (max-width: 680px) {
+  .data-table.clients-table { display: none; }
+
+  .client-cards { display: grid; gap: 12rem; margin: 8rem 0 18rem; padding: 0; list-style: none; }
+
+  .client-card {
+    border: 1rem solid var(--line);
+    border-radius: 16rem;
+    background: var(--surface);
+    padding: 14rem 16rem;
+  }
+
+  .client-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; }
+  .client-card-name { font-weight: 700; font-size: 16rem; }
+
+  .client-card-contact {
+    display: grid;
+    gap: 2rem;
+    margin: 4rem 0 10rem;
+    color: var(--muted);
+    font-size: 13rem;
+  }
+
+  .client-card-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10rem 12rem;
+    padding-top: 10rem;
+    border-top: 1rem solid var(--line);
+  }
+  .client-card-metrics div { display: grid; gap: 2rem; }
+  .client-card-metrics span { color: var(--muted); font-size: 11rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .client-card-metrics strong { font-size: 14rem; }
+
+  .client-card-edit { display: grid; gap: 10rem; }
+
+  .client-card-actions {
+    display: flex;
+    gap: 16rem;
+    margin-top: 12rem;
+    padding-top: 12rem;
+    border-top: 1rem solid var(--line);
+  }
+}
+
 
 /* --- Phase 2: catalogue, recipe editor and the financial insight panel --- */
 
@@ -210,6 +386,34 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; padding: 28rem 26rem; margin: 26rem 0; box-shadow: var(--shadow); }
 .panel h2 { font-size: 26rem; margin: 0 0 22rem; }
 
+/*
+ * The «Добавить …» compose panels on /clients, /services, /materials,
+ * /specialists and /add-ons. One header control opens each — the round
+ * phone button or the desktop pill — and that is the only place the action
+ * is offered: unlike `.add-form-toggle`'s mobile-only forms, these have
+ * nothing else on the page to open them, so there is nothing to keep in
+ * step with at the wider breakpoint either. The grid-row trick is the same
+ * one `.add-form-wrap` uses below, just run at every width rather than only
+ * under 680 — collapsed all the way to nothing rather than merely hidden,
+ * so a screen reader tabbing past does not land in a panel with no visible
+ * box around it.
+ */
+.compose-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 380ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.compose-wrap.is-closed { grid-template-rows: 0fr; }
+.compose-wrap > .compose-inner {
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 260ms ease, transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.compose-wrap.is-closed > .compose-inner {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 .inline-form { display: flex; gap: 16rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20rem; }
 .inline-form label { display: flex; flex-direction: column; gap: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
 .inline-form input, .inline-form select { padding: 11rem 12rem; border-radius: 12rem; border: 1rem solid var(--line); background: var(--surface); font: inherit; font-size: 16rem; min-width: 140rem; }
@@ -233,6 +437,47 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .metric small { font-size: 12rem; line-height: 1.4; }
 .metric-strong { border-color: var(--accent); }
 .metric-negative strong, td.metric-negative { color: var(--danger); }
+
+/*
+ * The period cards on the reports page. Four across on a desktop, collapsing
+ * the way `.metric-grid` already does, but the figure itself is the point
+ * here rather than a formula line — DSH-009's "every figure states its
+ * formula" still holds, just as a `title` tooltip on the card instead of
+ * visible text, since the delta now sits where that line used to be.
+ */
+.metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180rem, 1fr)); gap: 16rem; }
+.metric-card { background: var(--surface); border: 1rem solid var(--line); border-radius: 18rem; padding: 18rem 20rem; display: flex; flex-direction: column; gap: 10rem; }
+.metric-card-icon { display: flex; align-items: center; justify-content: center; width: 36rem; height: 36rem; border-radius: 999rem; background: var(--leaf-100); color: var(--accent); flex: none; }
+.metric-card-icon-glyph { width: 18rem; height: 18rem; }
+.metric-card-label { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.metric-card-value { font-size: 24rem; font-weight: 750; }
+.metric-card-value.metric-negative { color: var(--danger); }
+.metric-delta { font-size: 13rem; font-weight: 650; }
+.metric-delta.positive { color: var(--positive); }
+.metric-delta.negative { color: var(--danger); }
+
+/* «Прибыль по услугам»: the same ranking `metrics.ranking` already computes,
+   read as bars instead of a table row — the full table stays put further
+   down the page for whoever wants every column. */
+.profit-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12rem; }
+.profit-bar-row { display: grid; grid-template-columns: minmax(90rem, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 12rem; }
+.profit-bar-label { font-size: 14rem; color: var(--ink); }
+.profit-bar-track { height: 10rem; border-radius: 999rem; background: var(--leaf-100); overflow: hidden; }
+.profit-bar-fill { display: block; height: 100%; border-radius: 999rem; background: var(--accent); }
+.profit-bar-value { font-size: 14rem; font-weight: 650; white-space: nowrap; }
+
+/* «Динамика прибыли»: an SVG the page hands finished numbers to, since the
+   locale-aware label formatting lives there, not in this stylesheet. */
+.profit-trend-chart { width: 100%; height: auto; }
+.profit-trend-area { fill: var(--accent); opacity: 0.12; stroke: none; }
+.profit-trend-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.profit-trend-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.profit-trend-axis { fill: var(--muted); font-size: 10px; }
+
+.report-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rem; }
+@media (max-width: 900px) {
+  .report-charts-grid { grid-template-columns: 1fr; }
+}
 
 .breakdown { margin-top: 20rem; }
 .breakdown summary { cursor: pointer; color: var(--accent); font-size: 14rem; font-weight: 700; }
@@ -441,6 +686,857 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
     justify-content: center;
   }
   .btn-toggle-close:hover { background: var(--accent-dark); }
+}
+
+/* --- The app shell: sidebar, bottom navigation and the «Ещё» screen --- */
+
+/*
+ * Units here are the project's own: `1rem` is one unit of the design, and the
+ * root font-size above ties that to the viewport. Media queries stay in `px`
+ * for the reason the two blocks above already give — inside a query `rem`
+ * resolves against the initial 16px root, never the computed one.
+ *
+ * The breakpoint is 680px, the one the rest of this file already switches on,
+ * so a screen never has the phone's tables and the desktop's navigation at the
+ * same time.
+ */
+/*
+ * The full-width bar above the sidebar/content split — reference 1 of the
+ * mobile redesign. Fixed `height` rather than `min-height` so the sidebar
+ * below (`top: 64rem` at the desktop breakpoint) can offset by an exact
+ * number rather than guessing at the bar's rendered height.
+ *
+ * Search and notifications are inert buttons for now — no panel exists to
+ * open yet — but keep their `aria-label` and touch target so wiring one in
+ * later is a click handler, not a markup change.
+ */
+.app-topbar {
+  position: sticky;
+  z-index: 95;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rem;
+  height: 64rem;
+  padding: 0 16rem;
+  border-bottom: 1rem solid var(--line);
+  background: var(--surface-strong);
+}
+
+/* Below the desktop breakpoint these two wrappers take no part in layout of
+   their own — `display: contents` hands their children straight to
+   `.app-topbar`'s flex row, so brand, title and actions sit in one line. */
+.topbar-brand-cell, .topbar-main-cell { display: contents; }
+
+.topbar-brand { display: flex; align-items: center; gap: 10rem; flex: none; text-decoration: none; }
+.brand-mark { width: 30rem; height: 30rem; flex: none; color: var(--accent); }
+
+/* Hidden below the desktop breakpoint: at phone widths the bottom bar already
+   names the section, so the brand's own subtitle would repeat it. */
+.topbar-brand-text { display: none; min-width: 0; }
+.topbar-brand-text strong { font-size: 16rem; font-weight: 750; letter-spacing: -0.02em; }
+.topbar-brand-text small {
+  display: block;
+  color: var(--muted);
+  font-size: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 19rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.topbar-actions { display: flex; align-items: center; gap: 4rem; flex: none; }
+
+.topbar-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40rem;
+  height: 40rem;
+  flex: none;
+  border: 0;
+  border-radius: 999rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.topbar-icon-btn:hover { background: var(--leaf-100); color: var(--ink); }
+.chrome-icon { width: 20rem; height: 20rem; flex: none; }
+
+.topbar-badge {
+  position: absolute;
+  top: 7rem;
+  right: 7rem;
+  width: 8rem;
+  height: 8rem;
+  border-radius: 999rem;
+  background: var(--danger);
+  border: 1.5rem solid var(--surface-strong);
+}
+
+.topbar-account {
+  display: flex;
+  align-items: center;
+  gap: 8rem;
+  margin-inline-start: 4rem;
+  padding: 4rem;
+  border-radius: 999rem;
+}
+
+/* Reused from the account chip that used to sit at the foot of the sidebar —
+   same fallback-to-initial rule as `.avatar` for a specialist with no photo. */
+.sidebar-avatar {
+  display: grid;
+  place-items: center;
+  width: 32rem;
+  height: 32rem;
+  flex: none;
+  border-radius: 999rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14rem;
+  font-weight: 750;
+}
+
+.topbar-account-text { display: none; min-width: 0; }
+.topbar-account-text strong {
+  display: block;
+  font-size: 13rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-account-text small { display: block; color: var(--muted); font-size: 12rem; text-transform: capitalize; }
+.topbar-account .icon-chevron { display: none; color: var(--muted); }
+
+.app-frame { min-height: 100dvh; }
+
+.app-sidebar { display: none; }
+
+.bottom-nav {
+  position: fixed;
+  z-index: 90;
+  inset: auto 0 0;
+  border-top: 1rem solid var(--line);
+  /* Opaque: content scrolls underneath it. */
+  background: var(--surface-strong);
+  /* The bar sits above the home indicator rather than under it. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav ul {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bottom-link {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4rem;
+  /* Section 7.8's 44-unit touch target, and five of them fit across 360. */
+  min-height: 56rem;
+  padding: 8rem 2rem;
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 650;
+  text-align: center;
+  text-decoration: none;
+}
+
+.bottom-link span {
+  /* RU and RO labels are the long ones: «Календарь», «Programare online». One
+     line that ellipsises beats a second line that changes the bar's height. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-icon { width: 22rem; height: 22rem; flex: none; }
+
+/*
+ * Three signals, not one. Section 7.8 rules out colour as the only carrier of
+ * state, so the current section is also the heavier label and the only one
+ * sitting on a filled tile.
+ */
+.bottom-link.active {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+/*
+ * Every icon in the bar reserves the pill, and only the current one fills it.
+ * Padding the active icon alone would make its row the tall one — the bar would
+ * change height as you moved between sections, and the labels under it would
+ * step up and down with it.
+ */
+.bottom-link .nav-icon {
+  box-sizing: content-box;
+  padding: 3rem 12rem;
+  border-radius: 999rem;
+}
+
+.bottom-link.active .nav-icon { background: var(--sage); }
+
+@media (max-width: 680px) {
+  /* The bar is fixed, so the page has to end above it rather than behind it. */
+  .app-main > .app-shell { padding-bottom: calc(96rem + env(safe-area-inset-bottom)); }
+}
+
+.more-nav { display: grid; gap: 26rem; margin-top: 22rem; }
+.more-list { display: grid; gap: 8rem; margin: 0; padding: 0; list-style: none; }
+
+.more-link {
+  display: flex;
+  align-items: center;
+  gap: 14rem;
+  min-height: 52rem;
+  padding: 12rem 16rem;
+  border: 1rem solid var(--line);
+  border-radius: 16rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.more-link .nav-icon { color: var(--muted); }
+.more-link.active { border-color: var(--accent); font-weight: 800; }
+.more-link.active .nav-icon { color: var(--accent); }
+
+/* An `h2` on the «Ещё» screen, a labelling `span` in the sidebar — the class
+   has to lay out as a block either way. */
+.sidebar-group-title {
+  display: block;
+  margin: 0 0 8rem;
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 681px) {
+  /* Sidebar and content side by side. The column is a fixed number of design
+     units and the content takes what is left, so nothing here is a fixed px
+     width that a narrow laptop could overflow. */
+  .app-frame {
+    display: grid;
+    grid-template-columns: 264rem minmax(0, 1fr);
+  }
+
+  /* `top`/`height` offset by the topbar's own fixed 64rem rather than 0/100dvh,
+     so the column sticks just below the bar instead of scrolling under it. */
+  .app-sidebar {
+    position: sticky;
+    top: 64rem;
+    display: flex;
+    flex-direction: column;
+    gap: 22rem;
+    height: calc(100dvh - 64rem);
+    padding: 26rem 16rem 20rem;
+    border-right: 1rem solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  /* The phone's bar is taken out of the accessibility tree here, so the eleven
+     links exist once rather than twice. */
+  .bottom-nav { display: none; }
+
+  .app-main { min-width: 0; }
+
+  /*
+   * A grid sharing `.app-frame`'s own `264rem` column, rather than a flex row
+   * with its own padding — that's what makes `.topbar-brand-cell`'s right
+   * border land exactly on `.app-sidebar`'s right border below it, and
+   * `.topbar-main-cell`'s left padding (the same `clamp` `.app-shell` pads
+   * its content with) put the page title directly above the content's own
+   * left edge instead of floating wherever the brand text happened to end.
+   */
+  .app-topbar {
+    display: grid;
+    grid-template-columns: 264rem minmax(0, 1fr);
+    padding: 0;
+    gap: 0;
+  }
+
+  .topbar-brand-cell {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 16rem;
+    border-right: 1rem solid var(--line);
+  }
+
+  .topbar-main-cell {
+    display: flex;
+    align-items: center;
+    gap: 20rem;
+    height: 100%;
+    padding: 0 clamp(24rem, 6vw, 96rem);
+  }
+
+  .topbar-brand-text { display: grid; }
+  .topbar-title { font-size: 21rem; }
+  .topbar-account-text { display: grid; }
+  .topbar-account .icon-chevron { display: block; }
+  .topbar-account { padding: 4rem 10rem 4rem 4rem; border: 1rem solid transparent; }
+  .topbar-account:hover { border-color: var(--line); }
+
+  /*
+   * The list is what scrolls when the sections outgrow a short window; the
+   * sidebar itself stays put.
+   *
+   * The negative margin matters: `overflow-y: auto` makes the computed
+   * `overflow-x` `auto` too, and a scroll container clips at its padding edge.
+   * The active marker hangs 16 units to the left of its link, so without this
+   * the column's own padding would put that marker outside the box and clip it
+   * away — the state would silently lose one of its three signals. Pulling the
+   * container out by the same amount it pads back in keeps the links where they
+   * were and brings the marker inside the clip.
+   */
+  .sidebar-nav {
+    display: grid;
+    align-content: start;
+    gap: 20rem;
+    flex: 1;
+    min-height: 0;
+    margin-inline-start: -16rem;
+    padding-inline-start: 16rem;
+    overflow-y: auto;
+  }
+
+  .sidebar-group-title { padding: 0 10rem; }
+  .sidebar-list { display: grid; gap: 2rem; margin: 0; padding: 0; list-style: none; }
+
+  .sidebar-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12rem;
+    min-height: 44rem;
+    padding: 10rem 12rem;
+    border-radius: 12rem;
+    color: var(--muted);
+    font-size: 15rem;
+    font-weight: 650;
+    text-decoration: none;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .sidebar-link:hover { background: var(--leaf-100); color: var(--ink); }
+
+  /* Same rule as the bottom bar: a fill and a weight change carry the state,
+     and the bar on the leading edge carries it again for anyone who cannot
+     separate the two greens. */
+  .sidebar-link.active {
+    background: var(--sage);
+    color: var(--accent);
+    font-weight: 800;
+  }
+
+  .sidebar-link.active::before {
+    content: "";
+    position: absolute;
+    inset-block: 8rem;
+    inset-inline-start: -16rem;
+    width: 4rem;
+    border-radius: 0 4rem 4rem 0;
+    background: var(--accent);
+  }
+
+  /* Импорт and Настройки are the administrative pair the brief separates. */
+  .sidebar-group-admin { padding-top: 18rem; border-top: 1rem solid var(--line); }
+
+  .more-list { grid-template-columns: repeat(auto-fit, minmax(240rem, 1fr)); }
+}
+
+/* --- The day view as a timetable --- */
+
+/*
+ * One column per specialist against an hour rail, which is the shape the
+ * approved direction asks for. Only the `day` view becomes a grid: a week of
+ * columns does not survive a phone, and the flat list is searched rather than
+ * read as a clock, so both keep the list they already were.
+ *
+ * `--calendar-span` is set on the element by the component — the number of
+ * hours the day actually covers, which widens past 08:00–20:00 when something
+ * is booked outside it. Everything positions off one row height, so the grid
+ * and the cards can never disagree about where 14:00 is.
+ */
+.calendar-grid {
+  --calendar-row: 56rem;
+  position: relative;
+  display: grid;
+  grid-template-columns: 54rem minmax(0, 1fr);
+  gap: 0;
+  margin: 18rem 0 26rem;
+  border: 1rem solid var(--line);
+  border-radius: 20rem;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.calendar-hours {
+  display: grid;
+  grid-auto-rows: var(--calendar-row);
+  /* Clears the column headers, so 09:00 lines up with the 09:00 row. */
+  padding-top: 52rem;
+  border-right: 1rem solid var(--line);
+}
+
+.calendar-hours span {
+  padding: 0 8rem;
+  color: var(--muted);
+  font-size: 11rem;
+  font-variant-numeric: tabular-nums;
+  /* Sits on the line it names rather than inside the box below it. */
+  transform: translateY(-6rem);
+  text-align: right;
+}
+
+/*
+ * The columns share the width instead of scrolling sideways, and that is a
+ * deliberate trade. A scroll container clips: `overflow-x` forces `overflow-y`
+ * to match, so an appointment opened late in the day had its actions cut off by
+ * the bottom of the box — measured, not guessed. Sharing the width keeps every
+ * card able to open over its neighbours, and a studio with too many people for
+ * the space filters to one of them with the control already in the toolbar.
+ */
+.calendar-columns {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  min-width: 0;
+}
+
+.calendar-column { min-width: 0; border-left: 1rem solid var(--line); }
+.calendar-column:first-child { border-left: 0; }
+
+/* The specialist's name stays visible while their day is scrolled. */
+.calendar-column > h2 {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  height: 52rem;
+  margin: 0;
+  padding: 0 12rem;
+  display: flex;
+  align-items: center;
+  gap: 8rem;
+  border-bottom: 1rem solid var(--line);
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-size: 14rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The track the cards are placed on, ruled once per hour. */
+.calendar-grid .calendar-list {
+  position: relative;
+  display: block;
+  height: calc(var(--calendar-row) * var(--calendar-span));
+  margin: 0;
+  padding: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--line) 0 1rem,
+    transparent 1rem var(--calendar-row)
+  );
+}
+
+.calendar-grid .calendar-entry {
+  position: absolute;
+  /* Never shorter than the touch target its summary asks for. */
+  min-height: 46rem;
+  margin: 0 4rem 0 0;
+  border-radius: 10rem;
+  border-left-width: 3rem;
+  background: var(--surface-strong);
+  overflow: hidden;
+}
+
+.calendar-grid .calendar-entry summary {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2rem;
+  padding: 7rem 9rem;
+  font-size: 12rem;
+}
+
+.calendar-grid .calendar-time { order: 3; font-size: 11rem; font-weight: 600; color: var(--muted); }
+.calendar-grid .calendar-what { font-size: 12rem; }
+.calendar-grid .calendar-who { order: -1; font-size: 12rem; font-weight: 700; color: var(--ink); }
+/* Colour is never the only signal, but in a card this narrow the word does not
+   fit — the status keeps its stripe and is read out on the opened detail. */
+.calendar-grid .calendar-status { position: absolute; width: 1rem; height: 1rem; overflow: hidden; clip: rect(0, 0, 0, 0); }
+
+/* A soft wash per status, over the stripe the list view already carries. */
+.calendar-grid .status-confirmed { background: var(--leaf-100); }
+.calendar-grid .status-completed { background: var(--sage-300); }
+.calendar-grid .status-pending_confirmation { background: var(--warning-soft); }
+.calendar-grid .status-cancelled, .calendar-grid .status-no_show { background: var(--danger-soft); }
+.calendar-grid .status-blocked { background: repeating-linear-gradient(135deg, var(--sage-300) 0 6rem, var(--surface) 6rem 12rem); }
+
+/*
+ * An opened card leaves its slot rather than being cut off by it: the actions
+ * inside it — confirm, move, cancel, close into a visit — are taller than any
+ * appointment, and clipping them would make them unreachable.
+ */
+/*
+ * `!important` is load-bearing here, not laziness. The slot's height is an
+ * inline style — the component computes it from the appointment's own start and
+ * end — and an inline declaration outranks any selector. Without the override
+ * an opened card keeps the height of its slot: the actions spill out past a
+ * background that did not grow with them, over the cards underneath.
+ */
+.calendar-grid .calendar-entry:has(details[open]) {
+  z-index: 20;
+  height: auto !important;
+  min-width: 240rem;
+  overflow: visible;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.calendar-now {
+  position: absolute;
+  z-index: 10;
+  inset-inline: 0;
+  /* Offset by the column headers, the same 52 units the hour rail is padded. */
+  margin-top: 52rem;
+  border-top: 2rem solid var(--danger);
+  pointer-events: none;
+}
+
+.calendar-now span {
+  position: absolute;
+  top: -9rem;
+  inset-inline-start: 2rem;
+  padding: 2rem 5rem;
+  border-radius: 999rem;
+  background: var(--danger);
+  color: var(--surface-strong);
+  font-size: 10rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The period control: «Сегодня ← →» and the date it is pointing at.
+ *
+ * `align-items` has to be set. The default leaves the date stretched to the
+ * height of the buttons beside it, and a stretched block draws its text from
+ * the top while each button centres its own — so the row lined up by box and
+ * not by what you actually read. Wrapping is on for the same reason the date
+ * gets its own line below 680: «вторник, 11 августа» does not fit beside three
+ * buttons at 288, and a nowrap row would break the words instead.
+ */
+.calendar-steps {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  row-gap: 10rem;
+}
+
+.calendar-period {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44rem;
+  margin-inline-start: 6rem;
+  font-size: 15rem;
+  font-weight: 700;
+}
+
+/*
+ * The toolbar's own shapes.
+ *
+ * These are squared off where the rest of the product uses pill buttons, which
+ * is the direction's call and is kept local to this bar rather than changed
+ * globally — every other screen still reads as the same product. The colours
+ * are the existing tokens: the accent here is the studio's forest, not the
+ * reference's magenta.
+ */
+.calendar-toolbar { align-items: flex-start; gap: 12rem; }
+.calendar-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10rem; }
+
+.calendar-toolbar .secondary-button,
+.calendar-filters > summary,
+.calendar-create {
+  min-height: 40rem;
+  border-radius: 10rem;
+  padding: 9rem 16rem;
+  font-size: 14rem;
+  font-weight: 650;
+}
+
+/*
+ * The compose form, closed by default. Reuses the disclosure-triangle pattern
+ * `.calendar-subform` already draws elsewhere in this file, at the size a
+ * page-level panel wants rather than an inline one.
+ */
+.calendar-compose > summary {
+  display: flex;
+  align-items: center;
+  gap: 10rem;
+  min-height: 44rem;
+  margin: -6rem -4rem 4rem;
+  padding: 6rem 4rem;
+  border-radius: 12rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.calendar-compose > summary::-webkit-details-marker { display: none; }
+.calendar-compose > summary::before { content: "▸"; color: var(--muted); transition: transform 150ms ease; }
+.calendar-compose[open] > summary::before { transform: rotate(90deg); }
+.calendar-compose > summary:hover { background: var(--leaf-100); }
+.calendar-compose > summary h2 { margin: 0; }
+
+/* «Заблокировать время» is long enough to wrap at phone widths under the
+   panel-heading size everything else here uses; shrunk just on this heading
+   rather than the whole `.calendar-compose` heading size, since «Новая
+   запись» already fits at 26rem. */
+@media (max-width: 680px) {
+  .calendar-block-time > summary h2 { font-size: 18rem; white-space: nowrap; }
+}
+
+/* The two arrows read as one control: a single frame, split by a hairline. */
+.calendar-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1rem solid var(--sage-600);
+  border-radius: 10rem;
+  background: rgba(243, 247, 237, 0.6);
+  overflow: hidden;
+}
+
+/* 38 plus the frame's own two units makes 40, the height every other control
+   in the bar is set to — so the row lines up by edge and not only by centre. */
+.calendar-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44rem;
+  min-height: 38rem;
+  color: var(--ink);
+  font-size: 15rem;
+  text-decoration: none;
+  transition: background 150ms;
+}
+
+.calendar-step + .calendar-step { border-left: 1rem solid var(--sage-600); }
+.calendar-step:hover { background: var(--sage-300); }
+
+/* The view picker: one frame, the current view filled rather than underlined. */
+.calendar-views {
+  gap: 0;
+  border: 1rem solid var(--sage-600);
+  border-radius: 10rem;
+  background: rgba(243, 247, 237, 0.6);
+  overflow: hidden;
+}
+
+.calendar-views a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38rem;
+  padding: 0 14rem;
+  border-bottom: 0;
+  font-size: 14rem;
+}
+
+.calendar-views a.active {
+  background: var(--accent);
+  border-bottom-color: transparent;
+  color: var(--on-accent);
+}
+
+.calendar-filters { position: relative; }
+
+.calendar-filters > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7rem;
+  border: 1rem solid var(--sage-600);
+  background: rgba(243, 247, 237, 0.6);
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.calendar-filters > summary::-webkit-details-marker { display: none; }
+.calendar-filters[open] > summary { background: var(--sage-300); }
+.tool-icon { width: 16rem; height: 16rem; flex: none; }
+
+/*
+ * The panel floats over the day rather than pushing it down — reopening the
+ * filters should not move the appointment someone was about to click.
+ */
+.calendar-filters > .inline-form {
+  position: absolute;
+  z-index: 40;
+  inset-inline-end: 0;
+  top: calc(100% + 8rem);
+  width: max-content;
+  max-width: 92vw;
+  margin: 0;
+  padding: 16rem;
+  border: 1rem solid var(--line);
+  border-radius: 16rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.calendar-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 7rem;
+}
+
+/*
+ * The abbreviated date is for the narrowest phones only. By 430 the full
+ * spelling has room to spare, and «воскресенье» reads better than «вс» when
+ * there is width to print it in.
+ */
+.period-short { display: none; }
+
+@media (max-width: 400px) {
+  .period-long { display: none; }
+  .period-short { display: inline; }
+}
+
+/*
+ * The same action as `.calendar-create`, in the shape a phone wants: a round
+ * button on the title row. Hidden above the phone breakpoint, where the
+ * toolbar's labelled button is the one on screen — the two are never displayed
+ * together, so an anchor to the compose form is only ever offered once.
+ */
+.header-action { display: none; }
+
+@media (max-width: 680px) {
+  .calendar-grid { --calendar-row: 52rem; grid-template-columns: 40rem minmax(0, 1fr); }
+  /* At 288 the card has to use the column it has rather than widening past the
+     screen, so the opened state drops the minimum it takes on a desktop. */
+  .calendar-grid .calendar-entry:has(details[open]) { min-width: 0; }
+  .calendar-grid .calendar-entry { margin-right: 2rem; }
+  .calendar-grid .calendar-entry summary { padding: 6rem; }
+
+  /* The compose action moves up to the title row, so the toolbar's copy of it
+     stands down and the day starts higher up the screen. */
+  .calendar-create { display: none; }
+
+  .header-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 44rem;
+    height: 44rem;
+    border-radius: 999rem;
+    background: var(--accent);
+    color: var(--on-accent);
+    text-decoration: none;
+  }
+
+  .header-action:hover { background: var(--accent-dark); }
+  .header-action .tool-icon { width: 22rem; height: 22rem; }
+
+  /* Both glyphs ship in the button; which one is visible tracks the compose
+     panel's own open state, so a summary click (not just this button) still
+     leaves the icon correct. */
+  .header-action .icon-minus { display: none; }
+  .app-shell:has(#new-booking[open]) .header-action .icon-plus { display: none; }
+  .app-shell:has(#new-booking[open]) .header-action .icon-minus { display: block; }
+  /*
+   * The other five compose panels (`.compose-wrap` below) aren't `<details>`
+   * — there is no `[open]` to key off — so the open state is the absence of
+   * their own `.is-closed` class instead.
+   */
+  .app-shell:has(#add-client:not(.is-closed)) .header-action .icon-plus { display: none; }
+  .app-shell:has(#add-client:not(.is-closed)) .header-action .icon-minus { display: block; }
+  .app-shell:has(#add-service:not(.is-closed)) .header-action .icon-plus { display: none; }
+  .app-shell:has(#add-service:not(.is-closed)) .header-action .icon-minus { display: block; }
+  .app-shell:has(#add-material:not(.is-closed)) .header-action .icon-plus { display: none; }
+  .app-shell:has(#add-material:not(.is-closed)) .header-action .icon-minus { display: block; }
+  .app-shell:has(#add-specialist:not(.is-closed)) .header-action .icon-plus { display: none; }
+  .app-shell:has(#add-specialist:not(.is-closed)) .header-action .icon-minus { display: block; }
+  .app-shell:has(#add-addon:not(.is-closed)) .header-action .icon-plus { display: none; }
+  .app-shell:has(#add-addon:not(.is-closed)) .header-action .icon-minus { display: block; }
+  .app-shell:has(#import-upload:not(.is-closed)) .header-action .icon-plus { display: none; }
+  .app-shell:has(#import-upload:not(.is-closed)) .header-action .icon-minus { display: block; }
+
+  /*
+   * The title that used to share this row moved to the global topbar, so
+   * `.app-header` now holds at most the one compose action — a row of one,
+   * pinned to the trailing edge rather than stretched with `space-between`.
+   */
+  .app-main > .app-shell > .app-header:has(.header-action) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12rem;
+  }
+
+  .calendar-tools { width: 100%; }
+  .calendar-views { flex: 1 1 auto; }
+  .calendar-views a { flex: 1; justify-content: center; padding: 0 10rem; }
+
+  /*
+   * The period control keeps to one line at every width, which is what the
+   * smaller controls below are for: at 288 the row has about 261 units to
+   * spend once the shell's padding is taken off, and the full-size buttons
+   * wanted more than that.
+   *
+   * The date is the part that gives: it may shrink and, in the worst case a
+   * long weekday in a long locale makes, ellipsise. Wrapping is not on the
+   * table — a second line here would push the day's first appointment down.
+   */
+  .calendar-steps { flex-wrap: nowrap; gap: 6rem; }
+
+  .calendar-toolbar .secondary-button {
+    min-height: 34rem;
+    padding: 6rem 10rem;
+    font-size: 13rem;
+  }
+
+  .calendar-stepper { flex: none; }
+  .calendar-step { min-width: 32rem; min-height: 32rem; font-size: 14rem; }
+
+  .calendar-period {
+    flex: 0 1 auto;
+    min-width: 0;
+    min-height: 0;
+    margin-inline-start: 2rem;
+    font-size: 13rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

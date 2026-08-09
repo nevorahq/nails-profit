@@ -7,6 +7,10 @@ import { getTranslator } from "@/i18n/t";
  * The specialist select is omitted rather than disabled when the caller's scope
  * is "own": section 6.1 limits a Master to their own rows, and a control that
  * cannot change anything only invites the question of why it is there.
+ *
+ * Plain by design — folding it behind a «Фильтры» button is done at the call
+ * site with `<details className="calendar-filters">`, the way `/app/visits`
+ * already does, rather than as a mode of this component.
  */
 export function PeriodFilter({
   locale,

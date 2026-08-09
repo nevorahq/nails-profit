@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
@@ -65,7 +65,41 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
+
+  /*
+   * The upload panel: nothing on the page until the header opens it — the
+   * header anchors `app/app/import/page.tsx` renders are the *only* control
+   * (`.header-action` on a phone, `.calendar-create` on a desktop; a Server
+   * Component, so neither can hold this listener itself, delegated on
+   * `document` for that reason). Same `.compose-wrap` collapse the other
+   * five catalogue pages use, not a `<details>` whose own `<summary>` would
+   * sit visible under the header's own button while closed.
+   */
+  // Lazy so it reads the real hash on the client's own first render rather
+  // than in a follow-up effect — `location` does not exist during the
+  // server's render of this "use client" component.
+  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#import-upload");
+  const addRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#import-upload"]');
+      if (!trigger) return;
+      event.preventDefault();
+      setAddOpen((open) => !open);
+    }
+
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#import-upload"]').forEach((button) => {
+      const label = addOpen ? button.dataset.labelOpen : button.dataset.labelClosed;
+      if (label) button.setAttribute("aria-label", label);
+    });
+  }, [addOpen]);
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,52 +197,39 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
 
   if (!job) {
     return (
-      <>
-        <div className="add-form-toggle">
-          {formOpen ? (
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button className="btn-toggle-close" type="button" onClick={() => setFormOpen(false)} aria-label={t("common.cancel")}>−</button>
-            </div>
-          ) : (
-            <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setFormOpen(true)}>
-              {t("import.upload")}
-            </button>
-          )}
+      <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="import-upload" ref={addRef}>
+        <div className="compose-inner">
+          <section className="panel">
+            <h2>{t("import.upload")}</h2>
+            <form className="inline-form" onSubmit={upload}>
+              <label>
+                {t("import.what")}
+                <select value={entity} onChange={(event) => setEntity(event.target.value)}>
+                  {entities.map((option) => (
+                    <option key={option} value={option}>
+                      {t(`entity.${option}` as MessageKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("import.file")}
+                <input type="file" name="file" accept=".csv,text/csv" required />
+              </label>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("import.reading") : t("import.submit")}
+              </button>
+            </form>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <p className="muted">
+              {t("import.hint")}{" "}
+              <a className="text-link" href={`/api/v1/imports/templates/${entity}`}>
+                {t("import.downloadTemplate")}
+              </a>
+            </p>
+          </section>
         </div>
-        <div className={`add-form-wrap${formOpen ? "" : " add-form-closed"}`}>
-          <div className="add-form-inner">
-            <section className="panel">
-              <h2>{t("import.upload")}</h2>
-              <form className="inline-form" onSubmit={upload}>
-                <label>
-                  {t("import.what")}
-                  <select value={entity} onChange={(event) => setEntity(event.target.value)}>
-                    {entities.map((option) => (
-                      <option key={option} value={option}>
-                        {t(`entity.${option}` as MessageKey)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {t("import.file")}
-                  <input type="file" name="file" accept=".csv,text/csv" required />
-                </label>
-                <button className="primary-button" type="submit" disabled={pending}>
-                  {pending ? t("import.reading") : t("import.submit")}
-                </button>
-              </form>
-              {error && <p className="form-error" role="alert">{error}</p>}
-              <p className="muted">
-{t("import.hint")}{" "}
-                <a className="text-link" href={`/api/v1/imports/templates/${entity}`}>
-                  {t("import.downloadTemplate")}
-                </a>
-              </p>
-            </section>
-          </div>
-        </div>
-      </>
+      </div>
     );
   }
 

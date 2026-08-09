@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { clockAt, groupBookings, type CalendarView } from "@/components/calendar-grouping";
+import { ToolIcon } from "@/components/icons";
 import {
   addLocalDays,
   formatLocalDate,
@@ -82,6 +83,44 @@ type RecipeMaterial = {
 };
 
 type BookingRecipe = { durationMinutes: number; materials: RecipeMaterial[] };
+
+/* --- The day view's time grid --- */
+
+/** "09:30" as minutes past midnight. The strings are already local wall clock. */
+function minutesOf(clock: string) {
+  return Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+}
+
+/** The hours the grid draws, widened to whole hours around what the day holds. */
+const DEFAULT_GRID = { from: 8 * 60, to: 20 * 60 };
+
+function gridBounds(spans: readonly { start: number; end: number }[]) {
+  const from = Math.min(DEFAULT_GRID.from, ...spans.map((s) => s.start));
+  const to = Math.max(DEFAULT_GRID.to, ...spans.map((s) => s.end));
+  return { from: Math.floor(from / 60) * 60, to: Math.ceil(to / 60) * 60 };
+}
+
+/**
+ * Side-by-side columns for entries that overlap in time.
+ *
+ * A specialist cannot be double-booked — the availability engine refuses it —
+ * but blocked time is stored separately from bookings and may cover a slot that
+ * already has one, and a cancelled appointment still shows next to whatever
+ * replaced it. Without this the later card would simply cover the earlier one
+ * and the day would look emptier than it is.
+ *
+ * Greedy: each entry takes the first lane whose previous occupant has finished.
+ */
+function assignLanes<T extends { start: number; end: number }>(spans: T[]) {
+  const laneEnds: number[] = [];
+  const placed = spans.map((span) => {
+    let lane = laneEnds.findIndex((end) => end <= span.start);
+    if (lane === -1) lane = laneEnds.push(span.start) - 1;
+    laneEnds[lane] = span.end;
+    return { ...span, lane };
+  });
+  return { placed, lanes: Math.max(1, laneEnds.length) };
+}
 
 export function CalendarBoard({
   view,
@@ -376,53 +415,244 @@ export function CalendarBoard({
    * everyone is offered rather than nobody.
    */
   const [composeLocation, setComposeLocation] = useState(locations[0]?.id ?? "");
+
+  /*
+   * The compose form's `<details>` opens on its own summary click — that part
+   * is the browser's. This only handles the anchors that point at it from
+   * elsewhere: the toolbar's «Новая запись» button and the round one in the
+   * mobile title row (`app/app/calendar/page.tsx`, a Server Component, so it
+   * cannot hold this listener itself).
+   *
+   * Delegated on `document` rather than attached to one link, because the two
+   * anchors are rendered by two different components and neither is in scope
+   * of the other. `block: "nearest"` is what makes the phone/desktop split in
+   * the request happen without branching on viewport width: the form usually
+   * sits below the fold on a phone and already inside it on a wide screen, so
+   * "scroll only if it is not already visible" produces exactly that split.
+   *
+   * The round mobile button is the one place this doubles as a close control
+   * (its "+" is a "−" once the panel is open, purely via the `:has()` rule on
+   * `.header-action .icon-minus` in globals.css) — the toolbar's labelled
+   * button stays open-only, since it is never on screen at the same time as
+   * the panel it would be closing. The `toggle` event, which fires on the
+   * `<details>` whichever way it changed (this handler, or its own summary),
+   * is what keeps that button's `aria-label` in sync in every case.
+   */
+  const composeRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    function revealCompose() {
+      const details = composeRef.current;
+      if (!details) return;
+      details.open = true;
+      details.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#new-booking"]');
+      if (!trigger) return;
+      event.preventDefault();
+      const details = composeRef.current;
+      if (!details) return;
+      if (trigger.classList.contains("header-action")) {
+        details.open = !details.open;
+        if (details.open) details.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else {
+        revealCompose();
+      }
+    }
+
+    function onToggle() {
+      const details = composeRef.current;
+      if (!details) return;
+      document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#new-booking"]').forEach((button) => {
+        const label = details.open ? button.dataset.labelOpen : button.dataset.labelClosed;
+        if (label) button.setAttribute("aria-label", label);
+      });
+    }
+
+    const details = composeRef.current;
+    document.addEventListener("click", onClick);
+    details?.addEventListener("toggle", onToggle);
+    // A direct link or a page refresh with the hash already set: the browser
+    // scrolled to the closed `<details>` before this ran, so it is opened and
+    // recentred rather than left shut with the summary sitting at the top.
+    if (location.hash === "#new-booking") revealCompose();
+    return () => {
+      document.removeEventListener("click", onClick);
+      details?.removeEventListener("toggle", onToggle);
+    };
+  }, []);
+
   const bookable = specialists.filter((person) => {
     if (ownSpecialistId !== null && person.id !== ownSpecialistId) return false;
     const theirs = assignments.filter((link) => link.specialistId === person.id);
     return theirs.length === 0 || theirs.some((link) => link.locationId === composeLocation);
   });
 
+  /*
+   * The day view is a timetable rather than a list: one column per specialist,
+   * hours down the side, and each appointment drawn where it actually sits.
+   * Week and list stay lists — a week of columns does not fit a phone, and the
+   * list is what gets searched rather than read as a clock.
+   */
+  const dayItems =
+    view === "day"
+      ? [
+          ...bookings.filter((b) => b.localDate === days[0]),
+          ...exceptions.filter((e) => e.localDate === days[0]),
+        ]
+      : [];
+  /*
+   * An empty day keeps the old panel. With nothing to place, `groupBookings`
+   * falls back to a single group titled with the date, and drawing that as a
+   * timetable puts a specialist column headed "2026-08-09" above twelve empty
+   * hours — a grid that says less than the sentence it replaced.
+   */
+  const isGrid = view === "day" && dayItems.length > 0;
+  const daySpans = dayItems.map((item) => ({
+    start: minutesOf(item.localStart),
+    end: minutesOf(item.localEnd),
+  }));
+  const bounds = gridBounds(daySpans);
+  const gridHours = Array.from(
+    { length: (bounds.to - bounds.from) / 60 + 1 },
+    (_, index) => bounds.from / 60 + index,
+  );
+
+  /** Where an entry sits in the grid, in whole rows of one hour each. */
+  const rows = (minutes: number) => (minutes - bounds.from) / 60;
+
+  /*
+   * The «now» line, and why it is state rather than computed during render.
+   *
+   * The server renders this page, so a time computed inline would be the
+   * server's clock baked into HTML that the browser then hydrates against its
+   * own — a mismatch React would warn about, and a line that stops moving. It
+   * is filled in after mount instead, and ticks each minute.
+   */
+  const zone =
+    locations.find((place) => place.id === filters.location)?.timezone ??
+    locations[0]?.timezone ??
+    "UTC";
+  const [nowMinutes, setNowMinutes] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isGrid || days[0] !== today) return;
+    const read = () =>
+      setNowMinutes(
+        minutesOf(
+          new Intl.DateTimeFormat("en-GB", {
+            timeZone: zone,
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(new Date()),
+        ),
+      );
+    read();
+    const timer = setInterval(read, 60_000);
+    return () => clearInterval(timer);
+  }, [isGrid, days, today, zone]);
+
+  const nowInView =
+    nowMinutes !== null && nowMinutes >= bounds.from && nowMinutes <= bounds.to ? nowMinutes : null;
+
   return (
     <>
       <nav className="calendar-toolbar" aria-label={t("calendar.period")}>
-        <div className="calendar-views" role="group" aria-label={t("calendar.view")}>
-          {(["day", "week", "list"] as const).map((option) => (
-            <Link
-              key={option}
-              href={queryFor({ ...filters, view: option, date: days[0] })}
-              className={option === view ? "active" : undefined}
-              aria-current={option === view ? "true" : undefined}
-            >
-              {t(`calendar.view.${option}` as MessageKey)}
-            </Link>
-          ))}
-        </div>
-
         <div className="calendar-steps">
-          <Link
-            className="secondary-button"
-            href={queryFor({ ...filters, view, date: shiftDate(days[0], -days.length) })}
-            aria-label={t("calendar.previous")}
-          >
-            ←
-          </Link>
           <Link className="secondary-button" href={queryFor({ ...filters, view, date: today })}>
             {t("calendar.today")}
           </Link>
-          <Link
-            className="secondary-button"
-            href={queryFor({ ...filters, view, date: shiftDate(days[0], days.length) })}
-            aria-label={t("calendar.next")}
-          >
-            →
-          </Link>
+          {/* One control in one frame, the way the direction draws it: the two
+              arrows step the same period and belong together. */}
+          <span className="calendar-stepper">
+            <Link
+              className="calendar-step"
+              href={queryFor({ ...filters, view, date: shiftDate(days[0], -days.length) })}
+              aria-label={t("calendar.previous")}
+            >
+              ←
+            </Link>
+            <Link
+              className="calendar-step"
+              href={queryFor({ ...filters, view, date: shiftDate(days[0], days.length) })}
+              aria-label={t("calendar.next")}
+            >
+              →
+            </Link>
+          </span>
+          {/*
+            Midday rather than midnight: "2026-05-14" parses as UTC, and a
+            browser west of Greenwich would render the day before.
+          */}
+          {/*
+            Keyed to the view, not to `isGrid`: a day with nothing in it is
+            still one day, and `isGrid` also turns off when there is nothing to
+            place — which printed the range "2026-08-09 — 2026-08-09".
+          */}
+          <strong className="calendar-period">
+            {view === "day" ? (
+              /*
+                Two spellings of one date, because the longest Russian spelling
+                — «воскресенье, 20 сентября», 124 units — does not fit beside
+                the buttons at 288, where about 109 are left for it. Only one is
+                displayed at a time, so it is read out once.
+              */
+              <>
+                <span className="period-long">
+                  {new Date(`${days[0]}T12:00:00`).toLocaleDateString(localeTag, {
+                    day: "numeric",
+                    month: "long",
+                    weekday: "long",
+                  })}
+                </span>
+                <span className="period-short">
+                  {new Date(`${days[0]}T12:00:00`).toLocaleDateString(localeTag, {
+                    day: "numeric",
+                    month: "short",
+                    weekday: "short",
+                  })}
+                </span>
+              </>
+            ) : (
+              `${days[0]} — ${days.at(-1)}`
+            )}
+          </strong>
         </div>
-      </nav>
 
-      {showFilters && (
-        <form className="inline-form" method="get">
-          <input type="hidden" name="view" value={view} />
-          <input type="hidden" name="date" value={days[0]} />
+        <div className="calendar-tools">
+          <div className="calendar-views" role="group" aria-label={t("calendar.view")}>
+            {(["day", "week", "list"] as const).map((option) => (
+              <Link
+                key={option}
+                href={queryFor({ ...filters, view: option, date: days[0] })}
+                className={option === view ? "active" : undefined}
+                aria-current={option === view ? "true" : undefined}
+              >
+                {t(`calendar.view.${option}` as MessageKey)}
+              </Link>
+            ))}
+          </div>
+
+          {showFilters && (
+            /*
+             * The three selects were open on the page at all times, which on a
+             * phone pushed the day itself below the fold. `details` folds them
+             * behind the button the direction shows without any state to keep:
+             * the disclosure, the keyboard behaviour and the escape are the
+             * browser's, and the form inside is byte-for-byte the one that was
+             * already here.
+             */
+            <details className="calendar-filters">
+              <summary>
+                <ToolIcon name="filter" />
+                {t("filters.title")}
+              </summary>
+              <form className="inline-form" method="get">
+                <input type="hidden" name="view" value={view} />
+                <input type="hidden" name="date" value={days[0]} />
           <label>
             {t("calendar.location")}
             <select name="location" defaultValue={filters.location}>
@@ -462,8 +692,24 @@ export function CalendarBoard({
           <button className="secondary-button" type="submit">
             {t("calendar.apply")}
           </button>
-        </form>
-      )}
+              </form>
+            </details>
+          )}
+
+          {/*
+            An anchor to the form that already exists further down the page,
+            not a new one. The direction puts a primary action in the toolbar;
+            duplicating the compose form to get it there would mean two places
+            a booking can be made and two places a bug can live.
+          */}
+          {canWrite && locations.length > 0 && services.length > 0 && (
+            <a className="primary-button calendar-create" href="#new-booking">
+              <ToolIcon name="plus" />
+              {t("calendar.newBooking")}
+            </a>
+          )}
+        </div>
+      </nav>
 
       {error && (
         <div className="form-error" role="alert">
@@ -481,6 +727,20 @@ export function CalendarBoard({
         </div>
       )}
 
+      <div
+        className={isGrid ? "calendar-grid" : undefined}
+        style={isGrid ? ({ "--calendar-span": gridHours.length - 1 } as React.CSSProperties) : undefined}
+      >
+        {isGrid && (
+          /* The hour rail. Decorative: every card states its own time in text. */
+          <div className="calendar-hours" aria-hidden="true">
+            {gridHours.slice(0, -1).map((hour) => (
+              <span key={hour}>{`${String(hour).padStart(2, "0")}:00`}</span>
+            ))}
+          </div>
+        )}
+
+        <div className={isGrid ? "calendar-columns" : undefined}>
       {allGroups.map((group) => {
         const groupExceptions =
           view === "day"
@@ -498,18 +758,43 @@ export function CalendarBoard({
           ...groupExceptions.map((e) => ({ kind: "exception" as const, data: e })),
         ].sort((a, b) => a.data.localStart.localeCompare(b.data.localStart));
 
+        // `items` is already in start order, so the lanes come back in the same
+        // order and can be read by the index of the entry being drawn.
+        const laid = isGrid
+          ? assignLanes(
+              items.map((item) => ({
+                start: minutesOf(item.data.localStart),
+                end: minutesOf(item.data.localEnd),
+              })),
+            )
+          : null;
+
+        const slotOf = (index: number): React.CSSProperties | undefined => {
+          if (!laid) return undefined;
+          const span = laid.placed[index];
+          return {
+            top: `calc(var(--calendar-row) * ${rows(span.start)})`,
+            height: `calc(var(--calendar-row) * ${(span.end - span.start) / 60})`,
+            insetInlineStart: `${(span.lane / laid.lanes) * 100}%`,
+            width: `${(1 / laid.lanes) * 100}%`,
+          };
+        };
+
         return (
-        <section className="panel calendar-group" key={group.key}>
+        <section
+          className={isGrid ? "calendar-column" : "panel calendar-group"}
+          key={group.key}
+        >
           <h2>{group.title}</h2>
-          {items.length === 0 ? (
+          {items.length === 0 && !isGrid ? (
             <p className="muted">{t("calendar.emptyDay")}</p>
           ) : (
             <ul className="calendar-list">
-              {items.map((item) => {
+              {items.map((item, index) => {
                 if (item.kind === "exception") {
                   const exc = item.data;
                   return (
-                    <li key={exc.id} className="calendar-entry status-blocked">
+                    <li key={exc.id} className="calendar-entry status-blocked" style={slotOf(index)}>
                       <details>
                         <summary>
                           <span className="calendar-time">
@@ -553,7 +838,11 @@ export function CalendarBoard({
                 }
                 const booking = item.data;
                 return (
-                <li key={booking.id} className={`calendar-entry status-${booking.status}`}>
+                <li
+                  key={booking.id}
+                  className={`calendar-entry status-${booking.status}`}
+                  style={slotOf(index)}
+                >
                   <details>
                     <summary>
                       <span className="calendar-time">
@@ -771,10 +1060,27 @@ export function CalendarBoard({
         </section>
         );
       })}
+        </div>
+
+        {isGrid && nowInView !== null && (
+          <div className="calendar-now" style={{ top: `calc(var(--calendar-row) * ${rows(nowInView)})` }}>
+            <span>{`${String(Math.floor(nowInView / 60)).padStart(2, "0")}:${String(nowInView % 60).padStart(2, "0")}`}</span>
+          </div>
+        )}
+      </div>
 
       {canWrite && locations.length > 0 && services.length > 0 && (
-        <section className="panel">
-          <h2>{t("calendar.newBooking")}</h2>
+        /*
+         * Closed by default. The form was open on the page at all times, which
+         * on a phone put an eleven-field form between the day and the next
+         * thing worth scrolling to. `<details>` gives the open/close and the
+         * keyboard behaviour for free; the toolbar and header actions layer a
+         * scroll-into-view on top rather than duplicating either.
+         */
+        <details className="panel calendar-compose" id="new-booking" ref={composeRef}>
+          <summary>
+            <h2>{t("calendar.newBooking")}</h2>
+          </summary>
           <p className="muted">{t("calendar.newBookingHint")}</p>
           <form className="inline-form" onSubmit={createBooking}>
             <label>
@@ -854,12 +1160,14 @@ export function CalendarBoard({
               {pending ? t("common.saving") : t("calendar.book")}
             </button>
           </form>
-        </section>
+        </details>
       )}
 
       {canWrite && specialists.length > 0 && (
-        <section className="panel">
-          <h2>{t("calendar.blockTime")}</h2>
+        <details className="panel calendar-compose calendar-block-time">
+          <summary>
+            <h2>{t("calendar.blockTime")}</h2>
+          </summary>
           <p className="muted">{t("calendar.blockHint")}</p>
           <form className="inline-form" onSubmit={blockTime}>
             <label>
@@ -901,7 +1209,7 @@ export function CalendarBoard({
               {t("calendar.block")}
             </button>
           </form>
-        </section>
+        </details>
       )}
     </>
   );

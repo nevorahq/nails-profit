@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aggregateVisitMetrics, type VisitMetricRow } from "@/domain/dashboard-metrics";
+import { aggregateVisitMetrics, buildProfitTrend, type VisitMetricRow } from "@/domain/dashboard-metrics";
 
 function row(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitMetricRow {
   return {
@@ -13,6 +13,7 @@ function row(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitMet
     normativeMaterialCostMinor: 2_000,
     durationMinutes: 90,
     incompleteReasons: [],
+    completedAt: new Date("2026-05-12T10:00:00.000Z"),
     ...overrides,
   };
 }
@@ -157,5 +158,47 @@ describe("aggregateVisitMetrics", () => {
   it("reports no profit per hour when nothing was timed", () => {
     const metrics = aggregateVisitMetrics([row({ visitId: "1", durationMinutes: 0 })]);
     expect(metrics.profitPerHourMinor).toBeNull();
+  });
+});
+
+describe("buildProfitTrend", () => {
+  it("buckets a short period by day", () => {
+    const trend = buildProfitTrend([
+      row({ visitId: "1", completedAt: new Date("2026-05-12T09:00:00.000Z"), contributionMarginMinor: 10_000 }),
+      row({ visitId: "2", completedAt: new Date("2026-05-12T18:00:00.000Z"), contributionMarginMinor: 5_000 }),
+      row({ visitId: "3", completedAt: new Date("2026-05-13T09:00:00.000Z"), contributionMarginMinor: 7_000 }),
+    ]);
+
+    expect(trend.granularity).toBe("day");
+    expect(trend.points).toEqual([
+      { key: "2026-05-12", profitMinor: 15_000 },
+      { key: "2026-05-13", profitMinor: 7_000 },
+    ]);
+  });
+
+  it("buckets a period longer than a month by month", () => {
+    const trend = buildProfitTrend([
+      row({ visitId: "1", completedAt: new Date("2026-01-05T09:00:00.000Z"), contributionMarginMinor: 10_000 }),
+      row({ visitId: "2", completedAt: new Date("2026-01-28T09:00:00.000Z"), contributionMarginMinor: 5_000 }),
+      row({ visitId: "3", completedAt: new Date("2026-03-02T09:00:00.000Z"), contributionMarginMinor: 7_000 }),
+    ]);
+
+    expect(trend.granularity).toBe("month");
+    expect(trend.points).toEqual([
+      { key: "2026-01", profitMinor: 15_000 },
+      { key: "2026-03", profitMinor: 7_000 },
+    ]);
+  });
+
+  it("leaves out visits that could not be costed", () => {
+    const trend = buildProfitTrend([
+      row({ visitId: "1", contributionMarginMinor: null }),
+    ]);
+
+    expect(trend.points).toEqual([]);
+  });
+
+  it("reports nothing rather than zero for an empty period", () => {
+    expect(buildProfitTrend([])).toEqual({ granularity: "day", points: [] });
   });
 });

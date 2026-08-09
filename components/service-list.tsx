@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -84,7 +84,6 @@ export function ServiceList({
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [editPending, setEditPending] = useState(false);
@@ -92,6 +91,42 @@ export function ServiceList({
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+
+  /*
+   * The add-service panel: nothing on the page until the header opens it —
+   * the header anchors `app/app/services/page.tsx` renders are the *only*
+   * control (`.header-action` on a phone, `.calendar-create` on a desktop; a
+   * Server Component, so neither can hold this listener itself, delegated on
+   * `document` for that reason). This used to be a `<details>` whose own
+   * `<summary>` stayed visible — and clickable — while closed, which put a
+   * second «Добавить услугу» directly under the header's own button. A
+   * `.compose-wrap` collapsed by class has no such leftover strip.
+   */
+  // Lazy so it reads the real hash on the client's own first render rather
+  // than in a follow-up effect — `location` does not exist during the
+  // server's render of this "use client" component.
+  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-service");
+  const addRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#add-service"]');
+      if (!trigger) return;
+      event.preventDefault();
+      setAddOpen((open) => !open);
+    }
+
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#add-service"]').forEach((button) => {
+      const label = addOpen ? button.dataset.labelOpen : button.dataset.labelClosed;
+      if (label) button.setAttribute("aria-label", label);
+    });
+  }, [addOpen]);
 
   async function submitAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,6 +156,7 @@ export function ServiceList({
 
     form.reset();
     setPending(false);
+    setAddOpen(false);
     router.refresh();
   }
 
@@ -198,52 +234,33 @@ export function ServiceList({
         </div>
       )}
 
-      {/* Mobile toggle — hidden on desktop via CSS */}
-      <div className="add-form-toggle">
-        {formOpen ? (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              className="btn-toggle-close"
-              type="button"
-              onClick={() => setFormOpen(false)}
-              aria-label={t("common.cancel")}
-            >
-              −
-            </button>
-          </div>
-        ) : (
-          <button
-            className="primary-button"
-            type="button"
-            style={{ width: "100%" }}
-            onClick={() => setFormOpen(true)}
-          >
-            {t("services.add")}
-          </button>
-        )}
-      </div>
-
-      {/* Collapsible on mobile; always visible on desktop */}
-      <div className={`add-form-wrap${formOpen ? "" : " add-form-closed"}`}>
-        <div className="add-form-inner">
-          <form className="inline-form" onSubmit={submitAdd}>
-            <label>
-              {t("services.name")}
-              <input name="name" required maxLength={200} placeholder={t("services.namePlaceholder")} />
-            </label>
-            <label>
-              {t("common.price")}
-              <input name="price" type="number" step="0.01" min="0" placeholder="600" />
-            </label>
-            <label>
-              {t("services.durationMinutes")}
-              <input name="duration" type="number" step="1" min="1" placeholder="90" />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("services.creating") : t("services.add")}
-            </button>
-          </form>
-          {error && <div className="form-error" role="alert">{error}</div>}
+      <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-service" ref={addRef}>
+        <div className="compose-inner">
+          <section className="panel">
+            <h2>{t("services.add")}</h2>
+            <form className="inline-form" onSubmit={submitAdd}>
+              <label>
+                {t("services.name")}
+                <input name="name" required maxLength={200} placeholder={t("services.namePlaceholder")} />
+              </label>
+              <label>
+                {t("common.price")}
+                <input name="price" type="number" step="0.01" min="0" placeholder="600" />
+              </label>
+              <label>
+                {t("services.durationMinutes")}
+                <input name="duration" type="number" step="1" min="1" placeholder="90" />
+              </label>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("services.creating") : t("services.add")}
+              </button>
+            </form>
+            {error && (
+              <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
+                {error}
+              </div>
+            )}
+          </section>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { asc, desc, eq, isNull, isNotNull, sql } from "drizzle-orm";
 
-import { AppNav } from "@/components/app-nav";
 import { ClientManager, type ClientRow } from "@/components/client-manager";
+import { ToolIcon } from "@/components/icons";
 import { clients, financialSnapshots, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
@@ -11,7 +11,7 @@ import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ClientsPage() {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "clients", "read")) {
@@ -22,8 +22,8 @@ export default async function ClientsPage() {
     );
   }
 
-  const hidePii =
-    scopeFor(membership.role, "clients") === "all" && !can(membership.role, "clients", "write");
+  const canWrite = can(membership.role, "clients", "write");
+  const hidePii = scopeFor(membership.role, "clients") === "all" && !canWrite;
 
   const rows: ClientRow[] = await withTenant(membership.organizationId, async (tx) => {
     // Section 6.1: Master sees only their own clients.
@@ -130,15 +130,37 @@ export default async function ClientsPage() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("clients.title")}</h1>
-        </div>
-        <AppNav active="/app/clients" locale={locale} role={membership.role} />
+        {/*
+          The compose action. Two shapes of the one control, exactly as the
+          calendar's own toolbar and round button are (`app/app/calendar/page.tsx`):
+          a labelled toggle for a desktop, a round one for a phone. Both point
+          at the add-client `<details>` `components/client-manager.tsx` renders
+          further down the page; the click handling that opens (and, for
+          either anchor, closes) it lives there, since this is a Server
+          Component and cannot hold it.
+        */}
+        {canWrite && (
+          <a className="primary-button calendar-create" href="#add-client">
+            <ToolIcon name="plus" />
+            {t("clients.addTitle")}
+          </a>
+        )}
+        {canWrite && (
+          <a
+            className="header-action"
+            href="#add-client"
+            aria-label={t("clients.addTitle")}
+            data-label-closed={t("clients.addTitle")}
+            data-label-open={t("clients.hideAddTitle")}
+          >
+            <ToolIcon name="plus" />
+            <ToolIcon name="minus" />
+          </a>
+        )}
       </header>
       <ClientManager
         clients={rows}
-        canWrite={can(membership.role, "clients", "write")}
+        canWrite={canWrite}
         currency={currency}
         locale={locale}
       />

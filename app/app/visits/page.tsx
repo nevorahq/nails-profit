@@ -1,11 +1,10 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
-import { Fragment } from "react";
 
-import { AppNav } from "@/components/app-nav";
+import { ToolIcon } from "@/components/icons";
 import { PeriodFilter } from "@/components/period-filter";
 import { type AdjustMaterial, VisitAdjustForm } from "@/components/visit-adjust-form";
-import { clients, consumptions, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
+import { clients, consumptions, financialSnapshots, specialists, users, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
@@ -19,7 +18,7 @@ export default async function VisitsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; specialist?: string }>;
 }) {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
 
@@ -63,8 +62,9 @@ export default async function VisitsPage({
       .orderBy(desc(visits.completedAt));
 
     const people = await tx
-      .select({ id: specialists.id, name: specialists.name })
+      .select({ id: specialists.id, name: specialists.name, avatar: users.image })
       .from(specialists)
+      .leftJoin(users, eq(specialists.userId, users.id))
       .where(isNull(specialists.archivedAt))
       .orderBy(asc(specialists.name));
 
@@ -111,24 +111,67 @@ export default async function VisitsPage({
   const totalRevenue = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.revenueMinor ?? 0), 0);
   const totalCommission = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.commissionMinor ?? 0), 0);
 
+  const canAddVisit = can(membership.role, "bookings", "write");
+
+  // Grouped by master when the viewer can see more than their own (section
+  // 6.1: a Master's list is already just their own, and a one-item group
+  // labelled with their own name would say nothing a flat list didn't).
+  type DetailedRow = (typeof data.detailed)[number];
+  const groups: { key: string; title: string | null; avatar: string | null; rows: DetailedRow[] }[] = [];
+  if (data.canFilterBySpecialist) {
+    const bySpecialist = new Map<string, DetailedRow[]>();
+    for (const row of data.detailed) {
+      const id = row.visit.specialistId;
+      bySpecialist.set(id, [...(bySpecialist.get(id) ?? []), row]);
+    }
+    for (const person of data.people) {
+      const rows = bySpecialist.get(person.id);
+      if (rows) {
+        groups.push({ key: person.id, title: person.name, avatar: person.avatar, rows });
+        bySpecialist.delete(person.id);
+      }
+    }
+    // A visit whose specialist was archived since still needs somewhere to live.
+    for (const [id, rows] of bySpecialist) {
+      groups.push({ key: id, title: t("common.unnamed"), avatar: null, rows });
+    }
+  } else if (data.detailed.length > 0) {
+    groups.push({ key: "own", title: null, avatar: null, rows: data.detailed });
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("visits.title")}</h1>
-        </div>
-        <AppNav active="/app/visits" locale={locale} role={membership.role} />
+        {canAddVisit && (
+          <Link className="header-action" href="/app/visits/new" aria-label={t("visits.close")}>
+            <ToolIcon name="plus" />
+          </Link>
+        )}
       </header>
 
-      <PeriodFilter
-        locale={locale}
-        from={filters.from}
-        to={filters.to}
-        specialistId={filters.specialist}
-        people={data.people}
-        showSpecialist={data.canFilterBySpecialist}
-      />
+      <nav className="calendar-toolbar" aria-label={t("filters.title")}>
+        <details className="calendar-filters visit-filters">
+          <summary>
+            <ToolIcon name="filter" />
+            {t("filters.title")}
+          </summary>
+          <PeriodFilter
+            locale={locale}
+            from={filters.from}
+            to={filters.to}
+            specialistId={filters.specialist}
+            people={data.people}
+            showSpecialist={data.canFilterBySpecialist}
+          />
+        </details>
+
+        {canAddVisit && (
+          <Link className="primary-button calendar-create" href="/app/visits/new">
+            <ToolIcon name="plus" />
+            {t("visits.close")}
+          </Link>
+        )}
+      </nav>
 
       {data.detailed.length > 0 && withMargin < data.detailed.length && (
         <div className="warning-banner">
@@ -139,96 +182,122 @@ export default async function VisitsPage({
         </div>
       )}
 
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>{t("visits.when")}</th>
-            <th>{t("visits.service")}</th>
-            <th>{t("visits.client")}</th>
-            <th>{t("visits.revenue")}</th>
-            <th>{t("visits.keeps")}</th>
-            <th>{t("visits.margin")}</th>
-            <th>{t("visits.hourly")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.detailed.length === 0 && (
-            <tr>
-              <td colSpan={7} className="muted">
-                {t("visits.none")}
-              </td>
-            </tr>
-          )}
-          {data.detailed.map(({ visit, snapshot, lines, clientName }) => {
-            const serviceLine = lines.find((line) => line.kind === "service");
-            const incomplete = !snapshot || snapshot.contributionMarginMinor === null;
-            const visitConsumptions = data.consumptionsByVisit.get(visit.id) ?? [];
-            const adjustMaterials: AdjustMaterial[] = visitConsumptions.map((c) => ({
-              materialId: c.materialId,
-              materialName: c.materialNameSnapshot,
-              baseUnit: c.baseUnitSnapshot,
-              normativeQuantityMilliUnits: c.normativeQuantityMilliUnits,
-              actualQuantityMilliUnits: c.actualQuantityMilliUnits,
-            }));
-            return (
-              <Fragment key={visit.id}>
-                <tr>
-                  <td>{visit.completedAt.toLocaleDateString(localeTag(locale))}</td>
-                  <td>
-                    {serviceLine
-                      ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
-                      : "—"}
-                    {lines.length > 1 && <span className="unit-hint">+{lines.length - 1}</span>}
-                    {visit.status === "adjusted" && <span className="badge-warning">{t("visits.adjusted")}</span>}
-                  </td>
-                  <td>{clientName ?? <span className="muted">—</span>}</td>
-                  <td>{snapshot ? money(snapshot.revenueMinor) : "—"}</td>
-                  {incomplete ? (
-                    <td colSpan={3}>
-                      <div className="inline-actions">
-                      <span className="badge-warning">
-                        {(snapshot?.incompleteReasons ?? [])
-                          .map((reason) => t(`reason.${reason}` as MessageKey))
-                          .join("; ") || t("visits.noCalculation")}
-                      </span>
-                      <VisitAdjustForm
-                        visitId={visit.id}
-                        materials={adjustMaterials}
-                        plannedDurationMinutes={visit.plannedDurationMinutes}
-                        actualDurationMinutes={visit.actualDurationMinutes}
-                        locale={locale}
-                      />
-                      </div>
-                    </td>
+      {groups.length === 0 && <p className="muted">{t("visits.none")}</p>}
+
+      <div className="visit-groups">
+        {groups.map((group) => (
+          <section className={group.title ? "panel visit-group" : undefined} key={group.key}>
+            {group.title && (
+              <div className="visit-group-head">
+                <span className="avatar" aria-hidden="true">
+                  {group.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+                    <img src={group.avatar} alt="" referrerPolicy="no-referrer" />
                   ) : (
-                    <>
-                      <td className={snapshot!.contributionMarginMinor! < 0 ? "metric-negative" : ""}>
-                        {money(snapshot!.contributionMarginMinor!)}
-                      </td>
-                      <td>{formatBasisPoints(snapshot!.marginBasisPoints, localeTag(locale))}</td>
-                      <td className={snapshot!.profitPerHourMinor! < 0 ? "metric-negative" : ""}>
-                        {money(snapshot!.profitPerHourMinor!)}
-                        {snapshot!.estimatedDuration && <span className="unit-hint">{t("visits.estimate")}</span>}
-                      </td>
-                    </>
+                    group.title.trim().slice(0, 1).toUpperCase() || "?"
                   )}
-                </tr>
-              </Fragment>
-            );
-          })}
-        </tbody>
-        {data.detailed.length > 0 && (
-          <tfoot>
-            <tr>
-              <td colSpan={3}>{t("visits.total")}</td>
-              <td>{money(totalRevenue)}</td>
-              <td colSpan={3}>
-                {t("visits.masterEarnings")}: <strong>{money(totalCommission)}</strong>
-              </td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
+                </span>
+                <h2>{group.title}</h2>
+              </div>
+            )}
+            <ul className="visit-cards">
+              {group.rows.map(({ visit, snapshot, lines, clientName }) => {
+                const serviceLine = lines.find((line) => line.kind === "service");
+                const incomplete = !snapshot || snapshot.contributionMarginMinor === null;
+                const visitConsumptions = data.consumptionsByVisit.get(visit.id) ?? [];
+                const adjustMaterials: AdjustMaterial[] = visitConsumptions.map((c) => ({
+                  materialId: c.materialId,
+                  materialName: c.materialNameSnapshot,
+                  baseUnit: c.baseUnitSnapshot,
+                  normativeQuantityMilliUnits: c.normativeQuantityMilliUnits,
+                  actualQuantityMilliUnits: c.actualQuantityMilliUnits,
+                }));
+                return (
+                  <li key={visit.id} className={`visit-card${incomplete ? " is-incomplete" : ""}`}>
+                    <div className="visit-card-head">
+                      <span className="visit-card-date">
+                        {visit.completedAt.toLocaleDateString(localeTag(locale))}
+                      </span>
+                      {visit.status === "adjusted" && (
+                        <span className="badge-warning">{t("visits.adjusted")}</span>
+                      )}
+                    </div>
+                    <p className="visit-card-service">
+                      {serviceLine
+                        ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
+                        : "—"}
+                      {lines.length > 1 && <span className="unit-hint">+{lines.length - 1}</span>}
+                    </p>
+                    <p className="visit-card-client">{clientName ?? <span className="muted">—</span>}</p>
+
+                    {incomplete ? (
+                      <>
+                        <p className="visit-card-revenue">
+                          <span>{t("visits.revenue")}</span>
+                          <strong>{snapshot ? money(snapshot.revenueMinor) : "—"}</strong>
+                        </p>
+                        <div className="visit-card-warning">
+                          <span className="badge-warning">
+                            {(snapshot?.incompleteReasons ?? [])
+                              .map((reason) => t(`reason.${reason}` as MessageKey))
+                              .join("; ") || t("visits.noCalculation")}
+                          </span>
+                          <VisitAdjustForm
+                            visitId={visit.id}
+                            materials={adjustMaterials}
+                            plannedDurationMinutes={visit.plannedDurationMinutes}
+                            actualDurationMinutes={visit.actualDurationMinutes}
+                            locale={locale}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="visit-card-metrics">
+                        <div>
+                          <span>{t("visits.revenue")}</span>
+                          <strong>{money(snapshot!.revenueMinor)}</strong>
+                        </div>
+                        <div>
+                          <span>{t("visits.keeps")}</span>
+                          <strong
+                            className={snapshot!.contributionMarginMinor! < 0 ? "metric-negative" : undefined}
+                          >
+                            {money(snapshot!.contributionMarginMinor!)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>{t("visits.margin")}</span>
+                          <strong>{formatBasisPoints(snapshot!.marginBasisPoints, localeTag(locale))}</strong>
+                        </div>
+                        <div>
+                          <span>{t("visits.hourly")}</span>
+                          <strong className={snapshot!.profitPerHourMinor! < 0 ? "metric-negative" : undefined}>
+                            {money(snapshot!.profitPerHourMinor!)}
+                            {snapshot!.estimatedDuration && (
+                              <span className="unit-hint">{t("visits.estimate")}</span>
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      {data.detailed.length > 0 && (
+        <div className="visit-card-total">
+          <span>
+            {t("visits.total")}: <strong>{money(totalRevenue)}</strong>
+          </span>
+          <span>
+            {t("visits.masterEarnings")}: <strong>{money(totalCommission)}</strong>
+          </span>
+        </div>
+      )}
     </main>
   );
 }

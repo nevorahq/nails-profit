@@ -1,6 +1,5 @@
 import { asc, eq, isNull, or, sql } from "drizzle-orm";
 
-import { AppNav } from "@/components/app-nav";
 import { BookingSetup, type LocationRow, type RotaRule } from "@/components/booking-setup";
 import {
   bookingSettings,
@@ -32,7 +31,7 @@ import type { MemberRole } from "@/domain/rbac";
  * says what is still missing before a client could book.
  */
 export default async function BookingSetupPage() {
-  const { membership, organizationName, bookingAccess, locale } = await requireWorkspace();
+  const { membership, bookingAccess, locale } = await requireWorkspace();
   const t = getTranslator(locale);
 
   // Reading the setup is the `bookings` read scope; changing it is the
@@ -117,14 +116,6 @@ export default async function BookingSetupPage() {
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("bookingSetup.title")}</h1>
-        </div>
-        <AppNav active="/app/booking" locale={locale} role={membership.role} />
-      </header>
-
       <BookingSetup
         locations={data.places as LocationRow[]}
         specialists={data.people}

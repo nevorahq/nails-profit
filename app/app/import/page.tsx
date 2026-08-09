@@ -1,6 +1,6 @@
 import { desc } from "drizzle-orm";
 
-import { AppNav } from "@/components/app-nav";
+import { ToolIcon } from "@/components/icons";
 import { ImportWizard } from "@/components/import-wizard";
 import { importJobs } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -11,7 +11,7 @@ import { canImport } from "@/lib/import-flow";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ImportPage() {
-  const { membership, organizationName, locale } = await requireWorkspace();
+  const { membership, locale } = await requireWorkspace();
   const t = getTranslator(locale);
 
   // Only the entities this role may actually write. Offering a choice that will
@@ -47,13 +47,29 @@ export default async function ImportPage() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("import.title")}</h1>
-        </div>
-        <AppNav active="/app/import" locale={locale} role={membership.role} />
+        {/*
+          The compose action. Two shapes of the one control, exactly as the
+          calendar's own toolbar and round button are (`app/app/calendar/page.tsx`):
+          a labelled toggle for a desktop, a round one for a phone. Both point
+          at the upload `.compose-wrap` `components/import-wizard.tsx` renders;
+          the click handling that opens (and, for either anchor, closes) it
+          lives there, since this is a Server Component and cannot hold it.
+        */}
+        <a className="primary-button calendar-create" href="#import-upload">
+          <ToolIcon name="plus" />
+          {t("import.upload")}
+        </a>
+        <a
+          className="header-action"
+          href="#import-upload"
+          aria-label={t("import.upload")}
+          data-label-closed={t("import.upload")}
+          data-label-open={t("import.hideUploadTitle")}
+        >
+          <ToolIcon name="plus" />
+          <ToolIcon name="minus" />
+        </a>
       </header>
-
       <ImportWizard entities={allowed} locale={locale} />
 
       {history.length > 0 && (

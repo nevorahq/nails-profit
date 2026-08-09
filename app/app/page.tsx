@@ -3,13 +3,16 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AppNav } from "@/components/app-nav";
+import { MetricIcon, ToolIcon } from "@/components/icons";
 import { OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
+import { ProfitBars } from "@/components/profit-bars";
+import { ProfitTrendChart } from "@/components/profit-trend-chart";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { buildProfitTrend } from "@/domain/dashboard-metrics";
 import { starterMaterials } from "@/domain/import-templates";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { isPilotAccessEnforced } from "@/env";
@@ -17,7 +20,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { auth } from "@/lib/auth";
-import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
+import { formatBasisPoints, formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { resolveLocale } from "@/lib/locale";
 import { loadOnboarding } from "@/lib/onboarding";
@@ -41,6 +44,45 @@ function Metric({
       <span title={formula}>{label}</span>
       <strong>{value}</strong>
       <small className="muted">{formula}</small>
+    </div>
+  );
+}
+
+/**
+ * A period card for the reports page's top row. The formula still exists —
+ * DSH-009 asks for one on every figure — but as a `title` tooltip rather than
+ * visible text, since a period-over-period delta takes that line's place
+ * whenever a comparable prior period exists (see `formatPercentDelta`).
+ */
+function MetricCard({
+  icon,
+  label,
+  value,
+  formula,
+  delta,
+  deltaCaption,
+  negative,
+}: {
+  icon: "revenue" | "cost" | "profit" | "perHour";
+  label: string;
+  value: string;
+  formula: string;
+  delta: { text: string; direction: "up" | "down" } | null;
+  deltaCaption: string;
+  negative?: boolean;
+}) {
+  return (
+    <div className="metric-card" title={formula}>
+      <span className="metric-card-icon">
+        <MetricIcon name={icon} />
+      </span>
+      <span className="metric-card-label">{label}</span>
+      <strong className={`metric-card-value${negative ? " metric-negative" : ""}`}>{value}</strong>
+      {delta && (
+        <span className={`metric-delta ${delta.direction === "down" ? "negative" : "positive"}`}>
+          {delta.text} {deltaCaption}
+        </span>
+      )}
     </div>
   );
 }
@@ -106,7 +148,23 @@ export default async function AppPage({
   const filters = await searchParams;
   const organizationId = membership.organization.id;
   const currency = membership.organization.currency;
-  const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
+  const localeCode = localeTag(locale);
+  const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
+
+  // The period cards compare against the equal-length window immediately
+  // before the selected one — only defined when a specific period was picked;
+  // "all time" has no prior period to be a delta against.
+  const previousRange =
+    filters.from && filters.to
+      ? (() => {
+          const currentFrom = new Date(`${filters.from}T00:00:00.000Z`);
+          const currentTo = new Date(`${filters.to}T23:59:59.999Z`);
+          const spanMs = currentTo.getTime() - currentFrom.getTime() + 1;
+          const previousTo = new Date(currentFrom.getTime() - 1);
+          const previousFrom = new Date(previousTo.getTime() - spanMs + 1);
+          return { from: previousFrom, to: previousTo };
+        })()
+      : null;
 
   const data = await withTenant(organizationId, async (tx) => {
     // Section 6.1: a Master sees "только собственные" — resolved from the
@@ -131,6 +189,16 @@ export default async function AppPage({
       locale,
     );
 
+    const previousMetrics = previousRange
+      ? (
+          await loadDashboard(
+            tx,
+            { from: previousRange.from, to: previousRange.to, specialistId: effectiveSpecialist },
+            locale,
+          )
+        ).metrics
+      : null;
+
     const people = await loadSpecialistOptions(tx);
     const onboarding = await loadOnboarding(tx);
     const activeSpecialists = await tx
@@ -140,6 +208,7 @@ export default async function AppPage({
 
     return {
       ...dashboard,
+      previousMetrics,
       onboarding,
       people,
       canFilterBySpecialist: scopeFor(membership.role, "dashboard") === "all",
@@ -148,7 +217,64 @@ export default async function AppPage({
   });
 
   const isMaster = membership.role === "master";
-  const { metrics } = data;
+  const { metrics, previousMetrics } = data;
+
+  // «Себестоимость» is the complement of profit within revenue rather than a
+  // separate ledger figure — materials and commission for uncosted visits are
+  // not yet known, and this stays true to what the cards above it show.
+  const costMinor = metrics.revenueMinor - metrics.contributionMarginMinor;
+  const previousCostMinor = previousMetrics ? previousMetrics.revenueMinor - previousMetrics.contributionMarginMinor : null;
+  const revenueDelta = previousMetrics
+    ? formatPercentDelta(metrics.revenueMinor, previousMetrics.revenueMinor, localeCode)
+    : null;
+  const costDelta =
+    previousCostMinor !== null ? formatPercentDelta(costMinor, previousCostMinor, localeCode) : null;
+  const profitDelta = previousMetrics
+    ? formatPercentDelta(metrics.contributionMarginMinor, previousMetrics.contributionMarginMinor, localeCode)
+    : null;
+  const perHourDelta =
+    previousMetrics && metrics.profitPerHourMinor !== null && previousMetrics.profitPerHourMinor !== null
+      ? formatPercentDelta(metrics.profitPerHourMinor, previousMetrics.profitPerHourMinor, localeCode)
+      : null;
+
+  // «Прибыль по услугам»: the top of the same ranking the full table below
+  // shows, with everything past it folded into one «Прочее» bar so five bars
+  // stay readable regardless of how many services the catalogue has.
+  const TOP_SERVICES_SHOWN = 4;
+  const topServices = metrics.ranking.slice(0, TOP_SERVICES_SHOWN);
+  const otherServices = metrics.ranking.slice(TOP_SERVICES_SHOWN);
+  const profitByServiceEntries = [
+    ...topServices.map((entry) => ({
+      key: entry.serviceId ?? entry.serviceName,
+      label: entry.serviceName,
+      valueMinor: entry.contributionMarginMinor,
+    })),
+    ...(otherServices.length > 0
+      ? [
+          {
+            key: "__other__",
+            label: t("dashboard.otherServices"),
+            valueMinor: otherServices.reduce((total, entry) => total + entry.contributionMarginMinor, 0),
+          },
+        ]
+      : []),
+  ];
+
+  // «Диаграмма прибыли»: bucketed by `buildProfitTrend` (day or month, decided
+  // from the actual spread of the data), labelled here since that is where
+  // the viewer's locale lives.
+  const profitTrend = buildProfitTrend(data.rows);
+  const trendLabelFormat = new Intl.DateTimeFormat(
+    localeCode,
+    profitTrend.granularity === "day" ? { day: "numeric", month: "short" } : { month: "short", year: "numeric" },
+  );
+  const profitTrendPoints = profitTrend.points.map((point) => ({
+    label: trendLabelFormat.format(
+      new Date(profitTrend.granularity === "day" ? `${point.key}T00:00:00Z` : `${point.key}-01T00:00:00Z`),
+    ),
+    valueMinor: point.profitMinor,
+  }));
+
   const rankingTotals = {
     visits: metrics.ranking.reduce((s, e) => s + e.visits, 0),
     revenueMinor: metrics.ranking.reduce((s, e) => s + e.revenueMinor, 0),
@@ -162,24 +288,24 @@ export default async function AppPage({
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">
-            {t("dashboard.eyebrow")} · {period}
-          </span>
-          <h1>{membership.organization.name}</h1>
-        </div>
-        <AppNav active="/app" locale={locale} role={membership.role} />
-      </header>
+      <span className="eyebrow report-period">
+        {t("dashboard.eyebrow")} · {period}
+      </span>
 
-      <PeriodFilter
-        locale={locale}
-        from={filters.from}
-        to={filters.to}
-        specialistId={filters.specialist}
-        people={data.people}
-        showSpecialist={data.canFilterBySpecialist}
-      />
+      <details className="calendar-filters report-filters">
+        <summary>
+          <ToolIcon name="filter" />
+          {t("filters.title")}
+        </summary>
+        <PeriodFilter
+          locale={locale}
+          from={filters.from}
+          to={filters.to}
+          specialistId={filters.specialist}
+          people={data.people}
+          showSpecialist={data.canFilterBySpecialist}
+        />
+      </details>
 
       {!data.onboarding.complete && (
         <OnboardingPanel
@@ -233,35 +359,63 @@ export default async function AppPage({
           {!isMaster && (
             <section className="panel insight-panel">
               <h2>{t("dashboard.periodTotals")}</h2>
-              <div className="metric-grid">
-                <Metric
+              <div className="metric-cards">
+                <MetricCard
+                  icon="revenue"
                   label={t("dashboard.revenue")}
                   value={money(metrics.revenueMinor)}
                   formula={t("dashboard.revenueFormula", { visits: metrics.visits })}
+                  delta={revenueDelta}
+                  deltaCaption={t("dashboard.vsPreviousPeriod")}
                 />
-                <Metric
-                  label={t("dashboard.youKeep")}
+                <MetricCard
+                  icon="cost"
+                  label={t("dashboard.cost")}
+                  value={money(costMinor)}
+                  formula={t("dashboard.costFormula")}
+                  delta={costDelta}
+                  deltaCaption={t("dashboard.vsPreviousPeriod")}
+                />
+                <MetricCard
+                  icon="profit"
+                  label={t("dashboard.profit")}
                   value={money(metrics.contributionMarginMinor)}
                   formula={t("dashboard.marginFormula", { visits: metrics.costedVisits })}
-                  strong
+                  delta={profitDelta}
+                  deltaCaption={t("dashboard.vsPreviousPeriod")}
                   negative={metrics.contributionMarginMinor < 0}
                 />
-                <Metric
-                  label={t("dashboard.margin")}
-                  value={formatBasisPoints(metrics.marginBasisPoints, localeTag(locale))}
-                  formula={`${money(metrics.contributionMarginMinor)} ÷ ${money(metrics.costedRevenueMinor)}`}
-                  negative={(metrics.marginBasisPoints ?? 0) < 0}
-                />
-                <Metric
+                <MetricCard
+                  icon="perHour"
                   label={t("dashboard.perHour")}
                   value={metrics.profitPerHourMinor === null ? "—" : money(metrics.profitPerHourMinor)}
                   formula={t("dashboard.perHourFormula", {
                     hours: Math.round(metrics.costedDurationMinutes / 60),
                   })}
+                  delta={perHourDelta}
+                  deltaCaption={t("dashboard.vsPreviousPeriod")}
                   negative={(metrics.profitPerHourMinor ?? 0) < 0}
                 />
               </div>
             </section>
+          )}
+
+          {!isMaster && profitByServiceEntries.length > 0 && (
+            <div className="report-charts-grid">
+              <section className="panel">
+                <h2>{t("dashboard.profitByService")}</h2>
+                <ProfitBars entries={profitByServiceEntries} formatMoney={money} />
+              </section>
+              <section className="panel">
+                <h2>{t("dashboard.profitTrend")}</h2>
+                <ProfitTrendChart
+                  points={profitTrendPoints}
+                  formatMoney={money}
+                  emptyLabel={t("dashboard.profitTrendEmpty")}
+                  title={t("dashboard.profitTrend")}
+                />
+              </section>
+            </div>
           )}
 
           {!isMaster && <section className="panel">

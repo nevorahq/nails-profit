@@ -1,6 +1,6 @@
 import { asc, isNull } from "drizzle-orm";
-import { AppNav } from "@/components/app-nav";
 
+import { ToolIcon } from "@/components/icons";
 import { services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
@@ -11,7 +11,7 @@ import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ServicesPage() {
-  const { membership, organizationName, locale } = await requireWorkspace();
+  const { membership, locale } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "services", "read")) {
@@ -59,14 +59,38 @@ export default async function ServicesPage() {
     );
   });
 
+  const canWrite = can(membership.role, "services", "write");
+
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("services.title")}</h1>
-        </div>
-        <AppNav active="/app/services" locale={locale} role={membership.role} />
+        {/*
+          The compose action. Two shapes of the one control, exactly as the
+          calendar's own toolbar and round button are (`app/app/calendar/page.tsx`):
+          a labelled toggle for a desktop, a round one for a phone. Both point
+          at the add-service `<details>` `components/service-list.tsx` renders
+          further down the page; the click handling that opens (and, for
+          either anchor, closes) it lives there, since this is a Server
+          Component and cannot hold it.
+        */}
+        {canWrite && (
+          <a className="primary-button calendar-create" href="#add-service">
+            <ToolIcon name="plus" />
+            {t("services.add")}
+          </a>
+        )}
+        {canWrite && (
+          <a
+            className="header-action"
+            href="#add-service"
+            aria-label={t("services.add")}
+            data-label-closed={t("services.add")}
+            data-label-open={t("services.hideAddTitle")}
+          >
+            <ToolIcon name="plus" />
+            <ToolIcon name="minus" />
+          </a>
+        )}
       </header>
       <ServiceList services={rows} locale={locale} />
     </main>

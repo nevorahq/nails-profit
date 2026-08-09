@@ -1,5 +1,6 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
+import { cache } from "react";
 
 import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments } from "@/db/schema";
@@ -21,8 +22,15 @@ export type ActiveMembership = Readonly<{
  * The caller's session together with the organization they act in. Ordering is
  * explicit for the same reason the workspace page orders: without it the active
  * organization could differ between requests.
+ *
+ * Memoized per request (see the export below): the app shell needs the role to
+ * decide which sections to draw, and the page underneath needs it again to
+ * decide what to load. Without the cache that is two sessions looked up and two
+ * membership joins for every navigation. `cache` is per-request, so nothing is
+ * shared between users, and the CSRF refusal below is reached exactly as often
+ * as it was — once, before anything else runs.
  */
-export async function getActiveMembership(): Promise<
+async function loadActiveMembership(): Promise<
   { session: false } | { session: true; membership: ActiveMembership | null; userId: string }
 > {
   const requestHeaders = await headers();
@@ -83,3 +91,5 @@ export async function getActiveMembership(): Promise<
         : null,
   };
 }
+
+export const getActiveMembership = cache(loadActiveMembership);

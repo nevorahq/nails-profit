@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
-import { AppNav } from "@/components/app-nav";
 
+import { ToolIcon } from "@/components/icons";
 import { addOns, materials, recipeItems, recipes } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
@@ -11,7 +11,7 @@ import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function AddOnsPage() {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "services", "read")) {
@@ -69,22 +69,45 @@ export default async function AddOnsPage() {
   });
 
   const materialRows = await loadMaterials(membership.organizationId);
+  const canManage = canManageCatalogue(membership.role, "services");
 
   return (
     <main className="app-shell">
       <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("addOns.title")}</h1>
-        </div>
-        <AppNav active="/app/add-ons" locale={locale} role={membership.role} />
+        {/*
+          The compose action. Two shapes of the one control, exactly as the
+          calendar's own toolbar and round button are (`app/app/calendar/page.tsx`):
+          a labelled toggle for a desktop, a round one for a phone. Both point
+          at the add-on `<details>` `components/add-on-catalogue.tsx` renders
+          further down the page; the click handling that opens (and, for
+          either anchor, closes) it lives there, since this is a Server
+          Component and cannot hold it.
+        */}
+        {canManage && (
+          <a className="primary-button calendar-create" href="#add-addon">
+            <ToolIcon name="plus" />
+            {t("addOns.add")}
+          </a>
+        )}
+        {canManage && (
+          <a
+            className="header-action"
+            href="#add-addon"
+            aria-label={t("addOns.add")}
+            data-label-closed={t("addOns.add")}
+            data-label-open={t("addOns.hideAddTitle")}
+          >
+            <ToolIcon name="plus" />
+            <ToolIcon name="minus" />
+          </a>
+        )}
       </header>
       <AddOnCatalogue
         addOns={rows}
         materials={materialRows}
         currency={currency}
         locale={locale}
-        canManage={canManageCatalogue(membership.role, "services")}
+        canManage={canManage}
       />
     </main>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { MaterialRow } from "@/components/material-catalogue";
@@ -39,7 +39,42 @@ export function AddOnCatalogue({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
+
+  /*
+   * The add-on panel: nothing on the page until the header opens it — the
+   * header anchors `app/app/add-ons/page.tsx` renders are the *only* control
+   * (`.header-action` on a phone, `.calendar-create` on a desktop; a Server
+   * Component, so neither can hold this listener itself, delegated on
+   * `document` for that reason). Earlier this was a `<details>` whose own
+   * `<summary>` stayed visible — and clickable — while closed, which put a
+   * second «Добавить опцию» directly under the header's own button. A plain
+   * `hidden` section has no such collapsed state to show.
+   */
+  // Lazy so it reads the real hash on the client's own first render rather
+  // than in a follow-up effect — `location` does not exist during the
+  // server's render of this "use client" component.
+  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-addon");
+  const addRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#add-addon"]');
+      if (!trigger) return;
+      event.preventDefault();
+      setAddOpen((open) => !open);
+    }
+
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#add-addon"]').forEach((button) => {
+      const label = addOpen ? button.dataset.labelOpen : button.dataset.labelClosed;
+      if (label) button.setAttribute("aria-label", label);
+    });
+  }, [addOpen]);
 
   async function send(url: string, method: string, payload: unknown, form?: HTMLFormElement) {
     setPending(true);
@@ -68,7 +103,7 @@ export function AddOnCatalogue({
     const price = String(data.get("price") ?? "").trim();
     const duration = String(data.get("duration") ?? "").trim();
 
-    await send(
+    const ok = await send(
       "/api/v1/add-ons",
       "POST",
       {
@@ -78,6 +113,7 @@ export function AddOnCatalogue({
       },
       form,
     );
+    if (ok) setAddOpen(false);
   }
 
   async function saveRecipe(addOnId: string, event: FormEvent<HTMLFormElement>) {
@@ -98,46 +134,31 @@ export function AddOnCatalogue({
   return (
     <>
       {canManage && (
-        <>
-          <div className="add-form-toggle">
-            {formOpen ? (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button className="btn-toggle-close" type="button" onClick={() => setFormOpen(false)} aria-label={t("common.cancel")}>−</button>
-              </div>
-            ) : (
-              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setFormOpen(true)}>
-                {t("addOns.add")}
-              </button>
-            )}
+        <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-addon" ref={addRef}>
+          <div className="compose-inner">
+            <section className="panel">
+              <h2>{t("addOns.add")}</h2>
+              <form className="inline-form" onSubmit={createAddOn}>
+                <label>
+                  {t("addOns.name")}
+                  <input name="name" required maxLength={200} placeholder={t("addOns.namePlaceholder")} />
+                </label>
+                <label>
+                  {t("addOns.priceDelta", { currency })}
+                  <input name="price" type="number" step="0.01" placeholder="100" />
+                </label>
+                <label>
+                  {t("addOns.timeDelta")}
+                  <input name="duration" type="number" step="1" placeholder="20" />
+                </label>
+                <button className="primary-button" type="submit" disabled={pending}>
+                  {pending ? t("common.saving") : t("common.add")}
+                </button>
+              </form>
+              <p className="muted">{t("addOns.negativeHint")}</p>
+            </section>
           </div>
-          <div className={`add-form-wrap${formOpen ? "" : " add-form-closed"}`}>
-            <div className="add-form-inner">
-              <section className="panel">
-                <h2>{t("addOns.add")}</h2>
-                <form className="inline-form" onSubmit={createAddOn}>
-                  <label>
-                    {t("addOns.name")}
-                    <input name="name" required maxLength={200} placeholder={t("addOns.namePlaceholder")} />
-                  </label>
-                  <label>
-                    {t("addOns.priceDelta", { currency })}
-                    <input name="price" type="number" step="0.01" placeholder="100" />
-                  </label>
-                  <label>
-                    {t("addOns.timeDelta")}
-                    <input name="duration" type="number" step="1" placeholder="20" />
-                  </label>
-                  <button className="primary-button" type="submit" disabled={pending}>
-                    {pending ? t("common.saving") : t("common.add")}
-                  </button>
-                </form>
-                <p className="muted">
-{t("addOns.negativeHint")}
-                </p>
-              </section>
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {error && <div className="form-error" role="alert">{error}</div>}

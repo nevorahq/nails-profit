@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
@@ -63,9 +63,47 @@ export function SpecialistManager({
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [exceptionOpen, setExceptionOpen] = useState(false);
+
+  /*
+   * The add-specialist panel: nothing on the page until the header opens
+   * it — the header anchors `app/app/specialists/page.tsx` renders are the
+   * *only* control (`.header-action` on a phone, `.calendar-create` on a
+   * desktop; a Server Component, so neither can hold this listener itself,
+   * delegated on `document` for that reason). This used to be a `<details>`
+   * whose own `<summary>` stayed visible — and clickable — while closed,
+   * which put a second «Добавить мастера» directly under the header's own
+   * button. A `.compose-wrap` collapsed by class has no such leftover strip.
+   *
+   * The other two panels below (link an account, service exception) keep
+   * their older mobile-only toggle — only «Добавить мастера» was asked for.
+   */
+  // Lazy so it reads the real hash on the client's own first render rather
+  // than in a follow-up effect — `location` does not exist during the
+  // server's render of this "use client" component.
+  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-specialist");
+  const addRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#add-specialist"]');
+      if (!trigger) return;
+      event.preventDefault();
+      setAddOpen((open) => !open);
+    }
+
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#add-specialist"]').forEach((button) => {
+      const label = addOpen ? button.dataset.labelOpen : button.dataset.labelClosed;
+      if (label) button.setAttribute("aria-label", label);
+    });
+  }, [addOpen]);
 
   async function send(url: string, payload: unknown, form?: HTMLFormElement, method = "POST") {
     setPending(true);
@@ -80,11 +118,12 @@ export function SpecialistManager({
       const body = await response.json().catch(() => null);
       setError(body?.error?.message ?? t("common.saveFailed"));
       setPending(false);
-      return;
+      return false;
     }
     form?.reset();
     setPending(false);
     router.refresh();
+    return true;
   }
 
   function ruleFromForm(data: FormData) {
@@ -101,7 +140,7 @@ export function SpecialistManager({
     const form = event.currentTarget;
     const data = new FormData(form);
     const rule = ruleFromForm(data);
-    await send(
+    const ok = await send(
       "/api/v1/specialists",
       {
         name: data.get("name"),
@@ -110,6 +149,7 @@ export function SpecialistManager({
       },
       form,
     );
+    if (ok) setAddOpen(false);
   }
 
   async function addException(event: FormEvent<HTMLFormElement>) {
@@ -173,58 +213,45 @@ export function SpecialistManager({
       )}
 
       {canManage && (
-        <>
-          <div className="add-form-toggle">
-            {addOpen ? (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button className="btn-toggle-close" type="button" onClick={() => setAddOpen(false)} aria-label={t("common.cancel")}>−</button>
-              </div>
-            ) : (
-              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setAddOpen(true)}>
-                {t("specialists.add")}
-              </button>
-            )}
+        <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-specialist" ref={addRef}>
+          <div className="compose-inner">
+            <section className="panel">
+              <h2>{t("specialists.add")}</h2>
+              <form className="inline-form" onSubmit={createSpecialist}>
+                <label>
+                  {t("specialists.name")}
+                  <input name="name" required maxLength={200} placeholder={t("specialists.namePlaceholder")} />
+                </label>
+                <label>
+                  {t("specialists.cooperation")}
+                  <select name="cooperation_type" defaultValue="commission">
+                    <option value="commission">{t("cooperation.commission")}</option>
+                    <option value="rent">{t("cooperation.rent")}</option>
+                    <option value="staff">{t("cooperation.staff")}</option>
+                  </select>
+                </label>
+                <label>
+                  {t("specialists.commissionType")}
+                  <select name="rule_type" defaultValue="percentage">
+                    <option value="percentage">{t("commissionType.percentage")}</option>
+                    <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
+                    <option value="fixed">{t("commissionType.fixed")}</option>
+                  </select>
+                </label>
+                <label>
+                  {t("specialists.value")}
+                  <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
+                </label>
+                <button className="primary-button" type="submit" disabled={pending}>
+                  {pending ? t("common.saving") : t("common.add")}
+                </button>
+              </form>
+              <p className="muted">
+                {t("specialists.valueHint", { currency })}
+              </p>
+            </section>
           </div>
-          <div className={`add-form-wrap${addOpen ? "" : " add-form-closed"}`}>
-            <div className="add-form-inner">
-              <section className="panel">
-                <h2>{t("specialists.add")}</h2>
-                <form className="inline-form" onSubmit={createSpecialist}>
-                  <label>
-                    {t("specialists.name")}
-                    <input name="name" required maxLength={200} placeholder={t("specialists.namePlaceholder")} />
-                  </label>
-                  <label>
-                    {t("specialists.cooperation")}
-                    <select name="cooperation_type" defaultValue="commission">
-                      <option value="commission">{t("cooperation.commission")}</option>
-                      <option value="rent">{t("cooperation.rent")}</option>
-                      <option value="staff">{t("cooperation.staff")}</option>
-                    </select>
-                  </label>
-                  <label>
-                    {t("specialists.commissionType")}
-                    <select name="rule_type" defaultValue="percentage">
-                      <option value="percentage">{t("commissionType.percentage")}</option>
-                      <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
-                      <option value="fixed">{t("commissionType.fixed")}</option>
-                    </select>
-                  </label>
-                  <label>
-                    {t("specialists.value")}
-                    <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
-                  </label>
-                  <button className="primary-button" type="submit" disabled={pending}>
-                    {pending ? t("common.saving") : t("common.add")}
-                  </button>
-                </form>
-                <p className="muted">
-                  {t("specialists.valueHint", { currency })}
-                </p>
-              </section>
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {error && <div className="form-error" role="alert">{error}</div>}

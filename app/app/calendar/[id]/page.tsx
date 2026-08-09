@@ -1,7 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 
-import { AppNav } from "@/components/app-nav";
 import { auditEvents, clients, locations, specialists, users, visits, workplaces } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, hasConstraint } from "@/domain/rbac";
@@ -23,7 +22,7 @@ import { requireWorkspace } from "@/lib/workspace";
  * booking row — that row only knows where the appointment ended up.
  */
 export default async function BookingCardPage({ params }: { params: Promise<{ id: string }> }) {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
   const tag = localeTag(locale);
 
@@ -118,13 +117,7 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("calendar.card")}</h1>
-        </div>
-        <AppNav active="/app/calendar" locale={locale} role={membership.role} />
-      </header>
+      <h1>{t("calendar.card")}</h1>
 
       <p>
         <Link className="text-link" href="/app/calendar">

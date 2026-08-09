@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { AppNav } from "@/components/app-nav";
 import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
@@ -21,7 +20,7 @@ export default async function ClientCardPage({
   const { id: clientId } = await params;
   if (!z.uuid().safeParse(clientId).success) notFound();
 
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
   const tag = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, tag);
@@ -125,13 +124,7 @@ export default async function ClientCardPage({
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{client.name}</h1>
-        </div>
-        <AppNav active="/app/clients" locale={locale} role={membership.role} />
-      </header>
+      <h1>{client.name}</h1>
 
       <div style={{ marginBottom: "8rem" }}>
         <Link href="/app/clients" className="muted" style={{ fontSize: "14rem" }}>

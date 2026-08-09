@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
@@ -76,7 +76,6 @@ export function MaterialCatalogue({
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [editPending, setEditPending] = useState(false);
@@ -84,6 +83,42 @@ export function MaterialCatalogue({
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+
+  /*
+   * The add-material panel: nothing on the page until the header opens it —
+   * the header anchors `app/app/materials/page.tsx` renders are the *only*
+   * control (`.header-action` on a phone, `.calendar-create` on a desktop; a
+   * Server Component, so neither can hold this listener itself, delegated on
+   * `document` for that reason). This used to be a `<details>` whose own
+   * `<summary>` stayed visible — and clickable — while closed, which put a
+   * second «Добавить материал» directly under the header's own button. A
+   * `.compose-wrap` collapsed by class has no such leftover strip.
+   */
+  // Lazy so it reads the real hash on the client's own first render rather
+  // than in a follow-up effect — `location` does not exist during the
+  // server's render of this "use client" component.
+  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-material");
+  const addRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#add-material"]');
+      if (!trigger) return;
+      event.preventDefault();
+      setAddOpen((open) => !open);
+    }
+
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#add-material"]').forEach((button) => {
+      const label = addOpen ? button.dataset.labelOpen : button.dataset.labelClosed;
+      if (label) button.setAttribute("aria-label", label);
+    });
+  }, [addOpen]);
 
   async function submitAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,6 +151,7 @@ export function MaterialCatalogue({
 
     form.reset();
     setPending(false);
+    setAddOpen(false);
     router.refresh();
   }
 
@@ -217,60 +253,41 @@ export function MaterialCatalogue({
         </div>
       )}
 
-      {/* Mobile toggle — hidden on desktop via CSS */}
-      <div className="add-form-toggle">
-        {formOpen ? (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              className="btn-toggle-close"
-              type="button"
-              onClick={() => setFormOpen(false)}
-              aria-label={t("common.cancel")}
-            >
-              −
-            </button>
-          </div>
-        ) : (
-          <button
-            className="primary-button"
-            type="button"
-            style={{ width: "100%" }}
-            onClick={() => setFormOpen(true)}
-          >
-            {t("materials.addMaterial")}
-          </button>
-        )}
-      </div>
-
-      {/* Collapsible on mobile; always visible on desktop */}
-      <div className={`add-form-wrap${formOpen ? "" : " add-form-closed"}`}>
-        <div className="add-form-inner">
-          <form className="inline-form" onSubmit={submitAdd}>
-            <label>
-              {t("materials.name")}
-              <input name="name" required maxLength={200} placeholder={t("materials.namePlaceholder")} />
-            </label>
-            <label>
-              {t("materials.unit")}
-              <select name="base_unit" defaultValue="ml">
-                <option value="ml">{t("unit.ml")}</option>
-                <option value="g">{t("unit.g")}</option>
-                <option value="piece">{t("unit.piece")}</option>
-              </select>
-            </label>
-            <label>
-              {t("materials.packagePrice")}
-              <input name="price" type="number" step="0.01" min="0" placeholder="240" />
-            </label>
-            <label>
-              {t("materials.packageSize")}
-              <input name="size" type="number" step="0.001" min="0" placeholder="15" />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("common.add")}
-            </button>
-          </form>
-          {error && <div className="form-error" role="alert">{error}</div>}
+      <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-material" ref={addRef}>
+        <div className="compose-inner">
+          <section className="panel">
+            <h2>{t("materials.addMaterial")}</h2>
+            <form className="inline-form" onSubmit={submitAdd}>
+              <label>
+                {t("materials.name")}
+                <input name="name" required maxLength={200} placeholder={t("materials.namePlaceholder")} />
+              </label>
+              <label>
+                {t("materials.unit")}
+                <select name="base_unit" defaultValue="ml">
+                  <option value="ml">{t("unit.ml")}</option>
+                  <option value="g">{t("unit.g")}</option>
+                  <option value="piece">{t("unit.piece")}</option>
+                </select>
+              </label>
+              <label>
+                {t("materials.packagePrice")}
+                <input name="price" type="number" step="0.01" min="0" placeholder="240" />
+              </label>
+              <label>
+                {t("materials.packageSize")}
+                <input name="size" type="number" step="0.001" min="0" placeholder="15" />
+              </label>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("common.saving") : t("common.add")}
+              </button>
+            </form>
+            {error && (
+              <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
+                {error}
+              </div>
+            )}
+          </section>
         </div>
       </div>
 

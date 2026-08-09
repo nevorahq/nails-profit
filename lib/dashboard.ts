@@ -95,6 +95,7 @@ export async function loadDashboard(
         normativeMaterialCostMinor: snapshot.normativeMaterialCostMinor,
         durationMinutes: snapshot.durationMinutes,
         incompleteReasons: snapshot.incompleteReasons ?? [],
+        completedAt: snapshot.completedAt,
       };
     });
 

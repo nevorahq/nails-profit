@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
@@ -80,7 +80,6 @@ export function ClientManager({
   const t = getTranslator(locale);
   const tag = localeTag(locale);
 
-  const [addOpen, setAddOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +88,42 @@ export function ClientManager({
   const [editError, setEditError] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  /*
+   * The add-client panel: nothing on the page until the header opens it —
+   * the header anchors `app/app/clients/page.tsx` renders are the *only*
+   * control (`.header-action` on a phone, `.calendar-create` on a desktop; a
+   * Server Component, so neither can hold this listener itself, delegated on
+   * `document` for that reason). This used to be a `<details>` whose own
+   * `<summary>` stayed visible — and clickable — while closed, which put a
+   * second «Добавить клиента» directly under the header's own button. A
+   * `.compose-wrap` collapsed by class has no such leftover strip.
+   */
+  // Lazy so it reads the real hash on the client's own first render rather
+  // than in a follow-up effect — `location` does not exist during the
+  // server's render of this "use client" component.
+  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-client");
+  const addRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      const trigger = (event.target as HTMLElement).closest('a[href="#add-client"]');
+      if (!trigger) return;
+      event.preventDefault();
+      setAddOpen((open) => !open);
+    }
+
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
+  useEffect(() => {
+    if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#add-client"]').forEach((button) => {
+      const label = addOpen ? button.dataset.labelOpen : button.dataset.labelClosed;
+      if (label) button.setAttribute("aria-label", label);
+    });
+  }, [addOpen]);
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -179,7 +214,7 @@ export function ClientManager({
 
   return (
     <>
-      <table className="data-table">
+      <table className="data-table clients-table">
         <thead>
           <tr>
             <th>{t("clients.name")}</th>
@@ -314,71 +349,174 @@ export function ClientManager({
         </tbody>
       </table>
 
-      {canWrite && (
-        <>
-          <div className="add-form-toggle">
-            {addOpen ? (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  className="btn-toggle-close"
-                  type="button"
-                  onClick={() => { setAddOpen(false); setError(null); }}
-                  aria-label={t("common.cancel")}
-                >
-                  −
-                </button>
-              </div>
-            ) : (
-              <button
-                className="primary-button"
-                type="button"
-                style={{ width: "100%" }}
-                onClick={() => setAddOpen(true)}
-              >
-                {t("clients.addTitle")}
-              </button>
-            )}
-          </div>
-          <div className={`add-form-wrap${addOpen ? "" : " add-form-closed"}`}>
-            <div className="add-form-inner">
-              <section className="panel">
-                <h2>{t("clients.addTitle")}</h2>
-                <form className="inline-form" onSubmit={add}>
-                  <label>
-                    {t("clients.name")}
-                    <input
-                      name="name"
-                      required
-                      minLength={1}
-                      maxLength={200}
-                      placeholder={t("clients.namePlaceholder")}
-                    />
-                  </label>
-                  <label>
-                    {t("clients.phone")}
-                    <input
-                      name="phone"
-                      type="tel"
-                      placeholder={t("clients.phonePlaceholder")}
-                    />
-                  </label>
-                  <label>
-                    {t("clients.email")}
-                    <input name="email" type="email" placeholder="client@example.com" />
-                  </label>
-                  <button className="primary-button" type="submit" disabled={pending}>
-                    {pending ? t("common.saving") : t("clients.addButton")}
-                  </button>
-                </form>
-                {error && (
-                  <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
-                    {error}
+      {/*
+        The same rows, drawn as cards for a phone — the columns above don't
+        survive a horizontal scroll any better than /visits' did. Below 680px
+        `.clients-table` is swapped for this list outright; see
+        `.client-cards` in globals.css for the toggle.
+      */}
+      <ul className="client-cards" aria-label={t("clients.title")}>
+        {clients.length === 0 && <li className="muted">{t("clients.none")}</li>}
+        {clients.map((client) => {
+          const isEditing = edit?.id === client.id;
+          return (
+            <li
+              key={client.id}
+              className="client-card"
+              onClick={() => {
+                if (!isEditing && !client.anonymized) router.push(`/app/clients/${client.id}`);
+              }}
+              style={!isEditing && !client.anonymized ? { cursor: "pointer" } : undefined}
+            >
+              {isEditing ? (
+                <div className="client-card-edit" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    style={cellInput}
+                    value={edit.name}
+                    onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+                    maxLength={200}
+                    aria-label={t("clients.name")}
+                  />
+                  <input
+                    style={cellInput}
+                    value={edit.phone}
+                    onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
+                    type="tel"
+                    placeholder={t("clients.phonePlaceholder")}
+                    aria-label={t("clients.phone")}
+                  />
+                  <input
+                    style={cellInput}
+                    value={edit.email}
+                    onChange={(e) => setEdit({ ...edit, email: e.target.value })}
+                    type="email"
+                    placeholder="client@example.com"
+                    aria-label={t("clients.email")}
+                  />
+                  <div className="inline-actions">
+                    <button
+                      className="inline-action"
+                      type="button"
+                      onClick={save}
+                      disabled={editPending || !edit.name.trim()}
+                    >
+                      {editPending ? t("common.saving") : t("common.save")}
+                    </button>
+                    <button
+                      className="inline-action"
+                      type="button"
+                      onClick={() => { setEdit(null); setEditError(null); }}
+                    >
+                      <IconX />
+                      <span className="btn-label">{t("common.cancel")}</span>
+                    </button>
                   </div>
-                )}
-              </section>
-            </div>
+                  {editError && (
+                    <span style={{ fontSize: "12rem", color: "var(--danger)" }}>{editError}</span>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="client-card-head">
+                    <span className="client-card-name">{client.name}</span>
+                  </div>
+                  {client.anonymized ? (
+                    <p className="muted">{t("clients.anonymized")}</p>
+                  ) : (
+                    <div className="client-card-contact">
+                      <span>{client.phone ?? "—"}</span>
+                      <span>{client.email ?? "—"}</span>
+                    </div>
+                  )}
+                  <div className="client-card-metrics">
+                    <div>
+                      <span>{t("clients.lastVisit")}</span>
+                      <strong>{formatDate(client.lastVisitAt)}</strong>
+                    </div>
+                    <div>
+                      <span>{t("clients.visitCount")}</span>
+                      <strong>{client.visitCount}</strong>
+                    </div>
+                    <div>
+                      <span>{t("clients.totalSpent")}</span>
+                      <strong>{client.totalSpent ?? "—"}</strong>
+                    </div>
+                  </div>
+                  {canWrite && !client.anonymized && (
+                    <div className="client-card-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="inline-action"
+                        type="button"
+                        onClick={() => setEdit({
+                          id: client.id,
+                          name: client.name,
+                          phone: client.phone ?? "",
+                          email: client.email ?? "",
+                        })}
+                        aria-label={t("services.edit")}
+                      >
+                        <IconEdit />
+                        <span className="btn-label">{t("services.edit")}</span>
+                      </button>
+                      <button
+                        className="inline-action danger"
+                        type="button"
+                        onClick={() => deleteClient(client)}
+                        disabled={deletingId === client.id}
+                        aria-label={t("common.delete")}
+                      >
+                        <IconTrash />
+                        <span className="btn-label">{t("common.delete")}</span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {canWrite && (
+        <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-client" ref={addRef}>
+          <div className="compose-inner">
+            <section className="panel">
+              <h2>{t("clients.addTitle")}</h2>
+              <form className="inline-form" onSubmit={add}>
+                <label>
+                  {t("clients.name")}
+                  <input
+                    name="name"
+                    required
+                    minLength={1}
+                    maxLength={200}
+                    placeholder={t("clients.namePlaceholder")}
+                  />
+                </label>
+                <label>
+                  {t("clients.phone")}
+                  <input
+                    name="phone"
+                    type="tel"
+                    placeholder={t("clients.phonePlaceholder")}
+                  />
+                </label>
+                <label>
+                  {t("clients.email")}
+                  <input name="email" type="email" placeholder="client@example.com" />
+                </label>
+                <button className="primary-button" type="submit" disabled={pending}>
+                  {pending ? t("common.saving") : t("clients.addButton")}
+                </button>
+              </form>
+              {error && (
+                <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
+                  {error}
+                </div>
+              )}
+            </section>
           </div>
-        </>
+        </div>
       )}
     </>
   );

@@ -82,7 +82,7 @@ async function loadCatalogue(
 }
 
 export default async function NewVisitPage() {
-  const { membership, organizationName, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "write")) {
@@ -111,11 +111,8 @@ export default async function NewVisitPage() {
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">{organizationName}</span>
-          <h1>{t("closeVisit.title")}</h1>
-        </div>
+      <header className="app-header app-header-split">
+        <h1>{t("closeVisit.title")}</h1>
         <Link className="text-link" href="/app/visits">
           ← {t("visits.title")}
         </Link>
