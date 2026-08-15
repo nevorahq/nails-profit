@@ -1,8 +1,8 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { ToolIcon } from "@/components/icons";
 import { db } from "@/db";
-import { commissionRules, memberships, services, specialists, users } from "@/db/schema";
+import { commissionRules, memberships, services, specialistServices, specialists, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
@@ -45,6 +45,18 @@ export default async function SpecialistsPage() {
       .where(isNull(services.archivedAt))
       .orderBy(asc(services.createdAt));
 
+    const assignments = rows.length
+      ? await tx
+          .select({
+            specialistId: specialistServices.specialistId,
+            serviceId: specialistServices.serviceId,
+            durationMinutes: specialistServices.durationOverrideMinutes,
+            requiresWorkplace: specialistServices.requiresWorkplace,
+          })
+          .from(specialistServices)
+          .where(inArray(specialistServices.specialistId, rows.map((person) => person.id)))
+      : [];
+
     const people: SpecialistRow[] = await Promise.all(
       rows.map(async (person) => {
         const rules = await tx
@@ -54,6 +66,7 @@ export default async function SpecialistsPage() {
             type: commissionRules.type,
             basisPoints: commissionRules.basisPoints,
             fixedAmountMinor: commissionRules.fixedAmountMinor,
+            base: commissionRules.base,
             activeFrom: commissionRules.activeFrom,
             activeTo: commissionRules.activeTo,
           })
@@ -76,11 +89,13 @@ export default async function SpecialistsPage() {
           name: person.name,
           cooperation_type: person.cooperationType,
           user_id: person.userId,
+          is_principal: person.isPrincipal,
           default_rule: defaultRule
             ? {
                 type: defaultRule.type,
                 basis_points: defaultRule.basisPoints,
                 fixed_amount_minor: defaultRule.fixedAmountMinor,
+                base: defaultRule.base,
               }
             : null,
           service_exceptions: exceptions.map((rule) => ({
@@ -88,7 +103,15 @@ export default async function SpecialistsPage() {
             type: rule.type,
             basis_points: rule.basisPoints,
             fixed_amount_minor: rule.fixedAmountMinor,
+            base: rule.base,
           })),
+          service_assignments: assignments
+            .filter((assignment) => assignment.specialistId === person.id)
+            .map((assignment) => ({
+              service_id: assignment.serviceId,
+              duration_minutes: assignment.durationMinutes,
+              requires_workplace: assignment.requiresWorkplace,
+            })),
         };
       }),
     );
@@ -98,6 +121,7 @@ export default async function SpecialistsPage() {
       catalogue: serviceRows.map((service) => ({
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
+        duration_minutes: service.durationMinutes,
       })),
     };
   });

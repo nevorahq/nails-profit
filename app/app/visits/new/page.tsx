@@ -1,7 +1,18 @@
-import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
 
-import { addOns, clients, materials, recipeItems, recipes, serviceAddOns, services, specialists } from "@/db/schema";
+import {
+  addOns,
+  clients,
+  materials,
+  materialPriceVersions,
+  paymentMethods,
+  recipeItems,
+  recipes,
+  serviceAddOns,
+  services,
+  specialists,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { VisitCloseForm, type CloseFormAddOn, type CloseFormService } from "@/components/visit-close-form";
@@ -22,7 +33,7 @@ async function recipeLines(tx: Parameters<typeof loadCatalogue>[0], target: { se
     .orderBy(desc(recipes.activeFrom), desc(recipes.recipeVersion))
     .limit(1);
 
-  if (!recipe) return [];
+  if (!recipe) return { configured: false, lines: [] };
 
   const rows = await tx
     .select({
@@ -35,12 +46,41 @@ async function recipeLines(tx: Parameters<typeof loadCatalogue>[0], target: { se
     .innerJoin(materials, eq(recipeItems.materialId, materials.id))
     .where(eq(recipeItems.recipeId, recipe.id));
 
-  return rows.map((row) => ({
-    material_id: row.materialId,
-    material_name: row.materialName,
-    base_unit: row.baseUnit,
-    quantity_milli_units: row.quantity,
-  }));
+  const ids = rows.map((row) => row.materialId);
+  const prices =
+    ids.length === 0
+      ? []
+      : await tx
+          .selectDistinctOn([materialPriceVersions.materialId], {
+            materialId: materialPriceVersions.materialId,
+            packagePriceMinor: materialPriceVersions.packagePriceMinor,
+            packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
+          })
+          .from(materialPriceVersions)
+          .where(
+            and(
+              inArray(materialPriceVersions.materialId, ids),
+              lte(materialPriceVersions.validFrom, new Date()),
+            ),
+          )
+          .orderBy(
+            materialPriceVersions.materialId,
+            desc(materialPriceVersions.validFrom),
+            desc(materialPriceVersions.createdAt),
+          );
+  const priceByMaterial = new Map(prices.map((price) => [price.materialId, price]));
+
+  return {
+    configured: true,
+    lines: rows.map((row) => ({
+      material_id: row.materialId,
+      material_name: row.materialName,
+      base_unit: row.baseUnit,
+      quantity_milli_units: row.quantity,
+      package_price_minor: priceByMaterial.get(row.materialId)?.packagePriceMinor ?? null,
+      package_size_milli_units: priceByMaterial.get(row.materialId)?.packageSizeMilliUnits ?? null,
+    })),
+  };
 }
 
 async function loadCatalogue(
@@ -58,24 +98,32 @@ async function loadCatalogue(
   const links = await tx.select().from(serviceAddOns);
 
   const catalogue: CloseFormService[] = await Promise.all(
-    serviceRows.map(async (service) => ({
-      id: service.id,
-      displayName: resolveLocalizedText(service.name, locale as "ru", locale as "ru") ?? t("common.unnamed"),
-      price_minor: service.priceMinor,
-      duration_minutes: service.durationMinutes,
-      recipe: await recipeLines(tx, { serviceId: service.id }),
-    })),
+    serviceRows.map(async (service) => {
+      const recipe = await recipeLines(tx, { serviceId: service.id });
+      return {
+        id: service.id,
+        displayName: resolveLocalizedText(service.name, locale as "ru", locale as "ru") ?? t("common.unnamed"),
+        price_minor: service.priceMinor,
+        duration_minutes: service.durationMinutes,
+        standard_profile_configured: recipe.configured,
+        recipe: recipe.lines,
+      };
+    }),
   );
 
   const options: CloseFormAddOn[] = await Promise.all(
-    addOnRows.map(async (addOn) => ({
-      id: addOn.id,
-      displayName: resolveLocalizedText(addOn.name, locale as "ru", locale as "ru") ?? t("common.unnamed"),
-      price_delta_minor: addOn.priceDeltaMinor,
-      duration_delta_minutes: addOn.durationDeltaMinutes,
-      serviceIds: links.filter((link) => link.addOnId === addOn.id).map((link) => link.serviceId),
-      recipe: await recipeLines(tx, { addOnId: addOn.id }),
-    })),
+    addOnRows.map(async (addOn) => {
+      const recipe = await recipeLines(tx, { addOnId: addOn.id });
+      return {
+        id: addOn.id,
+        displayName: resolveLocalizedText(addOn.name, locale as "ru", locale as "ru") ?? t("common.unnamed"),
+        price_delta_minor: addOn.priceDeltaMinor,
+        duration_delta_minutes: addOn.durationDeltaMinutes,
+        serviceIds: links.filter((link) => link.addOnId === addOn.id).map((link) => link.serviceId),
+        standard_profile_configured: recipe.configured,
+        recipe: recipe.lines,
+      };
+    }),
   );
 
   return { catalogue, options };
@@ -106,7 +154,23 @@ export default async function NewVisitPage() {
       .where(isNull(clients.archivedAt))
       .orderBy(asc(clients.name));
 
-    return { catalogue, options, people, clientRows };
+    const methods = await tx
+      .select({
+        id: paymentMethods.id,
+        name: paymentMethods.name,
+        is_default: paymentMethods.isDefault,
+      })
+      .from(paymentMethods)
+      .where(isNull(paymentMethods.archivedAt))
+      .orderBy(asc(paymentMethods.createdAt));
+
+    const materialOptions = await tx
+      .select({ id: materials.id, name: materials.name, base_unit: materials.baseUnit })
+      .from(materials)
+      .where(isNull(materials.archivedAt))
+      .orderBy(asc(materials.name));
+
+    return { catalogue, options, people, clientRows, methods, materialOptions };
   });
 
   return (
@@ -122,6 +186,8 @@ export default async function NewVisitPage() {
         addOns={data.options}
         specialists={data.people}
         clients={data.clientRows}
+        paymentMethods={data.methods}
+        extraMaterials={data.materialOptions}
         currency={currency}
         locale={locale}
       />

@@ -5,16 +5,21 @@ import {
   addOns,
   auditEvents,
   clients,
+  commissionRuleServices,
   commissionRules,
   consumptions,
+  expenses,
   externalReferences,
   financialSnapshots,
   importJobs,
   invitations,
+  laborCostRules,
   materialPriceVersions,
   materials,
   memberships,
   organizations,
+  ownerDraws,
+  paymentMethods,
   pilotEnrollments,
   pilotInteractions,
   pilotIssues,
@@ -25,6 +30,7 @@ import {
   serviceCategories,
   services,
   specialists,
+  taxRules,
   users,
   visitLines,
   visits,
@@ -36,7 +42,14 @@ import { recordAuditEvent } from "@/lib/audit";
 import { apiError, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
-export const EXPORT_FORMAT_VERSION = 1;
+/**
+ * 3: the labour rules joined the payload.
+ *
+ * 2: the expense ledger joined the payload. A consumer written for version 1
+ * still reads every field it knew, so the bump is a signal that more arrived,
+ * not that anything moved.
+ */
+export const EXPORT_FORMAT_VERSION = 3;
 
 /**
  * Owner-requested export of everything the organization owns, spec section 4.3.
@@ -110,6 +123,10 @@ export async function GET(request: Request) {
       .select()
       .from(commissionRules)
       .orderBy(asc(commissionRules.createdAt));
+    const commissionRuleServiceRows = await tx
+      .select()
+      .from(commissionRuleServices)
+      .orderBy(asc(commissionRuleServices.createdAt));
     const recipeRows = await tx.select().from(recipes).orderBy(asc(recipes.createdAt));
     const recipeItemRows = await tx.select().from(recipeItems).orderBy(asc(recipeItems.createdAt));
     const clientRows = await tx.select().from(clients).orderBy(asc(clients.createdAt));
@@ -124,6 +141,20 @@ export async function GET(request: Request) {
       .select()
       .from(externalReferences)
       .orderBy(asc(externalReferences.createdAt));
+    const laborCostRows = await tx
+      .select()
+      .from(laborCostRules)
+      .orderBy(asc(laborCostRules.activeFrom));
+    const paymentMethodRows = await tx
+      .select()
+      .from(paymentMethods)
+      .orderBy(asc(paymentMethods.createdAt));
+    const taxRuleRows = await tx.select().from(taxRules).orderBy(asc(taxRules.activeFrom));
+    const expenseRows = await tx.select().from(expenses).orderBy(asc(expenses.spentOn), asc(expenses.createdAt));
+    const ownerDrawRows = await tx
+      .select()
+      .from(ownerDraws)
+      .orderBy(asc(ownerDraws.occurredOn), asc(ownerDraws.createdAt));
     const importJobRows = await tx.select().from(importJobs).orderBy(asc(importJobs.createdAt));
     const pilotEnrollmentRows = await tx.select().from(pilotEnrollments);
     const pilotEventRows = await tx
@@ -172,6 +203,7 @@ export async function GET(request: Request) {
       service_add_ons: serviceAddOnRows,
       specialists: specialistRows,
       commission_rules: commissionRuleRows,
+      commission_rule_services: commissionRuleServiceRows,
       recipes: recipeRows,
       recipe_items: recipeItemRows,
       clients: clientRows,
@@ -179,6 +211,11 @@ export async function GET(request: Request) {
       visit_lines: visitLineRows,
       consumptions: consumptionRows,
       financial_snapshots: financialSnapshotRows,
+      expenses: expenseRows,
+      labor_cost_rules: laborCostRows,
+      owner_draws: ownerDrawRows,
+      payment_methods: paymentMethodRows,
+      tax_rules: taxRuleRows,
       external_references: externalReferenceRows,
       import_jobs: importJobRows,
       pilot_enrollment: pilotEnrollmentRows,

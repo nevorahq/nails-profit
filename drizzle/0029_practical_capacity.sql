@@ -1,0 +1,2 @@
+ALTER TABLE "organization" ADD COLUMN "practical_capacity_basis_points" integer DEFAULT 7500 NOT NULL;--> statement-breakpoint
+ALTER TABLE "organization" ADD CONSTRAINT "organization_practical_capacity_range" CHECK ("organization"."practical_capacity_basis_points" between 1 and 10000);

@@ -41,7 +41,9 @@ type Case = Readonly<{
   public?: boolean;
   /** The section 6.1 cell this encodes, or why the endpoint has no cell. */
   note: string;
-  request: (fixture: Fixture) => Promise<{ path: string; body?: Record<string, unknown> }>;
+  request: (
+    fixture: Fixture,
+  ) => Promise<{ path: string; body?: Record<string, unknown>; headers?: Record<string, string> }>;
 }>;
 
 const ALL_ROLES = memberRoles;
@@ -228,7 +230,14 @@ const cases: readonly Case[] = [
     method: "POST",
     allowed: CATALOGUE_MANAGERS,
     note: "Master's materials write is scope own — consumption, not the shared catalogue",
-    request: async () => ({ path: "/api/v1/materials", body: { name: "Проба", base_unit: "ml" } }),
+    // A distinct name per call. Since migration 0034 a material's name is
+    // unique within an organization, so a fixed name would have every role
+    // after the first refused for existing rather than for its permissions —
+    // and this file is about permissions.
+    request: async () => ({
+      path: "/api/v1/materials",
+      body: { name: `Проба ${crypto.randomUUID()}`, base_unit: "ml" },
+    }),
   },
   {
     route: "/api/v1/materials/[id]/prices",
@@ -241,18 +250,173 @@ const cases: readonly Case[] = [
     }),
   },
   {
-    route: "/api/v1/materials/starter",
+    route: "/api/v1/material-templates",
     method: "GET",
     allowed: ALL_ROLES,
-    note: "A static list of names, no tenant data",
-    request: async () => ({ path: "/api/v1/materials/starter" }),
+    note: "The curated catalogue is product data; reading it needs materials read, which every role has",
+    request: async () => ({ path: "/api/v1/material-templates?core=true" }),
   },
   {
-    route: "/api/v1/materials/starter",
+    route: "/api/v1/materials/from-templates",
     method: "POST",
     allowed: CATALOGUE_MANAGERS,
-    note: "Writes the shared catalogue",
-    request: async () => ({ path: "/api/v1/materials/starter" }),
+    note: "Fast Setup writes the shared catalogue, so it takes the catalogue scope",
+    request: async () => ({
+      path: "/api/v1/materials/from-templates",
+      body: {
+        items: [
+          {
+            template_id: "00000000-0000-4000-8000-000000000000",
+            package_price_minor: 1_000,
+            currency: "MDL",
+          },
+        ],
+      },
+      headers: { "idempotency-key": crypto.randomUUID() },
+    }),
+  },
+  {
+    route: "/api/v1/expenses",
+    method: "GET",
+    allowed: ["owner"],
+    note: "the expense ledger is the owner's alone — rent and payroll, not catalogue data",
+    request: async () => ({ path: "/api/v1/expenses" }),
+  },
+  {
+    route: "/api/v1/expenses",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Recording a purchase is the owner's write; no manager, master or analyst",
+    request: async () => ({
+      path: "/api/v1/expenses",
+      body: { name: "Аренда", category: "rent", amount_minor: 120_000 },
+    }),
+  },
+  {
+    route: "/api/v1/expenses/[id]",
+    method: "PATCH",
+    allowed: ["owner"],
+    note: "Editing a recorded purchase is the same owner-only write as making one",
+    // A missing UUID exercises authorization alone: the role check runs before
+    // the lookup, so a permitted role gets 404 and a denied one still gets 403.
+    request: async () => ({
+      path: `/api/v1/expenses/${crypto.randomUUID()}`,
+      body: { name: "Аренда за июль" },
+    }),
+  },
+  {
+    route: "/api/v1/expenses/[id]",
+    method: "DELETE",
+    allowed: ["owner"],
+    note: "Archiving a recorded purchase is an owner-only write",
+    request: async () => ({ path: `/api/v1/expenses/${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/labor-costs",
+    method: "GET",
+    allowed: ["owner"],
+    note: "Salaries and what the owner's own work is worth — the owner's alone, reading included",
+    request: async () => ({ path: "/api/v1/labor-costs" }),
+  },
+  {
+    route: "/api/v1/labor-costs",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Setting a wage is an owner's decision; no manager, master or analyst",
+    request: async () => ({
+      path: "/api/v1/labor-costs",
+      body: { recipient: "owner", basis: "fixed_monthly", amount_minor: 1_500_000 },
+    }),
+  },
+  {
+    route: "/api/v1/labor-costs/[id]",
+    method: "DELETE",
+    allowed: ["owner"],
+    // A missing UUID exercises authorization alone: the role check runs before
+    // the lookup, so a permitted role gets 404 and a denied one still gets 403.
+    note: "Ending a wage is the same owner-only write as starting one",
+    request: async () => ({ path: `/api/v1/labor-costs/${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/payment-methods",
+    method: "GET",
+    allowed: ALL_ROLES,
+    // The list is a field on the closing form: a master who cannot read it
+    // cannot say the client paid by card, and the fee goes uncounted.
+    note: "Anyone who may record a visit needs to see how it can be paid for",
+    request: async () => ({ path: "/api/v1/payment-methods" }),
+  },
+  {
+    route: "/api/v1/payment-methods",
+    method: "POST",
+    allowed: ["owner"],
+    note: "The acquirer's rate is a financial setting, so it takes organization_settings",
+    request: async () => ({
+      path: "/api/v1/payment-methods",
+      body: { name: "Терминал", kind: "card", commission_basis_points: 220 },
+    }),
+  },
+  {
+    route: "/api/v1/payment-methods/[id]",
+    method: "PATCH",
+    allowed: ["owner"],
+    note: "Changing a rate is the same owner-only write as adding one",
+    request: async () => ({
+      path: `/api/v1/payment-methods/${crypto.randomUUID()}`,
+      body: { commission_basis_points: 300 },
+    }),
+  },
+  {
+    route: "/api/v1/payment-methods/[id]",
+    method: "DELETE",
+    allowed: ["owner"],
+    note: "Retiring a method changes what new visits cost; owner only",
+    request: async () => ({ path: `/api/v1/payment-methods/${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/owner-draws",
+    method: "GET",
+    allowed: ["owner"],
+    note: "What the owner took for themselves — the most personal figure the product holds",
+    request: async () => ({ path: "/api/v1/owner-draws" }),
+  },
+  {
+    route: "/api/v1/owner-draws",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Recording a draw is the owner's own business; no manager, master or analyst",
+    request: async () => ({
+      path: "/api/v1/owner-draws",
+      body: { amount_minor: 100_000, currency: "MDL" },
+    }),
+  },
+  {
+    route: "/api/v1/owner-draws",
+    method: "DELETE",
+    allowed: ["owner"],
+    note: "Same owner-only write as recording one",
+    request: async () => ({ path: `/api/v1/owner-draws?id=${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/tax-rules",
+    method: "GET",
+    allowed: ["owner"],
+    note: "What a business owes the state is the owner's, like rent — reading included",
+    request: async () => ({ path: "/api/v1/tax-rules" }),
+  },
+  {
+    route: "/api/v1/tax-rules",
+    method: "POST",
+    allowed: ["owner"],
+    note: "A tax rate reaches the margin of every visit; owner alone",
+    request: async () => ({ path: "/api/v1/tax-rules", body: { kind: "vat", basis_points: 2_000 } }),
+  },
+  {
+    route: "/api/v1/tax-rules/[id]",
+    method: "DELETE",
+    allowed: ["owner"],
+    note: "Ending a tax rule is the same owner-only write as starting one",
+    request: async () => ({ path: `/api/v1/tax-rules/${crypto.randomUUID()}` }),
   },
   {
     route: "/api/v1/services",
@@ -699,19 +863,25 @@ const cases: readonly Case[] = [
   },
 ];
 
-async function send(actor: Actor, method: Method, path: string, body?: Record<string, unknown>) {
+async function send(
+  actor: Actor,
+  method: Method,
+  path: string,
+  body?: Record<string, unknown>,
+  headers?: Record<string, string>,
+) {
   // The import upload is the one multipart endpoint; everything else is JSON.
   if (path === "/api/v1/imports" && method === "POST") return actor.post(path, importForm());
 
   switch (method) {
     case "GET":
-      return actor.get(path);
+      return actor.get(path, headers);
     case "POST":
-      return actor.post(path, body);
+      return actor.post(path, body, headers);
     case "PUT":
-      return actor.put(path, body);
+      return actor.put(path, body, headers);
     case "PATCH":
-      return actor.patch(path, body);
+      return actor.patch(path, body, headers);
     case "DELETE":
       return actor.delete(path, body);
   }
@@ -822,8 +992,8 @@ describe("RBAC and tenant isolation", () => {
         const label = `${permitted ? "may" : "may not"} ${entry.method} ${entry.route} — ${entry.note}`;
 
         test(label, async () => {
-          const { path, body } = await entry.request(fixture);
-          const response = await send(fixture.actors[role], entry.method, path, body);
+          const { path, body, headers } = await entry.request(fixture);
+          const response = await send(fixture.actors[role], entry.method, path, body, headers);
 
           if (permitted) {
             expect(response.status).not.toBe(403);
@@ -839,8 +1009,8 @@ describe("RBAC and tenant isolation", () => {
   describe("without a session", () => {
     for (const entry of cases) {
       test(`${entry.method} ${entry.route} ${entry.public ? "is public" : "is refused"}`, async () => {
-        const { path, body } = await entry.request(fixture);
-        const response = await send(anonymous, entry.method, path, body);
+        const { path, body, headers } = await entry.request(fixture);
+        const response = await send(anonymous, entry.method, path, body, headers);
         if (entry.public) expect(response.status).not.toBe(401);
         else expect(response.status).toBe(401);
       });

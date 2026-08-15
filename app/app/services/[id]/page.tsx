@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 
 import { addOns, serviceAddOns, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { allocatedFixedCostMinor } from "@/domain/capacity";
 import { can } from "@/domain/rbac";
 import { ServiceDetail, type ServiceDetailData } from "@/components/service-detail";
 import { resolveLocalizedText } from "@/i18n/localized-text";
-import { loadMaterials } from "@/app/app/materials/page";
+import { loadMaterials } from "@/lib/materials";
+import { loadPeriodPL, monthOf } from "@/lib/period";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
@@ -18,7 +20,7 @@ export default async function ServicePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ add_ons?: string }>;
 }) {
-  const { membership, locale } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
   const { id } = await params;
   // The chosen add-on set comes from the URL so the server can compute the
@@ -64,7 +66,51 @@ export default async function ServicePage({
       .from(serviceAddOns)
       .where(eq(serviceAddOns.serviceId, service.id));
 
-    return { service, costing, catalogue, linked: linked.map((row) => row.addOnId) };
+    /*
+     * The Fully Loaded view, and only for someone allowed to see fixed costs.
+     *
+     * Rent and salaries are owner's data — the same capability the ledger and
+     * the monthly report are behind — so a master sees the contribution margin
+     * and no toggle at all rather than a rate that lets them work the rent out.
+     *
+     * It also costs four extra queries, which is the second reason not to run
+     * it for every reader of the catalogue.
+     */
+    const showsFixedCosts =
+      costing.status === "complete" &&
+      costing.currency === currency &&
+      can(membership.role, "expenses", "read");
+
+    if (!showsFixedCosts) {
+      return { service, costing, catalogue, linked: linked.map((row) => row.addOnId), fullyLoaded: null };
+    }
+
+    const month = monthOf(new Date());
+    const report = await loadPeriodPL(
+      tx,
+      { month, currency, organizationId: membership.organizationId },
+      locale,
+    );
+    const allocated = allocatedFixedCostMinor(
+      report.capacity.fixedCostMinor,
+      report.capacity.practicalMinutes,
+      costing.costing.durationMinutes,
+    );
+
+    return {
+      service,
+      costing,
+      catalogue,
+      linked: linked.map((row) => row.addOnId),
+      fullyLoaded:
+        allocated === null || report.capacity.fixedCostRateMinorPerHour === null
+          ? null
+          : {
+              month,
+              allocated_fixed_cost_minor: allocated,
+              fixed_cost_rate_minor_per_hour: report.capacity.fixedCostRateMinorPerHour,
+            },
+    };
   });
 
   if (!loaded) notFound();
@@ -91,6 +137,7 @@ export default async function ServicePage({
             formula_version: loaded.costing.costing.formulaVersion,
             currency: loaded.costing.currency,
             price_minor: loaded.costing.costing.priceMinor,
+            duration_minutes: loaded.costing.costing.durationMinutes,
             material_cost_minor: loaded.costing.costing.materialCostMinor,
             commission_minor: loaded.costing.costing.commissionMinor,
             contribution_margin_minor: loaded.costing.costing.contributionMarginMinor,
@@ -117,6 +164,7 @@ export default async function ServicePage({
       }))}
       linkedAddOnIds={loaded.linked}
       selectedAddOnIds={selectedAddOnIds}
+      fullyLoaded={loaded.fullyLoaded}
       locale={locale}
     />
   );

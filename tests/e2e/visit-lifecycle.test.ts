@@ -29,7 +29,7 @@ describe("visit lifecycle", () => {
         service_id: studio.serviceId,
         specialist_id: studio.specialistId,
         actual_duration_minutes: CANONICAL.serviceDurationMinutes,
-        consumption: [{ material_id: studio.materialId, actual_quantity: CANONICAL.recipeQuantity }],
+        consumption: [],
       }),
     ).id;
   });
@@ -55,10 +55,12 @@ describe("visit lifecycle", () => {
 
     expect(snapshots).toHaveLength(2);
     expect(snapshots[0].snapshotVersion).toBe(2);
+    expect(snapshots[0].materialUsageSource).toBe("actual");
     expect(snapshots[0].materialCostMinor).toBe(7_000);
     expect(snapshots[0].contributionMarginMinor).toBe(29_000);
     // Version 1 is untouched: this is an audit trail, not an edit history.
     expect(snapshots[1].snapshotVersion).toBe(1);
+    expect(snapshots[1].materialUsageSource).toBe("standard");
     expect(snapshots[1].materialCostMinor).toBe(CANONICAL.materialCostMinor);
     expect(snapshots[1].contributionMarginMinor).toBe(CANONICAL.contributionMarginMinor);
   });
@@ -88,7 +90,7 @@ describe("visit lifecycle", () => {
         service_id: studio.serviceId,
         specialist_id: studio.specialistId,
         actual_duration_minutes: CANONICAL.serviceDurationMinutes,
-        consumption: [{ material_id: studio.materialId, actual_quantity: CANONICAL.recipeQuantity }],
+        consumption: [],
       }),
     ).id;
 

@@ -118,8 +118,8 @@ describe("visit snapshots", () => {
         organizationId,
         visitId: visit.id,
         snapshotVersion: 1,
-        formulaVersion: "costing-v1",
         currency: "MDL",
+        formulaVersion: "costing-v1",
         revenueMinor: 60_000,
         contributionMarginMinor: 34_000,
       })
@@ -398,7 +398,6 @@ describe("closing and adjusting a visit", () => {
         organizationId,
         visitId: visit.id,
         profit,
-        currency: "MDL",
         actorUserId: userId,
       });
       return { visitId: visit.id, snapshot };
@@ -437,16 +436,14 @@ describe("closing and adjusting a visit", () => {
     expect(snapshot.incompleteReasons).toEqual([]);
   });
 
-  it("stores a snapshot even when the margin cannot be computed", async () => {
-    // CST-010 needs the row in order to list what is missing; the figures that
-    // depend on the unknown stay null rather than zero.
+  it("uses the snapshotted standard quantity when actual usage is absent", async () => {
     const { snapshot } = await close(null);
 
     expect(snapshot.revenueMinor).toBe(60_000);
-    expect(snapshot.contributionMarginMinor).toBeNull();
-    expect(snapshot.materialCostMinor).toBeNull();
-    expect(snapshot.incompleteReasons).toEqual(["missing_actual_consumption"]);
-    // The normative cost is knowable, so it is recorded.
+    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.materialCostMinor).toBe(2_000);
+    expect(snapshot.materialUsageSource).toBe("standard");
+    expect(snapshot.incompleteReasons).toEqual([]);
     expect(snapshot.normativeMaterialCostMinor).toBe(2_000);
   });
 
@@ -498,7 +495,6 @@ describe("closing and adjusting a visit", () => {
         organizationId,
         visitId,
         profit,
-        currency: "MDL",
         actorUserId: userId,
       });
     });

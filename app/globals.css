@@ -68,21 +68,6 @@
   border: 0;
 }
 
-/*
- * 1rem is one unit of the design, so a value written here is the number from
- * the mock. The mocks are 390 wide on mobile and 1920 on desktop, and both
- * describe the same 16px body text as `16rem` — so the scale has to be 1 at
- * both references, not proportional to the viewport across the whole range.
- *
- * Switching the divisor from 390 to 1920 at a breakpoint did the opposite: at
- * 640px the root font-size fell from 1.64px to 0.33px, a fivefold cliff, and
- * everything from a tablet to a 1600px laptop rendered body text at 5–13px.
- * One continuous function instead: shrink below 390 so the mobile design fits
- * a narrow phone, hold at 1 through the desktop range, grow past 1920.
- *
- * Layout survives the constant because nothing here is a fixed width — the
- * containers are percentages, `min()` and `max-width` caps.
- */
 html {
   width: 100%;
   height: 100%;
@@ -121,14 +106,8 @@ small { font-size: 12rem; }
   from { opacity: 0; transform: translateY(8px); }
 }
 .topbar { display: flex; align-items: center; justify-content: space-between; }
-/* The title that used to live here now lives in the global `.app-topbar`
-   (`components/app-shell.tsx`), so `.app-header` on a page is usually empty or
-   holds one compose action — flex-end puts that action on the trailing edge
-   without a second flex item to balance it against. */
 .app-header { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 28rem; }
 .app-header:empty { display: none; margin: 0; }
-/* The one header that still carries both a title and its own link (the
-   close-visit form's «back to Визиты») rather than a compose action. */
 .app-header-split { justify-content: space-between; }
 .report-period { margin: 0 0 14rem; }
 .brand { font-size: 21rem; font-weight: 700; text-decoration: none; letter-spacing: -0.02em; }
@@ -170,6 +149,105 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .consent-field label { color: var(--ink); font-size: 14rem; line-height: 1.5; }
 .consent-field a, .legal-footer a { color: var(--accent); text-underline-offset: 4rem; }
 .legal-footer { display: flex; gap: 18rem; flex-wrap: wrap; margin-top: 28rem; color: var(--muted); font-size: 13rem; }
+
+.marketing-page {
+  --marketing-canvas: #f7f3ed;
+  --marketing-surface: #fffcf8;
+  --marketing-ink: #241e26;
+  --marketing-muted: #706872;
+  --marketing-line: #d9d0c6;
+  --marketing-accent: #d75b45;
+  --marketing-accent-dark: #b84535;
+  --marketing-profit: #2f7552;
+  position: relative;
+  overflow: hidden;
+  color: var(--marketing-ink);
+  background: var(--marketing-canvas);
+  font-family: var(--font-onest), Arial, sans-serif;
+}
+.marketing-page::before {
+  position: absolute;
+  z-index: 0;
+  top: -240rem;
+  right: -190rem;
+  width: min(650rem, 180vw);
+  height: 650rem;
+  border-radius: 50%;
+  background: #ece5da;
+  content: "";
+}
+.marketing-page > *:not(.marketing-grain) { position: relative; z-index: 1; }
+.marketing-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .36;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.07'/%3E%3C/svg%3E");
+}
+.marketing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(1440rem, calc(100% - 96rem));
+  min-height: 96rem;
+  margin: 0 auto;
+  border-bottom: 1rem solid var(--marketing-line);
+}
+.marketing-brand { display: inline-flex; align-items: center; gap: 10rem; color: var(--marketing-ink); font-size: 18rem; font-weight: 700; letter-spacing: -.035em; text-decoration: none; }
+.marketing-brand sup { margin-left: 2rem; color: var(--marketing-accent); font-size: 9rem; letter-spacing: 0; vertical-align: top; }
+.marketing-mark { display: inline-grid; width: 32rem; height: 32rem; place-items: center; border: 1rem solid var(--marketing-ink); border-radius: 50%; color: var(--marketing-ink); font-family: Georgia, serif; font-size: 10rem; letter-spacing: -.08em; }
+.marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 30rem; }
+.marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color 140ms ease; }
+.marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
+.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: #fffaf5; font-size: 13rem; font-weight: 700; text-decoration: none; transition: background 160ms ease, transform 160ms ease; }
+.marketing-cta:hover { background: var(--marketing-accent-dark); transform: translateY(-2rem); }
+.marketing-cta span { font-size: 18rem; font-weight: 400; line-height: 1; }
+.marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 7rem; }
+
+.marketing-hero { display: grid; grid-template-columns: minmax(0, .94fr) minmax(440rem, 1.06fr); align-items: center; gap: clamp(42rem, 6vw, 120rem); width: min(1248rem, calc(100% - 96rem)); min-height: 720rem; margin: 0 auto; padding: 76rem 0 92rem; }
+.marketing-kicker { display: flex; align-items: center; gap: 10rem; margin: 0 0 20rem; color: var(--marketing-accent); font-size: 11rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.marketing-kicker span { width: 18rem; height: 1rem; background: currentColor; }
+.hero-copy h1, .section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(52rem, 5.2vw, 84rem); font-weight: 600; line-height: .99; letter-spacing: -.06em; }
+.hero-copy h1 em { color: var(--marketing-accent); font-weight: inherit; }
+.marketing-intro { max-width: 510rem; margin: 28rem 0 32rem; color: var(--marketing-muted); font-size: 18rem; line-height: 1.55; }
+.hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 22rem; }
+.marketing-text-action { display: inline-flex; align-items: center; gap: 10rem; color: var(--marketing-ink); font-size: 13rem; font-weight: 700; text-decoration: none; }
+.marketing-text-action span { color: var(--marketing-accent); font-size: 17rem; }
+.hero-fine-print { max-width: 330rem; margin: 42rem 0 0; color: var(--marketing-muted); font-size: 11rem; line-height: 1.45; }
+.hero-visual { position: relative; min-height: 550rem; padding: 0 38rem 38rem 0; }
+.hero-visual > img { display: block; width: 100%; height: 520rem; border-radius: 10rem; object-fit: cover; object-position: 55% center; filter: saturate(.84) contrast(.98); }
+.hero-visual::after { position: absolute; inset: 0 38rem 38rem 0; border-radius: 10rem; background: linear-gradient(130deg, rgba(36,30,38,.08), transparent 52%); content: ""; pointer-events: none; }
+.hero-sun { position: absolute; top: -28rem; right: -12rem; width: 154rem; height: 154rem; border-radius: 50%; background: var(--marketing-accent); mix-blend-mode: multiply; opacity: .94; }
+.hero-calculation { position: absolute; right: 0; bottom: 0; width: 312rem; padding: 20rem; border: 1rem solid rgba(36,30,38,.16); border-radius: 8rem; background: rgba(255,252,248,.96); box-shadow: 0 22rem 54rem rgba(50,36,35,.15); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
+.calculation-topline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rem; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.calculation-topline i { display: block; width: 7rem; height: 7rem; border-radius: 50%; background: var(--marketing-profit); }
+.hero-calculation > strong { display: block; margin-bottom: 16rem; font-size: 15rem; letter-spacing: -.02em; }
+.calculation-row, .calculation-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; padding: 6rem 0; font-size: 12rem; }
+.calculation-row span { color: var(--marketing-muted); }.calculation-row b { font-size: 12rem; font-weight: 600; }.calculation-total { margin-top: 7rem; padding: 13rem 0 3rem; border-top: 1rem solid var(--marketing-line); }.calculation-total span { font-weight: 700; }.calculation-total strong { color: var(--marketing-profit); font-size: 21rem; letter-spacing: -.04em; }
+.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 6rem; background: #eee7de; }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all 150ms ease; }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem rgba(36,30,38,.07); }
+.hero-stamp { position: absolute; bottom: 70rem; left: -50rem; display: grid; gap: 4rem; width: 92rem; height: 92rem; place-content: center; border-radius: 50%; background: var(--marketing-ink); color: var(--marketing-surface); font-family: Georgia, serif; text-align: center; transform: rotate(-12deg); }.hero-stamp span:first-child { color: #e9a998; font-size: 11rem; }.hero-stamp span:last-child { font-size: 11rem; line-height: 1; }
+
+.section-wrap { width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; }.marketing-reason { display: grid; grid-template-columns: .85fr 1.15fr; gap: clamp(45rem, 9vw, 180rem); padding: 124rem 0; border-top: 1rem solid var(--marketing-line); }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: clamp(35rem, 3.4vw, 57rem); }.section-lead > p:last-child, .product-copy > p:last-child, .calculator-copy > p:last-child { max-width: 475rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }.marketing-pillars { display: grid; border-top: 1rem solid var(--marketing-line); }.marketing-pillar { display: grid; grid-template-columns: 56rem 1fr minmax(160rem, .85fr); align-items: baseline; gap: 14rem; padding: 22rem 0; border-bottom: 1rem solid var(--marketing-line); }.marketing-pillar > span { color: var(--marketing-accent); font-family: Georgia, serif; font-size: 14rem; }.marketing-pillar h3 { margin: 0; font-size: 17rem; letter-spacing: -.03em; }.marketing-pillar p { margin: 0; color: var(--marketing-muted); font-size: 13rem; line-height: 1.5; }
+
+.marketing-product { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(50rem, 8vw, 140rem); padding: 108rem 0; }.product-photo { position: relative; padding-bottom: 45rem; }.product-photo img { display: block; width: 100%; height: 490rem; border-radius: 8rem; object-fit: cover; object-position: 70% center; filter: saturate(.75); }.product-photo p { position: absolute; right: -28rem; bottom: 0; display: flex; align-items: center; gap: 11rem; width: 250rem; margin: 0; padding: 15rem 17rem; border-radius: 7rem; background: var(--marketing-profit); color: #f7f3ed; font-size: 11rem; line-height: 1.4; }.product-photo p span { font-size: 17rem; }.product-report { margin-top: 34rem; padding: 22rem; border: 1rem solid var(--marketing-line); border-radius: 8rem; background: var(--marketing-surface); }.report-heading, .report-labels { display: flex; justify-content: space-between; gap: 12rem; }.report-heading { font-size: 13rem; font-weight: 700; }.report-status { padding: 3rem 7rem; border-radius: 99rem; background: #ddebe3; color: var(--marketing-profit); font-size: 10rem; }.report-bar { display: flex; height: 13rem; margin: 24rem 0 7rem; overflow: hidden; border-radius: 2rem; background: #eee7de; }.report-bar i:nth-child(1) { width: 54%; background: var(--marketing-profit); }.report-bar i:nth-child(2) { width: 7%; background: #8e9d84; }.report-bar i:nth-child(3) { width: 39%; background: var(--marketing-accent); }.report-labels { color: var(--marketing-muted); font-size: 10rem; }.product-report p { margin: 21rem 0 16rem; font-size: 12rem; line-height: 1.5; }.product-report button { display: inline-flex; align-items: center; gap: 18rem; padding: 0; border: 0; background: transparent; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; cursor: pointer; }.product-report button span { font-size: 17rem; }
+
+.marketing-calculator { display: grid; grid-template-columns: .78fr 1.22fr; align-items: start; gap: clamp(50rem, 10vw, 180rem); padding: 116rem 0; border-top: 1rem solid var(--marketing-line); }.calculator-card { display: grid; gap: 26rem; padding: 29rem; border-radius: 10rem; background: var(--marketing-ink); box-shadow: 0 24rem 50rem rgba(36,30,38,.16); color: var(--marketing-surface); }.calculator-card label { display: grid; grid-template-columns: 1fr auto; gap: 11rem 16rem; color: #d9d0c6; font-size: 12rem; font-weight: 600; }.calculator-card output { color: #fffaf5; font-family: Georgia, serif; font-size: 17rem; }.calculator-card input { grid-column: 1 / -1; width: 100%; height: 15rem; appearance: none; border-radius: 99rem; background: #504950; cursor: pointer; }.calculator-card input::-webkit-slider-thumb { width: 18rem; height: 18rem; appearance: none; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-accent); box-shadow: 0 0 0 1rem #fffaf5; }.calculator-result { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 5rem 16rem; padding-top: 22rem; border-top: 1rem solid #5e575f; }.calculator-result > span { color: #d9d0c6; font-size: 12rem; font-weight: 700; }.calculator-result > strong { color: #a9d6bd; font-family: Georgia, serif; font-size: 36rem; letter-spacing: -.06em; }.calculator-result > div { display: flex; grid-column: 1 / -1; justify-content: space-between; padding-top: 12rem; color: #d9d0c6; font-size: 11rem; }.calculator-result b { color: #fffaf5; font-size: 13rem; }.calculator-card small { color: #aea5ad; font-size: 10rem; line-height: 1.45; }
+
+.marketing-final { display: grid; justify-items: center; padding: 136rem 8vw; border-radius: 12rem; background: #eee7de; text-align: center; }.marketing-final .marketing-mark { margin-bottom: 27rem; }.marketing-final h2 { max-width: 780rem; }.marketing-final p { max-width: 500rem; margin: 22rem 0 30rem; color: var(--marketing-muted); font-size: 15rem; line-height: 1.55; }.marketing-footer { display: flex; align-items: center; justify-content: space-between; width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; padding: 34rem 0; color: var(--marketing-muted); font-size: 11rem; }.marketing-footer div { display: flex; gap: 22rem; }.marketing-footer a { text-decoration: none; }.marketing-footer a:hover { color: var(--marketing-ink); }
+
+.marketing-reveal { animation: marketing-enter 650ms cubic-bezier(.2,.8,.2,1) both; }.marketing-reveal-delayed { animation-delay: 130ms; }@keyframes marketing-enter { from { opacity: 0; transform: translateY(22rem); } to { opacity: 1; transform: none; } }@keyframes calculation-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8rem); } }
+
+@media (max-width: 900px) {
+  .marketing-hero { grid-template-columns: 1fr; padding-top: 72rem; }.hero-copy { max-width: 680rem; }.hero-visual { width: min(100%, 680rem); margin-left: auto; }.marketing-reason, .marketing-calculator { grid-template-columns: 1fr; gap: 48rem; }.marketing-product { grid-template-columns: 1fr; }.product-photo { width: min(100%, 680rem); }.product-copy { max-width: 680rem; }.marketing-pillars { max-width: 760rem; }
+}
+@media (max-width: 680px) {
+  .marketing-nav, .marketing-hero, .section-wrap, .marketing-footer { width: min(100% - 40rem, 620rem); }.marketing-nav { min-height: 74rem; }.marketing-nav-links, .marketing-login { display: none; }.marketing-nav-actions { gap: 0; }.marketing-cta-small { min-height: 36rem; font-size: 11rem; }.marketing-brand { font-size: 16rem; }.marketing-mark { width: 29rem; height: 29rem; }.marketing-hero { min-height: 0; gap: 54rem; padding: 54rem 0 70rem; }.hero-copy h1 { font-size: clamp(43rem, 13vw, 59rem); }.marketing-intro { margin: 23rem 0 27rem; font-size: 16rem; }.hero-fine-print { margin-top: 28rem; }.hero-visual { min-height: 405rem; padding-right: 18rem; padding-bottom: 20rem; }.hero-visual > img { height: 386rem; }.hero-sun { top: -17rem; right: -4rem; width: 92rem; height: 92rem; }.hero-calculation { right: 0; width: min(280rem, 80%); padding: 16rem; }.hero-stamp { bottom: 36rem; left: -12rem; width: 66rem; height: 66rem; }.hero-stamp span:last-child { font-size: 8rem; }.hero-stamp span:first-child { font-size: 9rem; }.marketing-reason, .marketing-product, .marketing-calculator { gap: 38rem; padding: 76rem 0; }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: 37rem; }.marketing-pillar { grid-template-columns: 40rem 1fr; gap: 7rem; }.marketing-pillar p { grid-column: 2; margin-top: 4rem; }.product-photo { padding-bottom: 28rem; }.product-photo img { height: 355rem; }.product-photo p { right: -5rem; width: 230rem; padding: 12rem 14rem; }.product-report { margin-top: 26rem; }.marketing-calculator { padding-bottom: 78rem; }.calculator-card { gap: 22rem; padding: 21rem; }.calculator-result > strong { font-size: 31rem; }.marketing-final { padding: 82rem 22rem; }.marketing-final p { font-size: 14rem; }.marketing-footer { align-items: flex-start; flex-direction: column; gap: 17rem; padding: 25rem 0; }.marketing-footer div { gap: 16rem; }
+}
+@media (prefers-reduced-motion: reduce) { .marketing-page *, .marketing-page *::before, .marketing-page *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+.product-report a { display: inline-flex; align-items: center; gap: 18rem; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; text-decoration: none; }
+.product-report a span { font-size: 17rem; }
+.calculator-card input::-moz-range-thumb { width: 13rem; height: 13rem; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-accent); box-shadow: 0 0 0 1rem #fffaf5; }
 .workspace-card { width: min(100%, 520rem); }
 
 .app-header h1 { font-size: 42rem; margin: 10rem 0 0; }
@@ -179,12 +257,6 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .empty-state p { color: var(--muted); font-size: 16rem; line-height: 1.6; margin: 0 auto 26rem; max-width: 480rem; }
 .step-number { display: inline-grid; place-items: center; width: 48rem; height: 48rem; border-radius: 50%; background: var(--sage); color: var(--accent); font-size: 18rem; font-weight: 800; }
 
-/*
- * `px`, not `rem`. Inside a media query `rem` resolves against the *initial*
- * root font-size of 16px, never the computed one, so `680rem` asked for
- * 10880px — a width no screen has, which left this "mobile" block switched on
- * everywhere. On a 1440px desktop the sign-in card was rendering 345px wide.
- */
 @media (max-width: 680px) {
   .landing-shell, .app-shell { padding: 22rem 18rem 40rem; }
   .hero { padding: 80rem 0 52rem; }
@@ -194,21 +266,6 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .auth-card h1 { font-size: 36rem; }
 }
 
-/*
- * /visits, section reference 2: one card per visit, grouped under the master
- * who did the work — the same shape at every width, rather than a table that
- * only survives on a desktop. `.visit-groups` is the grid that turns three
- * masters into side-by-side columns on a wide screen and stacks them on a
- * phone; nothing here is conditional on viewport beyond that reflow.
- */
-/*
- * `.calendar-filters` normally floats its panel right-aligned to the trigger
- * (see the shared rule below). On /visits and the /app report page the
- * trigger sits at the toolbar's own left edge, next to the sidebar, so a
- * right-aligned panel wide enough for two dates and a select ran under the
- * sidebar rather than beside it. Dropping it into the flow instead sidesteps
- * the math entirely.
- */
 .app-shell .visit-filters > .inline-form,
 .app-shell .report-filters > .inline-form {
   position: static;
@@ -226,14 +283,6 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .visit-group-head { display: flex; align-items: center; gap: 12rem; margin: 0 0 14rem; }
 .visit-group-head h2 { margin: 0; }
 
-/*
- * The master's avatar, section reference 2. No photo field exists on a
- * specialist row — a studio can record a master with no login of their own —
- * so this falls back to their initial the same way `.sidebar-avatar` does for
- * the signed-in account; a linked login's own picture is used when there is
- * one. Sized in the design's own `rem` unit, so it scales with everything
- * else across the fluid range rather than needing its own breakpoint.
- */
 .avatar {
   display: grid;
   place-items: center;
@@ -409,6 +458,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   opacity: 1;
   transition: opacity 260ms ease, transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+.compose-wrap:not(.is-closed) > .compose-inner { overflow: visible; }
 .compose-wrap.is-closed > .compose-inner {
   opacity: 0;
   transform: translateY(-6px);
@@ -417,17 +467,187 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .inline-form { display: flex; gap: 16rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20rem; }
 .inline-form label { display: flex; flex-direction: column; gap: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
 .inline-form input, .inline-form select { padding: 11rem 12rem; border-radius: 12rem; border: 1rem solid var(--line); background: var(--surface); font: inherit; font-size: 16rem; min-width: 140rem; }
+/* A checkbox reads left-to-right beside its label, not stacked above it like
+   the text fields, and sits on the same baseline as the button next to it. */
+.inline-form label.checkbox-field { flex-direction: row; align-items: center; gap: 10rem; padding-bottom: 11rem; }
+.inline-form label.checkbox-field input { min-width: 0; width: 20rem; height: 20rem; padding: 0; accent-color: var(--accent); }
 
 .data-table { width: 100%; border-collapse: collapse; margin: 8rem 0 18rem; }
 .data-table th { text-align: left; font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 12rem; border-bottom: 1rem solid var(--line); }
 .data-table td { padding: 14rem 12rem; border-bottom: 1rem solid var(--line); vertical-align: middle; font-size: 14rem; }
+/* A totals row closes the table, so it carries no rule under it and reads as a
+   summary rather than one more entry. */
+.data-table tfoot td { border-bottom: 0; color: var(--muted); text-transform: uppercase; font-size: 12rem; letter-spacing: 0.06em; }
+.data-table tfoot strong { color: var(--ink); font-size: 16rem; letter-spacing: normal; }
 .data-table input { width: 110rem; padding: 8rem 10rem; border-radius: 10rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
 .data-table a { color: var(--accent); font-size: 14rem; font-weight: 600; }
+
+.materials-table .material-actions { min-width: 270rem; white-space: normal; }
+.materials-table .material-actions .inline-action:first-child { margin-left: 0; }
+.material-editor-row td { background: var(--leaf-100); }
+.material-editor-row .inline-form { margin: 0; }
+.material-editor-row .muted { margin: 8rem 0 0; }
+.material-history-row td { padding-top: 4rem; color: var(--muted); }
+.material-history-row summary { width: fit-content; cursor: pointer; color: var(--accent); font-weight: 600; }
+.material-price-history { margin: 10rem 0 4rem; }
+
+.inline-form label.name-combobox {
+  position: relative;
+  min-width: 280rem;
+}
+.name-combobox-search { position: relative; display: block; }
+.name-combobox-search > input { width: 100%; padding-left: 38rem; }
+.name-combobox-search > svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 12rem;
+  width: 17rem;
+  height: 17rem;
+  fill: none;
+  stroke: var(--muted);
+  stroke-linecap: round;
+  stroke-width: 1.8;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.name-suggestions-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6rem);
+  left: 0;
+  width: min(360rem, calc(100vw - 40rem));
+  padding: 8rem;
+  border: 1rem solid var(--line);
+  border-radius: 14rem;
+  background: var(--surface-strong);
+  box-shadow: 0 16rem 44rem rgba(15, 42, 29, 0.18);
+}
+.name-suggestions-title,
+.name-suggestions-custom,
+.name-suggestions-empty {
+  display: block;
+  padding: 7rem 10rem;
+  color: var(--muted);
+  font-size: 12rem;
+  font-weight: 600;
+}
+.name-suggestions-custom {
+  border-top: 1rem solid var(--line);
+  font-weight: 400;
+}
+/* Group headings inside the list. Sticky, because the catalogue is long enough
+   to scroll and a heading that scrolls away leaves the reader guessing which
+   group they are in. */
+.name-suggestions-group {
+  position: sticky;
+  top: 0;
+  display: block;
+  padding: 6rem 10rem 2rem;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.name-suggestions-popover ul {
+  max-height: 300rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.name-suggestions-popover button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3rem;
+  padding: 9rem 10rem;
+  border: 0;
+  border-radius: 9rem;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14rem;
+  text-align: left;
+  cursor: pointer;
+}
+.name-suggestions-popover button:hover,
+.name-suggestions-popover button.is-active {
+  background: var(--leaf-100);
+}
+.name-suggestions-popover button small {
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 400;
+}
+
+.specialist-services-panel { scroll-margin-top: 84rem; }
+.specialist-service-list { display: grid; gap: 10rem; margin: 0 0 20rem; padding: 0; border: 0; }
+.specialist-service-list legend { margin-bottom: 10rem; font-weight: 700; }
+.specialist-service-row {
+  display: grid;
+  grid-template-columns: minmax(190rem, 1fr) minmax(140rem, 180rem) minmax(180rem, auto);
+  align-items: end;
+  gap: 14rem;
+  padding: 14rem;
+  border: 1rem solid var(--line);
+  border-radius: 14rem;
+}
+.specialist-service-row > label { display: flex; flex-direction: column; gap: 6rem; color: var(--muted); font-size: 13rem; font-weight: 600; }
+.specialist-service-row > label.checkbox-field { flex-direction: row; align-items: center; padding-bottom: 10rem; }
+.specialist-service-row input[type="number"] { width: 100%; padding: 10rem 12rem; border: 1rem solid var(--line); border-radius: 10rem; font: inherit; }
+.specialist-service-row input[type="checkbox"] { width: 19rem; height: 19rem; flex: none; accent-color: var(--accent); }
+.specialist-service-name strong { color: var(--ink); font-size: 15rem; }
+
+@media (max-width: 680px) {
+  .specialist-service-row { grid-template-columns: 1fr; align-items: stretch; }
+  .specialist-service-row > label.checkbox-field { padding-bottom: 0; }
+}
+
+/*
+  The monthly P&L reads down a column of figures, so the figures line up and
+  the two rules that separate the levels are drawn rather than implied: one
+  under the contribution margin, a heavier one under the operating profit.
+  Everything else is the ordinary data table.
+*/
+.pl-table td:last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pl-table .pl-label { color: var(--muted); }
+.pl-table .pl-subtotal td { border-bottom: 2rem solid var(--line); font-weight: 600; }
+.pl-table .pl-subtotal td:first-child { color: var(--ink); }
+.pl-table .pl-total td { border-bottom: 0; border-top: 3rem solid var(--accent); font-size: 16rem; font-weight: 700; padding-top: 16rem; }
+/* A caption row, not a figure. It spans both columns, which makes it
+   `td:last-child` and so inherits the `nowrap` that keeps amounts on one line —
+   right for «1 420,00 MDL», and enough to push a whole sentence off a phone. */
+.pl-table .pl-ratio td { border-bottom: 0; color: var(--muted); font-size: 13rem; padding-top: 0; text-align: left; white-space: normal; }
+/* The one line in the statement that goes up. Everything around it is money
+   leaving, and an add-back printed like its neighbours reads as another
+   deduction however big the plus in front of it is.
+   Marked with a wash rather than green text: `--positive` on this paper is
+   about 3.3:1, which is under the 4.5:1 a figure has to clear, and a number
+   nobody can read is a worse outcome than a number nobody notices. */
+.pl-table .pl-addback td { background: var(--leaf-100); }
+.pl-table .pl-addback td:first-child { border-radius: 8rem 0 0 8rem; }
+.pl-table .pl-addback td:last-child { border-radius: 0 8rem 8rem 0; }
+.pl-note { margin: 0 0 18rem; color: var(--muted); font-size: 13rem; line-height: 1.6; }
+/* Superseded wage rules: present, and folded away until asked for. */
+.pl-history { margin: 0 0 18rem; }
+.pl-history summary { cursor: pointer; color: var(--muted); font-size: 13rem; padding: 6rem 0; }
+.pl-history .compact-list { margin: 8rem 0 0; color: var(--muted); font-size: 13rem; }
+.month-nav { display: flex; align-items: center; gap: 12rem; flex-wrap: wrap; margin-bottom: 18rem; }
+.month-nav form { display: flex; align-items: center; gap: 8rem; }
+.month-nav input { padding: 8rem 12rem; border-radius: 12rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
+.month-nav .secondary-button { padding: 8rem 14rem; }
 .unit-hint { margin-left: 8rem; color: var(--muted); font-size: 13rem; }
 
 .warning-banner { background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); border-radius: 16rem; padding: 16rem 20rem; margin: 20rem 0; font-size: 14rem; line-height: 1.6; }
 .warning-banner ul { margin: 8rem 0 0; padding-left: 20rem; }
 .badge-warning { display: inline-block; margin-left: 8rem; padding: 4rem 10rem; border-radius: 999rem; background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); font-size: 12rem; font-weight: 700; }
+/* Same pill as above in the house green: it states a fact about a row rather
+   than warning about it, and amber would read as something to fix. */
+.badge-accent { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 999rem; background: var(--sage); border: 1rem solid var(--line); color: var(--forest-950); font-size: 12rem; font-weight: 700; }
 
 .insight-panel { background: linear-gradient(180deg, var(--surface), var(--sage)); }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180rem, 1fr)); gap: 16rem; }
@@ -487,6 +707,19 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .compact-list li { line-height: 1.5; }
 .checkbox-set { border: 1rem solid var(--line); border-radius: 14rem; padding: 12rem 16rem; margin: 0; }
 .checkbox-set legend { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 6rem; }
+/*
+ * One line per option, unlike the add-on checkboxes above it: these two are
+ * whole phrases and mutually exclusive, and left to flow inline they read as a
+ * single broken sentence rather than as a choice between two.
+ */
+/*
+ * A cell of actions is allowed to wrap, unlike the figures beside it.
+ * `.pl-table td:last-child` keeps amounts on one line — right for «1 420,00
+ * MDL» and wrong for two buttons, which on a phone push the row off screen.
+ */
+.pl-table td.pl-actions { white-space: normal; }
+.costing-view .radio-row { display: flex; align-items: center; gap: 10rem; padding: 6rem 0; }
+.costing-view .radio-row input { width: auto; margin: 0; flex: none; }
 
 .danger-zone { margin-top: 28rem; padding-top: 22rem; border-top: 1rem solid var(--line); }
 .danger-zone h3 { color: var(--danger); }
@@ -640,6 +873,33 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   /* The tables scroll rather than squashing the numbers: at 360rem the margin
      column must stay readable. */
   .data-table { display: block; overflow-x: auto; white-space: nowrap; }
+  /* Except the P&L, which is two columns and has to fit. Scrolling sideways to
+     find the profit would hide the one figure the screen exists for, so the
+     labels wrap instead and only the amounts keep their line. */
+  .data-table.pl-table { display: table; white-space: normal; }
+  /* Same reasoning for the wage table, which is why it carries the class: the
+     amount is the column somebody opened it for, and a sideways scroll puts it
+     off screen. The start date goes instead — it is the one field that can wait
+     for a wider window. */
+  .labor-since { display: none; }
+  /* Two actions side by side set the width of the whole table and push the
+     amount column off a 375 px screen. Stacked, the column is as wide as the
+     wider of the two rather than as wide as both. */
+  .data-table.pl-table td.pl-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4rem; }
+  .data-table.pl-table td.pl-actions .inline-action { margin-left: 0; }
+  .data-table.pl-table td { padding: 12rem 0; }
+  .data-table.pl-table td:last-child { white-space: nowrap; padding-left: 12rem; }
+  .data-table.pl-table .pl-ratio td { white-space: normal; padding-left: 0; }
+  .data-table.pl-table .pl-total td { font-size: 15rem; }
+  /* On one line at this width the hint would push the figure off the row. */
+  .data-table.pl-table .pl-total .unit-hint { display: block; margin-left: 0; }
+  /* Three rows of month controls pushed the report itself below the fold. The
+     arrows keep their accessible names and lose their words. */
+  .month-nav { flex-wrap: nowrap; gap: 8rem; }
+  .month-nav form { flex: 1; }
+  .month-nav input { flex: 1; min-width: 0; }
+  .month-nav .month-nav-word { display: none; }
+  .month-nav .secondary-button { padding: 10rem 12rem; }
   .metric-grid { grid-template-columns: 1fr; }
   .public-booking-shell { padding: 18rem 14rem 48rem; }
   .public-booking-intro { margin: 46rem auto 24rem; text-align: left; }
@@ -757,36 +1017,13 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 
 .topbar-actions { display: flex; align-items: center; gap: 4rem; flex: none; }
-
-.topbar-icon-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40rem;
-  height: 40rem;
-  flex: none;
-  border: 0;
-  border-radius: 999rem;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
-}
-
-.topbar-icon-btn:hover { background: var(--leaf-100); color: var(--ink); }
 .chrome-icon { width: 20rem; height: 20rem; flex: none; }
 
-.topbar-badge {
-  position: absolute;
-  top: 7rem;
-  right: 7rem;
-  width: 8rem;
-  height: 8rem;
-  border-radius: 999rem;
-  background: var(--danger);
-  border: 1.5rem solid var(--surface-strong);
-}
+/*
+ * The account chip is a real `<button>` now — it opens the menu below — so it
+ * carries the resets a button needs to keep looking like the chip it was.
+ */
+.account-menu { position: relative; display: flex; }
 
 .topbar-account {
   display: flex;
@@ -794,8 +1031,68 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   gap: 8rem;
   margin-inline-start: 4rem;
   padding: 4rem;
+  border: 0;
   border-radius: 999rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
+
+/*
+ * One panel at every width, pinned to the chip's right edge — the chip sits at
+ * the end of the topbar, so a left-aligned panel would hang off the screen on a
+ * phone. `max-width` keeps it inside the viewport at 320px; the address inside
+ * wraps rather than widening it, since an email is as long as it likes.
+ *
+ * Above the topbar's own `z-index: 95`, or the sticky bar would draw over the
+ * panel it opened.
+ */
+.account-menu-panel {
+  position: absolute;
+  z-index: 96;
+  top: calc(100% + 8rem);
+  inset-inline-end: 0;
+  min-width: 224rem;
+  max-width: min(300rem, calc(100vw - 24rem));
+  padding: 6rem;
+  border: 1rem solid var(--line);
+  border-radius: 16rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.account-menu-head {
+  display: grid;
+  gap: 2rem;
+  padding: 10rem 12rem;
+  border-bottom: 1rem solid var(--line);
+  margin-bottom: 6rem;
+}
+.account-menu-head strong { font-size: 13rem; font-weight: 700; overflow-wrap: anywhere; }
+.account-menu-head small { color: var(--muted); font-size: 12rem; text-transform: capitalize; }
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10rem;
+  width: 100%;
+  /* 44rem: the same thumb target the bottom bar's links use. */
+  min-height: 44rem;
+  padding: 10rem 12rem;
+  border: 0;
+  border-radius: 10rem;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+.account-menu-item:hover { background: var(--leaf-100); }
+.account-menu-item:disabled { color: var(--muted); cursor: progress; }
 
 /* Reused from the account chip that used to sit at the foot of the sidebar —
    same fallback-to-initial rule as `.avatar` for a specialist with no photo. */

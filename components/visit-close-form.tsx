@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { formatMoneyMinor } from "@/lib/format";
+import { materialCostMinor } from "@/domain/units";
 
 export type CloseFormService = {
   id: string;
   displayName: string;
   price_minor: number | null;
   duration_minutes: number | null;
-  recipe: { material_id: string; material_name: string; base_unit: string; quantity_milli_units: number }[];
+  standard_profile_configured: boolean;
+  recipe: RecipeRow[];
 };
 
 export type CloseFormAddOn = {
@@ -22,7 +24,8 @@ export type CloseFormAddOn = {
   price_delta_minor: number;
   duration_delta_minutes: number;
   serviceIds: string[];
-  recipe: { material_id: string; material_name: string; base_unit: string; quantity_milli_units: number }[];
+  standard_profile_configured: boolean;
+  recipe: RecipeRow[];
 };
 
 /**
@@ -38,6 +41,8 @@ export function VisitCloseForm({
   addOns,
   specialists,
   clients,
+  paymentMethods,
+  extraMaterials,
   currency,
   locale,
 }: {
@@ -45,6 +50,9 @@ export function VisitCloseForm({
   addOns: CloseFormAddOn[];
   specialists: { id: string; name: string }[];
   clients: { id: string; name: string }[];
+  /** Empty when the studio has entered none; the field is then not shown. */
+  paymentMethods: { id: string; name: string; is_default: boolean }[];
+  extraMaterials: { id: string; name: string; base_unit: string }[];
   currency: string;
   locale: AppLocale;
 }) {
@@ -54,6 +62,7 @@ export function VisitCloseForm({
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const completionKey = useRef<string | null>(null);
 
   const service = services.find((item) => item.id === serviceId) ?? null;
   const availableAddOns = addOns.filter((addOn) => addOn.serviceIds.includes(serviceId));
@@ -68,32 +77,62 @@ export function VisitCloseForm({
   const price = (service?.price_minor ?? 0) + chosen.reduce((total, a) => total + a.price_delta_minor, 0);
   const duration =
     (service?.duration_minutes ?? 0) + chosen.reduce((total, a) => total + a.duration_delta_minutes, 0);
+  const standardProfileConfigured =
+    Boolean(service?.standard_profile_configured) &&
+    chosen.every((addOn) => addOn.standard_profile_configured);
+  const standardMaterialCostMinor =
+    materials.some((material) => material.costMinor === null)
+      ? null
+      : materials.reduce((total, material) => total + material.costMinor!, 0);
+  const availableExtraMaterials = extraMaterials.filter(
+    (option) => !materials.some((material) => material.id === option.id),
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Generate on the user event, not during render. The same value survives a
+    // failed request and makes an explicit retry idempotent.
+    completionKey.current ??= globalThis.crypto.randomUUID();
     setPending(true);
     setError(null);
     const data = new FormData(event.currentTarget);
 
-    const consumption = materials
-      .map((material) => ({
-        material_id: material.id,
-        actual_quantity: Number(String(data.get(`actual-${material.id}`) ?? "").trim()),
-      }))
-      .filter((entry) => Number.isFinite(entry.actual_quantity));
+    const consumption = materials.flatMap((material) => {
+      const raw = String(data.get(`actual-${material.id}`) ?? "").trim();
+      if (raw === "") return [];
+      const quantity = Number(raw);
+      return Number.isFinite(quantity)
+        ? [{ material_id: material.id, actual_quantity: quantity }]
+        : [];
+    });
+    const extraMaterialId = String(data.get("extra_material_id") ?? "").trim();
+    const extraQuantityRaw = String(data.get("extra_quantity") ?? "").trim();
+    const extraQuantity = Number(extraQuantityRaw);
+    if (extraMaterialId && extraQuantityRaw && Number.isFinite(extraQuantity) && extraQuantity > 0) {
+      consumption.push({ material_id: extraMaterialId, actual_quantity: extraQuantity });
+    }
 
     const actualDuration = String(data.get("actual_duration") ?? "").trim();
     const clientId = String(data.get("client_id") ?? "");
+    // "" is the cash option and means null — an explicit "no fee", not an
+    // omission. Omitting the field entirely would ask for the default method.
+    const paymentMethodId = String(data.get("payment_method_id") ?? "");
 
     const response = await fetch("/api/v1/visits", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": completionKey.current,
+      },
       body: JSON.stringify({
         service_id: serviceId,
         specialist_id: data.get("specialist_id"),
         client_id: clientId === "" ? null : clientId,
         add_on_ids: selectedAddOns,
         ...(actualDuration ? { actual_duration_minutes: Number(actualDuration) } : {}),
+        ...(paymentMethods.length > 0
+          ? { payment_method_id: paymentMethodId === "" ? null : paymentMethodId }
+          : {}),
         consumption,
       }),
     });
@@ -175,6 +214,28 @@ export function VisitCloseForm({
             {t("closeVisit.actualMinutes")}
             <input name="actual_duration" type="number" min="1" step="1" placeholder={String(duration)} />
           </label>
+          {/*
+            Shown only to a studio that has entered a method — asking «чем
+            оплачено» when the only possible answer is cash is a field that
+            costs a second on every visit and answers nothing. The default is
+            pre-selected, so the usual case stays one tap.
+          */}
+          {paymentMethods.length > 0 && (
+            <label>
+              {t("payment.choose")}
+              <select
+                name="payment_method_id"
+                defaultValue={paymentMethods.find((method) => method.is_default)?.id ?? ""}
+              >
+                <option value="">{t("payment.cash")}</option>
+                {paymentMethods.map((method) => (
+                  <option key={method.id} value={method.id}>
+                    {method.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         {availableAddOns.length > 0 && (
@@ -205,10 +266,21 @@ export function VisitCloseForm({
       </section>
 
       <section className="panel">
-        <h2>{t("closeVisit.actualUse")}</h2>
-        {materials.length === 0 ? (
-          <p className="muted">{t("closeVisit.noRecipe")}</p>
+        <h2>{t("closeVisit.materials")}</h2>
+        {!standardProfileConfigured ? (
+          <p className="warning-banner">{t("closeVisit.noRecipe")}</p>
+        ) : standardMaterialCostMinor === null ? (
+          <p className="warning-banner">{t("closeVisit.unknownMaterialCost")}</p>
         ) : (
+          <p className="visit-card-revenue">
+            <span>{t("closeVisit.standardUse")}</span>
+            <strong>≈ {formatMoneyMinor(standardMaterialCostMinor, currency)}</strong>
+          </p>
+        )}
+
+        {materials.length > 0 && (
+          <details className="calendar-subform">
+            <summary>{t("closeVisit.modifyUse")}</summary>
           <table className="data-table">
             <thead>
               <tr>
@@ -231,7 +303,7 @@ export function VisitCloseForm({
                       type="number"
                       step="0.001"
                       min="0"
-                      defaultValue={material.quantity / 1000}
+                      placeholder={String(material.quantity / 1000)}
                     />
                     <span className="unit-hint">{material.unit}</span>
                   </td>
@@ -239,10 +311,29 @@ export function VisitCloseForm({
               ))}
             </tbody>
           </table>
+          {availableExtraMaterials.length > 0 && (
+            <fieldset className="checkbox-set">
+              <legend>{t("visits.extraMaterial")}</legend>
+              <label>
+                {t("common.material")}
+                <select name="extra_material_id" defaultValue="">
+                  <option value="">—</option>
+                  {availableExtraMaterials.map((material) => (
+                    <option key={material.id} value={material.id}>
+                      {material.name} ({material.base_unit})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t("closeVisit.actual")}
+                <input name="extra_quantity" type="number" step="0.001" min="0.001" />
+              </label>
+            </fieldset>
+          )}
+          <p className="muted">{t("closeVisit.overrideNote")}</p>
+          </details>
         )}
-        <p className="muted">
-{t("closeVisit.prefilledNote")}
-        </p>
       </section>
 
       {error && <div className="form-error" role="alert">{error}</div>}
@@ -254,17 +345,42 @@ export function VisitCloseForm({
   );
 }
 
-type RecipeRow = { material_id: string; material_name: string; base_unit: string; quantity_milli_units: number };
+type RecipeRow = {
+  material_id: string;
+  material_name: string;
+  base_unit: string;
+  quantity_milli_units: number;
+  package_price_minor: number | null;
+  package_size_milli_units: number | null;
+};
 
 function mergeRecipeRows(rows: RecipeRow[]) {
-  const merged = new Map<string, { name: string; unit: string; quantity: number }>();
+  const merged = new Map<
+    string,
+    {
+      name: string;
+      unit: string;
+      quantity: number;
+      packagePriceMinor: number | null;
+      packageSizeMilliUnits: number | null;
+    }
+  >();
   for (const line of rows) {
     const existing = merged.get(line.material_id);
     merged.set(line.material_id, {
       name: line.material_name,
       unit: line.base_unit,
       quantity: (existing?.quantity ?? 0) + line.quantity_milli_units,
+      packagePriceMinor: line.package_price_minor,
+      packageSizeMilliUnits: line.package_size_milli_units,
     });
   }
-  return [...merged.entries()].map(([id, value]) => ({ id, ...value }));
+  return [...merged.entries()].map(([id, value]) => ({
+    id,
+    ...value,
+    costMinor:
+      value.packagePriceMinor === null || value.packageSizeMilliUnits === null
+        ? null
+        : materialCostMinor(value.packagePriceMinor, value.packageSizeMilliUnits, value.quantity),
+  }));
 }

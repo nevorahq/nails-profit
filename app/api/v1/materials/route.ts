@@ -1,12 +1,17 @@
-import { asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { materialPriceVersions, materials } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
-import { baseUnitCostMinor, materialUnits, toMilliUnits } from "@/domain/units";
+import { baseUnitCostMinor, materialUnits } from "@/domain/units";
+import {
+  materialCostingModes,
+  normalizeMaterialPriceProfile,
+} from "@/domain/material-pricing";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { matchKeyOf } from "@/lib/material-templates";
 import { getActiveMembership } from "@/lib/membership";
 import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 
@@ -20,6 +25,9 @@ const createMaterialSchema = z.object({
   // costing engine already refuses to treat an unknown cost as free.
   package_price_minor: z.int().min(0).optional(),
   package_size: z.number().positive().optional(),
+  costing_mode: z.enum(materialCostingModes).default("quantity"),
+  services_per_package: z.number().positive().optional(),
+  fixed_cost_minor: z.int().min(0).optional(),
 });
 
 export async function GET(request: Request) {
@@ -46,6 +54,7 @@ export async function GET(request: Request) {
           .select({
             packagePriceMinor: materialPriceVersions.packagePriceMinor,
             packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
+            costingMode: materialPriceVersions.costingMode,
             currency: materialPriceVersions.currency,
             validFrom: materialPriceVersions.validFrom,
           })
@@ -67,6 +76,7 @@ export async function GET(request: Request) {
             ? {
                 package_price_minor: price.packagePriceMinor,
                 package_size_milli_units: price.packageSizeMilliUnits,
+                costing_mode: price.costingMode,
                 currency: price.currency,
                 base_unit_cost_minor: baseUnitCostMinor(
                   price.packagePriceMinor,
@@ -106,12 +116,46 @@ export async function POST(request: Request) {
     });
   }
 
-  const { package_price_minor: packagePrice, package_size: packageSize } = parsed.data;
-  if ((packagePrice === undefined) !== (packageSize === undefined)) {
-    return apiError(422, "INCOMPLETE_PRICE", "A price needs both a package price and a package size", id);
+  const {
+    package_price_minor: packagePrice,
+    package_size: packageSize,
+    services_per_package: servicesPerPackage,
+    fixed_cost_minor: fixedCostMinor,
+    costing_mode: costingMode,
+  } = parsed.data;
+  const anyPrice = packagePrice !== undefined || packageSize !== undefined || servicesPerPackage !== undefined || fixedCostMinor !== undefined;
+  const priceProfile = !anyPrice
+    ? null
+    : costingMode === "quantity" && packagePrice !== undefined && packageSize !== undefined
+      ? normalizeMaterialPriceProfile({ mode: costingMode, packagePriceMinor: packagePrice, packageSize })
+      : costingMode === "services_per_package" && packagePrice !== undefined && servicesPerPackage !== undefined
+        ? normalizeMaterialPriceProfile({ mode: costingMode, packagePriceMinor: packagePrice, servicesPerPackage })
+        : costingMode === "fixed_per_service" && fixedCostMinor !== undefined
+          ? normalizeMaterialPriceProfile({ mode: costingMode, fixedCostMinor })
+          : null;
+  if (anyPrice && !priceProfile) {
+    return apiError(422, "INCOMPLETE_PRICE", "The selected costing mode needs all of its price fields", id);
   }
 
   const material = await withTenant(actor.organizationId, async (tx) => {
+    // The natural key added in migration 0034 is what makes a second "Гель-лак"
+    // impossible, and a constraint violation surfacing as a 500 would tell the
+    // owner the product broke when what happened is that they already have this
+    // material. E3.1 §3.3: a collision is an answer, not a failure.
+    const clash = await tx
+      .select({ id: materials.id })
+      .from(materials)
+      .where(
+        and(
+          isNull(materials.archivedAt),
+          eq(materials.matchKey, matchKeyOf(parsed.data.name)),
+          eq(materials.baseUnit, parsed.data.base_unit),
+        ),
+      )
+      .limit(1);
+
+    if (clash.length > 0) return { conflict: clash[0].id };
+
     const [created] = await tx
       .insert(materials)
       .values({
@@ -126,12 +170,13 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    if (packagePrice !== undefined && packageSize !== undefined) {
+    if (priceProfile) {
       await tx.insert(materialPriceVersions).values({
         organizationId: actor.organizationId,
         materialId: created.id,
-        packagePriceMinor: packagePrice,
-        packageSizeMilliUnits: toMilliUnits(packageSize),
+        packagePriceMinor: priceProfile.packagePriceMinor,
+        packageSizeMilliUnits: priceProfile.packageSizeMilliUnits,
+        costingMode: priceProfile.mode,
         currency: "MDL",
         createdBy: actor.userId,
       });
@@ -149,8 +194,22 @@ export async function POST(request: Request) {
 
     await recordCompletedServiceCostEvents(tx, actor);
 
-    return created;
+    return { created };
   });
 
-  return apiSuccess({ id: material.id, name: material.name, base_unit: material.baseUnit }, id, 201);
+  if ("conflict" in material) {
+    return apiError(409, "MATERIAL_EXISTS", "This material is already in the catalogue", id, {
+      details: { material_id: material.conflict },
+    });
+  }
+
+  return apiSuccess(
+    {
+      id: material.created.id,
+      name: material.created.name,
+      base_unit: material.created.baseUnit,
+    },
+    id,
+    201,
+  );
 }

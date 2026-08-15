@@ -4,7 +4,9 @@ import { z } from "zod";
 import {
   auditEvents,
   clients,
+  expenses,
   externalReferences,
+  laborCostRules,
   importJobs,
   invitations,
   memberships,
@@ -108,6 +110,35 @@ export async function POST(request: Request) {
       .where(eq(specialists.organizationId, actor.organizationId))
       .returning({ id: specialists.id });
 
+    /*
+     * The ledger keeps its amounts and loses its words.
+     *
+     * A line under «Зарплата» is «Зарплата Марии», and a note can hold anything
+     * the owner typed. The sums stay because section 15.3 keeps the financial
+     * record while erasing who it was about — the same trade the client and
+     * specialist rows above make.
+     */
+    const anonymizedExpenses = await tx
+      .update(expenses)
+      .set({
+        name: sql`concat('Расход ', left(${expenses.id}::text, 8))`,
+        note: null,
+        updatedBy: actor.userId,
+        updatedAt: new Date(),
+        version: sql`${expenses.version} + 1`,
+      })
+      .where(eq(expenses.organizationId, actor.organizationId))
+      .returning({ id: expenses.id });
+
+    /*
+     * A wage keeps its amount and loses whose it was. «Оклад Марии» is a label
+     * an owner typed, and the specialist it points at is anonymized above.
+     */
+    await tx
+      .update(laborCostRules)
+      .set({ label: null, updatedBy: actor.userId, updatedAt: new Date() })
+      .where(eq(laborCostRules.organizationId, actor.organizationId));
+
     await tx
       .update(importJobs)
       .set({ fileName: "deleted-import.csv", sourceText: null, issues: [] })
@@ -146,6 +177,7 @@ export async function POST(request: Request) {
         invitations_revoked: revoked.length,
         clients_anonymized: anonymizedClients.length,
         specialists_anonymized: anonymizedSpecialists.length,
+        expenses_anonymized: anonymizedExpenses.length,
       },
       requestId: id,
     });
@@ -166,6 +198,7 @@ export async function POST(request: Request) {
       invitations_revoked: revoked.length,
       clients_anonymized: anonymizedClients.length,
       specialists_anonymized: anonymizedSpecialists.length,
+      expenses_anonymized: anonymizedExpenses.length,
     };
   });
 

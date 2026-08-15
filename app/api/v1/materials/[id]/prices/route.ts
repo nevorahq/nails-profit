@@ -4,7 +4,10 @@ import { z } from "zod";
 import { materialPriceVersions, materials } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { canManageCatalogue } from "@/domain/rbac";
-import { toMilliUnits } from "@/domain/units";
+import {
+  materialCostingModes,
+  normalizeMaterialPriceProfile,
+} from "@/domain/material-pricing";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -16,8 +19,11 @@ import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
  * from silently re-pricing when a supplier raises a price.
  */
 const priceSchema = z.object({
-  package_price_minor: z.int().min(0),
-  package_size: z.number().positive(),
+  costing_mode: z.enum(materialCostingModes).default("quantity"),
+  package_price_minor: z.int().min(0).optional(),
+  package_size: z.number().positive().optional(),
+  services_per_package: z.number().positive().optional(),
+  fixed_cost_minor: z.int().min(0).optional(),
   currency: z.enum(["MDL", "EUR"]).default("MDL"),
   valid_from: z.iso.datetime().optional(),
 });
@@ -47,6 +53,38 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   const { id } = await context.params;
+  const profile =
+    parsed.data.costing_mode === "quantity" &&
+    parsed.data.package_price_minor !== undefined &&
+    parsed.data.package_size !== undefined
+      ? normalizeMaterialPriceProfile({
+          mode: "quantity",
+          packagePriceMinor: parsed.data.package_price_minor,
+          packageSize: parsed.data.package_size,
+        })
+      : parsed.data.costing_mode === "services_per_package" &&
+          parsed.data.package_price_minor !== undefined &&
+          parsed.data.services_per_package !== undefined
+        ? normalizeMaterialPriceProfile({
+            mode: "services_per_package",
+            packagePriceMinor: parsed.data.package_price_minor,
+            servicesPerPackage: parsed.data.services_per_package,
+          })
+        : parsed.data.costing_mode === "fixed_per_service" &&
+            parsed.data.fixed_cost_minor !== undefined
+          ? normalizeMaterialPriceProfile({
+              mode: "fixed_per_service",
+              fixedCostMinor: parsed.data.fixed_cost_minor,
+            })
+          : null;
+  if (!profile) {
+    return apiError(
+      422,
+      "INCOMPLETE_PRICE",
+      "The selected costing mode needs all of its price fields",
+      requestIdentifier,
+    );
+  }
 
   const created = await withTenant(actor.organizationId, async (tx) => {
     // RLS makes a cross-tenant id simply invisible, so this answers 404 rather
@@ -59,8 +97,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       .values({
         organizationId: actor.organizationId,
         materialId: material.id,
-        packagePriceMinor: parsed.data.package_price_minor,
-        packageSizeMilliUnits: toMilliUnits(parsed.data.package_size),
+        packagePriceMinor: profile.packagePriceMinor,
+        packageSizeMilliUnits: profile.packageSizeMilliUnits,
+        costingMode: profile.mode,
         currency: parsed.data.currency,
         validFrom: parsed.data.valid_from ? new Date(parsed.data.valid_from) : new Date(),
         createdBy: actor.userId,
@@ -77,6 +116,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         material_id: material.id,
         package_price_minor: version.packagePriceMinor,
         package_size_milli_units: version.packageSizeMilliUnits,
+        costing_mode: version.costingMode,
       },
       requestId: requestIdentifier,
     });
@@ -95,6 +135,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       id: created.id,
       package_price_minor: created.packagePriceMinor,
       package_size_milli_units: created.packageSizeMilliUnits,
+      costing_mode: created.costingMode,
       currency: created.currency,
       valid_from: created.validFrom,
     },

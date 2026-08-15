@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { notificationOutbox } from "@/db/schema";
+import { financialSnapshots, notificationOutbox, visits } from "@/db/schema";
 import { setNotificationProvider, type OutgoingMessage } from "@/lib/notification-provider";
 import { anonymous, dataOf, errorCodeOf, type Actor } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -142,6 +142,28 @@ describe("transactional notifications", () => {
     expect(completed.status).toBe(201);
 
     expect(await templatesFor(created.id)).toEqual(["booking.confirmed"]);
+  });
+
+  test("a retried booking completion replays one visit and one snapshot", async () => {
+    const created = await book();
+    const payload = { version: created.version, consumption: [] };
+    const headers = { "idempotency-key": `complete-${created.id}` };
+
+    const first = await owner.post(`/api/v1/bookings/${created.id}/complete`, payload, headers);
+    const replay = await owner.post(`/api/v1/bookings/${created.id}/complete`, payload, headers);
+
+    expect(first.status).toBe(201);
+    expect(replay.status).toBe(200);
+    const storedVisits = await adminDb
+      .select({ id: visits.id })
+      .from(visits)
+      .where(eq(visits.bookingId, created.id));
+    expect(storedVisits).toHaveLength(1);
+    const snapshots = await adminDb
+      .select({ id: financialSnapshots.id })
+      .from(financialSnapshots)
+      .where(eq(financialSnapshots.visitId, storedVisits[0].id));
+    expect(snapshots).toHaveLength(1);
   });
 
   test("staff can reissue a lost manage link without ever seeing it", async () => {

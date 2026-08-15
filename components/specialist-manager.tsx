@@ -18,17 +18,35 @@ export type SpecialistRow = {
   name: string;
   cooperation_type: string;
   user_id: string | null;
+  /** Takes the residual profit rather than a fee — the owner who also works. */
+  is_principal: boolean;
   default_rule: {
     type: string;
     basis_points: number | null;
     fixed_amount_minor: number | null;
+    base: string;
   } | null;
   service_exceptions: {
     service_id: string | null;
     type: string;
     basis_points: number | null;
     fixed_amount_minor: number | null;
+    base: string;
   }[];
+  service_assignments: {
+    service_id: string;
+    duration_minutes: number | null;
+    requires_workplace: boolean;
+  }[];
+};
+
+type ServiceOption = { id: string; name: string; duration_minutes: number | null };
+
+type ServiceEditor = {
+  specialistId: string;
+  selected: string[];
+  durationByService: Record<string, string>;
+  workplaceByService: Record<string, boolean>;
 };
 
 function describeRule(rule: SpecialistRow["default_rule"], currency: string, t: Translate) {
@@ -39,9 +57,20 @@ function describeRule(rule: SpecialistRow["default_rule"], currency: string, t: 
     });
   }
   const rate = formatBasisPoints(rule.basis_points);
-  return rule.type === "percentage_after_materials"
-    ? t("specialists.afterMaterials", { rate })
-    : t("specialists.ofRevenue", { rate });
+  if (rule.type === "hybrid") {
+    return t("specialists.hybridRule", {
+      amount: formatMoneyMinor(rule.fixed_amount_minor ?? 0, currency),
+      rate,
+    });
+  }
+  const described =
+    rule.type === "percentage_after_materials"
+      ? t("specialists.afterMaterials", { rate })
+      : t("specialists.ofRevenue", { rate });
+  // Only worth saying when it is not the usual answer. Every rule written
+  // before the base existed is `after_discount`, and labelling all of them
+  // would be noise on every row.
+  return rule.base === "full_price" ? `${described} · ${t("commissionBase.full_price")}` : described;
 }
 
 export function SpecialistManager({
@@ -53,7 +82,7 @@ export function SpecialistManager({
   canManage,
 }: {
   specialists: SpecialistRow[];
-  services: { id: string; name: string }[];
+  services: ServiceOption[];
   members: OrganizationMember[];
   currency: string;
   locale: AppLocale;
@@ -65,6 +94,15 @@ export function SpecialistManager({
   const [pending, setPending] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [exceptionOpen, setExceptionOpen] = useState(false);
+  const [serviceEditor, setServiceEditor] = useState<ServiceEditor | null>(null);
+  /*
+   * The rule builder needs two pieces of state, and they are per form: showing
+   * the guaranteed-amount field only for a hybrid, and remembering which
+   * services a rule pays on. An empty list means every service.
+   */
+  const [addRuleType, setAddRuleType] = useState("percentage");
+  const [exceptionRuleType, setExceptionRuleType] = useState("percentage");
+  const [coveredServiceIds, setCoveredServiceIds] = useState<string[]>([]);
 
   /*
    * The add-specialist panel: nothing on the page until the header opens
@@ -126,13 +164,29 @@ export function SpecialistManager({
     return true;
   }
 
+  /**
+   * The three shapes the API and the database both insist on: an amount, a
+   * rate, or — for a hybrid — one of each.
+   */
   function ruleFromForm(data: FormData) {
     const type = String(data.get("rule_type"));
     const value = Number(String(data.get("rule_value") ?? "").trim());
     if (!Number.isFinite(value)) return null;
-    return type === "fixed"
-      ? { type, fixed_amount_minor: Math.round(value * 100) }
-      : { type, basis_points: Math.round(value * 100) };
+
+    const base = String(data.get("rule_base") ?? "after_discount");
+    if (type === "fixed") return { type, fixed_amount_minor: Math.round(value * 100) };
+
+    const guaranteed = Number(String(data.get("rule_guaranteed") ?? "").trim());
+    if (type === "hybrid") {
+      if (!Number.isFinite(guaranteed)) return null;
+      return {
+        type,
+        basis_points: Math.round(value * 100),
+        fixed_amount_minor: Math.round(guaranteed * 100),
+        base,
+      };
+    }
+    return { type, basis_points: Math.round(value * 100), base };
   }
 
   async function createSpecialist(event: FormEvent<HTMLFormElement>) {
@@ -145,7 +199,14 @@ export function SpecialistManager({
       {
         name: data.get("name"),
         cooperation_type: data.get("cooperation_type"),
-        ...(rule ? { default_rule: rule } : {}),
+        ...(rule
+          ? {
+              default_rule:
+                coveredServiceIds.length > 0
+                  ? { ...rule, covered_service_ids: coveredServiceIds }
+                  : rule,
+            }
+          : {}),
       },
       form,
     );
@@ -184,8 +245,52 @@ export function SpecialistManager({
     await send(`/api/v1/specialists/${specialistId}`, { user_id: null }, undefined, "PATCH");
   }
 
+  async function setPrincipal(specialistId: string, value: boolean) {
+    await send(`/api/v1/specialists/${specialistId}`, { is_principal: value }, undefined, "PATCH");
+  }
+
   async function deleteSpecialist(specialistId: string) {
     await send(`/api/v1/specialists/${specialistId}`, null, undefined, "DELETE");
+  }
+
+  function editServices(person: SpecialistRow) {
+    setError(null);
+    setServiceEditor({
+      specialistId: person.id,
+      selected: person.service_assignments.map((assignment) => assignment.service_id),
+      durationByService: Object.fromEntries(
+        person.service_assignments.map((assignment) => [
+          assignment.service_id,
+          assignment.duration_minutes === null ? "" : String(assignment.duration_minutes),
+        ]),
+      ),
+      workplaceByService: Object.fromEntries(
+        person.service_assignments.map((assignment) => [
+          assignment.service_id,
+          assignment.requires_workplace,
+        ]),
+      ),
+    });
+  }
+
+  async function saveServices(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!serviceEditor) return;
+    const entries = serviceEditor.selected.map((serviceId) => {
+      const duration = serviceEditor.durationByService[serviceId]?.trim() ?? "";
+      return {
+        service_id: serviceId,
+        duration_minutes: duration ? Number(duration) : null,
+        requires_workplace: serviceEditor.workplaceByService[serviceId] ?? false,
+      };
+    });
+    const ok = await send(
+      `/api/v1/specialists/${serviceEditor.specialistId}/services`,
+      { services: entries },
+      undefined,
+      "PUT",
+    );
+    if (ok) setServiceEditor(null);
   }
 
   const withoutRule = specialists.filter(
@@ -232,20 +337,70 @@ export function SpecialistManager({
                 </label>
                 <label>
                   {t("specialists.commissionType")}
-                  <select name="rule_type" defaultValue="percentage">
+                  <select
+                    name="rule_type"
+                    value={addRuleType}
+                    onChange={(event) => setAddRuleType(event.target.value)}
+                  >
                     <option value="percentage">{t("commissionType.percentage")}</option>
                     <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
                     <option value="fixed">{t("commissionType.fixed")}</option>
+                    <option value="hybrid">{t("commissionType.hybrid")}</option>
                   </select>
                 </label>
+                {addRuleType === "hybrid" && (
+                  <label>
+                    {t("specialists.guaranteed", { currency })}
+                    <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" />
+                  </label>
+                )}
                 <label>
                   {t("specialists.value")}
                   <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
                 </label>
+                {addRuleType !== "fixed" && (
+                  <label>
+                    {t("specialists.commissionBase")}
+                    <select name="rule_base" defaultValue="after_discount">
+                      <option value="after_discount">{t("commissionBase.after_discount")}</option>
+                      <option value="full_price">{t("commissionBase.full_price")}</option>
+                    </select>
+                  </label>
+                )}
                 <button className="primary-button" type="submit" disabled={pending}>
                   {pending ? t("common.saving") : t("common.add")}
                 </button>
               </form>
+              {/*
+                Which services the rule pays on. Nothing ticked means all of
+                them — the answer for almost every studio — so the list starts
+                closed rather than as a wall of checkboxes nobody needs.
+              */}
+              {services.length > 0 && addRuleType !== "fixed" && (
+                <details className="pl-history">
+                  <summary>{t("specialists.coveredServices")}</summary>
+                  <fieldset className="checkbox-set costing-view">
+                    <legend>{t("specialists.coveredServicesLegend")}</legend>
+                    {services.map((service) => (
+                      <label key={service.id} className="radio-row">
+                        <input
+                          type="checkbox"
+                          checked={coveredServiceIds.includes(service.id)}
+                          onChange={(event) =>
+                            setCoveredServiceIds(
+                              event.target.checked
+                                ? [...coveredServiceIds, service.id]
+                                : coveredServiceIds.filter((value) => value !== service.id),
+                            )
+                          }
+                        />{" "}
+                        {service.name}
+                      </label>
+                    ))}
+                  </fieldset>
+                  <p className="muted">{t("specialists.coveredServicesHint")}</p>
+                </details>
+              )}
               <p className="muted">
                 {t("specialists.valueHint", { currency })}
               </p>
@@ -263,13 +418,14 @@ export function SpecialistManager({
             <th>{t("specialists.cooperation")}</th>
             <th>{t("specialists.defaultRule")}</th>
             <th>{t("specialists.exceptions")}</th>
+            <th>{t("specialists.offeredServices")}</th>
             <th>{t("specialists.account")}</th>
           </tr>
         </thead>
         <tbody>
           {specialists.length === 0 && (
             <tr>
-              <td colSpan={5} className="muted">
+              <td colSpan={6} className="muted">
                 {t("specialists.none")}
               </td>
             </tr>
@@ -277,10 +433,40 @@ export function SpecialistManager({
           {specialists.map((person) => (
             <tr key={person.id}>
               <td>{person.name}</td>
-              <td>{t(`cooperation.${person.cooperation_type}` as MessageKey)}</td>
+              {/*
+                The principal mark lives beside the cooperation type because it
+                answers the same question — how this person is paid — and not
+                beside the account, where it would compete with two actions
+                already there. `badge-accent`, not `badge-warning`: it states a
+                fact, it is not something to go and fix.
+              */}
+              <td>
+                {t(`cooperation.${person.cooperation_type}` as MessageKey)}
+                {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
+                {canManage && (
+                  <button
+                    className="inline-action"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => setPrincipal(person.id, !person.is_principal)}
+                  >
+                    {person.is_principal ? t("specialists.principalUnset") : t("specialists.principalSet")}
+                  </button>
+                )}
+              </td>
               <td>
                 {person.default_rule ? (
-                  describeRule(person.default_rule, currency, t)
+                  <>
+                    {describeRule(person.default_rule, currency, t)}
+                    {/*
+                      The rate means something different for a principal, and
+                      the difference is the whole point of the mark: it is what
+                      a hired master would have cost, not money that leaves.
+                    */}
+                    {person.is_principal && (
+                      <span className="unit-hint">{t("specialists.imputedLabour")}</span>
+                    )}
+                  </>
                 ) : (
                   <span className="badge-warning">{t("specialists.notSet")}</span>
                 )}
@@ -297,6 +483,30 @@ export function SpecialistManager({
                       </li>
                     ))}
                   </ul>
+                )}
+              </td>
+              <td>
+                {person.service_assignments.length === 0 ? (
+                  <span className="muted">{t("specialists.allServices")}</span>
+                ) : (
+                  <ul className="compact-list">
+                    {person.service_assignments.map((assignment) => (
+                      <li key={assignment.service_id}>
+                        {services.find((service) => service.id === assignment.service_id)?.name ?? t("services.service")}
+                        {assignment.duration_minutes !== null && (
+                          <span className="unit-hint">{assignment.duration_minutes} {t("common.minutes")}</span>
+                        )}
+                        {assignment.requires_workplace && (
+                          <span className="unit-hint">{t("specialists.requiresWorkplace")}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {canManage && services.length > 0 && (
+                  <button className="inline-action" type="button" disabled={pending} onClick={() => editServices(person)}>
+                    {t("specialists.manageServices")}
+                  </button>
                 )}
               </td>
               <td>
@@ -334,6 +544,91 @@ export function SpecialistManager({
           ))}
         </tbody>
       </table>
+
+      {/*
+        Explained once, under the table where the mark is set, rather than in a
+        tooltip: it changes what the monthly report subtracts, and a control
+        that moves money should say so in full sentences.
+      */}
+      {canManage && specialists.length > 0 && <p className="muted">{t("specialists.principalHint")}</p>}
+
+      {canManage && serviceEditor && (
+        <section className="panel specialist-services-panel">
+          <h2>
+            {t("specialists.servicesOf", {
+              name: specialists.find((person) => person.id === serviceEditor.specialistId)?.name ?? "",
+            })}
+          </h2>
+          <p className="muted">{t("specialists.servicesHint")}</p>
+          <form onSubmit={saveServices}>
+            <fieldset className="specialist-service-list">
+              <legend>{t("specialists.offeredServices")}</legend>
+              {services.map((service) => {
+                const selected = serviceEditor.selected.includes(service.id);
+                return (
+                  <div className="specialist-service-row" key={service.id}>
+                    <label className="checkbox-field specialist-service-name">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(event) => setServiceEditor({
+                          ...serviceEditor,
+                          selected: event.target.checked
+                            ? [...serviceEditor.selected, service.id]
+                            : serviceEditor.selected.filter((id) => id !== service.id),
+                        })}
+                      />
+                      <strong>{service.name}</strong>
+                    </label>
+                    <label>
+                      {t("specialists.durationOverride")}
+                      <input
+                        type="number"
+                        min="1"
+                        max="720"
+                        step="1"
+                        disabled={!selected}
+                        placeholder={service.duration_minutes ? String(service.duration_minutes) : "—"}
+                        value={serviceEditor.durationByService[service.id] ?? ""}
+                        onChange={(event) => setServiceEditor({
+                          ...serviceEditor,
+                          durationByService: {
+                            ...serviceEditor.durationByService,
+                            [service.id]: event.target.value,
+                          },
+                        })}
+                      />
+                    </label>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        disabled={!selected}
+                        checked={serviceEditor.workplaceByService[service.id] ?? false}
+                        onChange={(event) => setServiceEditor({
+                          ...serviceEditor,
+                          workplaceByService: {
+                            ...serviceEditor.workplaceByService,
+                            [service.id]: event.target.checked,
+                          },
+                        })}
+                      />
+                      {t("specialists.requiresWorkplace")}
+                    </label>
+                  </div>
+                );
+              })}
+            </fieldset>
+            <div className="inline-actions">
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("common.saving") : t("specialists.saveServices")}
+              </button>
+              <button className="secondary-button" type="button" disabled={pending} onClick={() => setServiceEditor(null)}>
+                {t("common.cancel")}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       {canManage && specialists.length > 0 && (
         <>
@@ -431,16 +726,36 @@ export function SpecialistManager({
                   </label>
                   <label>
                     {t("specialists.type")}
-                    <select name="rule_type" defaultValue="percentage">
+                    <select
+                      name="rule_type"
+                      value={exceptionRuleType}
+                      onChange={(event) => setExceptionRuleType(event.target.value)}
+                    >
                       <option value="percentage">{t("commissionType.percentage")}</option>
                       <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
                       <option value="fixed">{t("commissionType.fixed")}</option>
+                      <option value="hybrid">{t("commissionType.hybrid")}</option>
                     </select>
                   </label>
+                  {exceptionRuleType === "hybrid" && (
+                    <label>
+                      {t("specialists.guaranteed", { currency })}
+                      <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
+                    </label>
+                  )}
                   <label>
                     {t("specialists.value")}
                     <input name="rule_value" type="number" step="0.01" min="0" placeholder="50" required />
                   </label>
+                  {exceptionRuleType !== "fixed" && (
+                    <label>
+                      {t("specialists.commissionBase")}
+                      <select name="rule_base" defaultValue="after_discount">
+                        <option value="after_discount">{t("commissionBase.after_discount")}</option>
+                        <option value="full_price">{t("commissionBase.full_price")}</option>
+                      </select>
+                    </label>
+                  )}
                   <button className="primary-button" type="submit" disabled={pending}>
                     {t("specialists.saveException")}
                   </button>
@@ -453,4 +768,3 @@ export function SpecialistManager({
     </>
   );
 }
-

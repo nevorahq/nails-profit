@@ -249,6 +249,7 @@ export function ClientManager({
                     <span className="muted">{t("clients.anonymized")}</span>
                   ) : isEditing ? (
                     <input
+                      aria-label={t("clients.name")}
                       style={cellInput}
                       value={edit.name}
                       onChange={(e) => setEdit({ ...edit, name: e.target.value })}
@@ -261,6 +262,7 @@ export function ClientManager({
                 <td className="muted">
                   {isEditing ? (
                     <input
+                      aria-label={t("clients.phone")}
                       style={cellInput}
                       value={edit.phone}
                       onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
@@ -274,6 +276,7 @@ export function ClientManager({
                 <td className="muted">
                   {isEditing ? (
                     <input
+                      aria-label={t("clients.email")}
                       style={cellInput}
                       value={edit.email}
                       onChange={(e) => setEdit({ ...edit, email: e.target.value })}

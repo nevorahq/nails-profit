@@ -1,12 +1,9 @@
-import { asc, desc, eq, isNull } from "drizzle-orm";
-
 import { ToolIcon } from "@/components/icons";
-import { materialPriceVersions, materials } from "@/db/schema";
-import { withTenant } from "@/db/tenant";
-import { can } from "@/domain/rbac";
-import { baseUnitCostMinor } from "@/domain/units";
-import { MaterialCatalogue, type MaterialRow } from "@/components/material-catalogue";
+import { MaterialCatalogue } from "@/components/material-catalogue";
+import { can, canManageCatalogue } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
+import { loadMaterials } from "@/lib/materials";
+import { loadMaterialTemplates } from "@/lib/material-templates";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function MaterialsPage() {
@@ -21,28 +18,23 @@ export default async function MaterialsPage() {
     );
   }
 
-  const rows = await loadMaterials(membership.organizationId);
-  const canWrite = can(membership.role, "materials", "write");
+  const canManage = canManageCatalogue(membership.role, "materials");
+  const [rows, templates] = await Promise.all([
+    loadMaterials(membership.organizationId),
+    // Loaded on the server: the catalogue is 155 rows of product data, and
+    // fetching it from the browser would put a spinner in front of the search
+    // box the owner is already typing into.
+    canManage ? loadMaterialTemplates(locale) : Promise.resolve([]),
+  ]);
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        {/*
-          The compose action. Two shapes of the one control, exactly as the
-          calendar's own toolbar and round button are (`app/app/calendar/page.tsx`):
-          a labelled toggle for a desktop, a round one for a phone. Both point
-          at the add-material `<details>` `components/material-catalogue.tsx`
-          renders further down the page; the click handling that opens (and,
-          for either anchor, closes) it lives there, since this is a Server
-          Component and cannot hold it.
-        */}
-        {canWrite && (
+      {canManage && (
+        <header className="app-header">
           <a className="primary-button calendar-create" href="#add-material">
             <ToolIcon name="plus" />
             {t("materials.addMaterial")}
           </a>
-        )}
-        {canWrite && (
           <a
             className="header-action"
             href="#add-material"
@@ -53,51 +45,14 @@ export default async function MaterialsPage() {
             <ToolIcon name="plus" />
             <ToolIcon name="minus" />
           </a>
-        )}
-      </header>
-      <MaterialCatalogue materials={rows} locale={locale} />
+        </header>
+      )}
+      <MaterialCatalogue
+        materials={rows}
+        templates={templates}
+        locale={locale}
+        canManage={canManage}
+      />
     </main>
   );
-}
-
-export async function loadMaterials(organizationId: string): Promise<MaterialRow[]> {
-  return withTenant(organizationId, async (tx) => {
-    const catalogue = await tx
-      .select()
-      .from(materials)
-      .where(isNull(materials.archivedAt))
-      .orderBy(asc(materials.name));
-
-    return Promise.all(
-      catalogue.map(async (material) => {
-        const [price] = await tx
-          .select({
-            packagePriceMinor: materialPriceVersions.packagePriceMinor,
-            packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
-            currency: materialPriceVersions.currency,
-          })
-          .from(materialPriceVersions)
-          .where(eq(materialPriceVersions.materialId, material.id))
-          .orderBy(desc(materialPriceVersions.validFrom), desc(materialPriceVersions.createdAt))
-          .limit(1);
-
-        return {
-          id: material.id,
-          name: material.name,
-          base_unit: material.baseUnit,
-          current_price: price
-            ? {
-                package_price_minor: price.packagePriceMinor,
-                package_size_milli_units: price.packageSizeMilliUnits,
-                currency: price.currency,
-                base_unit_cost_minor: baseUnitCostMinor(
-                  price.packagePriceMinor,
-                  price.packageSizeMilliUnits,
-                ),
-              }
-            : null,
-        };
-      }),
-    );
-  });
 }

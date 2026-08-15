@@ -3,7 +3,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { MaterialRow } from "@/components/material-catalogue";
+import type { MaterialRow } from "@/lib/materials";
+import { MaterialPresetPicker } from "@/components/material-preset-picker";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { formatDuration, formatMoneyMinor, formatQuantity } from "@/lib/format";
@@ -240,6 +241,7 @@ export function AddOnCatalogue({
               })}
             </h2>
             <form onSubmit={(event) => saveRecipe(editing, event)}>
+              <MaterialPresetPicker target="add_on" materials={materials} locale={locale} />
               <table className="data-table">
                 <thead>
                   <tr>
@@ -252,6 +254,9 @@ export function AddOnCatalogue({
                     const line = addOns
                       .find((a) => a.id === editing)
                       ?.recipe.find((item) => item.material_id === material.id);
+                    const pricedPerService =
+                      material.current_price !== null &&
+                      material.current_price.costing_mode !== "quantity";
                     return (
                       <tr key={material.id}>
                         <td>
@@ -267,9 +272,11 @@ export function AddOnCatalogue({
                             type="number"
                             step="0.001"
                             min="0"
-                            defaultValue={line ? line.quantity_milli_units / 1000 : ""}
+                            defaultValue={line ? line.quantity_milli_units / 1000 : pricedPerService ? 1 : ""}
                           />
-                          <span className="unit-hint">{material.base_unit}</span>
+                          <span className="unit-hint">
+                            {pricedPerService ? t("materials.service") : material.base_unit}
+                          </span>
                         </td>
                       </tr>
                     );

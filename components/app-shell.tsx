@@ -1,12 +1,13 @@
 import Link from "next/link";
 
-import { BrandMark, ChromeIcon, NavIcon } from "@/components/icons";
+import { AccountMenu } from "@/components/account-menu";
+import { BrandMark, NavIcon } from "@/components/icons";
 import { bottomNavFor, navFor, navGroups, type NavItem } from "@/components/nav-items";
 import { NavLink } from "@/components/nav-link";
 import { TopbarTitle } from "@/components/topbar-title";
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { getTranslator } from "@/i18n/t";
 
 /**
  * The frame every signed-in screen sits in, replacing the row of eleven tabs
@@ -14,7 +15,7 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
  * each page used to open with.
  *
  * A full-width topbar carries the brand, the current section's name and the
- * account chrome (search, notifications, the signed-in account) at every
+ * signed-in account at every
  * width — reference 1 of the mobile redesign. Below it, two renderings of the
  * navigation itself: on a wide screen the sections are a grouped column down
  * the left, which is the shape that lets Каталог and Команда read as separate
@@ -73,23 +74,7 @@ export function AppShell({
           <TopbarTitle titles={titles} fallback={organizationName} />
 
           <div className="topbar-actions">
-            <button className="topbar-icon-btn" type="button" aria-label={t("nav.search")}>
-              <ChromeIcon name="search" />
-            </button>
-            <button className="topbar-icon-btn" type="button" aria-label={t("nav.notifications")}>
-              <ChromeIcon name="bell" />
-              <span className="topbar-badge" aria-hidden="true" />
-            </button>
-            <span className="topbar-account" aria-label={t("nav.account")}>
-              <span className="sidebar-avatar" aria-hidden="true">
-                {userEmail.slice(0, 1).toUpperCase()}
-              </span>
-              <span className="topbar-account-text">
-                <strong>{userEmail}</strong>
-                <small>{t(`roles.${role}` as MessageKey)}</small>
-              </span>
-              <ChromeIcon name="chevron" />
-            </span>
+            <AccountMenu locale={locale} role={role} userEmail={userEmail} />
           </div>
         </div>
       </header>

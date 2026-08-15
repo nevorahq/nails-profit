@@ -9,6 +9,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { adoptPrincipalHistory } from "@/lib/visit-service";
 
 /**
  * Editing a specialist, and above all linking one to an account.
@@ -29,6 +30,8 @@ const patchSpecialistSchema = z.object({
   cooperation_type: z.enum(["commission", "rent", "staff"]).optional(),
   /** Null unlinks; the specialist and their history stay. */
   user_id: z.string().min(1).nullable().optional(),
+  /** The owner who also works. See the column's comment in `db/schema.ts`. */
+  is_principal: z.boolean().optional(),
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -83,12 +86,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           ...(parsed.data.name ? { name: parsed.data.name } : {}),
           ...(parsed.data.cooperation_type ? { cooperationType: parsed.data.cooperation_type } : {}),
           ...(link !== undefined ? { userId: link } : {}),
+          ...(parsed.data.is_principal !== undefined ? { isPrincipal: parsed.data.is_principal } : {}),
           updatedBy: actor.userId,
           updatedAt: new Date(),
           version: sql`${specialists.version} + 1`,
         })
         .where(eq(specialists.id, id))
         .returning();
+
+      // Marking someone a principal for the first time fills in the answer for
+      // the visits that closed before the question existed. See the function.
+      if (parsed.data.is_principal === true && !existing.isPrincipal) {
+        await adoptPrincipalHistory(tx, id);
+      }
 
       // Who may see which visits changes with this row, so it is audited the
       // way role changes are (section 15.3).
@@ -98,8 +108,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         eventType: "specialist.updated",
         entityType: "specialist",
         entityId: specialist.id,
-        before: { name: existing.name, user_id: existing.userId, cooperation_type: existing.cooperationType },
-        after: { name: specialist.name, user_id: specialist.userId, cooperation_type: specialist.cooperationType },
+        before: {
+          name: existing.name,
+          user_id: existing.userId,
+          cooperation_type: existing.cooperationType,
+          is_principal: existing.isPrincipal,
+        },
+        after: {
+          name: specialist.name,
+          user_id: specialist.userId,
+          cooperation_type: specialist.cooperationType,
+          is_principal: specialist.isPrincipal,
+        },
         requestId: requestIdentifier,
       });
 
@@ -116,6 +136,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         name: updated.name,
         cooperation_type: updated.cooperationType,
         user_id: updated.userId,
+        is_principal: updated.isPrincipal,
         version: updated.version,
       },
       requestIdentifier,

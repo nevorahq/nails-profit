@@ -559,7 +559,9 @@ describe("contended resources", () => {
         fingerprint,
       }),
     );
-    expect(replay).toEqual({ status: "replay", bookingId: rows[0].id });
+    // `result` is null for a booking: the row itself is the answer, and the
+    // stored counts exist for the mutations that produce no single row.
+    expect(replay).toEqual({ status: "replay", bookingId: rows[0].id, result: null });
   });
 });
 

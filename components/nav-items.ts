@@ -27,6 +27,7 @@ export type NavItem = Readonly<{
 
 export type IconName =
   | "report"
+  | "monthReport"
   | "calendar"
   | "booking"
   | "visits"
@@ -34,6 +35,7 @@ export type IconName =
   | "services"
   | "addOns"
   | "materials"
+  | "expenses"
   | "specialists"
   | "import"
   | "settings"
@@ -41,6 +43,7 @@ export type IconName =
 
 export const navItems: readonly NavItem[] = [
   { href: "/app", key: "nav.dashboard", group: "primary", icon: "report" },
+  { href: "/app/reports/month", key: "nav.monthReport", group: "primary", icon: "monthReport" },
 
   { href: "/app/calendar", key: "nav.calendar", group: "work", icon: "calendar" },
   { href: "/app/booking", key: "nav.booking", group: "work", icon: "booking" },
@@ -50,6 +53,7 @@ export const navItems: readonly NavItem[] = [
   { href: "/app/services", key: "nav.services", group: "catalogue", icon: "services" },
   { href: "/app/add-ons", key: "nav.addOns", group: "catalogue", icon: "addOns" },
   { href: "/app/materials", key: "nav.materials", group: "catalogue", icon: "materials" },
+  { href: "/app/expenses", key: "nav.expenses", group: "catalogue", icon: "expenses" },
 
   { href: "/app/specialists", key: "nav.specialists", group: "team", icon: "specialists" },
 
@@ -67,21 +71,33 @@ export const navGroups: readonly { group: NavGroup; key: MessageKey | null }[] =
 ];
 
 /**
- * Sections a master does not see. Carried over unchanged from the tab list:
- * this is presentation, and the endpoints behind each of these refuse the role
- * on their own.
+ * Organization-wide sections a master does not see. Visits and clients are
+ * intentionally absent here: their pages enforce the master's `own` scope.
  */
 const MASTER_HIDDEN: ReadonlySet<string> = new Set([
   "/app/import",
   "/app/specialists",
-  "/app/materials",
   "/app/add-ons",
-  "/app/clients",
-  "/app/visits",
+  "/app/materials",
 ]);
 
+/**
+ * Sections nobody but the owner is offered.
+ *
+ * Затраты is the whole of its page — rent, payroll, what the business pays —
+ * and the `expenses` capability grants it to the owner alone, reading included.
+ * Elsewhere this file leaves a link in place and lets the page refuse, because
+ * those pages still show the role *something*. This one would show a refusal
+ * and nothing else, so the link goes too.
+ */
+const OWNER_ONLY: ReadonlySet<string> = new Set(["/app/expenses", "/app/reports/month"]);
+
 export function navFor(role?: MemberRole): readonly NavItem[] {
-  return role === "master" ? navItems.filter((item) => !MASTER_HIDDEN.has(item.href)) : navItems;
+  return navItems.filter((item) => {
+    if (OWNER_ONLY.has(item.href) && role !== "owner") return false;
+    if (role === "master" && MASTER_HIDDEN.has(item.href)) return false;
+    return true;
+  });
 }
 
 /**
@@ -90,8 +106,7 @@ export function navFor(role?: MemberRole): readonly NavItem[] {
  * sections are direct and the rest are one tap away.
  *
  * Filtered by role like everything else, which is why it is expressed as a
- * preferred order rather than a fixed list: a master has neither Визиты nor
- * Клиенты, and a bar with two gaps in it would be worse than a shorter one.
+ * preferred order rather than a second navigation definition.
  */
 const BOTTOM_PREFERENCE: readonly string[] = [
   "/app",
@@ -106,8 +121,8 @@ export function bottomNavFor(role?: MemberRole): readonly NavItem[] {
     (item): item is NavItem => item !== undefined,
   );
 
-  // A master loses two of the four, so the bar backfills from what they do have
-  // rather than leaving the row half empty.
+  // Backfill keeps four direct destinations if future role rules hide one of
+  // the preferred sections.
   const backfill = allowed.filter((item) => !chosen.includes(item) && item.group === "work");
   return [...chosen, ...backfill].slice(0, 4);
 }

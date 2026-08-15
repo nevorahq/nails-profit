@@ -1,4 +1,4 @@
-import { eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -13,40 +13,18 @@ import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
-import { starterMaterials } from "@/domain/import-templates";
-import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { can, scopeFor } from "@/domain/rbac";
 import { isPilotAccessEnforced } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
+import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { auth } from "@/lib/auth";
 import { formatBasisPoints, formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
+import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { loadOnboarding } from "@/lib/onboarding";
-
-/** DSH-009: every figure states the formula it was computed with. */
-function Metric({
-  label,
-  value,
-  formula,
-  strong,
-  negative,
-}: {
-  label: string;
-  value: string;
-  formula: string;
-  strong?: boolean;
-  negative?: boolean;
-}) {
-  return (
-    <div className={`metric${strong ? " metric-strong" : ""}${negative ? " metric-negative" : ""}`}>
-      <span title={formula}>{label}</span>
-      <strong>{value}</strong>
-      <small className="muted">{formula}</small>
-    </div>
-  );
-}
 
 /**
  * A period card for the reports page's top row. The formula still exists —
@@ -63,7 +41,7 @@ function MetricCard({
   deltaCaption,
   negative,
 }: {
-  icon: "revenue" | "cost" | "profit" | "perHour";
+  icon: "revenue" | "expenses" | "profit";
   label: string;
   value: string;
   formula: string;
@@ -112,6 +90,8 @@ export default async function AppPage({
   }
 
   const locale = membership.organization.locale as AppLocale;
+  // Wording only: `organization.type` reaches no figure on this page.
+  const businessType = membership.organization.type as BusinessType;
   const t = getTranslator(locale);
 
   const pilotStatus =
@@ -146,6 +126,15 @@ export default async function AppPage({
   }
 
   const filters = await searchParams;
+  /*
+   * The period, taken from the query string and checked before anything reads
+   * it. `<input type="date">` sends a real day, but the URL is editable by
+   * hand, and «вчера» reached `new Date` as an Invalid Date while the very same
+   * string was quietly ignored by the expense ledger — one address, two
+   * behaviours. Ignored here too, so an unusable filter simply is not one.
+   */
+  const from = isCalendarDay(filters.from) ? filters.from : undefined;
+  const to = isCalendarDay(filters.to) ? filters.to : undefined;
   const organizationId = membership.organization.id;
   const currency = membership.organization.currency;
   const localeCode = localeTag(locale);
@@ -155,16 +144,25 @@ export default async function AppPage({
   // before the selected one — only defined when a specific period was picked;
   // "all time" has no prior period to be a delta against.
   const previousRange =
-    filters.from && filters.to
+    from && to
       ? (() => {
-          const currentFrom = new Date(`${filters.from}T00:00:00.000Z`);
-          const currentTo = new Date(`${filters.to}T23:59:59.999Z`);
+          const currentFrom = new Date(`${from}T00:00:00.000Z`);
+          const currentTo = new Date(`${to}T23:59:59.999Z`);
           const spanMs = currentTo.getTime() - currentFrom.getTime() + 1;
           const previousTo = new Date(currentFrom.getTime() - 1);
           const previousFrom = new Date(previousTo.getTime() - spanMs + 1);
           return { from: previousFrom, to: previousTo };
         })()
       : null;
+
+  /*
+   * The ledger is the whole organization's, and the report can be narrowed to
+   * one master. Narrowed, neither figure it feeds means anything: the revenue
+   * would be that person's while the expenses stayed everyone's — rent is not
+   * split per specialist, and the ledger holds nothing that could split it.
+   * Both cards drop out together, and the sum is not even asked for.
+   */
+  const oneSpecialist = Boolean(filters.specialist);
 
   const data = await withTenant(organizationId, async (tx) => {
     // Section 6.1: a Master sees "только собственные" — resolved from the
@@ -182,8 +180,8 @@ export default async function AppPage({
     const dashboard = await loadDashboard(
       tx,
       {
-        from: filters.from ? new Date(filters.from) : undefined,
-        to: filters.to ? new Date(`${filters.to}T23:59:59.999Z`) : undefined,
+        from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
+        to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
         specialistId: effectiveSpecialist,
       },
       locale,
@@ -199,12 +197,34 @@ export default async function AppPage({
         ).metrics
       : null;
 
+    /*
+     * The expense ledger over the same period.
+     *
+     * Owner-only, and not merely on the screen: the `expenses` capability
+     * denies every other role even the read, so the query does not run for
+     * them. Hiding the card while still fetching the number would put rent and
+     * payroll in a manager's page payload.
+     *
+     * The period is the same one the cards use, matched on the day of the
+     * purchase (`spent_on`) rather than on when the row was written — the
+     * report answers for the month the money left, like the ledger page does.
+     */
+    const canSeeExpenses = can(membership.role, "expenses", "read") && !oneSpecialist;
+    const expenseTotal = canSeeExpenses ? await sumExpensesMinor(tx, { from, to }, currency) : null;
+    const previousExpenseTotal =
+      canSeeExpenses && previousRange
+        ? await sumExpensesMinor(
+            tx,
+            {
+              from: previousRange.from.toISOString().slice(0, 10),
+              to: previousRange.to.toISOString().slice(0, 10),
+            },
+            currency,
+          )
+        : null;
+
     const people = await loadSpecialistOptions(tx);
     const onboarding = await loadOnboarding(tx);
-    const activeSpecialists = await tx
-      .select({ id: specialists.id })
-      .from(specialists)
-      .where(isNull(specialists.archivedAt));
 
     return {
       ...dashboard,
@@ -212,29 +232,43 @@ export default async function AppPage({
       onboarding,
       people,
       canFilterBySpecialist: scopeFor(membership.role, "dashboard") === "all",
-      hasSpecialists: activeSpecialists.length > 0,
+      expenseTotal,
+      previousExpenseTotal,
     };
   });
 
   const isMaster = membership.role === "master";
   const { metrics, previousMetrics } = data;
 
-  // «Себестоимость» is the complement of profit within revenue rather than a
-  // separate ledger figure — materials and commission for uncosted visits are
-  // not yet known, and this stays true to what the cards above it show.
-  const costMinor = metrics.revenueMinor - metrics.contributionMarginMinor;
-  const previousCostMinor = previousMetrics ? previousMetrics.revenueMinor - previousMetrics.contributionMarginMinor : null;
+  /*
+   * «Затраты» is what the ledger totals over the chosen period, and that is all
+   * it claims to be.
+   *
+   * There used to be a «Прибыль» card here reading «выручка − затраты», and it
+   * was wrong in both directions at once. If the owner recorded the gel and the
+   * wages, it subtracted them a second time — the charts below already take
+   * both out of every visit. If the owner recorded neither, it reported the
+   * whole margin as profit. Meanwhile «Прибыль по услугам», two panels down,
+   * meant the contribution margin: one screen, one word, two answers.
+   *
+   * The real figure needs a whole month — rent does not divide into the eleven
+   * days someone picked in the filter — so it lives in `/app/reports/month`,
+   * where recurring costs resolve and the two halves of the ledger are told
+   * apart. The link below is the whole of the fix on this page.
+   *
+   * The card is still null whenever the ledger was not read: for a role that
+   * may not see it, or for a report narrowed to one master, where the revenue
+   * would be that person's while the rent stayed everyone's.
+   */
+  const expensesMinor = data.expenseTotal === null ? null : data.expenseTotal.minor;
+  const previousExpensesMinor = data.previousExpenseTotal?.minor ?? null;
+
   const revenueDelta = previousMetrics
     ? formatPercentDelta(metrics.revenueMinor, previousMetrics.revenueMinor, localeCode)
     : null;
-  const costDelta =
-    previousCostMinor !== null ? formatPercentDelta(costMinor, previousCostMinor, localeCode) : null;
-  const profitDelta = previousMetrics
-    ? formatPercentDelta(metrics.contributionMarginMinor, previousMetrics.contributionMarginMinor, localeCode)
-    : null;
-  const perHourDelta =
-    previousMetrics && metrics.profitPerHourMinor !== null && previousMetrics.profitPerHourMinor !== null
-      ? formatPercentDelta(metrics.profitPerHourMinor, previousMetrics.profitPerHourMinor, localeCode)
+  const expensesDelta =
+    expensesMinor !== null && previousExpensesMinor !== null
+      ? formatPercentDelta(expensesMinor, previousExpensesMinor, localeCode)
       : null;
 
   // «Прибыль по услугам»: the top of the same ranking the full table below
@@ -282,8 +316,8 @@ export default async function AppPage({
     commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),
   };
   const period =
-    filters.from || filters.to
-      ? `${filters.from ?? t("filters.periodStart")} — ${filters.to ?? t("filters.periodToday")}`
+    from || to
+      ? `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`
       : t("filters.allTime");
 
   return (
@@ -308,200 +342,155 @@ export default async function AppPage({
       </details>
 
       {!data.onboarding.complete && (
-        <OnboardingPanel
-          progress={data.onboarding}
-          starterCount={starterMaterials.length}
-          canSeedMaterials={canManageCatalogue(membership.role, "materials")}
-          locale={locale}
-        />
+        <OnboardingPanel progress={data.onboarding} locale={locale} />
       )}
 
-      {metrics.visits === 0 ? (
-        <section className="empty-state">
-          <span className="step-number">01</span>
-          <h2>{t("dashboard.emptyTitle")}</h2>
-          <p>{t("dashboard.emptyBody")}</p>
-          <div className="button-row">
-            <Link className="primary-button" href="/app/visits/new">
-              {t("dashboard.closeVisit")}
-            </Link>
-            {!data.hasSpecialists && (
-              <Link className="secondary-button" href="/app/specialists">
-                {t("dashboard.addSpecialistFirst")}
-              </Link>
+      {metrics.incompleteVisits > 0 && (
+        <div className="warning-banner">
+          <strong>
+            {t("dashboard.incompleteTitle", {
+              incomplete: metrics.incompleteVisits,
+              total: metrics.visits,
+            })}
+          </strong>{" "}
+          {t("dashboard.incompleteBody", { revenue: money(metrics.incompleteRevenueMinor) })}
+          <ul>
+            {Object.entries(metrics.incompleteReasonCounts).map(([reason, count]) => (
+              <li key={reason}>
+                {t(`reason.${reason}` as MessageKey)}: {count}
+              </li>
+            ))}
+          </ul>
+          <Link className="text-link" href="/app/visits">
+            {t("dashboard.openVisits")}
+          </Link>
+        </div>
+      )}
+
+      {!isMaster && (
+        <section className="panel insight-panel">
+          <h2>{t("dashboard.periodTotals")}</h2>
+          <div className="metric-cards">
+            <MetricCard
+              icon="revenue"
+              label={t("dashboard.revenue")}
+              value={money(metrics.revenueMinor)}
+              formula={t("dashboard.revenueFormula", { visits: metrics.visits })}
+              delta={revenueDelta}
+              deltaCaption={t("dashboard.vsPreviousPeriod")}
+            />
+            {expensesMinor !== null && (
+              <MetricCard
+                icon="expenses"
+                label={t("dashboard.expenses")}
+                value={money(expensesMinor)}
+                formula={t("dashboard.expensesFormula")}
+                delta={expensesDelta}
+                deltaCaption={t("dashboard.vsPreviousPeriod")}
+              />
             )}
           </div>
-        </section>
-      ) : (
-        <>
-          {metrics.incompleteVisits > 0 && (
-            <div className="warning-banner">
-              <strong>
-                {t("dashboard.incompleteTitle", {
-                  incomplete: metrics.incompleteVisits,
-                  total: metrics.visits,
-                })}
-              </strong>{" "}
-              {t("dashboard.incompleteBody", { revenue: money(metrics.incompleteRevenueMinor) })}
-              <ul>
-                {Object.entries(metrics.incompleteReasonCounts).map(([reason, count]) => (
-                  <li key={reason}>
-                    {t(`reason.${reason}` as MessageKey)}: {count}
-                  </li>
-                ))}
-              </ul>
-              <Link className="text-link" href="/app/visits">
-                {t("dashboard.openVisits")}
+          {/*
+            Where the profit went, said plainly. A figure that quietly
+            disappears from a screen someone reads every morning is worse
+            than the wrong figure it replaced.
+          */}
+          {expensesMinor !== null && (
+            <p className="muted">
+              {t("dashboard.profitMoved")}{" "}
+              <Link className="text-link" href="/app/reports/month">
+                {t("nav.monthReport")}
               </Link>
-            </div>
+            </p>
           )}
-
-          {!isMaster && (
-            <section className="panel insight-panel">
-              <h2>{t("dashboard.periodTotals")}</h2>
-              <div className="metric-cards">
-                <MetricCard
-                  icon="revenue"
-                  label={t("dashboard.revenue")}
-                  value={money(metrics.revenueMinor)}
-                  formula={t("dashboard.revenueFormula", { visits: metrics.visits })}
-                  delta={revenueDelta}
-                  deltaCaption={t("dashboard.vsPreviousPeriod")}
-                />
-                <MetricCard
-                  icon="cost"
-                  label={t("dashboard.cost")}
-                  value={money(costMinor)}
-                  formula={t("dashboard.costFormula")}
-                  delta={costDelta}
-                  deltaCaption={t("dashboard.vsPreviousPeriod")}
-                />
-                <MetricCard
-                  icon="profit"
-                  label={t("dashboard.profit")}
-                  value={money(metrics.contributionMarginMinor)}
-                  formula={t("dashboard.marginFormula", { visits: metrics.costedVisits })}
-                  delta={profitDelta}
-                  deltaCaption={t("dashboard.vsPreviousPeriod")}
-                  negative={metrics.contributionMarginMinor < 0}
-                />
-                <MetricCard
-                  icon="perHour"
-                  label={t("dashboard.perHour")}
-                  value={metrics.profitPerHourMinor === null ? "—" : money(metrics.profitPerHourMinor)}
-                  formula={t("dashboard.perHourFormula", {
-                    hours: Math.round(metrics.costedDurationMinutes / 60),
-                  })}
-                  delta={perHourDelta}
-                  deltaCaption={t("dashboard.vsPreviousPeriod")}
-                  negative={(metrics.profitPerHourMinor ?? 0) < 0}
-                />
-              </div>
-            </section>
+          {/*
+            Said out loud rather than folded in. The currency of the
+            organization can be changed and nothing already recorded is
+            converted, so a ledger can hold both — and a card that quietly
+            dropped the other rows would be a smaller number with no
+            explanation.
+          */}
+          {(data.expenseTotal?.excludedRows ?? 0) > 0 && (
+            <p className="muted">
+              {t("dashboard.expensesOtherCurrency", { count: data.expenseTotal!.excludedRows })}
+            </p>
           )}
-
-          {!isMaster && profitByServiceEntries.length > 0 && (
-            <div className="report-charts-grid">
-              <section className="panel">
-                <h2>{t("dashboard.profitByService")}</h2>
-                <ProfitBars entries={profitByServiceEntries} formatMoney={money} />
-              </section>
-              <section className="panel">
-                <h2>{t("dashboard.profitTrend")}</h2>
-                <ProfitTrendChart
-                  points={profitTrendPoints}
-                  formatMoney={money}
-                  emptyLabel={t("dashboard.profitTrendEmpty")}
-                  title={t("dashboard.profitTrend")}
-                />
-              </section>
-            </div>
-          )}
-
-          {!isMaster && <section className="panel">
-            <h2>{t("dashboard.materialsTitle")}</h2>
-            <div className="metric-grid">
-              <Metric
-                label={t("dashboard.normative")}
-                value={money(metrics.normativeMaterialCostMinor)}
-                formula={t("dashboard.normativeFormula")}
-              />
-              <Metric
-                label={t("dashboard.actual")}
-                value={money(metrics.actualMaterialCostMinor)}
-                formula={t("dashboard.actualFormula")}
-              />
-              <Metric
-                label={t("dashboard.deviation")}
-                value={money(metrics.materialDeviationMinor)}
-                formula={t("dashboard.deviationFormula")}
-                negative={metrics.materialDeviationMinor > 0}
-              />
-            </div>
-            {metrics.materialDeviationMinor > 0 && (
-              <p className="muted">
-                {t("dashboard.overspend", { amount: money(metrics.materialDeviationMinor) })}
-              </p>
-            )}
-          </section>}
-
-          <section className="panel">
-            <h2>{t("dashboard.rankingTitle")}</h2>
-            <p className="muted">{t("dashboard.rankingHint")}</p>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{t("dashboard.service")}</th>
-                  <th>{t("dashboard.visitCount")}</th>
-                  {!isMaster && <th>{t("dashboard.revenue")}</th>}
-                  {!isMaster && <th>{t("dashboard.masterEarnings")}</th>}
-                  <th>{isMaster ? t("dashboard.commission") : t("dashboard.keeps")}</th>
-                  {!isMaster && <th>{t("dashboard.margin")}</th>}
-                  <th>{t("dashboard.hourly")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.ranking.map((entry) => (
-                  <tr key={entry.serviceId ?? entry.serviceName}>
-                    <td>{entry.serviceName}</td>
-                    <td>{entry.visits}</td>
-                    {!isMaster && <td>{money(entry.revenueMinor)}</td>}
-                    {!isMaster && <td>{money(entry.commissionMinor)}</td>}
-                    {isMaster ? (
-                      <td>{money(entry.commissionMinor)}</td>
-                    ) : (
-                      <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                        {money(entry.contributionMarginMinor)}
-                      </td>
-                    )}
-                    {!isMaster && <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>}
-                    <td className={(entry.profitPerHourMinor ?? 0) < 0 ? "metric-negative" : ""}>
-                      {entry.profitPerHourMinor === null ? "—" : money(entry.profitPerHourMinor)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th>{t("visits.total")}</th>
-                  <td>{rankingTotals.visits}</td>
-                  {!isMaster && <td>{money(rankingTotals.revenueMinor)}</td>}
-                  {!isMaster && <td>{money(rankingTotals.commissionMinor)}</td>}
-                  {isMaster ? (
-                    <td>{money(rankingTotals.commissionMinor)}</td>
-                  ) : (
-                    <td className={rankingTotals.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                      {money(rankingTotals.contributionMarginMinor)}
-                    </td>
-                  )}
-                  {!isMaster && <td />}
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </section>
-        </>
+        </section>
       )}
+
+      {!isMaster && profitByServiceEntries.length > 0 && (
+        <div className="report-charts-grid">
+          <section className="panel">
+            <h2>{t("dashboard.profitByService")}</h2>
+            <ProfitBars entries={profitByServiceEntries} formatMoney={money} />
+          </section>
+          <section className="panel">
+            <h2>{t("dashboard.profitTrend")}</h2>
+            <ProfitTrendChart
+              points={profitTrendPoints}
+              formatMoney={money}
+              emptyLabel={t("dashboard.profitTrendEmpty")}
+              title={t("dashboard.profitTrend")}
+            />
+          </section>
+        </div>
+      )}
+
+      <section className="panel">
+        <h2>{t("dashboard.rankingTitle")}</h2>
+        <p className="muted">{t("dashboard.rankingHint")}</p>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>{t("dashboard.service")}</th>
+              <th>{t("dashboard.visitCount")}</th>
+              {!isMaster && <th>{t("dashboard.revenue")}</th>}
+              {!isMaster && <th>{t(businessLabel.masterEarnings[businessType])}</th>}
+              <th>{isMaster ? t("dashboard.commission") : t("dashboard.keeps")}</th>
+              {!isMaster && <th>{t("dashboard.margin")}</th>}
+              <th>{t("dashboard.hourly")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.ranking.map((entry) => (
+              <tr key={entry.serviceId ?? entry.serviceName}>
+                <td>{entry.serviceName}</td>
+                <td>{entry.visits}</td>
+                {!isMaster && <td>{money(entry.revenueMinor)}</td>}
+                {!isMaster && <td>{money(entry.commissionMinor)}</td>}
+                {isMaster ? (
+                  <td>{money(entry.commissionMinor)}</td>
+                ) : (
+                  <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
+                    {money(entry.contributionMarginMinor)}
+                  </td>
+                )}
+                {!isMaster && <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>}
+                <td className={(entry.profitPerHourMinor ?? 0) < 0 ? "metric-negative" : ""}>
+                  {entry.profitPerHourMinor === null ? "—" : money(entry.profitPerHourMinor)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>{t("visits.total")}</th>
+              <td>{rankingTotals.visits}</td>
+              {!isMaster && <td>{money(rankingTotals.revenueMinor)}</td>}
+              {!isMaster && <td>{money(rankingTotals.commissionMinor)}</td>}
+              {isMaster ? (
+                <td>{money(rankingTotals.commissionMinor)}</td>
+              ) : (
+                <td className={rankingTotals.contributionMarginMinor < 0 ? "metric-negative" : ""}>
+                  {money(rankingTotals.contributionMarginMinor)}
+                </td>
+              )}
+              {!isMaster && <td />}
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </section>
     </main>
   );
 }

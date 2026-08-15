@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, type FormEvent } from "react";
+import { useEffect, useState, useRef, type FormEvent } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -9,6 +9,15 @@ export type TeamMember = {
   user_id: string;
   email: string;
   role: string;
+};
+
+type InvitationRow = {
+  id: string;
+  email: string;
+  role: string;
+  status: "pending" | "expired" | "accepted" | "revoked";
+  expires_at: string;
+  created_at: string;
 };
 
 type Step = "idle" | "link-ready" | "sent";
@@ -32,6 +41,36 @@ export function TeamManager({
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [invitations, setInvitations] = useState<InvitationRow[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(canManage);
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const loadFailed = t("team.invitationLoadFailed");
+
+  useEffect(() => {
+    if (!canManage) return;
+    let ignore = false;
+    void fetchInvitations(loadFailed)
+      .then((rows) => {
+        if (!ignore) setInvitations(rows);
+      })
+      .catch((cause: unknown) => {
+        if (!ignore) setError(cause instanceof Error ? cause.message : loadFailed);
+      })
+      .finally(() => {
+        if (!ignore) setInvitationsLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [canManage, loadFailed]);
+
+  async function reloadInvitations() {
+    try {
+      setInvitations(await fetchInvitations(loadFailed));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : loadFailed);
+    }
+  }
 
   function reset() {
     setStep("idle");
@@ -73,6 +112,7 @@ export function TeamManager({
     setInviteLink(link);
     setInvitedEmail(body.data.email);
     setStep("link-ready");
+    await reloadInvitations();
   }
 
   async function send() {
@@ -103,6 +143,26 @@ export function TeamManager({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function revoke(id: string) {
+    setPending(true);
+    setError(null);
+    const response = await fetch(`/api/v1/invitations/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setError(body?.error?.message ?? t("team.revokeFailed"));
+      setPending(false);
+      setConfirmRevoke(null);
+      return;
+    }
+    await reloadInvitations();
+    setConfirmRevoke(null);
+    setPending(false);
+  }
+
+  const openInvitations = invitations.filter(
+    (invitation) => invitation.status === "pending" || invitation.status === "expired",
+  );
+
   return (
     <section className="panel">
       <h2>{t("team.membersTitle")}</h2>
@@ -131,6 +191,57 @@ export function TeamManager({
 
       {canManage && (
         <>
+          <h2 style={{ marginTop: "28rem" }}>{t("team.pendingTitle")}</h2>
+          {invitationsLoading ? (
+            <p className="muted">{t("team.pendingLoading")}</p>
+          ) : openInvitations.length === 0 ? (
+            <p className="muted">{t("team.pendingNone")}</p>
+          ) : (
+            <table className="data-table invitations-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>{t("team.inviteRole")}</th>
+                  <th>{t("team.invitationStatus")}</th>
+                  <th>{t("team.createdAt")}</th>
+                  <th>{t("team.expiresAt")}</th>
+                  <th>{t("team.invitationActions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openInvitations.map((invitation) => (
+                  <tr key={invitation.id}>
+                    <td>{invitation.email}</td>
+                    <td>{t(`roles.${invitation.role}` as MessageKey)}</td>
+                    <td>
+                      <span className={invitation.status === "expired" ? "badge-warning" : "badge-accent"}>
+                        {t(`team.status.${invitation.status}` as MessageKey)}
+                      </span>
+                    </td>
+                    <td>{new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(invitation.created_at))}</td>
+                    <td>{new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(invitation.expires_at))}</td>
+                    <td>
+                      {confirmRevoke === invitation.id ? (
+                        <>
+                          <button className="inline-action danger" type="button" disabled={pending} onClick={() => revoke(invitation.id)}>
+                            {t("team.revokeConfirm")}
+                          </button>
+                          <button className="inline-action" type="button" disabled={pending} onClick={() => setConfirmRevoke(null)}>
+                            {t("common.cancel")}
+                          </button>
+                        </>
+                      ) : (
+                        <button className="inline-action danger" type="button" disabled={pending} onClick={() => setConfirmRevoke(invitation.id)}>
+                          {t("team.revoke")}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
           <h2 style={{ marginTop: "28rem" }}>{t("team.inviteTitle")}</h2>
 
           <form className="inline-form" ref={formRef} onSubmit={generate}>
@@ -254,4 +365,11 @@ export function TeamManager({
       )}
     </section>
   );
+}
+
+async function fetchInvitations(fallback: string): Promise<InvitationRow[]> {
+  const response = await fetch("/api/v1/invitations");
+  if (!response.ok) throw new Error(fallback);
+  const body = (await response.json()) as { data: InvitationRow[] };
+  return body.data;
 }

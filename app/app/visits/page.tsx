@@ -3,8 +3,8 @@ import Link from "next/link";
 
 import { ToolIcon } from "@/components/icons";
 import { PeriodFilter } from "@/components/period-filter";
-import { type AdjustMaterial, VisitAdjustForm } from "@/components/visit-adjust-form";
-import { clients, consumptions, financialSnapshots, specialists, users, visitLines, visits } from "@/db/schema";
+import { type AdjustLine, type AdjustMaterial, VisitAdjustForm } from "@/components/visit-adjust-form";
+import { clients, consumptions, financialSnapshots, materials, specialists, users, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
@@ -84,16 +84,14 @@ export default async function VisitsPage({
       }),
     );
 
-    const incompleteIds = detailed
-      .filter((d) => !d.snapshot || d.snapshot.contributionMarginMinor === null)
-      .map((d) => d.visit.id);
+    const visitIds = detailed.map((d) => d.visit.id);
 
     const consumptionRows =
-      incompleteIds.length > 0
+      visitIds.length > 0
         ? await tx
             .select()
             .from(consumptions)
-            .where(inArray(consumptions.visitId, incompleteIds))
+            .where(inArray(consumptions.visitId, visitIds))
         : [];
 
     const consumptionsByVisit = new Map<string, typeof consumptionRows>();
@@ -101,7 +99,13 @@ export default async function VisitsPage({
       consumptionsByVisit.set(row.visitId, [...(consumptionsByVisit.get(row.visitId) ?? []), row]);
     }
 
-    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null, consumptionsByVisit };
+    const materialOptions = await tx
+      .select({ id: materials.id, name: materials.name, baseUnit: materials.baseUnit })
+      .from(materials)
+      .where(isNull(materials.archivedAt))
+      .orderBy(asc(materials.name));
+
+    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null, consumptionsByVisit, materialOptions };
   });
 
   const withMargin = data.detailed.filter(
@@ -212,6 +216,16 @@ export default async function VisitsPage({
                   normativeQuantityMilliUnits: c.normativeQuantityMilliUnits,
                   actualQuantityMilliUnits: c.actualQuantityMilliUnits,
                 }));
+                const adjustLines: AdjustLine[] = lines.map((line) => ({
+                  id: line.id,
+                  name: resolveLocalizedText(line.nameSnapshot, locale, locale) ?? "—",
+                  chargedMinor: line.priceMinor - line.discountMinor,
+                  refundMinor: line.refundMinor,
+                }));
+                const presentMaterialIds = new Set(adjustMaterials.map((material) => material.materialId));
+                const extraMaterials = data.materialOptions.filter(
+                  (material) => !presentMaterialIds.has(material.id),
+                );
                 return (
                   <li key={visit.id} className={`visit-card${incomplete ? " is-incomplete" : ""}`}>
                     <div className="visit-card-head">
@@ -245,6 +259,9 @@ export default async function VisitsPage({
                           <VisitAdjustForm
                             visitId={visit.id}
                             materials={adjustMaterials}
+                            lines={adjustLines}
+                            extraMaterials={extraMaterials}
+                            currency={currency}
                             plannedDurationMinutes={visit.plannedDurationMinutes}
                             actualDurationMinutes={visit.actualDurationMinutes}
                             locale={locale}
@@ -256,6 +273,19 @@ export default async function VisitsPage({
                         <div>
                           <span>{t("visits.revenue")}</span>
                           <strong>{money(snapshot!.revenueMinor)}</strong>
+                        </div>
+                        <div>
+                          <span>{t("closeVisit.materials")}</span>
+                          <strong>
+                            {money(snapshot!.materialCostMinor!)}{" "}
+                            <span className="unit-hint">
+                              {snapshot!.materialUsageSource === "actual"
+                                ? t("visits.materialSource.actual")
+                                : snapshot!.materialUsageSource === "standard"
+                                  ? t("visits.materialSource.standard")
+                                  : t("visits.materialSource.legacy")}
+                            </span>
+                          </strong>
                         </div>
                         <div>
                           <span>{t("visits.keeps")}</span>
@@ -279,6 +309,24 @@ export default async function VisitsPage({
                           </strong>
                         </div>
                       </div>
+                    )}
+                    {/*
+                      Offered on a complete visit as well, not only on one that
+                      failed to cost. A refund is the ordinary reason to come
+                      back to a finished visit, and hiding the form behind an
+                      error would make giving money back look like a fault.
+                    */}
+                    {!incomplete && (
+                      <VisitAdjustForm
+                        visitId={visit.id}
+                        materials={adjustMaterials}
+                        lines={adjustLines}
+                        extraMaterials={extraMaterials}
+                        currency={currency}
+                        plannedDurationMinutes={visit.plannedDurationMinutes}
+                        actualDurationMinutes={visit.actualDurationMinutes}
+                        locale={locale}
+                      />
                     )}
                   </li>
                 );

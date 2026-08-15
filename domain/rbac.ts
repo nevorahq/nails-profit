@@ -25,6 +25,14 @@ export const capabilities = [
   "bookings",
   "services",
   "materials",
+  /**
+   * Recorded purchases — rent, payroll, tools. Not a row of the section 6.1
+   * table: the table predates the expense ledger, and the product decision is
+   * narrower than anything in it. Rent and payroll say what the business pays
+   * and what people earn, so the ledger is the owner's alone — no manager, no
+   * master, no analyst, not even for reading.
+   */
+  "expenses",
   "commissions",
   "dashboard",
   "campaigns",
@@ -75,6 +83,7 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     bookings: permission(READ_WRITE, "all", "Да"),
     services: permission(READ_WRITE, "all", "Да"),
     materials: permission(READ_WRITE, "all", "Да"),
+    expenses: permission(READ_WRITE, "all", "Затраты видит и вносит только владелец"),
     commissions: permission(READ_WRITE, "all", "Да"),
     dashboard: permission(READ_ONLY, "all", "Все данные"),
     campaigns: permission(READ_WRITE, "all", "Да"),
@@ -87,6 +96,7 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     bookings: permission(READ_WRITE, "all", "Да"),
     services: permission(READ_WRITE, "all", "Да"),
     materials: permission(READ_WRITE, "all", "Да"),
+    expenses: DENIED,
     commissions: permission(READ_WRITE, "all", "Да"),
     dashboard: permission(READ_ONLY, "all", "Все данные"),
     campaigns: permission(READ_WRITE, "all", "Да"),
@@ -102,6 +112,7 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     // consumption) but never says whether a master may browse the material
     // catalogue needed to pick from. Encoded at the narrower reading.
     materials: permission(READ_WRITE, "own", "Фактическое списание по своим визитам"),
+    expenses: DENIED,
     commissions: permission(READ_ONLY, "own", "Только собственный результат"),
     dashboard: permission(READ_ONLY, "own", "Только собственные"),
     campaigns: DENIED,
@@ -114,6 +125,7 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     bookings: permission(READ_ONLY, "all", "Чтение"),
     services: permission(READ_ONLY, "all", "Чтение"),
     materials: permission(READ_ONLY, "all", "Чтение агрегатов", ["aggregates_only"]),
+    expenses: DENIED,
     commissions: permission(READ_ONLY, "all", "Агрегаты", ["aggregates_only"]),
     dashboard: permission(READ_ONLY, "all", "Все агрегаты", ["aggregates_only"]),
     campaigns: permission(READ_ONLY, "all", "Чтение результатов"),

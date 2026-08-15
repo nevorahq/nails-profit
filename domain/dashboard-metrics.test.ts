@@ -11,9 +11,15 @@ function row(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitMet
     contributionMarginMinor: 34_000,
     materialCostMinor: 2_000,
     normativeMaterialCostMinor: 2_000,
+    vatMinor: null,
+    turnoverTaxMinor: null,
+    payrollTaxMinor: null,
+    paymentCommissionMinor: null,
     durationMinutes: 90,
+    workedMinutes: 90,
     incompleteReasons: [],
     completedAt: new Date("2026-05-12T10:00:00.000Z"),
+    masterIsPrincipal: false,
     ...overrides,
   };
 }

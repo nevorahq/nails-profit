@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-import type { MaterialRow } from "@/components/material-catalogue";
+import type { MaterialRow } from "@/lib/materials";
+import { MaterialPresetPicker } from "@/components/material-preset-picker";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
+import { roundRatio } from "@/domain/money";
 import {
   formatBasisPoints,
   formatDuration,
@@ -33,6 +36,8 @@ export type ServiceDetailData = {
         formula_version: string;
         currency: string;
         price_minor: number;
+        /** With the previewed add-ons, so the formula shown matches the figures. */
+        duration_minutes: number;
         material_cost_minor: number;
         commission_minor: number;
         contribution_margin_minor: number;
@@ -40,6 +45,20 @@ export type ServiceDetailData = {
         profit_per_hour_minor: number;
       }
     | { status: "incomplete"; reasons: string[]; unpriced_material_ids: string[] };
+};
+
+/**
+ * The share of the month's rent and salaries this service carries.
+ *
+ * Absent for anyone who may not see fixed costs, and absent when there is no
+ * rota to spread them over — in both cases the toggle is not offered rather
+ * than offered and empty.
+ */
+export type FullyLoadedView = {
+  /** `YYYY-MM` the rate was taken from, named on screen so it is not a mystery. */
+  month: string;
+  allocated_fixed_cost_minor: number;
+  fixed_cost_rate_minor_per_hour: number;
 };
 
 export type ServiceAddOn = {
@@ -56,6 +75,7 @@ export function ServiceDetail({
   addOns,
   linkedAddOnIds,
   selectedAddOnIds,
+  fullyLoaded,
   locale,
 }: {
   service: ServiceDetailData;
@@ -64,12 +84,48 @@ export function ServiceDetail({
   addOns: ServiceAddOn[];
   linkedAddOnIds: string[];
   selectedAddOnIds: string[];
+  fullyLoaded: FullyLoadedView | null;
   locale: AppLocale;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /*
+   * Contribution margin is the default and stays the default. It is the figure
+   * a price decision is made on — the one that answers "is this service worth
+   * doing at all" — while the fully loaded number answers "does the studio
+   * cover its rent", which is a question about the month, not about the
+   * service. Opening on the second would invite cutting a service that in fact
+   * contributes.
+   */
+  const [withFixedCosts, setWithFixedCosts] = useState(false);
+
+  /*
+   * The three figures the toggle actually changes, derived once.
+   *
+   * Recomputed here rather than fetched: the fully loaded margin is the
+   * contribution margin less this service's share of the month's fixed costs,
+   * and the server has already sent both. The share itself is allocated on the
+   * server, where practical capacity lives.
+   */
+  const complete = service.costing.status === "complete" ? service.costing : null;
+  const fixedShareMinor =
+    complete && fullyLoaded && withFixedCosts ? fullyLoaded.allocated_fixed_cost_minor : null;
+  const keptMinor = complete
+    ? complete.contribution_margin_minor - (fixedShareMinor ?? 0)
+    : 0;
+  const keptMarginBasisPoints =
+    !complete || complete.price_minor === 0
+      ? null
+      : fixedShareMinor === null
+        ? complete.margin_basis_points
+        : roundRatio(keptMinor * 10_000, complete.price_minor);
+  const keptPerHourMinor = !complete
+    ? 0
+    : fixedShareMinor === null
+      ? complete.profit_per_hour_minor
+      : roundRatio(keptMinor * 60, complete.duration_minutes);
 
   async function saveBasics(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -200,6 +256,7 @@ export function ServiceDetail({
           </p>
         ) : (
           <form onSubmit={saveRecipe}>
+            <MaterialPresetPicker target="service" materials={materials} locale={locale} />
             <table className="data-table">
               <thead>
                 <tr>
@@ -211,6 +268,9 @@ export function ServiceDetail({
               <tbody>
                 {materials.map((material) => {
                   const line = service.recipe.find((item) => item.material_id === material.id);
+                  const pricedPerService =
+                    material.current_price !== null &&
+                    material.current_price.costing_mode !== "quantity";
                   return (
                     <tr key={material.id}>
                       <td>
@@ -231,10 +291,14 @@ export function ServiceDetail({
                           defaultValue={
                             quantities.has(material.id)
                               ? quantities.get(material.id)! / 1000
-                              : ""
+                              : pricedPerService
+                                ? 1
+                                : ""
                           }
                         />
-                        <span className="unit-hint">{material.base_unit}</span>
+                        <span className="unit-hint">
+                          {pricedPerService ? t("materials.service") : material.base_unit}
+                        </span>
                       </td>
                       <td>
                         {line?.cost_minor != null
@@ -319,27 +383,79 @@ export function ServiceDetail({
           </div>
         ) : (
           <>
+            {/*
+              Offered only when there is a rate to offer, and worded as what is
+              subtracted rather than as a mode name: «Fully Loaded» is a term
+              from management accounting, and the reader of this screen is a
+              salon owner deciding on a price.
+            */}
+            {fullyLoaded && (
+              <fieldset className="checkbox-set costing-view">
+                <legend>{t("services.viewMode")}</legend>
+                <label className="radio-row">
+                  <input
+                    type="radio"
+                    name="costing-view"
+                    checked={!withFixedCosts}
+                    onChange={() => setWithFixedCosts(false)}
+                  />{" "}
+                  {t("services.viewContribution")}
+                </label>
+                <label className="radio-row">
+                  <input
+                    type="radio"
+                    name="costing-view"
+                    checked={withFixedCosts}
+                    onChange={() => setWithFixedCosts(true)}
+                  />{" "}
+                  {t("services.viewFullyLoaded")}
+                </label>
+              </fieldset>
+            )}
             <div className="metric-grid">
               <Metric label={t("services.servicePrice")} value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
               <Metric label={t("services.materials")} value={`− ${formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)}`} />
               <Metric label={t("services.commission")} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
+              {fixedShareMinor !== null && (
+                <Metric
+                  label={t("services.fixedShare")}
+                  value={`− ${formatMoneyMinor(fixedShareMinor, service.costing.currency)}`}
+                />
+              )}
               <Metric
-                label={t("services.youKeep")}
-                value={formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
+                label={fixedShareMinor === null ? t("services.youKeep") : t("services.afterFixed")}
+                value={formatMoneyMinor(keptMinor, service.costing.currency)}
                 strong
-                negative={service.costing.contribution_margin_minor < 0}
+                negative={keptMinor < 0}
               />
               <Metric
                 label={t("services.margin")}
-                value={formatBasisPoints(service.costing.margin_basis_points)}
-                negative={(service.costing.margin_basis_points ?? 0) < 0}
+                value={formatBasisPoints(keptMarginBasisPoints)}
+                negative={(keptMarginBasisPoints ?? 0) < 0}
               />
               <Metric
                 label={t("services.perHour")}
-                value={formatMoneyMinor(service.costing.profit_per_hour_minor, service.costing.currency)}
-                negative={service.costing.profit_per_hour_minor < 0}
+                value={formatMoneyMinor(keptPerHourMinor, service.costing.currency)}
+                negative={keptPerHourMinor < 0}
               />
             </div>
+            {fullyLoaded && fixedShareMinor !== null && (
+              <p className="muted">
+                {t("services.fullyLoadedHint", {
+                  rate: formatMoneyMinor(
+                    fullyLoaded.fixed_cost_rate_minor_per_hour,
+                    service.costing.currency,
+                  ),
+                  // Named as a month, not as `2026-03`: the rate came from a
+                  // month of the owner's life, and a key from the query layer
+                  // is not how they refer to it.
+                  month: new Intl.DateTimeFormat(localeTag(locale), {
+                    month: "long",
+                    year: "numeric",
+                  }).format(new Date(`${fullyLoaded.month}-01T00:00:00.000Z`)),
+                })}
+              </p>
+            )}
             {service.costing.contribution_margin_minor < 0 && (
               <div className="warning-banner">
                 {t("services.lossWarning")}
@@ -353,10 +469,23 @@ export function ServiceDetail({
                 {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t("services.commissionWord")}) ={" "}
                 {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
               </p>
+              {fullyLoaded && fixedShareMinor !== null && (
+                <p>
+                  {t("services.fullyLoadedFormula")}{" "}
+                  {formatMoneyMinor(
+                    fullyLoaded.fixed_cost_rate_minor_per_hour,
+                    service.costing.currency,
+                  )}{" "}
+                  ÷ 60 {t("common.minutes")} × {formatDuration(service.costing.duration_minutes)} ={" "}
+                  {formatMoneyMinor(fixedShareMinor, service.costing.currency)}
+                </p>
+              )}
               <p>
                 {t("services.perHourFormula")}{" "}
-                {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)} ÷{" "}
-                {formatDuration(service.duration_minutes)} × 60 {t("common.minutes")}
+                {formatMoneyMinor(keptMinor, service.costing.currency)} ÷{" "}
+                {/* The duration the costing used, add-ons included — the base
+                    duration would not divide the figure printed beside it. */}
+                {formatDuration(service.costing.duration_minutes)} × 60 {t("common.minutes")}
               </p>
               <ul>
                 {service.recipe.map((line) => (

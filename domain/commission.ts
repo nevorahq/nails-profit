@@ -19,11 +19,17 @@ export type CommissionRuleRow = Readonly<{
   activeTo: Date | null;
 }>;
 
-export function selectCommissionRule(
-  rules: readonly CommissionRuleRow[],
+/*
+ * Generic over the row so callers keep the columns they selected. The choice of
+ * rule depends only on the fields declared above; everything else a caller
+ * carries — the base, the covered services — has to survive the pick, and a
+ * concrete return type would quietly drop it.
+ */
+export function selectCommissionRule<Row extends CommissionRuleRow>(
+  rules: readonly Row[],
   serviceId: string,
   at: Date = new Date(),
-): CommissionRuleRow | null {
+): Row | null {
   const applicable = rules.filter(
     (rule) =>
       (rule.serviceId === null || rule.serviceId === serviceId) &&
@@ -55,5 +61,13 @@ export function toCommission(rule: CommissionRuleRow): Commission {
         throw new Error(`Commission rule ${rule.id} is ${rule.type} but has no rate`);
       }
       return { type: rule.type, basisPoints: rule.basisPoints };
+    case "hybrid":
+      // Both halves, or it is not a hybrid. The database says the same thing in
+      // `commission_rule_shape`; this is what a row that slipped past it reads
+      // as, and throwing beats costing the visit at half the agreement.
+      if (rule.basisPoints === null || rule.fixedAmountMinor === null) {
+        throw new Error(`Commission rule ${rule.id} is hybrid but is missing a rate or an amount`);
+      }
+      return { type: "hybrid", basisPoints: rule.basisPoints, amountMinor: rule.fixedAmountMinor };
   }
 }

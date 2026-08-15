@@ -1,10 +1,10 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { commissionRules, specialists } from "@/db/schema";
+import { commissionRuleServices, commissionRules, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
-import { commissionTypes } from "@/domain/costing";
+import { commissionBases, commissionTypes } from "@/domain/costing";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -25,13 +25,24 @@ const defaultRuleInput = z
     basis_points: z.int().min(0).max(10_000).optional(),
     fixed_amount_minor: z.int().min(0).optional(),
     service_id: z.uuid().optional(),
+    base: z.enum(commissionBases).optional(),
+    /** Empty or absent means every service, as every earlier rule does. */
+    covered_service_ids: z.array(z.uuid()).max(200).optional(),
   })
   .refine(
-    (value) =>
-      value.type === "fixed"
-        ? value.fixed_amount_minor !== undefined && value.basis_points === undefined
-        : value.basis_points !== undefined && value.fixed_amount_minor === undefined,
-    { message: "A fixed rule needs an amount; a percentage rule needs a rate" },
+    (value) => {
+      if (value.type === "fixed") {
+        return value.fixed_amount_minor !== undefined && value.basis_points === undefined;
+      }
+      if (value.type === "hybrid") {
+        return value.fixed_amount_minor !== undefined && value.basis_points !== undefined;
+      }
+      return value.basis_points !== undefined && value.fixed_amount_minor === undefined;
+    },
+    {
+      message:
+        "A fixed rule needs an amount, a percentage rule needs a rate, and a hybrid needs both",
+    },
   );
 
 const createSpecialistSchema = z.object({
@@ -81,6 +92,7 @@ export async function GET(request: Request) {
             type: commissionRules.type,
             basisPoints: commissionRules.basisPoints,
             fixedAmountMinor: commissionRules.fixedAmountMinor,
+            base: commissionRules.base,
             activeFrom: commissionRules.activeFrom,
             activeTo: commissionRules.activeTo,
           })
@@ -100,11 +112,13 @@ export async function GET(request: Request) {
           name: person.name,
           cooperation_type: person.cooperationType,
           user_id: person.userId,
+          is_principal: person.isPrincipal,
           default_rule: defaultRule
             ? {
                 type: defaultRule.type,
                 basis_points: defaultRule.basisPoints,
                 fixed_amount_minor: defaultRule.fixedAmountMinor,
+                base: defaultRule.base,
                 active_from: defaultRule.activeFrom,
               }
             : null,
@@ -113,6 +127,7 @@ export async function GET(request: Request) {
             type: rule.type,
             basis_points: rule.basisPoints,
             fixed_amount_minor: rule.fixedAmountMinor,
+            base: rule.base,
           })),
         };
       }),
@@ -156,16 +171,42 @@ export async function POST(request: Request) {
       .returning();
 
     if (parsed.data.default_rule) {
-      await tx.insert(commissionRules).values({
-        organizationId: actor.organizationId,
-        specialistId: created.id,
-        serviceId: null,
-        type: parsed.data.default_rule.type,
-        basisPoints: parsed.data.default_rule.basis_points ?? null,
-        fixedAmountMinor: parsed.data.default_rule.fixed_amount_minor ?? null,
-        createdBy: actor.userId,
-        updatedBy: actor.userId,
-      });
+      const [rule] = await tx
+        .insert(commissionRules)
+        .values({
+          organizationId: actor.organizationId,
+          specialistId: created.id,
+          serviceId: null,
+          type: parsed.data.default_rule.type,
+          basisPoints: parsed.data.default_rule.basis_points ?? null,
+          fixedAmountMinor: parsed.data.default_rule.fixed_amount_minor ?? null,
+          base: parsed.data.default_rule.base ?? "after_discount",
+          createdBy: actor.userId,
+          updatedBy: actor.userId,
+        })
+        .returning({ id: commissionRules.id });
+
+      // Which services the rule pays on. No rows means all of them; an unknown
+      // id simply finds nothing under RLS and is dropped rather than inventing
+      // coverage nobody asked for.
+      const coveredIds = [...new Set(parsed.data.default_rule.covered_service_ids ?? [])];
+      if (coveredIds.length > 0) {
+        const known = await tx
+          .select({ id: services.id })
+          .from(services)
+          .where(inArray(services.id, coveredIds));
+        if (known.length > 0) {
+          await tx.insert(commissionRuleServices).values(
+            known.map((service) => ({
+              organizationId: actor.organizationId,
+              commissionRuleId: rule.id,
+              serviceId: service.id,
+              createdBy: actor.userId,
+              updatedBy: actor.userId,
+            })),
+          );
+        }
+      }
     }
 
     await recordAuditEvent(tx, {

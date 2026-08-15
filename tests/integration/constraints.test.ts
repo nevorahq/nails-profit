@@ -273,6 +273,27 @@ describe("database constraints", () => {
     );
   });
 
+  /*
+   * The API bounds this too, but the column is what everything else in the
+   * product divides by: a zero here would turn every hourly rate into a
+   * division by nothing, and an import or a hand-written UPDATE does not pass
+   * through zod.
+   */
+  it("refuses a practical capacity of zero or above the whole rota", async () => {
+    const { organizations } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    for (const basisPoints of [0, 10_001]) {
+      await expectDatabaseError(
+        adminDb
+          .update(organizations)
+          .set({ practicalCapacityBasisPoints: basisPoints })
+          .where(eq(organizations.id, organizationId)),
+        { code: PG_ERROR.check, constraint: "organization_practical_capacity_range" },
+      );
+    }
+  });
+
   it("keeps financial history alive by refusing to delete an organization that has any", async () => {
     // Section 15.3: erasure anonymizes rather than deletes, and the FKs are what
     // make that the only option.

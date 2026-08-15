@@ -1,0 +1,1365 @@
+{
+  "$comment": "The fixed system catalogue of materials (epic E3.1 §F1). Generic entries only: no brands, because a brand does not enter unit_cost. packageSize is the packaging these materials are usually sold in. It is a default the owner edits in place, not a fact about a supplier: a generic material has no single packaging, so the figure is a starting point and the form keeps it editable. Prices are absent for the reason they always were: an invented purchase price is the plausible-but-wrong number section 8.8.1 refuses to produce. systemKey is set only where the name matches domain/import-templates.ts exactly, which is what the recipe presets map on; elsewhere it is null.",
+  "templates": [
+    {
+      "slug": "antiseptik",
+      "name": {
+        "ru": "Антисептик",
+        "ro": "Antiseptic",
+        "en": "Antiseptic"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 10
+    },
+    {
+      "slug": "obezzhirivatel-nail-cleaner",
+      "name": {
+        "ru": "Обезжириватель / Nail Cleaner",
+        "ro": "Degresant / Nail Cleaner",
+        "en": "Nail cleaner"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 20
+    },
+    {
+      "slug": "degidrator",
+      "name": {
+        "ru": "Дегидратор",
+        "ro": "Dehidrator",
+        "en": "Dehydrator"
+      },
+      "systemKey": "dehydrator",
+      "category": "Подготовка и жидкости",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 30
+    },
+    {
+      "slug": "praymer",
+      "name": {
+        "ru": "Праймер",
+        "ro": "Primer",
+        "en": "Primer"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 40
+    },
+    {
+      "slug": "bonder",
+      "name": {
+        "ru": "Бондер",
+        "ro": "Bonder",
+        "en": "Bonder"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 50
+    },
+    {
+      "slug": "remover-dlya-kutikuly",
+      "name": {
+        "ru": "Remover для кутикулы",
+        "ro": "Remover pentru cuticule",
+        "en": "Cuticle remover"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 30,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 60
+    },
+    {
+      "slug": "sredstvo-dlya-snyatiya-pokrytiya",
+      "name": {
+        "ru": "Средство для снятия покрытия",
+        "ro": "Soluție pentru îndepărtarea acoperirii",
+        "en": "Soak-off remover"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 70
+    },
+    {
+      "slug": "sredstvo-dlya-snyatiya-lipkogo-sloya",
+      "name": {
+        "ru": "Средство для снятия липкого слоя",
+        "ro": "Soluție pentru stratul lipicios",
+        "en": "Sticky layer cleanser"
+      },
+      "systemKey": null,
+      "category": "Подготовка и жидкости",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 80
+    },
+    {
+      "slug": "maslo-dlya-kutikuly",
+      "name": {
+        "ru": "Масло для кутикулы",
+        "ro": "Ulei pentru cuticule",
+        "en": "Cuticle oil"
+      },
+      "systemKey": "cuticle_oil",
+      "category": "Подготовка и жидкости",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 90
+    },
+    {
+      "slug": "baza",
+      "name": {
+        "ru": "База",
+        "ro": "Bază",
+        "en": "Base coat"
+      },
+      "systemKey": "base",
+      "category": "Базы и покрытия",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 100
+    },
+    {
+      "slug": "builder-base",
+      "name": {
+        "ru": "Builder Base",
+        "ro": "Builder Base",
+        "en": "Builder base"
+      },
+      "systemKey": null,
+      "category": "Базы и покрытия",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 110
+    },
+    {
+      "slug": "fiber-base",
+      "name": {
+        "ru": "Fiber Base",
+        "ro": "Fiber Base",
+        "en": "Fiber base"
+      },
+      "systemKey": null,
+      "category": "Базы и покрытия",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 120
+    },
+    {
+      "slug": "gel-lak",
+      "name": {
+        "ru": "Гель-лак",
+        "ro": "Ojă semipermanentă",
+        "en": "Gel polish"
+      },
+      "systemKey": "gel_color",
+      "category": "Базы и покрытия",
+      "packageSize": 8,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 130
+    },
+    {
+      "slug": "top",
+      "name": {
+        "ru": "Топ",
+        "ro": "Top coat",
+        "en": "Top coat"
+      },
+      "systemKey": "top",
+      "category": "Базы и покрытия",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 140
+    },
+    {
+      "slug": "builder-gel",
+      "name": {
+        "ru": "Builder Gel",
+        "ro": "Builder Gel",
+        "en": "Builder gel"
+      },
+      "systemKey": null,
+      "category": "Укрепление и моделирование",
+      "packageSize": 30,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 150
+    },
+    {
+      "slug": "kamufliruyuschiy-gel",
+      "name": {
+        "ru": "Камуфлирующий гель",
+        "ro": "Gel camuflant",
+        "en": "Camouflage gel"
+      },
+      "systemKey": null,
+      "category": "Укрепление и моделирование",
+      "packageSize": 30,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 160
+    },
+    {
+      "slug": "poligel-acryl-gel",
+      "name": {
+        "ru": "Полигель / Acryl Gel",
+        "ro": "Poligel / Acryl Gel",
+        "en": "Polygel / acryl gel"
+      },
+      "systemKey": null,
+      "category": "Укрепление и моделирование",
+      "packageSize": 30,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 170
+    },
+    {
+      "slug": "fiber-gel",
+      "name": {
+        "ru": "Fiber Gel",
+        "ro": "Fiber Gel",
+        "en": "Fiber gel"
+      },
+      "systemKey": null,
+      "category": "Укрепление и моделирование",
+      "packageSize": 30,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 180
+    },
+    {
+      "slug": "gel-zhele",
+      "name": {
+        "ru": "Гель-желе",
+        "ro": "Gel-jeleu",
+        "en": "Jelly gel"
+      },
+      "systemKey": null,
+      "category": "Укрепление и моделирование",
+      "packageSize": 30,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 190
+    },
+    {
+      "slug": "akrilovaya-pudra",
+      "name": {
+        "ru": "Акриловая пудра",
+        "ro": "Pudră acrilică",
+        "en": "Acrylic powder"
+      },
+      "systemKey": null,
+      "category": "Укрепление и моделирование",
+      "packageSize": 30,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 200
+    },
+    {
+      "slug": "verhnie-formy",
+      "name": {
+        "ru": "Верхние формы",
+        "ro": "Forme superioare",
+        "en": "Upper forms"
+      },
+      "systemKey": null,
+      "category": "Наращивание",
+      "packageSize": 120,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 210
+    },
+    {
+      "slug": "nizhnie-formy",
+      "name": {
+        "ru": "Нижние формы",
+        "ro": "Șabloane inferioare",
+        "en": "Nail forms"
+      },
+      "systemKey": null,
+      "category": "Наращивание",
+      "packageSize": 500,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 220
+    },
+    {
+      "slug": "tipsy",
+      "name": {
+        "ru": "Типсы",
+        "ro": "Tipsuri",
+        "en": "Tips"
+      },
+      "systemKey": null,
+      "category": "Наращивание",
+      "packageSize": 500,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 230
+    },
+    {
+      "slug": "soft-gel-tips",
+      "name": {
+        "ru": "Soft Gel Tips",
+        "ro": "Soft Gel Tips",
+        "en": "Soft gel tips"
+      },
+      "systemKey": null,
+      "category": "Наращивание",
+      "packageSize": 360,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 240
+    },
+    {
+      "slug": "kley-dlya-tipsov",
+      "name": {
+        "ru": "Клей для типсов",
+        "ro": "Adeziv pentru tipsuri",
+        "en": "Tip adhesive"
+      },
+      "systemKey": null,
+      "category": "Наращивание",
+      "packageSize": 10,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 250
+    },
+    {
+      "slug": "gel-kley",
+      "name": {
+        "ru": "Гель-клей",
+        "ro": "Gel-adeziv",
+        "en": "Gel glue"
+      },
+      "systemKey": null,
+      "category": "Наращивание",
+      "packageSize": 10,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 260
+    },
+    {
+      "slug": "material-dlya-remonta-nogtey",
+      "name": {
+        "ru": "Материал для ремонта ногтей",
+        "ro": "Material pentru repararea unghiilor",
+        "en": "Nail repair material"
+      },
+      "systemKey": null,
+      "category": "Ремонт",
+      "packageSize": 15,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 270
+    },
+    {
+      "slug": "fiberglass-steklovolokno",
+      "name": {
+        "ru": "Fiberglass / стекловолокно",
+        "ro": "Fiberglass / fibră de sticlă",
+        "en": "Fiberglass"
+      },
+      "systemKey": null,
+      "category": "Ремонт",
+      "packageSize": 1,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 280
+    },
+    {
+      "slug": "shelk-dlya-remonta",
+      "name": {
+        "ru": "Шёлк для ремонта",
+        "ro": "Mătase pentru reparație",
+        "en": "Silk wrap"
+      },
+      "systemKey": null,
+      "category": "Ремонт",
+      "packageSize": 1,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 290
+    },
+    {
+      "slug": "kley-dlya-remonta",
+      "name": {
+        "ru": "Клей для ремонта",
+        "ro": "Adeziv pentru reparație",
+        "en": "Repair glue"
+      },
+      "systemKey": null,
+      "category": "Ремонт",
+      "packageSize": 10,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 300
+    },
+    {
+      "slug": "gel-kraska",
+      "name": {
+        "ru": "Гель-краска",
+        "ro": "Vopsea gel",
+        "en": "Gel paint"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 5,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 310
+    },
+    {
+      "slug": "spider-gel",
+      "name": {
+        "ru": "Spider Gel",
+        "ro": "Spider Gel",
+        "en": "Spider gel"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 5,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 320
+    },
+    {
+      "slug": "material-dlya-stempinga",
+      "name": {
+        "ru": "Материал для стемпинга",
+        "ro": "Material pentru stampilare",
+        "en": "Stamping polish"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 8,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 330
+    },
+    {
+      "slug": "folga-dlya-dizayna",
+      "name": {
+        "ru": "Фольга для дизайна",
+        "ro": "Folie decorativă",
+        "en": "Transfer foil"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 1,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 340
+    },
+    {
+      "slug": "kley-dlya-folgi",
+      "name": {
+        "ru": "Клей для фольги",
+        "ro": "Adeziv pentru folie",
+        "en": "Foil glue"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 10,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 350
+    },
+    {
+      "slug": "vtirka",
+      "name": {
+        "ru": "Втирка",
+        "ro": "Pigment cromat",
+        "en": "Chrome powder"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 2,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 360
+    },
+    {
+      "slug": "blestki",
+      "name": {
+        "ru": "Блёстки",
+        "ro": "Sclipici",
+        "en": "Glitter"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 5,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 370
+    },
+    {
+      "slug": "pigment",
+      "name": {
+        "ru": "Пигмент",
+        "ro": "Pigment",
+        "en": "Pigment"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 5,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 380
+    },
+    {
+      "slug": "strazy",
+      "name": {
+        "ru": "Стразы",
+        "ro": "Cristale",
+        "en": "Rhinestones"
+      },
+      "systemKey": "rhinestones",
+      "category": "Дизайн",
+      "packageSize": 1440,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 390
+    },
+    {
+      "slug": "bulonki",
+      "name": {
+        "ru": "Бульонки",
+        "ro": "Biluțe decorative",
+        "en": "Caviar beads"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 10,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 400
+    },
+    {
+      "slug": "nakleyki-slaydery",
+      "name": {
+        "ru": "Наклейки / слайдеры",
+        "ro": "Abțibilduri / slidere",
+        "en": "Stickers / sliders"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 1,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 410
+    },
+    {
+      "slug": "potal",
+      "name": {
+        "ru": "Поталь",
+        "ro": "Foiță metalică",
+        "en": "Leaf foil"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 1,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 420
+    },
+    {
+      "slug": "dekorativnye-hlopya",
+      "name": {
+        "ru": "Декоративные хлопья",
+        "ro": "Fulgi decorativi",
+        "en": "Decorative flakes"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 2,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 430
+    },
+    {
+      "slug": "suhocvety",
+      "name": {
+        "ru": "Сухоцветы",
+        "ro": "Flori uscate",
+        "en": "Dried flowers"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 1,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 440
+    },
+    {
+      "slug": "dekorativnyy-pesok",
+      "name": {
+        "ru": "Декоративный песок",
+        "ro": "Nisip decorativ",
+        "en": "Decorative sand"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 10,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 450
+    },
+    {
+      "slug": "3d-gel",
+      "name": {
+        "ru": "3D-гель",
+        "ro": "Gel 3D",
+        "en": "3D gel"
+      },
+      "systemKey": null,
+      "category": "Дизайн",
+      "packageSize": 5,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 460
+    },
+    {
+      "slug": "keratolitik",
+      "name": {
+        "ru": "Кератолитик",
+        "ro": "Keratolitic",
+        "en": "Keratolytic"
+      },
+      "systemKey": null,
+      "category": "Педикюр",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 470
+    },
+    {
+      "slug": "razmyagchitel-dlya-stop",
+      "name": {
+        "ru": "Размягчитель для стоп",
+        "ro": "Emolient pentru picioare",
+        "en": "Foot softener"
+      },
+      "systemKey": null,
+      "category": "Педикюр",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 480
+    },
+    {
+      "slug": "sredstvo-ot-natoptyshey",
+      "name": {
+        "ru": "Средство от натоптышей",
+        "ro": "Soluție pentru calozități",
+        "en": "Callus remover"
+      },
+      "systemKey": null,
+      "category": "Педикюр",
+      "packageSize": 100,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 490
+    },
+    {
+      "slug": "sredstvo-dlya-treschin",
+      "name": {
+        "ru": "Средство для трещин",
+        "ro": "Soluție pentru crăpături",
+        "en": "Fissure treatment"
+      },
+      "systemKey": null,
+      "category": "Педикюр",
+      "packageSize": 100,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 500
+    },
+    {
+      "slug": "sredstvo-dlya-obrabotki-stop",
+      "name": {
+        "ru": "Средство для обработки стоп",
+        "ro": "Soluție pentru tratarea picioarelor",
+        "en": "Foot treatment"
+      },
+      "systemKey": null,
+      "category": "Педикюр",
+      "packageSize": 500,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 510
+    },
+    {
+      "slug": "krem",
+      "name": {
+        "ru": "Крем",
+        "ro": "Cremă",
+        "en": "Cream"
+      },
+      "systemKey": null,
+      "category": "SPA и уход",
+      "packageSize": 100,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 520
+    },
+    {
+      "slug": "maska",
+      "name": {
+        "ru": "Маска",
+        "ro": "Mască",
+        "en": "Mask"
+      },
+      "systemKey": null,
+      "category": "SPA и уход",
+      "packageSize": 100,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 530
+    },
+    {
+      "slug": "skrab",
+      "name": {
+        "ru": "Скраб",
+        "ro": "Scrub",
+        "en": "Scrub"
+      },
+      "systemKey": null,
+      "category": "SPA и уход",
+      "packageSize": 500,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 540
+    },
+    {
+      "slug": "parafin",
+      "name": {
+        "ru": "Парафин",
+        "ro": "Parafină",
+        "en": "Paraffin"
+      },
+      "systemKey": null,
+      "category": "SPA и уход",
+      "packageSize": 500,
+      "baseUnit": "g",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 550
+    },
+    {
+      "slug": "maslo-dlya-massazha",
+      "name": {
+        "ru": "Масло для массажа",
+        "ro": "Ulei de masaj",
+        "en": "Massage oil"
+      },
+      "systemKey": null,
+      "category": "SPA и уход",
+      "packageSize": 200,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 560
+    },
+    {
+      "slug": "loson",
+      "name": {
+        "ru": "Лосьон",
+        "ro": "Loțiune",
+        "en": "Lotion"
+      },
+      "systemKey": null,
+      "category": "SPA и уход",
+      "packageSize": 200,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 570
+    },
+    {
+      "slug": "perchatki",
+      "name": {
+        "ru": "Перчатки",
+        "ro": "Mănuși",
+        "en": "Gloves"
+      },
+      "systemKey": "gloves",
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 580
+    },
+    {
+      "slug": "maski",
+      "name": {
+        "ru": "Маски",
+        "ro": "Măști",
+        "en": "Face masks"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 590
+    },
+    {
+      "slug": "bezvorsovye-salfetki",
+      "name": {
+        "ru": "Безворсовые салфетки",
+        "ro": "Șervețele fără scame",
+        "en": "Lint-free wipes"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 500,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 600
+    },
+    {
+      "slug": "vatnye-diski",
+      "name": {
+        "ru": "Ватные диски",
+        "ro": "Discuri de bumbac",
+        "en": "Cotton pads"
+      },
+      "systemKey": "cotton",
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 610
+    },
+    {
+      "slug": "bumazhnye-salfetki",
+      "name": {
+        "ru": "Бумажные салфетки",
+        "ro": "Șervețele de hârtie",
+        "en": "Paper towels"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 620
+    },
+    {
+      "slug": "odnorazovye-polotenca",
+      "name": {
+        "ru": "Одноразовые полотенца",
+        "ro": "Prosoape de unică folosință",
+        "en": "Disposable towels"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 630
+    },
+    {
+      "slug": "odnorazovye-prostyni",
+      "name": {
+        "ru": "Одноразовые простыни",
+        "ro": "Cearșafuri de unică folosință",
+        "en": "Disposable sheets"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 640
+    },
+    {
+      "slug": "pedikyurnye-salfetki",
+      "name": {
+        "ru": "Педикюрные салфетки",
+        "ro": "Șervețele pentru pedichiură",
+        "en": "Pedicure wipes"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 650
+    },
+    {
+      "slug": "razdeliteli-dlya-palcev",
+      "name": {
+        "ru": "Разделители для пальцев",
+        "ro": "Separatoare pentru degete",
+        "en": "Toe separators"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 660
+    },
+    {
+      "slug": "apelsinovye-palochki",
+      "name": {
+        "ru": "Апельсиновые палочки",
+        "ro": "Bețișoare de portocal",
+        "en": "Orange sticks"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 670
+    },
+    {
+      "slug": "mikrobrashi",
+      "name": {
+        "ru": "Микробраши",
+        "ro": "Microaplicatoare",
+        "en": "Micro brushes"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 680
+    },
+    {
+      "slug": "odnorazovye-schetochki",
+      "name": {
+        "ru": "Одноразовые щёточки",
+        "ro": "Perii de unică folosință",
+        "en": "Disposable brushes"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 690
+    },
+    {
+      "slug": "pilki",
+      "name": {
+        "ru": "Пилки",
+        "ro": "Pile de unghii",
+        "en": "Nail files"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 700
+    },
+    {
+      "slug": "bafy",
+      "name": {
+        "ru": "Бафы",
+        "ro": "Buffere",
+        "en": "Buffers"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 710
+    },
+    {
+      "slug": "smennye-fayly-dlya-pilki",
+      "name": {
+        "ru": "Сменные файлы для пилки",
+        "ro": "Benzi abrazive pentru pilă",
+        "en": "Replacement file grits"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 720
+    },
+    {
+      "slug": "smennye-fayly-dlya-pedikyura",
+      "name": {
+        "ru": "Сменные файлы для педикюра",
+        "ro": "Benzi abrazive pentru pedichiură",
+        "en": "Pedicure file grits"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 730
+    },
+    {
+      "slug": "pedikyurnye-kolpachki",
+      "name": {
+        "ru": "Педикюрные колпачки",
+        "ro": "Capace abrazive pentru pedichiură",
+        "en": "Sanding caps"
+      },
+      "systemKey": null,
+      "category": "Одноразовые расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 740
+    },
+    {
+      "slug": "sredstvo-dlya-dezinfekcii-instrumentov",
+      "name": {
+        "ru": "Средство для дезинфекции инструментов",
+        "ro": "Dezinfectant pentru instrumente",
+        "en": "Instrument disinfectant"
+      },
+      "systemKey": null,
+      "category": "Стерилизация и дезинфекция",
+      "packageSize": 1000,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 750
+    },
+    {
+      "slug": "sredstvo-dlya-dezinfekcii-poverhnostey",
+      "name": {
+        "ru": "Средство для дезинфекции поверхностей",
+        "ro": "Dezinfectant pentru suprafețe",
+        "en": "Surface disinfectant"
+      },
+      "systemKey": null,
+      "category": "Стерилизация и дезинфекция",
+      "packageSize": 1000,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 760
+    },
+    {
+      "slug": "sredstvo-dlya-predvaritelnoy-ochistki",
+      "name": {
+        "ru": "Средство для предварительной очистки",
+        "ro": "Soluție de curățare preliminară",
+        "en": "Pre-cleaning solution"
+      },
+      "systemKey": null,
+      "category": "Стерилизация и дезинфекция",
+      "packageSize": 1000,
+      "baseUnit": "ml",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 770
+    },
+    {
+      "slug": "pakety-dlya-sterilizacii",
+      "name": {
+        "ru": "Пакеты для стерилизации",
+        "ro": "Pungi de sterilizare",
+        "en": "Sterilization pouches"
+      },
+      "systemKey": null,
+      "category": "Стерилизация и дезинфекция",
+      "packageSize": 200,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": true,
+      "profiles": [],
+      "sortOrder": 780
+    },
+    {
+      "slug": "indikatory-sterilizacii",
+      "name": {
+        "ru": "Индикаторы стерилизации",
+        "ro": "Indicatori de sterilizare",
+        "en": "Sterilization indicators"
+      },
+      "systemKey": null,
+      "category": "Стерилизация и дезинфекция",
+      "packageSize": 500,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 790
+    },
+    {
+      "slug": "folga-dlya-snyatiya",
+      "name": {
+        "ru": "Фольга для снятия",
+        "ro": "Folie pentru îndepărtare",
+        "en": "Removal foil"
+      },
+      "systemKey": "foil_wrap",
+      "category": "Прочие расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 800
+    },
+    {
+      "slug": "odnorazovye-stakanchiki",
+      "name": {
+        "ru": "Одноразовые стаканчики",
+        "ro": "Pahare de unică folosință",
+        "en": "Disposable cups"
+      },
+      "systemKey": null,
+      "category": "Прочие расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 810
+    },
+    {
+      "slug": "palitry",
+      "name": {
+        "ru": "Палитры",
+        "ro": "Palete",
+        "en": "Palettes"
+      },
+      "systemKey": null,
+      "category": "Прочие расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 820
+    },
+    {
+      "slug": "shpateli",
+      "name": {
+        "ru": "Шпатели",
+        "ro": "Spatule",
+        "en": "Spatulas"
+      },
+      "systemKey": null,
+      "category": "Прочие расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 830
+    },
+    {
+      "slug": "pipetki",
+      "name": {
+        "ru": "Пипетки",
+        "ro": "Pipete",
+        "en": "Pipettes"
+      },
+      "systemKey": null,
+      "category": "Прочие расходники",
+      "packageSize": 100,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 840
+    },
+    {
+      "slug": "pakety-dlya-musora",
+      "name": {
+        "ru": "Пакеты для мусора",
+        "ro": "Saci de gunoi",
+        "en": "Bin bags"
+      },
+      "systemKey": null,
+      "category": "Прочие расходники",
+      "packageSize": 50,
+      "baseUnit": "piece",
+      "kind": "sku",
+      "isCore": false,
+      "profiles": [],
+      "sortOrder": 850
+    }
+  ]
+}

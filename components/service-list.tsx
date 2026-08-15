@@ -4,9 +4,37 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+import { NameCombobox } from "@/components/name-combobox";
+import {
+  serviceCatalogue,
+  serviceSuggestions,
+  type ServiceCatalogueEntry,
+} from "@/domain/service-catalogue";
+import { resolveLocalizedText, type LocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
+
+/**
+ * What goes into `service.name`, which is localized while the form has one box.
+ *
+ * A catalogue pick carries all three languages, so all three are sent — the one
+ * moment a Romanian name gets filled in without anyone typing it. A name the
+ * owner typed, or edited after picking, is only theirs in the language they are
+ * working in; claiming it as the Romanian name too would be inventing a
+ * translation.
+ */
+export function nameForSubmit(
+  typed: string,
+  picked: ServiceCatalogueEntry | null,
+  locale: AppLocale,
+): LocalizedText {
+  const trimmed = typed.trim();
+  if (picked && resolveLocalizedText(picked.name, locale, locale) === trimmed) {
+    return picked.name;
+  }
+  return { [locale]: trimmed };
+}
 
 export type ServiceRow = {
   id: string;
@@ -106,6 +134,17 @@ export function ServiceList({
   // than in a follow-up effect — `location` does not exist during the
   // server's render of this "use client" component.
   const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-service");
+  const [addName, setAddName] = useState("");
+  /**
+   * The catalogue entry the name came from, kept so the other two languages can
+   * travel with it.
+   *
+   * Dropped the moment the owner edits the field: once the name is theirs, the
+   * Romanian and English of a kind of work they moved away from would be wrong,
+   * and a wrong translation is worse than a missing one — the missing one falls
+   * back and is visibly absent.
+   */
+  const [pickedKind, setPickedKind] = useState<ServiceCatalogueEntry | null>(null);
   const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -141,7 +180,9 @@ export function ServiceList({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: { [locale]: data.get("name") },
+        // A catalogue pick fills all three languages; a typed name fills the
+        // one being worked in, and `resolveLocalizedText` handles the rest.
+        name: nameForSubmit(String(data.get("name") ?? ""), pickedKind, locale),
         ...(price ? { price_minor: Math.round(Number(price) * 100) } : {}),
         ...(duration ? { duration_minutes: Number(duration) } : {}),
       }),
@@ -155,6 +196,8 @@ export function ServiceList({
     }
 
     form.reset();
+    setAddName("");
+    setPickedKind(null);
     setPending(false);
     setAddOpen(false);
     router.refresh();
@@ -239,10 +282,32 @@ export function ServiceList({
           <section className="panel">
             <h2>{t("services.add")}</h2>
             <form className="inline-form" onSubmit={submitAdd}>
-              <label>
-                {t("services.name")}
-                <input name="name" required maxLength={200} placeholder={t("services.namePlaceholder")} />
-              </label>
+              <NameCombobox
+                id="service-name"
+                name="name"
+                label={t("services.name")}
+                placeholder={t("services.searchPlaceholder")}
+                title={t("services.catalogueTitle")}
+                emptyLabel={t("services.noSuggestions")}
+                footnote={t("services.customNameHint")}
+                required
+                maxLength={200}
+                value={addName}
+                options={serviceSuggestions(addName).map((entry) => ({
+                  key: entry.key,
+                  label: resolveLocalizedText(entry.name, locale, locale) ?? entry.name.ru,
+                }))}
+                onChange={(next) => {
+                  setAddName(next);
+                  setPickedKind(null);
+                }}
+                onSelect={(option) => {
+                  const entry = serviceCatalogue.find((candidate) => candidate.key === option.key);
+                  if (!entry) return;
+                  setAddName(resolveLocalizedText(entry.name, locale, locale) ?? entry.name.ru);
+                  setPickedKind(entry);
+                }}
+              />
               <label>
                 {t("common.price")}
                 <input name="price" type="number" step="0.01" min="0" placeholder="600" />
@@ -293,6 +358,7 @@ export function ServiceList({
                   {/* Название */}
                   <td>
                     <input
+                      aria-label={t("services.service")}
                       value={edit.name}
                       onChange={(e) => setEdit({ ...edit, name: e.target.value })}
                       maxLength={200}
@@ -303,6 +369,7 @@ export function ServiceList({
                   {/* Цена */}
                   <td>
                     <input
+                      aria-label={t("common.price")}
                       value={edit.price}
                       onChange={(e) => setEdit({ ...edit, price: e.target.value })}
                       type="number"
@@ -314,6 +381,7 @@ export function ServiceList({
                   {/* Длительность */}
                   <td>
                     <input
+                      aria-label={t("common.duration")}
                       value={edit.duration}
                       onChange={(e) => setEdit({ ...edit, duration: e.target.value })}
                       type="number"

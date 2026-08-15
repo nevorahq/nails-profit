@@ -1,5 +1,7 @@
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { financialSnapshots, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
@@ -9,6 +11,7 @@ import { cancelPendingNotifications } from "@/lib/booking-notifications";
 import { bookingLinesOf, loadBooking, transitionBooking } from "@/lib/booking-service";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { fingerprintOf } from "@/lib/idempotency";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 
@@ -52,6 +55,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { id: bookingId } = await context.params;
   const now = new Date();
   const completedAt = parsed.data.completed_at ? new Date(parsed.data.completed_at) : now;
+  const completionKey = request.headers.get("idempotency-key")?.trim() || undefined;
+  if (completionKey && completionKey.length > 200) {
+    return apiError(422, "INVALID_IDEMPOTENCY_KEY", "The idempotency key is too long", id);
+  }
+  const completionFingerprint = fingerprintOf(parsed.data);
 
   try {
     const outcome = await withTenant(actor.organizationId, async (tx) => {
@@ -70,6 +78,43 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         return { ok: false as const, failure: "service_not_found" as const };
       }
 
+      const loadRecordedVisit = async () => {
+        const [visit] = await tx
+          .select()
+          .from(visits)
+          .where(eq(visits.bookingId, existing.id))
+          .limit(1);
+        if (!visit) return null;
+        const [snapshot] = await tx
+          .select()
+          .from(financialSnapshots)
+          .where(eq(financialSnapshots.visitId, visit.id))
+          .orderBy(desc(financialSnapshots.snapshotVersion))
+          .limit(1);
+        return snapshot ? { visit, snapshot } : null;
+      };
+
+      // A successful response that was lost on the network is still the same
+      // completion. Return the already persisted visit/snapshot instead of
+      // attempting another state transition or writing another snapshot.
+      if (existing.status === "completed") {
+        const recorded = await loadRecordedVisit();
+        if (!recorded) return { ok: false as const, failure: "idempotency_conflict" as const };
+        if (
+          recorded.visit.completionFingerprint !== null &&
+          recorded.visit.completionFingerprint !== completionFingerprint
+        ) {
+          return { ok: false as const, failure: "idempotency_conflict" as const };
+        }
+        return {
+          ok: true as const,
+          booking: existing,
+          lines,
+          ...recorded,
+          replayed: true,
+        };
+      }
+
       const moved = await transitionBooking(tx, {
         bookingId: existing.id,
         to: "completed",
@@ -77,7 +122,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         actorUserId: actor.userId,
         now,
       });
-      if (!moved.ok) return moved;
+      if (!moved.ok) {
+        // Under READ COMMITTED a racing completion may have committed while
+        // the optimistic update waited. Re-read once and turn that race into
+        // an idempotent replay when the same payload won.
+        const recorded = await loadRecordedVisit();
+        if (
+          recorded &&
+          (recorded.visit.completionFingerprint === null ||
+            recorded.visit.completionFingerprint === completionFingerprint)
+        ) {
+          return {
+            ok: true as const,
+            booking: (await loadBooking(tx, existing.id)) ?? existing,
+            lines,
+            ...recorded,
+            replayed: true,
+          };
+        }
+        return moved;
+      }
 
       const recorded = await recordCompletedVisit(tx, {
         organizationId: actor.organizationId,
@@ -94,6 +158,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           actualQuantityMilliUnits: toMilliUnits(entry.actual_quantity),
         })),
         requestId: id,
+        completionKey,
+        completionFingerprint,
       });
 
       // Rolls the status change back with it: a booking marked completed with
@@ -126,14 +192,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         entityId: moved.booking.id,
       });
 
-      return { ok: true as const, booking: moved.booking, lines, visit: recorded.visit, snapshot: recorded.snapshot };
+      return {
+        ok: true as const,
+        booking: moved.booking,
+        lines,
+        visit: recorded.visit,
+        snapshot: recorded.snapshot,
+        replayed: recorded.replayed,
+      };
     });
 
     if (!outcome.ok) {
       switch (outcome.failure) {
         case "service_not_found":
         case "missing_commission_rule":
-        case "missing_duration": {
+        case "missing_duration":
+        case "invalid_material_override": {
+          const refusal = VISIT_FAILURES[outcome.failure];
+          return apiError(refusal.status, refusal.code, refusal.message, id);
+        }
+        case "idempotency_conflict": {
           const refusal = VISIT_FAILURES[outcome.failure];
           return apiError(refusal.status, refusal.code, refusal.message, id);
         }
@@ -153,12 +231,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             revenue_minor: outcome.snapshot.revenueMinor,
             contribution_margin_minor: outcome.snapshot.contributionMarginMinor,
             profit_per_hour_minor: outcome.snapshot.profitPerHourMinor,
+            material_cost_minor: outcome.snapshot.materialCostMinor,
+            material_usage_source: outcome.snapshot.materialUsageSource,
             incomplete_reasons: outcome.snapshot.incompleteReasons,
           },
         },
       },
       id,
-      201,
+      outcome.replayed ? 200 : 201,
     );
   } catch (error) {
     // The partial unique index on `visit.booking_id`: two requests closed the

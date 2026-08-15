@@ -88,4 +88,13 @@ describe("materialCostMinor", () => {
     // 50 disposable files for 150 MDL => 3 MDL each.
     expect(materialCostMinor(15_000, toMilliUnits(50), toMilliUnits(2))).toBe(600);
   });
+
+  it("rounds once, at the end, on the epic's worked example", () => {
+    // 185.00 MDL for a 15 ml bottle, 0.6 ml used. The unit price is
+    // 12.333333 MDL/ml and is never stored or rounded on its own: rounding it
+    // first gives 12.33 × 0.6 = 7.398 → 7.40 by luck here, but 7.38 or 7.42 on
+    // neighbouring inputs. Rounding once keeps the arithmetic closed over the
+    // package.
+    expect(materialCostMinor(18_500, toMilliUnits(15), toMilliUnits(0.6))).toBe(740);
+  });
 });

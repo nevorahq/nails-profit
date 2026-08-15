@@ -1,8 +1,8 @@
-import { asc, desc, eq, isNull, isNotNull, sql } from "drizzle-orm";
+import { asc, eq, isNull, isNotNull, sql } from "drizzle-orm";
 
 import { ClientManager, type ClientRow } from "@/components/client-manager";
 import { ToolIcon } from "@/components/icons";
-import { clients, financialSnapshots, specialists, visits } from "@/db/schema";
+import { clients, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";

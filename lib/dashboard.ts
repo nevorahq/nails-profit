@@ -53,12 +53,27 @@ export async function loadDashboard(
       contributionMarginMinor: financialSnapshots.contributionMarginMinor,
       materialCostMinor: financialSnapshots.materialCostMinor,
       normativeMaterialCostMinor: financialSnapshots.normativeMaterialCostMinor,
+      vatMinor: financialSnapshots.vatMinor,
+      turnoverTaxMinor: financialSnapshots.turnoverTaxMinor,
+      payrollTaxMinor: financialSnapshots.payrollTaxMinor,
+      paymentCommissionMinor: financialSnapshots.paymentCommissionMinor,
       durationMinutes: financialSnapshots.durationMinutes,
+      // From the visit, not the snapshot: an incomplete costing carries no
+      // duration, and capacity is about the chair rather than the margin.
+      actualDurationMinutes: visits.actualDurationMinutes,
+      plannedDurationMinutes: visits.plannedDurationMinutes,
       incompleteReasons: financialSnapshots.incompleteReasons,
       completedAt: visits.completedAt,
+      masterIsPrincipal: visits.masterIsPrincipal,
+      specialistId: visits.specialistId,
+      specialistName: specialists.name,
+      commissionType: visits.commissionType,
+      commissionBasisPoints: visits.commissionBasisPoints,
+      commissionFixedAmountMinor: visits.commissionFixedAmountMinor,
     })
     .from(financialSnapshots)
     .innerJoin(visits, eq(visits.id, financialSnapshots.visitId))
+    .innerJoin(specialists, eq(specialists.id, visits.specialistId))
     .where(where)
     .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
 
@@ -93,9 +108,20 @@ export async function loadDashboard(
         contributionMarginMinor: snapshot.contributionMarginMinor,
         materialCostMinor: snapshot.materialCostMinor,
         normativeMaterialCostMinor: snapshot.normativeMaterialCostMinor,
+        vatMinor: snapshot.vatMinor,
+        turnoverTaxMinor: snapshot.turnoverTaxMinor,
+        payrollTaxMinor: snapshot.payrollTaxMinor,
+        paymentCommissionMinor: snapshot.paymentCommissionMinor,
         durationMinutes: snapshot.durationMinutes,
+        workedMinutes: snapshot.actualDurationMinutes ?? snapshot.plannedDurationMinutes,
         incompleteReasons: snapshot.incompleteReasons ?? [],
         completedAt: snapshot.completedAt,
+        masterIsPrincipal: snapshot.masterIsPrincipal,
+        specialistId: snapshot.specialistId,
+        specialistName: snapshot.specialistName,
+        commissionType: snapshot.commissionType,
+        commissionBasisPoints: snapshot.commissionBasisPoints,
+        commissionFixedAmountMinor: snapshot.commissionFixedAmountMinor,
       };
     });
 

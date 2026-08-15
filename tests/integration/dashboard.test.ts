@@ -100,7 +100,6 @@ describe("Studio Ledger", () => {
         organizationId,
         visitId: visit.id,
         profit,
-        currency: "MDL",
         actorUserId: userId,
       });
       return { visitId: visit.id, snapshot };
@@ -174,7 +173,6 @@ describe("Studio Ledger", () => {
         organizationId,
         visitId,
         profit,
-        currency: "MDL",
         actorUserId: userId,
       });
     });
@@ -204,7 +202,7 @@ describe("Studio Ledger", () => {
     expect(after.metrics.contributionMarginMinor).toBe(before.metrics.contributionMarginMinor);
   });
 
-  it("keeps uncosted revenue out of the margin denominator", async () => {
+  it("costs a visit from standard usage when no actual override is supplied", async () => {
     const service = await serviceWithRecipe("Маникюр", 60_000, 90);
     await closeVisit({ serviceId: service.id, actualQuantity: 2 });
     await closeVisit({ serviceId: service.id, actualQuantity: null });
@@ -213,12 +211,11 @@ describe("Studio Ledger", () => {
 
     expect(metrics.visits).toBe(2);
     expect(metrics.revenueMinor).toBe(120_000);
-    expect(metrics.costedVisits).toBe(1);
-    expect(metrics.incompleteVisits).toBe(1);
-    expect(metrics.incompleteRevenueMinor).toBe(60_000);
-    // 34000 / 60000 = 56.67%, not 34000 / 120000 = 28.33%.
+    expect(metrics.costedVisits).toBe(2);
+    expect(metrics.incompleteVisits).toBe(0);
+    expect(metrics.incompleteRevenueMinor).toBe(0);
     expect(metrics.marginBasisPoints).toBe(5_667);
-    expect(metrics.incompleteReasonCounts).toEqual({ missing_actual_consumption: 1 });
+    expect(metrics.incompleteReasonCounts).toEqual({});
   });
 
   it("filters by period", async () => {

@@ -162,6 +162,111 @@
       "when": 1786034577358,
       "tag": "0022_identity_tables_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786550932385,
+      "tag": "0023_tranquil_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786556142645,
+      "tag": "0024_elite_masked_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786626198948,
+      "tag": "0025_principal_and_visit_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786628263089,
+      "tag": "0026_recurring_expenses",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786630768817,
+      "tag": "0027_labor_cost_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1786630769817,
+      "tag": "0028_labor_cost_rule_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786643114102,
+      "tag": "0029_practical_capacity",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1786645474731,
+      "tag": "0030_taxes_and_acquiring",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1786686824358,
+      "tag": "0031_commission_rule_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786688311990,
+      "tag": "0032_owner_draw",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786702135443,
+      "tag": "0033_gorgeous_orphan",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786793810626,
+      "tag": "0034_long_gauntlet",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1786797726028,
+      "tag": "0035_material_template_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786798039556,
+      "tag": "0036_revoke_service_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786807728329,
+      "tag": "0037_material_template_optional_package",
+      "breakpoints": true
     }
   ]
 }

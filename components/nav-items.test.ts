@@ -7,7 +7,7 @@ import { memberRoles } from "@/domain/rbac";
 /**
  * The navigation is drawn three times — sidebar, bottom bar, «Ещё» — from one
  * array. These are the properties that make that safe: that the three cover the
- * same set, that a role never sees a section the tab list used to hide from it,
+ * same set, that a role only sees sections useful to it,
  * and that opening a row does not put out the light on the section it belongs
  * to.
  */
@@ -15,6 +15,7 @@ describe("navigation", () => {
   it("covers every route the app answers on", () => {
     expect(navItems.map((item) => item.href)).toEqual([
       "/app",
+      "/app/reports/month",
       "/app/calendar",
       "/app/booking",
       "/app/visits",
@@ -22,6 +23,7 @@ describe("navigation", () => {
       "/app/services",
       "/app/add-ons",
       "/app/materials",
+      "/app/expenses",
       "/app/specialists",
       "/app/import",
       "/app/settings",
@@ -33,22 +35,33 @@ describe("navigation", () => {
     expect(navItems.filter((item) => !printed.has(item.group))).toEqual([]);
   });
 
-  it("hides from a master exactly what the tab list hid", () => {
-    // The list this replaced. A regression here is a master seeing other
-    // people's clients in the navigation, which the endpoints refuse anyway —
-    // but offering it is still a bug.
+  it("offers a master their scoped visits and clients", () => {
     expect(navFor("master").map((item) => item.href)).toEqual([
       "/app",
       "/app/calendar",
       "/app/booking",
+      "/app/visits",
+      "/app/clients",
       "/app/services",
       "/app/settings",
     ]);
   });
 
-  it("shows every section to the roles that are not a master", () => {
+  it("offers Затраты and the monthly report to the owner and to nobody else", () => {
+    // Both are the owner's ledger of rent and payroll — one as rows, one as a
+    // total — and the `expenses` capability denies every other role even the
+    // read. A link that can only ever answer "нет доступа" is not worth drawing.
+    for (const role of memberRoles) {
+      const hrefs = navFor(role).map((item) => item.href);
+      expect(hrefs.includes("/app/expenses")).toBe(role === "owner");
+      expect(hrefs.includes("/app/reports/month")).toBe(role === "owner");
+    }
+  });
+
+  it("shows every other section to the roles that are not a master", () => {
     for (const role of memberRoles.filter((r) => r !== "master")) {
-      expect(navFor(role)).toHaveLength(navItems.length);
+      const expected = role === "owner" ? navItems.length : navItems.length - 2;
+      expect(navFor(role)).toHaveLength(expected);
     }
   });
 
@@ -68,14 +81,9 @@ describe("navigation", () => {
     }
   });
 
-  it("fills the bar for a master, who has neither Визиты nor Клиенты", () => {
-    // Two of the four preferred sections are hidden from this role; the bar
-    // backfills rather than rendering with gaps in it.
+  it("puts a master's scoped visits and clients on the bottom bar", () => {
     const bar = bottomNavFor("master").map((item) => item.href);
-    expect(bar).toContain("/app");
-    expect(bar).toContain("/app/calendar");
-    expect(bar).not.toContain("/app/visits");
-    expect(bar.length).toBeGreaterThan(2);
+    expect(bar).toEqual(["/app", "/app/calendar", "/app/visits", "/app/clients"]);
   });
 });
 

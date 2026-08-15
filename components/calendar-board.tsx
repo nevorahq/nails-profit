@@ -82,7 +82,19 @@ type RecipeMaterial = {
   normative_quantity_milli_units: number;
 };
 
-type BookingRecipe = { durationMinutes: number; materials: RecipeMaterial[] };
+type BookingRecipe = {
+  durationMinutes: number;
+  materials: RecipeMaterial[];
+  materialOptions: { id: string; name: string; base_unit: string }[];
+  preview:
+    | {
+        status: "complete";
+        material_cost_minor: number;
+        commission_minor: number;
+        contribution_margin_minor: number;
+      }
+    | { status: "incomplete"; material_cost_minor: number | null; reasons: string[] };
+};
 
 /* --- The day view's time grid --- */
 
@@ -167,6 +179,7 @@ export function CalendarBoard({
   const t = getTranslator(locale);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<Record<string, BookingRecipe | "loading" | "error">>({});
   // The alternatives arrive as UTC instants and have to be read back in the
   // zone of the location they belong to, so the zone travels with them.
@@ -197,6 +210,7 @@ export function CalendarBoard({
   ) {
     setPending(true);
     setError(null);
+    setNotice(null);
     setAlternatives({ zone: options.zone ?? "UTC", entries: [] });
 
     const response = await fetch(url, {
@@ -359,6 +373,12 @@ export function CalendarBoard({
     });
   }
 
+  async function resendManageLink(bookingId: string) {
+    if (await send(`/api/v1/bookings/${bookingId}/manage-link`, {})) {
+      setNotice(t("calendar.manageLinkSent"));
+    }
+  }
+
   async function loadRecipe(bookingId: string) {
     if (recipes[bookingId]) return;
     setRecipes((prev) => ({ ...prev, [bookingId]: "loading" }));
@@ -378,15 +398,35 @@ export function CalendarBoard({
     const materials = typeof recipe === "object" && recipe !== null ? recipe.materials : [];
 
     const durationRaw = String(data.get("actual_duration") ?? "").trim();
-    const consumption = materials.map((m) => ({
-      material_id: m.material_id,
-      actual_quantity: Number(String(data.get(`actual-${m.material_id}`) ?? "").trim()),
-    }));
+    const consumption = materials.flatMap((m) => {
+      const raw = String(data.get(`actual-${m.material_id}`) ?? "").trim();
+      if (raw === "") return [];
+      const quantity = Number(raw);
+      return Number.isFinite(quantity)
+        ? [{ material_id: m.material_id, actual_quantity: quantity }]
+        : [];
+    });
+    const extraMaterialId = String(data.get("extra_material_id") ?? "").trim();
+    const extraQuantityRaw = String(data.get("extra_quantity") ?? "").trim();
+    const extraQuantity = Number(extraQuantityRaw);
+    if (extraMaterialId && extraQuantityRaw && Number.isFinite(extraQuantity) && extraQuantity > 0) {
+      consumption.push({ material_id: extraMaterialId, actual_quantity: extraQuantity });
+    }
 
-    await send(`/api/v1/bookings/${booking.id}/complete`, {
+    const payload = {
       version: booking.version,
       ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
       consumption,
+    };
+    await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
+      key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
+    });
+  }
+
+  async function completeWithStandard(booking: CalendarBooking) {
+    const payload = { version: booking.version, consumption: [] };
+    await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
+      key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
     });
   }
 
@@ -726,6 +766,7 @@ export function CalendarBoard({
           )}
         </div>
       )}
+      {notice && <p className="booking-manage-notice" role="status">{notice}</p>}
 
       <div
         className={isGrid ? "calendar-grid" : undefined}
@@ -843,7 +884,16 @@ export function CalendarBoard({
                   className={`calendar-entry status-${booking.status}`}
                   style={slotOf(index)}
                 >
-                  <details>
+                  <details
+                    onToggle={(event) => {
+                      if (
+                        event.currentTarget.open &&
+                        booking.status === "confirmed"
+                      ) {
+                        loadRecipe(booking.id);
+                      }
+                    }}
+                  >
                     <summary>
                       <span className="calendar-time">
                         {booking.localStart}–{booking.localEnd}
@@ -899,15 +949,58 @@ export function CalendarBoard({
                           )}
                           {booking.status === "confirmed" && (
                             <>
+                              {recipes[booking.id] === "loading" && (
+                                <p className="muted">{t("calendar.loadingRecipe")}</p>
+                              )}
+                              {typeof recipes[booking.id] === "object" && recipes[booking.id] !== null && (
+                                (() => {
+                                  const preview = (recipes[booking.id] as BookingRecipe).preview;
+                                  return (
+                                    <div className="visit-card-metrics calendar-completion-preview">
+                                      <div>
+                                        <span>{t("closeVisit.materials")}</span>
+                                        <strong>
+                                          {preview.material_cost_minor === null
+                                            ? "—"
+                                            : `≈ ${money(preview.material_cost_minor)}`}
+                                        </strong>
+                                      </div>
+                                      {preview.status === "complete" && (
+                                        <>
+                                          <div>
+                                            <span>{t("visits.masterEarnings")}</span>
+                                            <strong>−{money(preview.commission_minor)}</strong>
+                                          </div>
+                                          <div>
+                                            <span>{t("visits.keeps")}</span>
+                                            <strong>{money(preview.contribution_margin_minor)}</strong>
+                                          </div>
+                                        </>
+                                      )}
+                                      {preview.status === "incomplete" && (
+                                        <p className="warning-banner">
+                                          {preview.reasons
+                                            .map((reason) => t(`reason.${reason}` as MessageKey))
+                                            .join("; ")}
+                                        </p>
+                                      )}
+                                      <p className="muted">{t("closeVisit.standardUse")}</p>
+                                    </div>
+                                  );
+                                })()
+                              )}
+                              <button
+                                type="button"
+                                className="primary-button"
+                                disabled={pending}
+                                onClick={() => completeWithStandard(booking)}
+                              >
+                                {pending ? t("common.saving") : t("calendar.complete")}
+                              </button>
                               <details
                                 className="calendar-subform"
-                                onToggle={(e) => {
-                                  if ((e.currentTarget as HTMLDetailsElement).open) {
-                                    loadRecipe(booking.id);
-                                  }
-                                }}
                               >
-                                <summary>{t("calendar.complete")}</summary>
+                                <summary>{t("closeVisit.modifyUse")}</summary>
                                 <form className="inline-form" onSubmit={(e) => complete(booking, e)}>
                                   {(() => {
                                     const r = recipes[booking.id];
@@ -921,14 +1014,11 @@ export function CalendarBoard({
                                           type="number"
                                           min="1"
                                           step="1"
-                                          defaultValue={dur}
+                                          placeholder={dur === undefined ? undefined : String(dur)}
                                         />
                                       </label>
                                     );
                                   })()}
-                                  {recipes[booking.id] === "loading" && (
-                                    <p className="muted">{t("calendar.loadingRecipe")}</p>
-                                  )}
                                   {recipes[booking.id] === "error" && (
                                     <p className="muted">{t("closeVisit.noRecipe")}</p>
                                   )}
@@ -936,6 +1026,7 @@ export function CalendarBoard({
                                     (() => {
                                       const recipe = recipes[booking.id] as BookingRecipe;
                                       return recipe.materials.length > 0 ? (
+                                        <>
                                         <table className="data-table">
                                           <thead>
                                             <tr>
@@ -958,7 +1049,7 @@ export function CalendarBoard({
                                                     type="number"
                                                     step="0.001"
                                                     min="0"
-                                                    defaultValue={m.normative_quantity_milli_units / 1000}
+                                                    placeholder={String(m.normative_quantity_milli_units / 1000)}
                                                   />
                                                   <span className="unit-hint">{m.base_unit}</span>
                                                 </td>
@@ -966,6 +1057,36 @@ export function CalendarBoard({
                                             ))}
                                           </tbody>
                                         </table>
+                                        {recipe.materialOptions.some(
+                                          (option) => !recipe.materials.some((material) => material.material_id === option.id),
+                                        ) && (
+                                          <fieldset className="checkbox-set">
+                                            <legend>{t("visits.extraMaterial")}</legend>
+                                            <label>
+                                              {t("common.material")}
+                                              <select name="extra_material_id" defaultValue="">
+                                                <option value="">—</option>
+                                                {recipe.materialOptions
+                                                  .filter(
+                                                    (option) =>
+                                                      !recipe.materials.some(
+                                                        (material) => material.material_id === option.id,
+                                                      ),
+                                                  )
+                                                  .map((option) => (
+                                                    <option key={option.id} value={option.id}>
+                                                      {option.name} ({option.base_unit})
+                                                    </option>
+                                                  ))}
+                                              </select>
+                                            </label>
+                                            <label>
+                                              {t("closeVisit.actual")}
+                                              <input name="extra_quantity" type="number" step="0.001" min="0.001" />
+                                            </label>
+                                          </fieldset>
+                                        )}
+                                        </>
                                       ) : (
                                         <p className="muted">{t("closeVisit.noRecipe")}</p>
                                       );
@@ -989,6 +1110,21 @@ export function CalendarBoard({
                                 {t("calendar.noShow")}
                               </button>
                             </>
+                          )}
+
+                          {booking.clientId && (
+                            <details className="calendar-subform">
+                              <summary>{t("calendar.resendManageLink")}</summary>
+                              <p className="muted">{t("calendar.resendManageLinkHint")}</p>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                disabled={pending}
+                                onClick={() => resendManageLink(booking.id)}
+                              >
+                                {pending ? t("common.saving") : t("calendar.resendManageLinkConfirm")}
+                              </button>
+                            </details>
                           )}
 
                           <details className="calendar-subform">
@@ -1225,4 +1361,3 @@ function shiftDate(date: string, days: number) {
   const parsed = parseLocalDate(date);
   return parsed ? formatLocalDate(addLocalDays(parsed, days)) : date;
 }
-

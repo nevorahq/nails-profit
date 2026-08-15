@@ -21,8 +21,18 @@ import type { TenantTransaction } from "@/db/tenant";
 export type IdempotencyClaim =
   /** This request owns the key; carry on and record the result. */
   | Readonly<{ status: "claimed"; id: string }>
-  /** The same request was already answered; return that answer verbatim. */
-  | Readonly<{ status: "replay"; bookingId: string | null }>
+  /**
+   * The same request was already answered; return that answer verbatim.
+   *
+   * `bookingId` for the mutations that produce one row, `result` for those that
+   * do not: a bulk paste that created 28 materials has no single row to point
+   * at, and "created: 28" is the only honest replay of it.
+   */
+  | Readonly<{
+      status: "replay";
+      bookingId: string | null;
+      result: Record<string, unknown> | null;
+    }>
   /** The key was used for something else. Answering would hand over the wrong booking. */
   | Readonly<{ status: "conflict" }>;
 
@@ -67,6 +77,7 @@ export async function claimIdempotencyKey(
     .select({
       fingerprint: bookingIdempotencyKeys.requestFingerprint,
       bookingId: bookingIdempotencyKeys.bookingId,
+      result: bookingIdempotencyKeys.result,
     })
     .from(bookingIdempotencyKeys)
     .where(
@@ -79,7 +90,7 @@ export async function claimIdempotencyKey(
 
   if (!existing) return { status: "conflict" };
   return existing.fingerprint === input.fingerprint
-    ? { status: "replay", bookingId: existing.bookingId }
+    ? { status: "replay", bookingId: existing.bookingId, result: existing.result ?? null }
     : { status: "conflict" };
 }
 
@@ -87,5 +98,21 @@ export async function recordIdempotentResult(tx: TenantTransaction, claimId: str
   await tx
     .update(bookingIdempotencyKeys)
     .set({ bookingId })
+    .where(eq(bookingIdempotencyKeys.id, claimId));
+}
+
+/**
+ * The counts a retry should be answered with, for mutations whose result is not
+ * one row. Written in the same transaction as the work, so a retry either sees
+ * the whole thing or claims the key itself.
+ */
+export async function recordIdempotentOutcome(
+  tx: TenantTransaction,
+  claimId: string,
+  result: Record<string, unknown>,
+) {
+  await tx
+    .update(bookingIdempotencyKeys)
+    .set({ result })
     .where(eq(bookingIdempotencyKeys.id, claimId));
 }

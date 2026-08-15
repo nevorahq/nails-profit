@@ -19,9 +19,40 @@ export type VisitMetricRow = Readonly<{
   contributionMarginMinor: number | null;
   materialCostMinor: number | null;
   normativeMaterialCostMinor: number | null;
+  /**
+   * The `costing-v2` terms, each null on a snapshot written before they
+   * existed. Read as zero when summing — nothing was charged then, because
+   * nothing had been entered — but kept nullable so the row still says which
+   * formula produced it.
+   */
+  vatMinor: number | null;
+  turnoverTaxMinor: number | null;
+  payrollTaxMinor: number | null;
+  paymentCommissionMinor: number | null;
   durationMinutes: number | null;
+  /**
+   * How long the visit actually occupied the chair, from the visit itself
+   * rather than from its costing.
+   *
+   * `durationMinutes` above comes from the financial snapshot and is null
+   * whenever the margin could not be computed — which is right for a profit per
+   * hour and wrong for capacity. An hour worked is an hour of the rota used up
+   * whether or not a material had a price, so utilization counts this one.
+   */
+  workedMinutes: number;
   incompleteReasons: readonly string[];
   completedAt: Date;
+  /**
+   * Whether the specialist took the residual profit rather than a fee, as
+   * recorded when the visit closed. Null for visits closed before the question
+   * existed, and read as false — see `db/schema.ts`.
+   */
+  masterIsPrincipal: boolean | null;
+  specialistId?: string;
+  specialistName?: string;
+  commissionType?: string;
+  commissionBasisPoints?: number | null;
+  commissionFixedAmountMinor?: number | null;
 }>;
 
 export type ServiceRanking = Readonly<{
@@ -47,10 +78,42 @@ export type DashboardMetrics = Readonly<{
    */
   costedVisits: number;
   costedRevenueMinor: number;
+  /**
+   * What the work cost: the sum of every costed visit's commission. Needed as
+   * its own line by the monthly P&L, which lists materials and labour
+   * separately rather than only their combined effect on the margin.
+   */
+  labourCostMinor: number;
+  /**
+   * The part of `labourCostMinor` booked to a principal — the owner who also
+   * works. It is a real cost of the visit and a real comparison between
+   * services, but the money never left the business, so the monthly report adds
+   * it back before subtracting the owner's imputed wage.
+   */
+  principalLabourMinor: number;
+  /**
+   * What the state and the bank took, split the way the monthly report lists
+   * it. All four are already inside the contribution margin; they are summed
+   * here so the statement on screen visibly adds up rather than leaving a gap
+   * between revenue and margin that nothing accounts for.
+   */
+  vatMinor: number;
+  turnoverTaxMinor: number;
+  payrollTaxMinor: number;
+  paymentCommissionMinor: number;
   contributionMarginMinor: number;
   marginBasisPoints: number | null;
   profitPerHourMinor: number | null;
   costedDurationMinutes: number;
+  /**
+   * Every completed visit's duration, costed or not.
+   *
+   * The numerator of capacity utilization, and deliberately not
+   * `costedDurationMinutes`: an hour worked occupied the chair whether or not
+   * the margin could be computed for it. Dividing costed hours by capacity
+   * would report a studio as idle because a price was missing.
+   */
+  bookedDurationMinutes: number;
   /** CST-007 at the level of a period: what the recipes said versus what was used. */
   normativeMaterialCostMinor: number;
   actualMaterialCostMinor: number;
@@ -76,6 +139,13 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
     0,
   );
   const costedDurationMinutes = costed.reduce((total, row) => total + (row.durationMinutes ?? 0), 0);
+  const labourCostMinor = costed.reduce((total, row) => total + (row.commissionMinor ?? 0), 0);
+  const principalLabourMinor = costed
+    .filter((row) => row.masterIsPrincipal === true)
+    .reduce((total, row) => total + (row.commissionMinor ?? 0), 0);
+
+  const sumOf = (pick: (row: VisitMetricRow) => number | null) =>
+    costed.reduce((total, row) => total + (pick(row) ?? 0), 0);
 
   const normativeMaterialCostMinor = costed.reduce(
     (total, row) => total + (row.normativeMaterialCostMinor ?? 0),
@@ -96,6 +166,12 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
     revenueMinor,
     costedVisits: costed.length,
     costedRevenueMinor,
+    labourCostMinor,
+    principalLabourMinor,
+    vatMinor: sumOf((row) => row.vatMinor),
+    turnoverTaxMinor: sumOf((row) => row.turnoverTaxMinor),
+    payrollTaxMinor: sumOf((row) => row.payrollTaxMinor),
+    paymentCommissionMinor: sumOf((row) => row.paymentCommissionMinor),
     contributionMarginMinor,
     // Section 8.9.1: total margin over total revenue, not the mean of per-visit
     // margins — a 20 MDL visit must not weigh as much as a 600 MDL one.
@@ -108,6 +184,7 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
         ? null
         : roundRatio(contributionMarginMinor * 60, costedDurationMinutes),
     costedDurationMinutes,
+    bookedDurationMinutes: rows.reduce((total, row) => total + row.workedMinutes, 0),
     normativeMaterialCostMinor,
     actualMaterialCostMinor,
     materialDeviationMinor: actualMaterialCostMinor - normativeMaterialCostMinor,

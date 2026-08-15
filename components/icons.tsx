@@ -4,7 +4,7 @@ import type { IconName } from "@/components/nav-items";
  * The navigation icons, drawn here rather than installed.
  *
  * The project has no icon library and the redesign brief rules out adding one,
- * so these are twelve paths on a shared 24-unit grid: one stroke weight, round
+ * so these are small inline paths on a shared 24-unit grid: one stroke weight, round
  * joins, and `currentColor` throughout, which is what lets the active state
  * tint the icon with the same rule that tints the label.
  *
@@ -18,6 +18,15 @@ const PATHS: Readonly<Record<IconName, React.ReactNode>> = {
     <>
       <path d="M3 3v16a2 2 0 0 0 2 2h16" />
       <path d="M7 15l4-5 3 3 5-6" />
+    </>
+  ),
+  // Отчёт за месяц — a sheet with its bottom line ruled off, the way the P&L
+  // draws one under the figure it totals.
+  monthReport: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h5" />
+      <path d="M8 17h8" />
     </>
   ),
   // Календарь — a month with its days marked.
@@ -70,12 +79,18 @@ const PATHS: Readonly<Record<IconName, React.ReactNode>> = {
       <circle cx="14.5" cy="17" r="2.5" />
     </>
   ),
-  // Материалы — an opened box.
+  // Материалы — a consumable bottle with a measured fill.
   materials: (
     <>
-      <path d="M3 8l9-5 9 5v8l-9 5-9-5z" />
-      <path d="M3 8l9 5 9-5" />
-      <path d="M12 13v8" />
+      <path d="M9 3h6M10 3v4l-3 4v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-8l-3-4V3" />
+      <path d="M7 14h10M10 17h4" />
+    </>
+  ),
+  // Затраты — a wallet with its clasp pocket.
+  expenses: (
+    <>
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M17 11h4v4h-4a2 2 0 0 1 0-4z" />
     </>
   ),
   // Мастера — a person with a setting.
@@ -164,8 +179,8 @@ export function ToolIcon({ name }: { name: "filter" | "plus" | "minus" }) {
   );
 }
 
-/** The four period-card glyphs on the reports page, one per figure. */
-export function MetricIcon({ name }: { name: "revenue" | "cost" | "profit" | "perHour" }) {
+/** The period-card glyphs on the reports page, one per figure. */
+export function MetricIcon({ name }: { name: "revenue" | "expenses" | "profit" }) {
   const paths: Record<typeof name, React.ReactNode> = {
     revenue: (
       <>
@@ -174,7 +189,8 @@ export function MetricIcon({ name }: { name: "revenue" | "cost" | "profit" | "pe
         <path d="M15 15h3" />
       </>
     ),
-    cost: (
+    // Затраты — a receipt.
+    expenses: (
       <>
         <path d="M6 3h12v17l-3-1.6-3 1.6-3-1.6L6 20V3z" />
         <path d="M9 8h6M9 12h4" />
@@ -184,12 +200,6 @@ export function MetricIcon({ name }: { name: "revenue" | "cost" | "profit" | "pe
       <>
         <path d="M4 16l6-6 4 4 6-7" />
         <path d="M15 6h5v5" />
-      </>
-    ),
-    perHour: (
-      <>
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 8v4l3 2" />
       </>
     ),
   };
@@ -211,24 +221,20 @@ export function MetricIcon({ name }: { name: "revenue" | "cost" | "profit" | "pe
 }
 
 /**
- * The topbar's own glyphs — search, notifications, the account chevron —
- * separate from `NavIcon` because none of them name a nav section.
+ * The account menu's glyphs, kept separate from `NavIcon` because neither
+ * names a navigation section.
  */
-export function ChromeIcon({ name }: { name: "search" | "bell" | "chevron" }) {
+export function ChromeIcon({ name }: { name: "chevron" | "signOut" }) {
   const paths: Record<typeof name, React.ReactNode> = {
-    search: (
-      <>
-        <circle cx="11" cy="11" r="7" />
-        <path d="M21 21l-4.3-4.3" />
-      </>
-    ),
-    bell: (
-      <>
-        <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
-        <path d="M10 21a2 2 0 0 0 4 0" />
-      </>
-    ),
     chevron: <path d="M6 9l6 6 6-6" />,
+    // Выйти — a door with an arrow leaving through it.
+    signOut: (
+      <>
+        <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+        <path d="M10 8l-4 4 4 4" />
+        <path d="M6 12h9" />
+      </>
+    ),
   };
   return (
     <svg

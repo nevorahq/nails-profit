@@ -6,7 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { AddOnCatalogue, type AddOnRow } from "@/components/add-on-catalogue";
 import { resolveLocalizedText } from "@/i18n/localized-text";
-import { loadMaterials } from "@/app/app/materials/page";
+import { loadMaterials } from "@/lib/materials";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 

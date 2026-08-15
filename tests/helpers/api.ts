@@ -42,17 +42,32 @@ collectRoutes(API_ROOT, ["api"], routes);
  */
 const matchable = routes
   .filter((route) => !route.pattern.some((segment) => segment.startsWith("[...")))
-  // Static segments beat dynamic ones, as they do in Next.js itself. Without
-  // this, `/api/v1/invitations/accept` matches `/api/v1/invitations/[id]`
-  // whenever that file happens to be read first, and the test calls the wrong
-  // handler — or, worse, quietly passes against it.
+  /*
+   * Static segments beat dynamic ones, as they do in Next.js itself. Without
+   * this, `/api/v1/invitations/accept` matches `/api/v1/invitations/[id]`
+   * whenever that file happens to be read first, and the test calls the wrong
+   * handler — or, worse, quietly passes against it.
+   *
+   * The comparator has to be a *total* order, and the obvious version is not:
+   * comparing only up to the shorter pattern calls unrelated routes equal,
+   * which makes it intransitive, and V8's sort then reorders pairs that do
+   * matter as soon as an unrelated route is added. That is not hypothetical —
+   * adding `/api/v1/payment-methods/[id]` was enough to send
+   * `/api/v1/materials/from-templates` to `materials/[id]`. Ties are broken by name
+   * and then by length so the order is decided by the routes themselves rather
+   * than by how many of them there happen to be.
+   */
   .sort((left, right) => {
-    for (let index = 0; index < Math.min(left.pattern.length, right.pattern.length); index += 1) {
-      const leftDynamic = isDynamic(left.pattern[index]);
-      const rightDynamic = isDynamic(right.pattern[index]);
+    const shared = Math.min(left.pattern.length, right.pattern.length);
+    for (let index = 0; index < shared; index += 1) {
+      const leftSegment = left.pattern[index];
+      const rightSegment = right.pattern[index];
+      const leftDynamic = isDynamic(leftSegment);
+      const rightDynamic = isDynamic(rightSegment);
       if (leftDynamic !== rightDynamic) return leftDynamic ? 1 : -1;
+      if (leftSegment !== rightSegment) return leftSegment < rightSegment ? -1 : 1;
     }
-    return 0;
+    return left.pattern.length - right.pattern.length;
   });
 
 function isDynamic(segment: string) {

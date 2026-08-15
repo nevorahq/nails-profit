@@ -6,6 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { toMilliUnits } from "@/domain/units";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
+import { fingerprintOf } from "@/lib/idempotency";
 import { getActiveMembership } from "@/lib/membership";
 import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 
@@ -22,6 +23,13 @@ const createVisitSchema = z.object({
   add_on_ids: z.array(z.uuid()).max(50).default([]),
   completed_at: z.iso.datetime().optional(),
   actual_duration_minutes: z.int().positive().nullable().optional(),
+  /**
+   * Omitted takes the studio's default method; an explicit null means cash.
+   * The distinction matters: a studio that usually takes cards should not have
+   * to think about the field, and the one client who paid in notes has to be
+   * recordable without a fee the bank never charged.
+   */
+  payment_method_id: z.uuid().nullable().optional(),
   /** Actual use per material; anything omitted stays unrecorded, never zero. */
   consumption: z
     .array(z.object({ material_id: z.uuid(), actual_quantity: z.number().min(0) }))
@@ -105,7 +113,15 @@ export async function GET(request: Request) {
             version: snapshot.snapshotVersion,
             revenue_minor: snapshot.revenueMinor,
             material_cost_minor: snapshot.materialCostMinor,
+            material_usage_source: snapshot.materialUsageSource,
             commission_minor: snapshot.commissionMinor,
+            // Null on anything written under `costing-v1`, and null rather than
+            // zero on purpose: nobody was asked about VAT then.
+            net_revenue_minor: snapshot.netRevenueMinor,
+            vat_minor: snapshot.vatMinor,
+            turnover_tax_minor: snapshot.turnoverTaxMinor,
+            payment_commission_minor: snapshot.paymentCommissionMinor,
+            payroll_tax_minor: snapshot.payrollTaxMinor,
             contribution_margin_minor: snapshot.contributionMarginMinor,
             margin_basis_points: snapshot.marginBasisPoints,
             profit_per_hour_minor: snapshot.profitPerHourMinor,
@@ -140,6 +156,10 @@ export async function POST(request: Request) {
   }
 
   const completedAt = parsed.data.completed_at ? new Date(parsed.data.completed_at) : new Date();
+  const completionKey = request.headers.get("idempotency-key")?.trim() || undefined;
+  if (completionKey && completionKey.length > 200) {
+    return apiError(422, "INVALID_IDEMPOTENCY_KEY", "The idempotency key is too long", id);
+  }
 
   const result = await withTenant(actor.organizationId, async (tx) => {
     // A Master may only record their own visits (section 6.1, scope "own").
@@ -161,11 +181,16 @@ export async function POST(request: Request) {
       addOnIds: parsed.data.add_on_ids,
       completedAt,
       actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,
+      // Passed straight through, undefined included: the service tells the two
+      // apart, and collapsing them here would lose the difference.
+      paymentMethodId: parsed.data.payment_method_id,
       consumption: parsed.data.consumption.map((entry) => ({
         materialId: entry.material_id,
         actualQuantityMilliUnits: toMilliUnits(entry.actual_quantity),
       })),
       requestId: id,
+      completionKey,
+      completionFingerprint: completionKey ? fingerprintOf(parsed.data) : undefined,
     });
   });
 
@@ -186,10 +211,12 @@ export async function POST(request: Request) {
         revenue_minor: result.snapshot.revenueMinor,
         contribution_margin_minor: result.snapshot.contributionMarginMinor,
         profit_per_hour_minor: result.snapshot.profitPerHourMinor,
+        material_cost_minor: result.snapshot.materialCostMinor,
+        material_usage_source: result.snapshot.materialUsageSource,
         incomplete_reasons: result.snapshot.incompleteReasons,
       },
     },
     id,
-    201,
+    result.replayed ? 200 : 201,
   );
 }

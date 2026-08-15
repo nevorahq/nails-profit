@@ -12,7 +12,7 @@ import {
   specialists,
   users,
 } from "@/db/schema";
-import type { CommissionType } from "@/domain/costing";
+import type { CommissionBase, CommissionType } from "@/domain/costing";
 import type { MemberRole } from "@/domain/rbac";
 import { toMilliUnits } from "@/domain/units";
 import { adminDb } from "./database";
@@ -30,10 +30,16 @@ export async function createUser(email = `${randomUUID()}@example.com`) {
   return user;
 }
 
-export async function createOrganization(options: { name?: string; ownerId?: string; role?: MemberRole } = {}) {
+export async function createOrganization(
+  options: { name?: string; ownerId?: string; role?: MemberRole; currency?: "MDL" | "EUR" } = {},
+) {
   const [organization] = await adminDb
     .insert(organizations)
-    .values({ name: options.name ?? "Test Studio", type: "solo" })
+    .values({
+      name: options.name ?? "Test Studio",
+      type: "solo",
+      ...(options.currency ? { currency: options.currency } : {}),
+    })
     .returning();
 
   if (options.ownerId) {
@@ -77,6 +83,13 @@ export async function createMaterial(
     packagePriceMinor?: number;
     packageSize?: number;
     createdBy?: string;
+    /**
+     * When the price starts applying. A visit is priced by the version whose
+     * `validFrom` precedes it, so a fixture dated "now" leaves a visit set in
+     * the past with no price at all — and the visit is then correctly reported
+     * as incomplete rather than costed at zero.
+     */
+    priceValidFrom?: Date;
   } = {},
 ) {
   const [material] = await adminDb
@@ -97,6 +110,7 @@ export async function createMaterial(
       packageSizeMilliUnits: toMilliUnits(options.packageSize),
       currency: "MDL",
       createdBy: owner,
+      ...(options.priceValidFrom ? { validFrom: options.priceValidFrom } : {}),
     });
   }
 
@@ -125,7 +139,12 @@ export async function addMaterialPrice(
 
 export async function createService(
   organizationId: string,
-  options: { name?: string; priceMinor?: number | null; durationMinutes?: number | null } = {},
+  options: {
+    name?: string;
+    priceMinor?: number | null;
+    durationMinutes?: number | null;
+    currency?: "MDL" | "EUR";
+  } = {},
 ) {
   const [service] = await adminDb
     .insert(services)
@@ -134,7 +153,7 @@ export async function createService(
       name: { ru: options.name ?? "Услуга" },
       priceMinor: options.priceMinor === undefined ? 60_000 : options.priceMinor,
       durationMinutes: options.durationMinutes === undefined ? 90 : options.durationMinutes,
-      currency: "MDL",
+      currency: options.currency ?? "MDL",
     })
     .returning();
   return service;
@@ -142,7 +161,7 @@ export async function createService(
 
 export async function createSpecialist(
   organizationId: string,
-  options: { name?: string; userId?: string } = {},
+  options: { name?: string; userId?: string; isPrincipal?: boolean } = {},
 ) {
   const [specialist] = await adminDb
     .insert(specialists)
@@ -150,6 +169,7 @@ export async function createSpecialist(
       organizationId,
       name: options.name ?? "Мастер",
       userId: options.userId ?? null,
+      isPrincipal: options.isPrincipal ?? false,
     })
     .returning();
   return specialist;
@@ -163,11 +183,16 @@ export async function createCommissionRule(
     basisPoints?: number | null;
     fixedAmountMinor?: number | null;
     serviceId?: string | null;
+    base?: CommissionBase;
+    /** Services the rule pays on. Empty means all of them. */
+    coveredServiceIds?: readonly string[];
     activeFrom?: Date;
     activeTo?: Date | null;
   } = {},
 ) {
   const type = options.type ?? "percentage";
+  const wantsRate = type !== "fixed";
+  const wantsAmount = type === "fixed" || type === "hybrid";
   const [rule] = await adminDb
     .insert(commissionRules)
     .values({
@@ -175,12 +200,25 @@ export async function createCommissionRule(
       specialistId,
       serviceId: options.serviceId ?? null,
       type,
-      basisPoints: type === "fixed" ? null : (options.basisPoints ?? 4_000),
-      fixedAmountMinor: type === "fixed" ? (options.fixedAmountMinor ?? 10_000) : null,
+      basisPoints: wantsRate ? (options.basisPoints ?? 4_000) : null,
+      fixedAmountMinor: wantsAmount ? (options.fixedAmountMinor ?? 10_000) : null,
+      base: options.base ?? "after_discount",
       activeFrom: options.activeFrom ?? new Date(Date.now() - 60_000),
       activeTo: options.activeTo ?? null,
     })
     .returning();
+
+  if (options.coveredServiceIds && options.coveredServiceIds.length > 0) {
+    const { commissionRuleServices } = await import("@/db/schema");
+    await adminDb.insert(commissionRuleServices).values(
+      options.coveredServiceIds.map((serviceId) => ({
+        organizationId,
+        commissionRuleId: rule.id,
+        serviceId,
+      })),
+    );
+  }
+
   return rule;
 }
 

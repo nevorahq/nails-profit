@@ -1,8 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 import type { OnboardingProgress } from "@/lib/onboarding";
 import type { AppLocale } from "@/i18n/messages";
@@ -14,32 +10,20 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
  * Every step is linked, not just the next one — an owner who already has a
  * price list open should not be walked through a wizard to reach materials.
  * The list is a map of what is missing, not a gate.
+ *
+ * A server component: nothing here reacts to anything. It stopped being a
+ * client one when the starter-materials button was removed — that button was
+ * the only reason for state, a router refresh and a whole JavaScript bundle on
+ * the dashboard.
  */
 export function OnboardingPanel({
   progress,
-  starterCount,
-  canSeedMaterials,
   locale,
 }: {
   progress: OnboardingProgress;
-  starterCount: number;
-  canSeedMaterials: boolean;
   locale: AppLocale;
 }) {
-  const router = useRouter();
   const t = getTranslator(locale);
-  const [pending, setPending] = useState(false);
-  const [added, setAdded] = useState<number | null>(null);
-
-  async function seedStarterMaterials() {
-    setPending(true);
-    const response = await fetch("/api/v1/materials/starter", { method: "POST" });
-    setPending(false);
-    if (!response.ok) return;
-    const body = await response.json();
-    setAdded(body.data.created);
-    router.refresh();
-  }
 
   return (
     <section className="panel">
@@ -60,26 +44,6 @@ export function OnboardingPanel({
           </li>
         ))}
       </ol>
-
-      <p className="muted">{t("onboarding.why")}</p>
-
-      {canSeedMaterials && !progress.steps[1].done && (
-        <>
-          <div className="button-row">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={seedStarterMaterials}
-              disabled={pending}
-            >
-              {pending ? t("common.saving") : t("onboarding.starter")}
-            </button>
-          </div>
-          <p className="muted">{t("onboarding.starterHint", { count: starterCount })}</p>
-        </>
-      )}
-
-      {added !== null && <p className="muted">{t("onboarding.starterAdded", { count: added })}</p>}
     </section>
   );
 }

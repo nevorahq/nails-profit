@@ -1,9 +1,9 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { commissionRules, services, specialists } from "@/db/schema";
+import { commissionRuleServices, commissionRules, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { commissionTypes } from "@/domain/costing";
+import { commissionBases, commissionTypes } from "@/domain/costing";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -26,13 +26,30 @@ const ruleSchema = z
     fixed_amount_minor: z.int().min(0).optional(),
     /** Null or absent makes this the specialist's default rule. */
     service_id: z.uuid().nullable().optional(),
+    /** What the percentage applies to. Absent keeps the historical behaviour. */
+    base: z.enum(commissionBases).optional(),
+    /**
+     * The services this rule pays on. Empty or absent means all of them, which
+     * is what every rule written before this did.
+     */
+    covered_service_ids: z.array(z.uuid()).max(200).optional(),
   })
   .refine(
-    (value) =>
-      value.type === "fixed"
-        ? value.fixed_amount_minor !== undefined && value.basis_points === undefined
-        : value.basis_points !== undefined && value.fixed_amount_minor === undefined,
-    { message: "A fixed rule needs an amount; a percentage rule needs a rate" },
+    (value) => {
+      // The same three shapes the database enforces, refused here first so the
+      // caller gets a field error rather than a constraint violation.
+      if (value.type === "fixed") {
+        return value.fixed_amount_minor !== undefined && value.basis_points === undefined;
+      }
+      if (value.type === "hybrid") {
+        return value.fixed_amount_minor !== undefined && value.basis_points !== undefined;
+      }
+      return value.basis_points !== undefined && value.fixed_amount_minor === undefined;
+    },
+    {
+      message:
+        "A fixed rule needs an amount, a percentage rule needs a rate, and a hybrid needs both",
+    },
   );
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -97,11 +114,38 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         type: parsed.data.type,
         basisPoints: parsed.data.basis_points ?? null,
         fixedAmountMinor: parsed.data.fixed_amount_minor ?? null,
+        base: parsed.data.base ?? "after_discount",
         activeFrom,
         createdBy: actor.userId,
         updatedBy: actor.userId,
       })
       .returning();
+
+    /*
+     * The services the rule pays on, if it does not pay on all of them.
+     *
+     * Written after the rule and inside the same transaction, so a rule can
+     * never exist with half a list — a visit closed against it would then pay
+     * on the wrong lines and the snapshot would preserve the mistake.
+     */
+    const coveredIds = [...new Set(parsed.data.covered_service_ids ?? [])];
+    if (coveredIds.length > 0) {
+      const known = await tx
+        .select({ id: services.id })
+        .from(services)
+        .where(inArray(services.id, coveredIds));
+      if (known.length !== coveredIds.length) return { failure: "SERVICE_NOT_FOUND" as const };
+
+      await tx.insert(commissionRuleServices).values(
+        coveredIds.map((serviceId) => ({
+          organizationId: actor.organizationId,
+          commissionRuleId: rule.id,
+          serviceId,
+          createdBy: actor.userId,
+          updatedBy: actor.userId,
+        })),
+      );
+    }
 
     await recordAuditEvent(tx, {
       organizationId: actor.organizationId,
@@ -115,6 +159,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         type: rule.type,
         basis_points: rule.basisPoints,
         fixed_amount_minor: rule.fixedAmountMinor,
+        base: rule.base,
+        covered_service_ids: coveredIds,
       },
       requestId: requestIdentifier,
     });
@@ -136,6 +182,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       type: result.rule.type,
       basis_points: result.rule.basisPoints,
       fixed_amount_minor: result.rule.fixedAmountMinor,
+      base: result.rule.base,
       service_id: result.rule.serviceId,
       active_from: result.rule.activeFrom,
     },

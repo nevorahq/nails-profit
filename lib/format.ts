@@ -10,6 +10,19 @@ export function formatMoneyMinor(amountMinor: number, currency: Currency | strin
   }).format(amountMinor / 100);
 }
 
+/**
+ * A `YYYY-MM-DD` day, written the way the locale writes days.
+ *
+ * Formatted in UTC on purpose: the value is a calendar day with no time in it,
+ * and rendering it in the reader's zone would show the 2nd to anyone west of
+ * Greenwich.
+ */
+export function formatDay(day: string, locale = "ru-MD") {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(`${day}T00:00:00Z`),
+  );
+}
+
 export function formatBasisPoints(basisPoints: number | null, locale = "ru-MD") {
   if (basisPoints === null) return "—";
   return new Intl.NumberFormat(locale, {
@@ -49,6 +62,19 @@ export function formatQuantity(milliUnits: number, unit: string, locale = "ru-MD
     fromMilliUnits(milliUnits),
   );
   return `${value} ${unit}`;
+}
+
+/**
+ * Minutes as hours, for figures that are counted in shifts rather than in
+ * appointments. One decimal: a month of capacity is a number in the hundreds,
+ * and the minutes of it are noise no one acts on.
+ *
+ * The unit is not appended here. `formatDuration` below writes «мин» and «ч» in
+ * Russian whatever the interface language is — a debt worth naming rather than
+ * copying — so the caller adds a translated unit instead.
+ */
+export function formatHours(minutes: number, locale = "ru-MD") {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(minutes / 60);
 }
 
 export function formatDuration(minutes: number | null) {

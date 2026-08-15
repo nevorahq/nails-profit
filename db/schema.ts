@@ -16,7 +16,11 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { commissionTypes } from "@/domain/costing";
+import { commissionBases, commissionTypes, type TaxRates } from "@/domain/costing";
+import { expenseCategories } from "@/domain/expense-categories";
+import { materialCostingModes } from "@/domain/material-pricing";
+import { materialDataSources, materialKinds } from "@/domain/material-provenance";
+import type { MaterialUsageSource } from "@/domain/material-usage";
 import { memberRoles } from "@/domain/rbac";
 import type { LocalizedText } from "@/i18n/localized-text";
 
@@ -27,6 +31,14 @@ export const memberRole = pgEnum("member_role", memberRoles);
 export const currency = pgEnum("currency", ["MDL", "EUR"]);
 export const locale = pgEnum("locale", ["ru", "ro", "en"]);
 export const unit = pgEnum("material_unit", ["ml", "g", "piece"]);
+export const materialCostingMode = pgEnum("material_costing_mode", materialCostingModes);
+// Generated from the domain lists for the same reason as the roles above: the
+// database and the code cannot drift into disagreeing about what a source is.
+export const materialDataSource = pgEnum("material_data_source", materialDataSources);
+export const materialKind = pgEnum("material_kind", materialKinds);
+// Generated from the domain list so a category can never exist in one and not
+// the other.
+export const expenseCategory = pgEnum("expense_category", expenseCategories);
 
 // Better Auth core tables. IDs are text because Better Auth owns their generation.
 export const users = pgTable("user", {
@@ -151,6 +163,24 @@ export const organizations = pgTable(
      * the calendar, and a default of `off` would take it from them on deploy.
      */
     bookingAccess: bookingAccessLevel("booking_access").notNull().default("calendar"),
+    /**
+     * What the owner keeps in the business before anything counts as safe to
+     * take out. Zero by default — a reserve nobody chose is not a reserve, and
+     * inventing one would understate what they may withdraw.
+     */
+    withdrawalReserveMinor: bigint("withdrawal_reserve_minor", { mode: "number" }).notNull().default(0),
+    /**
+     * The share of scheduled hours that can realistically be sold, in basis
+     * points. 75% by default, the middle of the 70–80% range that management
+     * accounting has used for practical capacity since Kaplan.
+     *
+     * It exists so that fixed costs are spread over the capacity the studio
+     * *has*, not over the hours a slow month happened to fill. Dividing by
+     * actual hours makes every service look dearer exactly when custom dries
+     * up, which is the moment an owner is deciding what to charge — the error
+     * feeds itself. Idle capacity is reported as its own figure instead.
+     */
+    practicalCapacityBasisPoints: integer("practical_capacity_basis_points").notNull().default(7500),
     currency: currency("currency").notNull().default("MDL"),
     locale: locale("locale").notNull().default("ru"),
     timezone: text("timezone").notNull().default("Europe/Chisinau"),
@@ -165,7 +195,17 @@ export const organizations = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...auditColumns,
   },
-  (table) => [uniqueIndex("organization_slug_idx").on(table.slug)],
+  (table) => [
+    uniqueIndex("organization_slug_idx").on(table.slug),
+    // Above zero, because zero practical capacity is a studio that cannot sell
+    // an hour, and every rate computed from it would be a division by nothing.
+    // Not above 100% either: practical capacity is a share of scheduled hours,
+    // and a figure over the schedule is a different claim than this column makes.
+    check(
+      "organization_practical_capacity_range",
+      sql`${table.practicalCapacityBasisPoints} between 1 and 10000`,
+    ),
+  ],
 );
 
 export const memberships = pgTable(
@@ -187,6 +227,70 @@ export const memberships = pgTable(
   ],
 );
 
+/**
+ * The curated catalogue behind Fast Setup, epic E3.1 §F1.
+ *
+ * Global on purpose: it carries no organization_id because it is product data,
+ * not tenant data — the same bottle of base coat is the same bottle in every
+ * salon, and copying 120 rows into each new organization would make a shared
+ * correction impossible to ship. A template is only ever read; what a tenant
+ * owns is the `material` it creates from one.
+ *
+ * `systemKey` is the bridge to the recipe presets in `domain/material-presets`,
+ * which map by `material.sku = 'SYSTEM:<key>'`. Without it a Fast Setup that
+ * created fourteen materials would leave every preset recipe unable to find
+ * them, and the owner would finish onboarding with a catalogue that still
+ * costs nothing.
+ */
+export const materialTemplates = pgTable(
+  "material_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * The seed file's own identifier, and the only thing the seed matches on.
+     *
+     * A natural key over brand, name and packaging would look sufficient and is
+     * not: correcting a template's package size — the whole reason the
+     * catalogue is curated centrally — would then insert a second row instead
+     * of fixing the first, and every organization that had already used it
+     * would keep pointing at the wrong one.
+     */
+    slug: text("slug").notNull(),
+    /** Null for generic entries: "coloured gel polish" belongs to no brand. */
+    brand: text("brand"),
+    name: jsonb("name").$type<LocalizedText>().notNull(),
+    /** Ties the template to a recipe-preset ingredient; null when it maps to none. */
+    systemKey: text("system_key"),
+    category: text("category").notNull(),
+    /**
+     * Thousandths of the base unit — or null when the catalogue does not claim
+     * to know the packaging.
+     *
+     * Null is the honest answer for a generic entry: "База" is sold in 8, 12,
+     * 15 and 35 ml bottles, and picking one would put a number into the
+     * denominator of every cost derived from it that nobody verified. The owner
+     * supplies the size of the bottle in front of them.
+     */
+    packageSizeMilliUnits: bigint("package_size_milli_units", { mode: "number" }),
+    baseUnit: unit("base_unit").notNull(),
+    kind: materialKind("kind").notNull().default("sku"),
+    /** The 12–18 rows Fast Setup offers first; the rest are found by search. */
+    isCore: boolean("is_core").notNull().default(false),
+    profiles: text("profiles").array().notNull().default(sql`'{}'::text[]`),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("material_template_slug_idx").on(table.slug),
+    index("material_template_core_idx").on(table.isCore, table.sortOrder),
+    check(
+      "material_template_size_positive",
+      sql`${table.packageSizeMilliUnits} is null or ${table.packageSizeMilliUnits} > 0`,
+    ),
+  ],
+);
+
 export const materials = pgTable(
   "material",
   {
@@ -203,10 +307,39 @@ export const materials = pgTable(
     category: text("category"),
     supplier: text("supplier"),
     baseUnit: unit("base_unit").notNull(),
+    /** E3.1 §F2. Inert in the costing arithmetic; see `domain/material-provenance`. */
+    kind: materialKind("kind").notNull().default("sku"),
+    /** E3.1 §F5. How this row first entered the catalogue. */
+    source: materialDataSource("source").notNull().default("manual"),
+    templateId: uuid("template_id").references(() => materialTemplates.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * The name with everything a spreadsheet varies stripped out, so that
+     * `Гель-лак`, `гель лак ` and `ГЕЛЬ–ЛАК` collapse to one value.
+     *
+     * Generated by the database rather than by the application because it backs
+     * a unique index, and an index is only as trustworthy as the writer that
+     * maintains it: a second pasted block arriving while the first is still
+     * committing would pass an application-side check and still create the
+     * duplicate. Mirrors `normalizeKeyPart` in `domain/import-identity`, which
+     * stays the reader-side normalizer for import fingerprints.
+     */
+    matchKey: text("match_key").generatedAlwaysAs(
+      sql`lower(regexp_replace(name, '[^0-9a-zа-яîăâșț]+', '', 'gi'))`,
+    ),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...auditColumns,
   },
-  (table) => [index("material_org_idx").on(table.organizationId)],
+  (table) => [
+    index("material_org_idx").on(table.organizationId),
+    // Partial on `archived_at`, so that archiving a material frees its name for
+    // reuse — a studio that stopped buying a brand and started again should not
+    // be told the row already exists when nothing on their screen shows it.
+    uniqueIndex("material_natural_key")
+      .on(table.organizationId, table.matchKey, table.baseUnit)
+      .where(sql`${table.archivedAt} is null`),
+  ],
 );
 
 export const materialPriceVersions = pgTable(
@@ -221,6 +354,14 @@ export const materialPriceVersions = pgTable(
       .references(() => materials.id, { onDelete: "restrict" }),
     packagePriceMinor: bigint("package_price_minor", { mode: "number" }).notNull(),
     packageSizeMilliUnits: bigint("package_size_milli_units", { mode: "number" }).notNull(),
+    /** How the user entered this ratio; the costing arithmetic remains shared. */
+    costingMode: materialCostingMode("costing_mode").notNull().default("quantity"),
+    /**
+     * E3.1 §F5, per version rather than per material: a material created from a
+     * template whose price was later pasted has two different provenances, and
+     * only the price history can say which number came from where.
+     */
+    priceSource: materialDataSource("price_source").notNull().default("manual"),
     currency: currency("currency").notNull(),
     validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by")
@@ -232,6 +373,115 @@ export const materialPriceVersions = pgTable(
     index("material_price_org_material_idx").on(table.organizationId, table.materialId),
     check("material_price_non_negative", sql`${table.packagePriceMinor} >= 0`),
     check("material_package_size_positive", sql`${table.packageSizeMilliUnits} > 0`),
+  ],
+);
+
+/**
+ * A purchase recorded as a lump sum: rent, a lamp, an ad, a box of files.
+ *
+ * Deliberately not a `material`. A material is priced per base unit so a recipe
+ * can consume 0.3 ml of it; an expense is a single amount that happened once and
+ * has no unit, no package and no consumption. Forcing one into the other would
+ * mean inventing a package size, which `baseUnitCostMinor` would then divide by.
+ *
+ * Rows are archived, never deleted, for the reason section 15.3 gives for the
+ * organization itself: financial records are kept even when the person who
+ * entered them wants the line gone from their screen.
+ */
+export const expenses = pgTable(
+  "expense",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    category: expenseCategory("category").notNull(),
+    /**
+     * The day the money was spent, which is not the day the row was written:
+     * a receipt from last week gets entered today, and the period filter has
+     * to answer for the purchase, not for the typing.
+     *
+     * `date`, not a timestamp — a purchase happens on a day, and giving it a
+     * time would invite a timezone question nobody asked. Defaulted rather
+     * than required so the column could be added without breaking the
+     * previous version's inserts (`tests/migration-compatibility.test.ts`).
+     */
+    spentOn: date("spent_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    currency: currency("currency").notNull(),
+    note: text("note"),
+    /**
+     * Rent, a subscription — something the business pays every month.
+     *
+     * Held as one row with an interval rather than materialised twelve times.
+     * Raising the rent in June must not rewrite January, and the way to
+     * guarantee that is for January never to have held a row June could edit:
+     * the old row gets a `recurringTo`, a new one starts at `recurringFrom`,
+     * and every month keeps the amount that was true in it.
+     *
+     * `spentOn` still means the day of the payment, so a recurring row says
+     * which day of the month the money goes out.
+     */
+    isRecurring: boolean("is_recurring").notNull().default(false),
+    recurringFrom: date("recurring_from", { mode: "string" }),
+    /** Null for "still running". The month it falls in is charged in full. */
+    recurringTo: date("recurring_to", { mode: "string" }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    // The list is read by period, so the index carries the day it sorts by.
+    index("expense_org_idx").on(table.organizationId, table.spentOn),
+    check("expense_amount_non_negative", sql`${table.amountMinor} >= 0`),
+    // A recurring row with no start would be read as "since forever" by
+    // anything less careful than `domain/expense-periods.ts`, and would charge
+    // every month in history. Refused here so that only one layer has to be
+    // careful.
+    check(
+      "expense_recurring_shape",
+      sql`not ${table.isRecurring} or ${table.recurringFrom} is not null`,
+    ),
+    check(
+      "expense_recurring_order",
+      sql`${table.recurringTo} is null or ${table.recurringFrom} is null or ${table.recurringTo} >= ${table.recurringFrom}`,
+    ),
+  ],
+);
+
+/**
+ * Money the owner took out of the business, for themselves.
+ *
+ * Its own table rather than an expense category, because it is not an expense:
+ * a draw does not make the business poorer at the level of profit — it moves
+ * money that was already earned from one pocket to another. Filed under
+ * `payroll` in the ledger, as it is today, it either shrinks the profit that
+ * pays for it or hides inside the `cash_only` class where nothing can see it.
+ * Neither is a report anybody can act on.
+ *
+ * So it appears in exactly one place: the cash flow, where it belongs, and
+ * nowhere in the profit and loss.
+ */
+export const ownerDraws = pgTable(
+  "owner_draw",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    currency: currency("currency").notNull(),
+    /** The day the money left, like `expense.spent_on` and for the same reason. */
+    occurredOn: date("occurred_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
+    note: text("note"),
+    ...auditColumns,
+  },
+  (table) => [
+    index("owner_draw_org_idx").on(table.organizationId, table.occurredOn),
+    // A negative draw would be money going the other way — an owner putting
+    // funds in. That is a different event and would need its own row; letting
+    // it in through the sign would make the total mean two things at once.
+    check("owner_draw_amount_non_negative", sql`${table.amountMinor} >= 0`),
   ],
 );
 
@@ -335,6 +585,18 @@ export const specialists = pgTable(
     /** Stable tie-breaker for the public “any available” assignment. */
     sortOrder: integer("sort_order").notNull().default(0),
     cooperationType: cooperationType("cooperation_type").notNull().default("commission"),
+    /**
+     * This person takes the residual profit rather than a wage — the owner who
+     * also stands at the table, and the owner who only runs the place.
+     *
+     * Kept on the specialist rather than on the organization because it is a
+     * property of a person: `organization.type` cannot tell a studio whose
+     * owner works from one whose owner does not, and both exist. A commission
+     * booked to a principal never leaves the business, so the monthly report
+     * adds it back before subtracting their imputed wage — see
+     * `docs/cost-engine-redesign-plan.md`, section 1.
+     */
+    isPrincipal: boolean("is_principal").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...auditColumns,
   },
@@ -351,6 +613,7 @@ export const specialists = pgTable(
 );
 
 export const commissionType = pgEnum("commission_type", commissionTypes);
+export const commissionBase = pgEnum("commission_base", commissionBases);
 
 /**
  * RES-005: a default commission rule per specialist plus per-service exceptions.
@@ -371,26 +634,237 @@ export const commissionRules = pgTable(
     /** Null is the specialist's default rule; a value makes it a per-service exception. */
     serviceId: uuid("service_id").references(() => services.id, { onDelete: "cascade" }),
     type: commissionType("type").notNull(),
-    /** Set for percentage rules; 4000 = 40%. */
+    /** Set for percentage and hybrid rules; 4000 = 40%. */
     basisPoints: integer("basis_points"),
-    /** Set for fixed rules. */
+    /** Set for fixed rules, and for the guaranteed part of a hybrid one. */
     fixedAmountMinor: bigint("fixed_amount_minor", { mode: "number" }),
+    /**
+     * What the percentage applies to. `after_discount` is what every rule
+     * written before this column did, so it is the default and no history moves.
+     */
+    base: commissionBase("base").notNull().default("after_discount"),
     activeFrom: timestamp("active_from", { withTimezone: true }).notNull().defaultNow(),
     activeTo: timestamp("active_to", { withTimezone: true }),
     ...auditColumns,
   },
   (table) => [
     index("commission_rule_lookup_idx").on(table.organizationId, table.specialistId, table.activeFrom),
-    // Exactly the field the rule's own type needs, and not the other one.
+    /*
+     * Exactly the fields the rule's own type needs, and not the others.
+     *
+     * Rewritten for `hybrid`, which is the first type that needs both a rate
+     * and an amount. The previous form said «not fixed ⇒ no amount», so it had
+     * to be replaced rather than extended — the one working integrity rule the
+     * redesign changes, and the reason this stage went last.
+     *
+     * Compared as text on purpose. PostgreSQL refuses to *use* an enum value in
+     * the transaction that added it, and drizzle-kit applies every pending
+     * migration in one transaction — so a constraint naming the enum label
+     * `'hybrid'` cannot be created in the same run that adds it. Against text
+     * the label is an ordinary constant, and the whole change applies in one
+     * go. The rule enforced is identical.
+     */
     check(
       "commission_rule_shape",
-      sql`(${table.type} = 'fixed' and ${table.fixedAmountMinor} is not null and ${table.basisPoints} is null)
-        or (${table.type} <> 'fixed' and ${table.basisPoints} is not null and ${table.fixedAmountMinor} is null)`,
+      sql`(${table.type}::text = 'fixed' and ${table.fixedAmountMinor} is not null and ${table.basisPoints} is null)
+        or (${table.type}::text in ('percentage', 'percentage_after_materials') and ${table.basisPoints} is not null and ${table.fixedAmountMinor} is null)
+        or (${table.type}::text = 'hybrid' and ${table.basisPoints} is not null and ${table.fixedAmountMinor} is not null)`,
     ),
     check(
       "commission_rule_non_negative",
       sql`(${table.basisPoints} is null or ${table.basisPoints} >= 0)
         and (${table.fixedAmountMinor} is null or ${table.fixedAmountMinor} >= 0)`,
+    ),
+  ],
+);
+
+/**
+ * Which services a rule covers, when it does not cover all of them.
+ *
+ * Absence of rows means «every service», which is what every rule written
+ * before this table did. A filter rather than a fourth commission base: «5% of
+ * the full price, but only on colouring» is a sentence the product should be
+ * able to say, and folding the choice of services into the choice of arithmetic
+ * would have made it unsayable.
+ */
+export const commissionRuleServices = pgTable(
+  "commission_rule_service",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    commissionRuleId: uuid("commission_rule_id")
+      .notNull()
+      .references(() => commissionRules.id, { onDelete: "cascade" }),
+    serviceId: uuid("service_id")
+      .notNull()
+      .references(() => services.id, { onDelete: "cascade" }),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex("commission_rule_service_idx").on(table.commissionRuleId, table.serviceId),
+  ],
+);
+
+export const laborCostRecipient = pgEnum("labor_cost_recipient", ["owner", "specialist"]);
+export const laborCostBasis = pgEnum("labor_cost_basis", ["fixed_monthly", "percent_revenue"]);
+
+/**
+ * Labour that a month owes and no single visit does.
+ *
+ * Two things that look different and are the same mechanism: a master on a
+ * monthly salary, and what the owner's own work is worth. Neither can be
+ * attached to a visit — a salary does not divide into the visits that happened
+ * to occur, and the owner is paid by what is left over — so both are subtracted
+ * once, at the level of the month.
+ *
+ * They sit on opposite sides of the operating profit all the same. A salary is
+ * a cost of running the place; the owner's imputed wage is what the owner's own
+ * hours were worth, and subtracting it turns operating profit into economic
+ * profit — the answer to «зарабатывает ли бизнес сверх моего труда».
+ *
+ * Versioned by `activeFrom` rather than edited, like `commission_rule`: raising
+ * a salary in June must leave January reporting January's.
+ *
+ * A salaried master's rule here is only half the arrangement. The other half is
+ * a commission rule of 0% on their visits, so that the visit charges nothing
+ * and the month charges once — see `docs/cost-engine-redesign-plan.md`, 5.3.
+ */
+export const laborCostRules = pgTable(
+  "labor_cost_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    recipient: laborCostRecipient("recipient").notNull(),
+    /** Required for a specialist, absent for the owner. */
+    specialistId: uuid("specialist_id").references(() => specialists.id, { onDelete: "restrict" }),
+    /** «Оклад Марии», «Моя работа». Free text, so it can hold a person's name. */
+    label: text("label"),
+    basis: laborCostBasis("basis").notNull(),
+    /** Set for `fixed_monthly`. */
+    amountMinor: bigint("amount_minor", { mode: "number" }),
+    /** Set for `percent_revenue`; 1500 = 15% of the month's revenue. */
+    basisPoints: integer("basis_points"),
+    /** Employer's contributions on top of the wage. 0 where there are none. */
+    payrollTaxBasisPoints: integer("payroll_tax_basis_points").notNull().default(0),
+    activeFrom: timestamp("active_from", { withTimezone: true }).notNull().defaultNow(),
+    activeTo: timestamp("active_to", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("labor_cost_rule_lookup_idx").on(table.organizationId, table.recipient, table.activeFrom),
+    check(
+      "labor_cost_rule_shape",
+      sql`(${table.basis} = 'fixed_monthly' and ${table.amountMinor} is not null and ${table.basisPoints} is null)
+        or (${table.basis} = 'percent_revenue' and ${table.basisPoints} is not null and ${table.amountMinor} is null)`,
+    ),
+    // The owner is the organization's, not a row in the specialist table; a
+    // specialist's salary without a specialist would be charged to nobody.
+    check(
+      "labor_cost_rule_recipient",
+      sql`(${table.recipient} = 'specialist') = (${table.specialistId} is not null)`,
+    ),
+    check(
+      "labor_cost_rule_non_negative",
+      sql`(${table.amountMinor} is null or ${table.amountMinor} >= 0)
+        and (${table.basisPoints} is null or ${table.basisPoints} >= 0)
+        and ${table.payrollTaxBasisPoints} >= 0`,
+    ),
+  ],
+);
+
+export const paymentMethodKind = pgEnum("payment_method_kind", ["cash", "card", "transfer", "other"]);
+
+/**
+ * How a visit was paid for, and what that costs.
+ *
+ * Not versioned, unlike `commission_rule` and `tax_rule`: the rate is copied
+ * into the visit when it closes, so a new contract with the bank is a plain
+ * edit here and every closed visit keeps the rate it was charged at. The two
+ * approaches are not in disagreement — versioning exists for rules that have to
+ * be resolved for a *past* date, and this one never is.
+ *
+ * `is_default` is the whole acquiring feature in one column: the fee is only
+ * counted if someone picks a method at closing, and the way to make that happen
+ * is to have the right one already chosen rather than to refuse the visit.
+ */
+export const paymentMethods = pgTable(
+  "payment_method",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    kind: paymentMethodKind("kind").notNull(),
+    /** The acquirer's percentage. Zero for cash, which is the point of the row. */
+    commissionBasisPoints: integer("commission_basis_points").notNull().default(0),
+    /** A flat charge per transaction, on top of the percentage. */
+    fixedFeeMinor: bigint("fixed_fee_minor", { mode: "number" }).notNull().default(0),
+    isDefault: boolean("is_default").notNull().default(false),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("payment_method_org_idx").on(table.organizationId),
+    // One default, and only among the live ones: archiving the default must not
+    // stand in the way of naming another.
+    uniqueIndex("payment_method_default_idx")
+      .on(table.organizationId)
+      .where(sql`${table.isDefault} and ${table.archivedAt} is null`),
+    check(
+      "payment_method_non_negative",
+      sql`${table.commissionBasisPoints} >= 0 and ${table.fixedFeeMinor} >= 0`,
+    ),
+  ],
+);
+
+/**
+ * Taxes that attach to a visit.
+ *
+ * Three kinds and deliberately not four. v1 of the plan also had
+ * `fixed_contribution` — a fixed monthly payment — and it is left out because
+ * the expense ledger already records exactly that, as a recurring row in the
+ * `taxes` category. Two ways to enter the same money is how a sum gets
+ * subtracted twice, which invariant 6 of the plan forbids.
+ *
+ * Versioned like `commission_rule`: a rate that changes in July must leave June
+ * reporting June's, and the rule in force is chosen by `active_from` at the
+ * moment the visit closed.
+ */
+export const taxKind = pgEnum("tax_kind", ["vat", "turnover", "payroll"]);
+
+export const taxRules = pgTable(
+  "tax_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    kind: taxKind("kind").notNull(),
+    basisPoints: integer("basis_points").notNull(),
+    /**
+     * Whether the VAT collected is handed on to the state.
+     *
+     * Only meaningful for `vat`. False records the rate without taking it out
+     * of revenue — for a business that shows VAT on a document but is not a
+     * payer under its regime. Deducting it anyway would understate the margin
+     * of every visit.
+     */
+    remittable: boolean("remittable").notNull().default(true),
+    activeFrom: timestamp("active_from", { withTimezone: true }).notNull().defaultNow(),
+    activeTo: timestamp("active_to", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("tax_rule_lookup_idx").on(table.organizationId, table.kind, table.activeFrom),
+    check("tax_rule_basis_points_range", sql`${table.basisPoints} >= 0 and ${table.basisPoints} <= 10000`),
+    check(
+      "tax_rule_active_range",
+      sql`${table.activeTo} is null or ${table.activeTo} > ${table.activeFrom}`,
     ),
   ],
 );
@@ -554,16 +1028,74 @@ export const visits = pgTable(
      * missing anything, and a visit will always be creatable without one.
      */
     bookingId: uuid("booking_id").references((): AnyPgColumn => bookings.id, { onDelete: "set null" }),
+    /** Client-generated key that makes a retried manual close return one visit. */
+    completionKey: text("completion_key"),
+    /** Refuses reuse of a key for a different close request. */
+    completionFingerprint: text("completion_fingerprint"),
     completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
     plannedDurationMinutes: integer("planned_duration_minutes").notNull(),
     actualDurationMinutes: integer("actual_duration_minutes"),
     status: visitStatus("status").notNull().default("completed"),
+    /**
+     * The currency the visit was charged in, copied like every other figure it
+     * owns. Re-costing used to hardcode "MDL", so an organization on EUR got
+     * its first snapshot in EUR and every correction afterwards in MDL — a
+     * silent swap, because the screen formats by the organization's currency
+     * either way. Defaulted rather than required so the column could be added
+     * without breaking the previous version's inserts.
+     */
+    currency: currency("currency").notNull().default("MDL"),
+    /**
+     * Whether the specialist was a principal when the visit closed, snapshotted
+     * for the same reason the commission rule is: marking someone a principal
+     * next year must not rewrite what last year's months reported. Nullable
+     * because it arrives by the expand step; `domain/period-pl.ts` reads a null
+     * as false rather than the database doing it, so the gap stays visible.
+     */
+    masterIsPrincipal: boolean("master_is_principal"),
+    /**
+     * Whether every sold line had a saved standard material profile at close.
+     * True by default preserves the interpretation of legacy visits.
+     */
+    standardMaterialUsageKnown: boolean("standard_material_usage_known").notNull().default(true),
+    /**
+     * How it was paid, and what the acquirer took, copied at closing time.
+     *
+     * `set null` on the reference and the rate kept separately: deleting a
+     * payment method must not silently make a closed visit cheaper. The
+     * snapshot is what the costing reads; the id is for reporting.
+     *
+     * Null means cash as far as the margin is concerned — no fee. A visit
+     * closed before any of this existed therefore costs exactly what it always
+     * did, which is what lets `costing-v2` recompute the whole history without
+     * moving a figure.
+     */
+    paymentMethodId: uuid("payment_method_id").references((): AnyPgColumn => paymentMethods.id, {
+      onDelete: "set null",
+    }),
+    paymentCommissionBasisPointsSnapshot: integer("payment_commission_basis_points_snapshot"),
+    paymentFixedFeeMinorSnapshot: bigint("payment_fixed_fee_minor_snapshot", { mode: "number" }),
+    /**
+     * The tax rules in force when the visit closed:
+     * `{ vat_bp, remittable_vat, turnover_bp, payroll_bp }`.
+     *
+     * One JSON column rather than four: they are read together, written
+     * together and never queried apart, and a visit that predates the feature
+     * holds one null instead of four.
+     */
+    taxSnapshot: jsonb("tax_snapshot").$type<TaxRates>(),
     // CST-009: the commission rule is copied into the visit. Resolving it from
     // the rule table by date would almost work, but it would leave a closed
     // visit depending on rows that live elsewhere and can still be edited.
     commissionType: commissionType("commission_type").notNull(),
     commissionBasisPoints: integer("commission_basis_points"),
     commissionFixedAmountMinor: bigint("commission_fixed_amount_minor", { mode: "number" }),
+    /**
+     * What the percentage applied to. Nullable because it arrives by the expand
+     * step; a null reads as `after_discount`, which is what every visit closed
+     * before this column was costed on.
+     */
+    commissionBase: commissionBase("commission_base"),
     ...auditColumns,
   },
   (table) => [
@@ -576,11 +1108,15 @@ export const visits = pgTable(
     uniqueIndex("visit_booking_idx")
       .on(table.bookingId)
       .where(sql`${table.bookingId} is not null`),
+    uniqueIndex("visit_completion_key_idx").on(table.organizationId, table.completionKey),
     check("visit_planned_duration_positive", sql`${table.plannedDurationMinutes} > 0`),
+    // Rewritten alongside `commission_rule_shape`, and text-compared for the
+    // same reason spelled out there.
     check(
       "visit_commission_shape",
-      sql`(${table.commissionType} = 'fixed' and ${table.commissionFixedAmountMinor} is not null and ${table.commissionBasisPoints} is null)
-        or (${table.commissionType} <> 'fixed' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)`,
+      sql`(${table.commissionType}::text = 'fixed' and ${table.commissionFixedAmountMinor} is not null and ${table.commissionBasisPoints} is null)
+        or (${table.commissionType}::text in ('percentage', 'percentage_after_materials') and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)
+        or (${table.commissionType}::text = 'hybrid' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is not null)`,
     ),
     check(
       "visit_actual_duration_positive",
@@ -610,6 +1146,26 @@ export const visitLines = pgTable(
     nameSnapshot: jsonb("name_snapshot").$type<LocalizedText>().notNull(),
     priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
     discountMinor: bigint("discount_minor", { mode: "number" }).notNull().default(0),
+    /**
+     * Money given back for this line after the visit closed.
+     *
+     * A separate column rather than a larger discount: a discount is what was
+     * agreed before the work, a refund is what happened after it, and a report
+     * that cannot tell them apart cannot answer why the month was short. The
+     * revenue of the visit is `price − discount − refund`.
+     */
+    refundMinor: bigint("refund_minor", { mode: "number" }).notNull().default(0),
+    /**
+     * Whether the master's percentage applies to this line, decided when the
+     * visit closed from the services the rule covers.
+     *
+     * True by default, which is every line ever written before this: a rule
+     * with no service list covers everything. Kept per line rather than as a
+     * list of service ids on the visit, so that a refund on one line still
+     * recomputes the base correctly — the filter and the arithmetic stay in the
+     * place the numbers are.
+     */
+    commissionable: boolean("commissionable").notNull().default(true),
     durationMinutes: integer("duration_minutes").notNull().default(0),
     ...auditColumns,
   },
@@ -619,6 +1175,12 @@ export const visitLines = pgTable(
     check(
       "visit_line_discount_within_price",
       sql`${table.discountMinor} >= 0 and ${table.discountMinor} <= ${table.priceMinor}`,
+    ),
+    // Nothing can be given back that was never charged. Without this a refund
+    // typo turns a visit's revenue negative, and every total above it with it.
+    check(
+      "visit_line_refund_within_charged",
+      sql`${table.refundMinor} >= 0 and ${table.refundMinor} <= ${table.priceMinor} - ${table.discountMinor}`,
     ),
   ],
 );
@@ -688,7 +1250,25 @@ export const financialSnapshots = pgTable(
     revenueMinor: bigint("revenue_minor", { mode: "number" }).notNull(),
     materialCostMinor: bigint("material_cost_minor", { mode: "number" }),
     normativeMaterialCostMinor: bigint("normative_material_cost_minor", { mode: "number" }),
+    /** Null identifies a legacy snapshot whose stored cost remains authoritative. */
+    materialUsageSource: text("material_usage_source").$type<MaterialUsageSource>(),
+    /**
+     * What the master's work cost. The name stays as it is: renaming a column
+     * every reader of history already knows would buy a better word at the
+     * price of the history reading correctly.
+     */
     commissionMinor: bigint("commission_minor", { mode: "number" }),
+    /*
+     * The `costing-v2` figures. All nullable, because they arrive by the expand
+     * step and because a snapshot written under `costing-v1` never had them —
+     * and a zero there would be a claim that the VAT was nil rather than that
+     * nobody asked. `formula_version` is what tells the two apart.
+     */
+    netRevenueMinor: bigint("net_revenue_minor", { mode: "number" }),
+    vatMinor: bigint("vat_minor", { mode: "number" }),
+    turnoverTaxMinor: bigint("turnover_tax_minor", { mode: "number" }),
+    paymentCommissionMinor: bigint("payment_commission_minor", { mode: "number" }),
+    payrollTaxMinor: bigint("payroll_tax_minor", { mode: "number" }),
     contributionMarginMinor: bigint("contribution_margin_minor", { mode: "number" }),
     marginBasisPoints: integer("margin_basis_points"),
     profitPerHourMinor: bigint("profit_per_hour_minor", { mode: "number" }),
@@ -703,6 +1283,10 @@ export const financialSnapshots = pgTable(
     uniqueIndex("financial_snapshot_visit_version_idx").on(table.visitId, table.snapshotVersion),
     index("financial_snapshot_org_idx").on(table.organizationId, table.createdAt),
     check("financial_snapshot_version_positive", sql`${table.snapshotVersion} > 0`),
+    check(
+      "financial_snapshot_material_source",
+      sql`${table.materialUsageSource} is null or ${table.materialUsageSource} in ('standard', 'actual')`,
+    ),
   ],
 );
 
@@ -1437,6 +2021,17 @@ export const bookingIdempotencyKeys = pgTable(
     idempotencyKey: text("idempotency_key").notNull(),
     requestFingerprint: text("request_fingerprint").notNull(),
     bookingId: uuid("booking_id").references(() => bookings.id, { onDelete: "cascade" }),
+    /**
+     * The answer that was sent, for retries whose result is not a booking.
+     *
+     * E3.1 needs "the same key returns the same counts and creates nothing",
+     * and `booking_id` cannot carry that: a bulk paste that created 28
+     * materials has no single row to point at. The table was already generic
+     * over `scope`; this is the missing half of it. The name stays
+     * `booking_idempotency_key` because renaming a table is the one change in
+     * this migration that would not roll back cleanly.
+     */
+    result: jsonb("result").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
