@@ -13,12 +13,22 @@ export function LoginForm({
   locale,
   next,
   activeEmail = null,
+  presetEmail = null,
+  inviteOrganization = null,
 }: {
   initialMode?: "signin" | "signup";
   locale: AppLocale;
   next?: string;
   /** Who is signed in in this browser already, and about to be replaced. */
   activeEmail?: string | null;
+  /**
+   * The address a live invitation was issued for. Present only when this form
+   * was reached from one, and then it is the only address that leads anywhere:
+   * the account has to match it for the invitation to be acceptable.
+   */
+  presetEmail?: string | null;
+  /** The inviting studio, so the fixed address is explained rather than imposed. */
+  inviteOrganization?: string | null;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
@@ -74,8 +84,24 @@ export function LoginForm({
         )}
         <label>
           {t("auth.email")}
-          <input name="email" type="email" autoComplete="email" required />
+          {/*
+           * `readOnly` rather than `disabled`: a disabled field is left out of
+           * the submitted form, which would send an empty address. It is a
+           * convenience either way — the server compares the account's address
+           * against the invitation again before anyone joins anything.
+           */}
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            defaultValue={presetEmail ?? undefined}
+            readOnly={presetEmail !== null}
+          />
         </label>
+        {presetEmail !== null && inviteOrganization !== null && (
+          <p className="muted">{t("auth.invitedEmailHint", { org: inviteOrganization })}</p>
+        )}
         <label>
           {t("auth.password")}
           <input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={10} />

@@ -152,7 +152,7 @@ export default async function SettingsPage() {
       }))
     : null;
 
-  const members: TeamMember[] = canReadTeam
+  const memberRows = canReadTeam
     ? await db
         .select({
           id: memberships.id,
@@ -165,6 +165,33 @@ export default async function SettingsPage() {
         .where(eq(memberships.organizationId, membership.organizationId))
         .orderBy(asc(memberships.createdAt))
     : [];
+
+  /*
+   * Which accounts the catalogue knows as a specialist. A master's calendar,
+   * visits and commission all resolve through `specialist.user_id`, so a master
+   * without that link signs in to an empty product and cannot be booked — a
+   * state the team screen is where somebody would notice. Read separately
+   * because `specialist` is tenant-scoped and `membership` is not.
+   */
+  const linkedAccounts = canReadTeam
+    ? new Set(
+        (
+          await withTenant(membership.organizationId, (tx) =>
+            tx
+              .select({ userId: specialists.userId })
+              .from(specialists)
+              .where(isNull(specialists.archivedAt)),
+          )
+        )
+          .map((row) => row.userId)
+          .filter((userId): userId is string => userId !== null),
+      )
+    : new Set<string>();
+
+  const members: TeamMember[] = memberRows.map((row) => ({
+    ...row,
+    has_specialist_card: linkedAccounts.has(row.user_id),
+  }));
 
   return (
     <main className="app-shell">

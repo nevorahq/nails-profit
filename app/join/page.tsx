@@ -1,105 +1,174 @@
-"use client";
+import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { JoinAccept, JoinSwitchAccount } from "@/components/join-actions";
+import { db } from "@/db";
+import { memberships, organizations } from "@/db/schema";
+import { normalizeInvitationEmail } from "@/domain/invitation";
+import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { auth } from "@/lib/auth";
+import { previewInvitation, type InvitationPreview } from "@/lib/invitation-preview";
+import { resolveLocale } from "@/lib/locale";
 
-function JoinForm() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const token = searchParams.get("token") ?? "";
+/**
+ * The invitation screen, resolved on the server before it is drawn.
+ *
+ * The version this replaces was a client component that knew nothing about the
+ * invitation it was showing: it drew one button, "принять и войти", and learned
+ * what was actually true from whichever error `POST accept` returned. For the
+ * common case — a person who has no account yet — that button did not accept
+ * anything. It sent a request that could only fail with 401, bounced to the
+ * sign-up form, and left the invitation pending; accepting it meant coming back
+ * to the link afterwards and pressing the same button a second time. Most
+ * people do not, and the owner's screen keeps saying "ожидает" forever.
+ *
+ * So the state is decided here, once, and the screen offers the single action
+ * that state allows. A guest is asked to create an account, not to accept
+ * something they cannot yet accept. A live invitation offers acceptance. Every
+ * dead end — expired, revoked, already used, wrong account, already a member —
+ * says which one it is, because "недействительная или истёкшая ссылка" told a
+ * person neither what happened nor what to do next.
+ */
+export default async function JoinPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const token = typeof params.token === "string" ? params.token : "";
+  const invitation = token ? await previewInvitation(token) : null;
 
-  const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [wrongAccount, setWrongAccount] = useState(false);
+  // The invitee has no locale of their own to read: no organization, and
+  // possibly no account. The inviting studio's language is the better guess
+  // than the browser's, and it is the language they will work in.
+  const locale = invitation?.locale ?? (await resolveLocale());
+  const t = getTranslator(locale);
 
-  async function accept() {
-    setPending(true);
-    setError(null);
-    setWrongAccount(false);
-    const response = await fetch("/api/v1/invitations/accept", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-    setPending(false);
-    if (response.ok) {
-      setDone(true);
-    } else {
-      const body = await response.json().catch(() => null);
-      const code = body?.error?.code;
-      if (code === "UNAUTHENTICATED") {
-        router.push(`/login?mode=signup&next=${encodeURIComponent(`/join?token=${token}`)}`);
-        return;
-      }
-      if (code === "INVITATION_EMAIL_MISMATCH") {
-        setWrongAccount(true);
-        return;
-      }
-      setError(body?.error?.message ?? "Недействительная или истёкшая ссылка");
-    }
+  const joinPath = `/join?token=${encodeURIComponent(token)}`;
+  const signInHref = `/login?next=${encodeURIComponent(joinPath)}`;
+  const signUpHref = `/login?mode=signup&next=${encodeURIComponent(joinPath)}`;
+
+  if (!invitation) {
+    return (
+      <Card title={t("join.invalidTitle")}>
+        <p className="muted">{t("join.invalidHint")}</p>
+      </Card>
+    );
   }
 
-  if (done) {
+  if (invitation.status === "expired" || invitation.status === "revoked") {
     return (
-      <div className="auth-card">
-        <p style={{ fontWeight: 700, marginBottom: "16rem" }}>
-          Вы успешно присоединились к организации
+      <Card title={t(invitation.status === "expired" ? "join.expiredTitle" : "join.revokedTitle")}>
+        <Summary invitation={invitation} t={t} />
+        <p className="muted">
+          {t(invitation.status === "expired" ? "join.expiredHint" : "join.revokedHint")}
         </p>
-        <a className="primary-button" href="/app">
-          Перейти в приложение
+      </Card>
+    );
+  }
+
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  if (invitation.status === "accepted") {
+    return (
+      <Card title={t("join.acceptedTitle")}>
+        <Summary invitation={invitation} t={t} />
+        <p className="muted" style={{ marginBottom: "20rem" }}>
+          {t("join.acceptedHint")}
+        </p>
+        <a className="primary-button" href={session ? "/app" : signInHref} style={centeredButton}>
+          {session ? t("join.goToApp") : t("join.loginButton")}
         </a>
-      </div>
+      </Card>
+    );
+  }
+
+  if (!session) {
+    return (
+      <Card title={t("join.title")}>
+        <Summary invitation={invitation} t={t} />
+        <a className="primary-button" href={signUpHref} style={centeredButton}>
+          {t("join.createAccount")}
+        </a>
+        <a className="switch-button" href={signInHref}>
+          {t("join.haveAccount")}
+        </a>
+      </Card>
+    );
+  }
+
+  /*
+   * Checked in the same order the server checks it, so the screen and the
+   * endpoint can never disagree about which refusal comes first: the address
+   * the invitation was issued for, and only then whether this account is free
+   * to join anything.
+   */
+  if (normalizeInvitationEmail(session.user.email) !== invitation.email) {
+    return (
+      <Card title={t("join.wrongAccountTitle")}>
+        <div className="warning-banner">
+          {t("join.wrongAccount", { invited: invitation.email, current: session.user.email })}
+        </div>
+        <JoinSwitchAccount token={token} locale={locale} />
+      </Card>
+    );
+  }
+
+  const [membership] = await db
+    .select({ organizationId: memberships.organizationId, organizationName: organizations.name })
+    .from(memberships)
+    .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
+    .where(eq(memberships.userId, session.user.id))
+    .limit(1);
+
+  if (membership) {
+    const sameOrganization = membership.organizationId === invitation.organizationId;
+    return (
+      <Card title={t("join.alreadyMemberTitle")}>
+        <div className="warning-banner">
+          {sameOrganization
+            ? t("join.alreadyMemberSame", { org: membership.organizationName })
+            : t("join.alreadyMemberOther", { org: membership.organizationName })}
+        </div>
+        <a className="primary-button" href="/app" style={centeredButton}>
+          {t("join.goToApp")}
+        </a>
+      </Card>
     );
   }
 
   return (
-    <div className="auth-card">
-      <h1 style={{ fontSize: "22rem", fontWeight: 750, marginBottom: "8rem" }}>
-        Принять приглашение
-      </h1>
-      <p className="muted" style={{ marginBottom: "20rem" }}>
-        Вы приглашены присоединиться к организации.
-      </p>
-      {error && (
-        <div className="form-error" role="alert" style={{ marginBottom: "16rem" }}>
-          {error}
-        </div>
-      )}
-      {wrongAccount ? (
-        <>
-          <div className="form-error" role="alert" style={{ marginBottom: "16rem" }}>
-            Это приглашение выдано на другой email-адрес. Выйдите из текущего аккаунта и войдите с адресом, на который было отправлено приглашение.
-          </div>
-          <a
-            className="primary-button"
-            href={`/login?mode=signup&next=${encodeURIComponent(`/join?token=${token}`)}`}
-            style={{ display: "block", textAlign: "center" }}
-          >
-            Войти с другим аккаунтом
-          </a>
-        </>
-      ) : !token ? (
-        <p className="muted">Ссылка недействительна — токен отсутствует.</p>
-      ) : (
-        <button className="primary-button" onClick={accept} disabled={pending} style={{ width: "100%" }}>
-          {pending ? "Присоединяемся…" : "Принять и войти"}
-        </button>
-      )}
-      <p className="muted" style={{ marginTop: "16rem", fontSize: "13rem" }}>
-        Войдите с тем email, на который было отправлено приглашение.{" "}
-        <a href="/login">Войти</a>
-      </p>
-    </div>
+    <Card title={t("join.title")}>
+      <Summary invitation={invitation} t={t} />
+      <JoinAccept token={token} locale={locale} />
+    </Card>
   );
 }
 
-export default function JoinPage() {
+const centeredButton = { display: "block", textAlign: "center" } as const;
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className="auth-shell">
-      <Suspense>
-        <JoinForm />
-      </Suspense>
+      <section className="auth-card">
+        <h1 style={{ fontSize: "22rem", fontWeight: 750, marginBottom: "12rem" }}>{title}</h1>
+        {children}
+      </section>
     </main>
+  );
+}
+
+/** Which studio, which role, which address — the three facts a decision needs. */
+function Summary({ invitation, t }: { invitation: InvitationPreview; t: Translate }) {
+  return (
+    <div style={{ marginBottom: "20rem" }}>
+      <p style={{ marginBottom: "6rem" }}>
+        {t("join.invitedTo", {
+          org: invitation.organizationName,
+          role: t(`roles.${invitation.role}` as MessageKey),
+        })}
+      </p>
+      <p className="muted">{t("join.invitedEmail", { email: invitation.email })}</p>
+    </div>
   );
 }

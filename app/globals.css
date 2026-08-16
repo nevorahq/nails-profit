@@ -709,6 +709,10 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Same pill as above in the house green: it states a fact about a row rather
    than warning about it, and amber would read as something to fix. */
 .badge-accent { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 999rem; background: var(--sage); border: 1rem solid var(--line); color: var(--forest-950); font-size: 12rem; font-weight: 700; }
+/* A settled state rather than an open one — an invitation that was taken up,
+   beside the pale pills that mark the ones still waiting. The word in the pill
+   says which is which; the fill only makes the difference visible at a glance. */
+.badge-done { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 999rem; background: var(--positive); border: 1rem solid var(--positive); color: var(--paper); font-size: 12rem; font-weight: 700; }
 
 .insight-panel { background: linear-gradient(180deg, var(--surface), var(--sage)); }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180rem, 1fr)); gap: 16rem; }

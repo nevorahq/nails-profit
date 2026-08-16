@@ -13,6 +13,13 @@ export type TeamMember = {
   user_id: string;
   email: string;
   role: string;
+  /**
+   * Whether the catalogue knows this account as a specialist. A master without
+   * that link sees an empty calendar and cannot be booked, and this screen is
+   * where the gap becomes visible — see `app/app/specialists/page.tsx` for the
+   * control that closes it.
+   */
+  has_specialist_card?: boolean;
 };
 
 type InvitationRow = {
@@ -22,7 +29,20 @@ type InvitationRow = {
   status: "pending" | "expired" | "accepted" | "revoked";
   expires_at: string;
   created_at: string;
+  accepted_at: string | null;
 };
+
+/**
+ * How long an accepted invitation stays on the list after it was accepted.
+ *
+ * It used to disappear the moment it was accepted, because the table only ever
+ * showed pending and expired rows. That left the owner with no answer to the
+ * one question they come to this screen with — did the person I invited get in
+ * — beyond noticing that a row they half-remember is gone. A week is long
+ * enough for that answer to still be there when they look, and short enough
+ * that the table does not turn into a log.
+ */
+const ACCEPTED_VISIBLE_DAYS = 7;
 
 type Step = "idle" | "link-ready" | "sent";
 
@@ -133,6 +153,33 @@ export function TeamManager({
     };
   }, [canManage, loadFailed]);
 
+  /**
+   * Whoever accepts an invitation does it in their own browser, so nothing
+   * here hears about it. Without this the table keeps saying "ожидает" for as
+   * long as the tab stays open — which for a screen an owner leaves open while
+   * waiting for exactly that answer is the whole time it matters.
+   *
+   * Coming back to the tab is the moment they are asking again, so that is when
+   * it is re-read. `router.refresh()` covers the members table above, which is
+   * rendered on the server and is where the new colleague actually appears.
+   */
+  useEffect(() => {
+    if (!canManage) return;
+    function sync() {
+      if (document.visibilityState !== "visible") return;
+      void fetchInvitations(loadFailed)
+        .then(setInvitations)
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : loadFailed));
+      router.refresh();
+    }
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, [canManage, loadFailed, router]);
+
   async function reloadInvitations() {
     try {
       setInvitations(await fetchInvitations(loadFailed));
@@ -198,7 +245,11 @@ export function TeamManager({
     setPending(false);
 
     if (!response.ok) {
-      setError(t("team.sendFailed"));
+      // "Не удалось отправить письмо" was all this said, for every cause there
+      // is — including the two that are the owner's to act on: the link is
+      // there to copy, and somebody has to fix the configuration.
+      const body = await response.json().catch(() => null);
+      setError(getErrorMessage(body?.error?.code, t("team.sendFailed"), locale));
       return;
     }
 
@@ -228,8 +279,38 @@ export function TeamManager({
     setPending(false);
   }
 
-  const openInvitations = invitations.filter(
-    (invitation) => invitation.status === "pending" || invitation.status === "expired",
+  /*
+   * An accepted invitation states that this person joined, so it belongs on the
+   * screen only while that is still true. Removing a colleague leaves the row
+   * itself alone — it is the record of how they got in, and the audit event
+   * points at it — but here it would read as a member who is missing from the
+   * members table directly above.
+   *
+   * Matched on the address rather than on who accepted it: invitation emails
+   * are stored normalized, so this needs no new field in the response.
+   */
+  const memberEmails = new Set(members.map((member) => member.email.trim().toLowerCase()));
+  const stillTrue = invitations.filter(
+    (invitation) => invitation.status !== "accepted" || memberEmails.has(invitation.email),
+  );
+
+  /*
+   * One row per address — the newest one. Inviting somebody a second time
+   * leaves both rows behind, and a table showing an address twice makes the
+   * owner work out which of the two is the live one. The latest invitation is
+   * the only one that can still be acted on, and it is the answer to "что с
+   * этим человеком сейчас"; the earlier rows stay in the database as the
+   * history they are.
+   */
+  const latestByEmail = new Map<string, InvitationRow>();
+  for (const invitation of stillTrue) {
+    const previous = latestByEmail.get(invitation.email);
+    if (!previous || createdAt(invitation) > createdAt(previous)) {
+      latestByEmail.set(invitation.email, invitation);
+    }
+  }
+  const visibleInvitations = [...latestByEmail.values()].sort(
+    (left, right) => createdAt(left) - createdAt(right),
   );
 
   // One actions column, shared by both controls: a manager gets removal without
@@ -263,7 +344,17 @@ export function TeamManager({
             return (
               <tr key={m.user_id}>
                 <td>{m.email}</td>
-                <td>{t(`roles.${m.role}` as MessageKey)}</td>
+                <td>
+                  {t(`roles.${m.role}` as MessageKey)}
+                  {/*
+                    Stated in words, not by colour alone: a master with no card
+                    in the catalogue signs in to an empty calendar and cannot be
+                    booked, and nothing else on this screen would say so.
+                  */}
+                  {m.role === "master" && m.has_specialist_card === false && (
+                    <span className="badge-warning">{t("team.noSpecialistCard")}</span>
+                  )}
+                </td>
                 {showActions && (
                   <td>
                     {/*
@@ -326,6 +417,10 @@ export function TeamManager({
         </p>
       )}
 
+      {canManage && members.some((m) => m.role === "master" && m.has_specialist_card === false) && (
+        <p className="warning-banner">{t("team.noSpecialistCardHint")}</p>
+      )}
+
       {!canManage && (
         <p className="muted" style={{ marginTop: "16rem" }}>
           {t("team.noAccess")}
@@ -337,7 +432,7 @@ export function TeamManager({
           <h2 style={{ marginTop: "28rem" }}>{t("team.pendingTitle")}</h2>
           {invitationsLoading ? (
             <p className="muted">{t("team.pendingLoading")}</p>
-          ) : openInvitations.length === 0 ? (
+          ) : visibleInvitations.length === 0 ? (
             <p className="muted">{t("team.pendingNone")}</p>
           ) : (
             <table className="data-table invitations-table">
@@ -348,23 +443,43 @@ export function TeamManager({
                   <th>{t("team.invitationStatus")}</th>
                   <th>{t("team.createdAt")}</th>
                   <th>{t("team.expiresAt")}</th>
+                  <th>{t("team.acceptedAt")}</th>
                   <th>{t("team.invitationActions")}</th>
                 </tr>
               </thead>
               <tbody>
-                {openInvitations.map((invitation) => (
+                {visibleInvitations.map((invitation) => (
                   <tr key={invitation.id}>
                     <td>{invitation.email}</td>
                     <td>{t(`roles.${invitation.role}` as MessageKey)}</td>
                     <td>
-                      <span className={invitation.status === "expired" ? "badge-warning" : "badge-accent"}>
+                      <span
+                        className={
+                          invitation.status === "expired"
+                            ? "badge-warning"
+                            : invitation.status === "accepted"
+                              ? "badge-done"
+                              : "badge-accent"
+                        }
+                      >
                         {t(`team.status.${invitation.status}` as MessageKey)}
                       </span>
                     </td>
                     <td>{new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(invitation.created_at))}</td>
-                    <td>{new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(invitation.expires_at))}</td>
                     <td>
-                      {confirmRevoke === invitation.id ? (
+                      {invitation.status === "accepted"
+                        ? "—"
+                        : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(invitation.expires_at))}
+                    </td>
+                    <td>
+                      {invitation.accepted_at
+                        ? new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(invitation.accepted_at))
+                        : "—"}
+                    </td>
+                    <td>
+                      {invitation.status === "accepted" ? (
+                        "—"
+                      ) : confirmRevoke === invitation.id ? (
                         <>
                           <button className="inline-action danger" type="button" disabled={pending} onClick={() => revoke(invitation.id)}>
                             {t("team.revokeConfirm")}
@@ -514,5 +629,26 @@ async function fetchInvitations(fallback: string): Promise<InvitationRow[]> {
   const response = await fetch("/api/v1/invitations");
   if (!response.ok) throw new Error(fallback);
   const body = (await response.json()) as { data: InvitationRow[] };
-  return body.data;
+  // Filtered on arrival rather than during render: the cutoff is read from the
+  // clock, and a render that consults the clock is not a function of its props.
+  return body.data.filter(worthShowing);
+}
+
+/**
+ * Which invitations belong on the owner's screen: everything still open, plus
+ * the ones taken up recently — see `ACCEPTED_VISIBLE_DAYS`. Revoked rows are
+ * left out because the owner is the one who revoked them.
+ */
+function createdAt(invitation: InvitationRow): number {
+  return new Date(invitation.created_at).getTime();
+}
+
+function worthShowing(invitation: InvitationRow): boolean {
+  if (invitation.status === "pending" || invitation.status === "expired") return true;
+  if (invitation.status !== "accepted") return false;
+  // A row accepted before the column was filled in still counts as news; only a
+  // dated one can be judged too old to keep.
+  if (!invitation.accepted_at) return true;
+  const age = Date.now() - new Date(invitation.accepted_at).getTime();
+  return age <= ACCEPTED_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
 }
