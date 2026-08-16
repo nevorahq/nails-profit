@@ -65,11 +65,20 @@ const resendEnvSchema = z.object({
     .refine((value) => !/[\r\n]/.test(value), "RESEND_FROM must be one line"),
 });
 
-/** Server-only credentials for the chosen Phase 7 email provider. */
+/**
+ * Server-only credentials for the chosen Phase 7 email provider.
+ *
+ * Two names for the sender, because the deployment already had the other one:
+ * production carried `RESEND_FROM_EMAIL` while this read `RESEND_FROM`, so with
+ * the provider set to `resend` every send threw on a missing variable and the
+ * pilot's invitations produced a 500 instead of an email. Accepting both is
+ * what keeps that from being a redeploy away from happening again in either
+ * direction.
+ */
 export function getResendConfig() {
   return resendEnvSchema.parse({
     apiKey: process.env.RESEND_API_KEY,
-    from: process.env.RESEND_FROM,
+    from: process.env.RESEND_FROM ?? process.env.RESEND_FROM_EMAIL,
   });
 }
 
@@ -95,4 +104,36 @@ export function getOpsApiToken() {
 export function getPublicAppUrl() {
   const value = process.env.NEXT_PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "";
   return value.replace(/\/+$/, "");
+}
+
+/**
+ * Whether a link built on `getPublicAppUrl()` can be opened by the person who
+ * receives it.
+ *
+ * A development server pointed at the production database is a working setup —
+ * it is how the pilot is looked after — but it also sends real mail to real
+ * people with `http://localhost:3000/join?token=…` inside, which is an
+ * invitation only the sender can open. The address is checked before a message
+ * goes out rather than trusted, so that mistake stops at a refusal instead of
+ * arriving in somebody's inbox looking legitimate.
+ */
+export function isPublicAppUrlReachable() {
+  const value = getPublicAppUrl();
+  if (!value) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  const host = url.hostname.toLowerCase();
+  return !(
+    host === "localhost" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host === "[::1]" ||
+    host.startsWith("127.") ||
+    host.endsWith(".local") ||
+    host.endsWith(".localhost")
+  );
 }
