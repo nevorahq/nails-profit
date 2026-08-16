@@ -51,6 +51,14 @@ type Case = Readonly<{
 
 const ALL_ROLES = memberRoles;
 const CATALOGUE_MANAGERS: readonly MemberRole[] = ["owner", "manager"];
+/**
+ * Adding a service is not managing the catalogue. A Master may create one — a
+ * row nobody is costed against yet — while editing and archiving stay with the
+ * managers, because a service's price and duration are what every other
+ * master's margin and commission are computed from. See `create_only` in
+ * `domain/rbac.ts`.
+ */
+const SERVICE_AUTHORS: readonly MemberRole[] = ["owner", "manager", "master"];
 
 /** A one-row file, so an import job can be created on demand. */
 function importForm() {
@@ -476,8 +484,8 @@ const cases: readonly Case[] = [
   {
     route: "/api/v1/services",
     method: "POST",
-    allowed: CATALOGUE_MANAGERS,
-    note: "services write: Owner и Manager",
+    allowed: SERVICE_AUTHORS,
+    note: "services write: Owner, Manager и Master (создание)",
     request: async () => ({ path: "/api/v1/services", body: { name: { ru: "Новая" }, price_minor: 1_000 } }),
   },
   {

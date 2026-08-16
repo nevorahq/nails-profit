@@ -103,9 +103,23 @@ const cellInput: React.CSSProperties = {
 export function ServiceList({
   services,
   locale,
+  canCreate = true,
+  canEdit = true,
 }: {
   services: ServiceRow[];
   locale: AppLocale;
+  /**
+   * Adding to the catalogue. A Master may — a new service is a row nobody is
+   * costed against yet.
+   */
+  canCreate?: boolean;
+  /**
+   * Changing or archiving what is already there, which a Master may not: those
+   * numbers are what every other master's margin and commission are computed
+   * from. The server refuses both regardless; this keeps the screen from
+   * offering a control that could only fail.
+   */
+  canEdit?: boolean;
 }) {
   const t = getTranslator(locale);
   const router = useRouter();
@@ -277,6 +291,13 @@ export function ServiceList({
         </div>
       )}
 
+      {/*
+        Rendered only for somebody who can use it. It used to be drawn for every
+        reader — collapsed and without the header button that opens it, but
+        present in the markup and one `#add-service` away from a form whose
+        submit could only answer 403.
+      */}
+      {canCreate && (
       <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-service" ref={addRef}>
         <div className="compose-inner">
           <section className="panel">
@@ -328,6 +349,7 @@ export function ServiceList({
           </section>
         </div>
       </div>
+      )}
 
       <table className="data-table">
         <thead>
@@ -453,6 +475,7 @@ export function ServiceList({
                   </td>
                 )}
                 <td style={{ whiteSpace: "nowrap" }}>
+                  {canEdit && (
                   <button
                     className="inline-action"
                     type="button"
@@ -463,7 +486,8 @@ export function ServiceList({
                     <IconEdit />
                     <span className="btn-label">{t("services.edit")}</span>
                   </button>
-                  {confirmDeleteId === service.id ? (
+                  )}
+                  {!canEdit ? null : confirmDeleteId === service.id ? (
                     <>
                       <button
                         className="inline-action danger"

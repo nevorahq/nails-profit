@@ -71,14 +71,27 @@ export const navGroups: readonly { group: NavGroup; key: MessageKey | null }[] =
 ];
 
 /**
- * Organization-wide sections a master does not see. Visits and clients are
- * intentionally absent here: their pages enforce the master's `own` scope.
+ * Sections a master is not offered.
+ *
+ * The first four are organization-wide and were never theirs. Visits and
+ * clients are different: their pages do scope correctly to the master's own
+ * rows, and they were kept for that reason — but the master's day is the
+ * calendar, where the appointment they are about to work is also the thing they
+ * close into a visit. Two more sections listing the same work from other angles
+ * made the product look larger than the job.
+ *
+ * Hidden, not forbidden. The pages still answer on a typed URL and still scope
+ * to the person asking; section 6.1 is explicit that a missing link is not
+ * access control. Closing a visit for somebody who walked in without an
+ * appointment lives on `/app/visits/new` and is now the owner's to do.
  */
 const MASTER_HIDDEN: ReadonlySet<string> = new Set([
   "/app/import",
   "/app/specialists",
   "/app/add-ons",
   "/app/materials",
+  "/app/visits",
+  "/app/clients",
 ]);
 
 /**

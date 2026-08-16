@@ -131,7 +131,14 @@ export default async function SpecialistsPage() {
   // who may manage specialists is shown who could be linked to one.
   const members = canManageCatalogue(membership.role, "commissions")
     ? await db
-        .select({ user_id: memberships.userId, email: users.email, role: memberships.role })
+        .select({
+          user_id: memberships.userId,
+          email: users.email,
+          // The name the account signed up with, so a card created for them is
+          // called what the studio calls them rather than by their address.
+          name: users.name,
+          role: memberships.role,
+        })
         .from(memberships)
         .innerJoin(users, eq(memberships.userId, users.id))
         .where(eq(memberships.organizationId, membership.organizationId))

@@ -3,7 +3,7 @@ import { asc, isNull } from "drizzle-orm";
 import { ToolIcon } from "@/components/icons";
 import { services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can } from "@/domain/rbac";
+import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceList, type ServiceRow } from "@/components/service-list";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadServiceCosting } from "@/lib/service-costing";
@@ -59,7 +59,11 @@ export default async function ServicesPage() {
     );
   });
 
-  const canWrite = can(membership.role, "services", "write");
+  // Two different permissions on one screen: a Master may add a service, and
+  // only a catalogue manager may change or archive one. See `create_only` in
+  // `domain/rbac.ts` for why the write is granted and then narrowed.
+  const canCreate = can(membership.role, "services", "write");
+  const canEdit = canManageCatalogue(membership.role, "services");
 
   return (
     <main className="app-shell">
@@ -73,13 +77,13 @@ export default async function ServicesPage() {
           either anchor, closes) it lives there, since this is a Server
           Component and cannot hold it.
         */}
-        {canWrite && (
+        {canCreate && (
           <a className="primary-button calendar-create" href="#add-service">
             <ToolIcon name="plus" />
             {t("services.add")}
           </a>
         )}
-        {canWrite && (
+        {canCreate && (
           <a
             className="header-action"
             href="#add-service"
@@ -92,7 +96,7 @@ export default async function ServicesPage() {
           </a>
         )}
       </header>
-      <ServiceList services={rows} locale={locale} />
+      <ServiceList services={rows} locale={locale} canCreate={canCreate} canEdit={canEdit} />
     </main>
   );
 }

@@ -52,7 +52,7 @@ const expected: Record<MemberRole, Record<Capability, string>> = {
     user_management: "-",
     clients: "rw own",
     bookings: "rw own",
-    services: "r all",
+    services: "rw all create_only",
     materials: "rw own",
     expenses: "-",
     commissions: "r own",
@@ -100,10 +100,24 @@ describe("section 6.1 capability matrix", () => {
 
 describe("rbac helpers", () => {
   it("denies writes that the matrix only grants for reading", () => {
-    expect(can("master", "services", "read")).toBe(true);
-    expect(can("master", "services", "write")).toBe(false);
+    expect(can("analyst", "services", "read")).toBe(true);
+    expect(can("analyst", "services", "write")).toBe(false);
     expect(can("analyst", "campaigns", "read")).toBe(true);
     expect(can("analyst", "campaigns", "write")).toBe(false);
+  });
+
+  it("lets a master add a service without letting them rewrite the catalogue", () => {
+    // A new service is a row nobody is costed against yet. An existing one
+    // carries the price and duration every other master's margin and commission
+    // are computed from, so changing it stays with the catalogue managers.
+    expect(can("master", "services", "write")).toBe(true);
+    expect(hasConstraint("master", "services", "create_only")).toBe(true);
+    expect(canManageCatalogue("master", "services")).toBe(false);
+
+    for (const role of ["owner", "manager"] as const) {
+      expect(canManageCatalogue(role, "services")).toBe(true);
+      expect(hasConstraint(role, "services", "create_only")).toBe(false);
+    }
   });
 
   it("treats the dashboard as read-only even for an owner", () => {

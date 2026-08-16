@@ -35,13 +35,14 @@ describe("navigation", () => {
     expect(navItems.filter((item) => !printed.has(item.group))).toEqual([]);
   });
 
-  it("offers a master their scoped visits and clients", () => {
+  it("leaves a master the calendar and nothing that restates it", () => {
+    // Visits and clients scope correctly to them, and are still reachable by
+    // URL; they are simply not offered. The appointment in the calendar is the
+    // same work, and it is where closing a visit happens.
     expect(navFor("master").map((item) => item.href)).toEqual([
       "/app",
       "/app/calendar",
       "/app/booking",
-      "/app/visits",
-      "/app/clients",
       "/app/services",
       "/app/settings",
     ]);
@@ -65,6 +66,14 @@ describe("navigation", () => {
     }
   });
 
+  it("keeps visits and clients for everybody else", () => {
+    for (const role of memberRoles.filter((r) => r !== "master")) {
+      const hrefs = navFor(role).map((item) => item.href);
+      expect(hrefs).toContain("/app/visits");
+      expect(hrefs).toContain("/app/clients");
+    }
+  });
+
   it("splits each role's sections between the bar and «Ещё» without loss", () => {
     for (const role of memberRoles) {
       const bar = bottomNavFor(role);
@@ -81,9 +90,11 @@ describe("navigation", () => {
     }
   });
 
-  it("puts a master's scoped visits and clients on the bottom bar", () => {
+  it("backfills a master's bottom bar rather than leaving it half empty", () => {
+    // Two of the four preferred sections are not theirs, so the bar is filled
+    // from what is left of the same group — the point of the backfill.
     const bar = bottomNavFor("master").map((item) => item.href);
-    expect(bar).toEqual(["/app", "/app/calendar", "/app/visits", "/app/clients"]);
+    expect(bar).toEqual(["/app", "/app/calendar", "/app/booking"]);
   });
 });
 

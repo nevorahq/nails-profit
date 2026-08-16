@@ -51,7 +51,19 @@ export type RbacConstraint =
   /** Analyst sees aggregates, never row-level financial detail. */
   | "aggregates_only"
   /** Manager administers users but may not touch an Owner. */
-  | "exclude_owner";
+  | "exclude_owner"
+  /**
+   * A Master may add to the shared catalogue but not rewrite it.
+   *
+   * Section 6.1 gives them reading only, and the reason is sound: a service's
+   * price and duration are what every other master's margin and commission are
+   * computed from, so an executor editing them changes other people's numbers.
+   * Adding one does not — a new row nobody is costed against yet — and a studio
+   * where the master is the person who knows the treatments should not have to
+   * queue that behind the owner. So the write is granted and narrowed here
+   * rather than granted whole.
+   */
+  | "create_only";
 
 export type Permission = Readonly<{
   actions: readonly RbacAction[];
@@ -107,7 +119,9 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     user_management: DENIED,
     clients: permission(READ_WRITE, "own", "Только назначенные клиенты/визиты"),
     bookings: permission(READ_WRITE, "own", "Свои записи"),
-    services: permission(READ_ONLY, "all", "Чтение"),
+    services: permission(READ_WRITE, "all", "Чтение; добавлять услуги можно, править чужие — нет", [
+      "create_only",
+    ]),
     // Open question for Phase 2: the spec grants the write (recording actual
     // consumption) but never says whether a master may browse the material
     // catalogue needed to pick from. Encoded at the narrower reading.
@@ -166,7 +180,14 @@ export function hasConstraint(
  * master calculates against. Checking `can` alone would let a Master rewrite it.
  */
 export function canManageCatalogue(role: MemberRole, capability: Capability): boolean {
-  return can(role, capability, "write") && scopeFor(role, capability) === "all";
+  return (
+    can(role, capability, "write") &&
+    scopeFor(role, capability) === "all" &&
+    // Adding a row is not managing the catalogue. Everything that reads this —
+    // options, their attachment to services, the owner's onboarding — is about
+    // changing what is already there, which `create_only` withholds.
+    !hasConstraint(role, capability, "create_only")
+  );
 }
 
 /** True when `actor` may administer a member holding `target`'s role. */

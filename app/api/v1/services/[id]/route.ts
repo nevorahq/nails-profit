@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can } from "@/domain/rbac";
+import { can, canManageCatalogue } from "@/domain/rbac";
 import { supportedLocales } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -78,7 +78,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   const actor = caller.membership;
-  if (!can(actor.role, "services", "write")) {
+  // Editing an existing service is not the same permission as adding one: a
+  // Master may add, and `create_only` is what stops that from becoming the
+  // ability to rewrite the prices everyone else is costed against.
+  if (!canManageCatalogue(actor.role, "services")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage services", requestIdentifier);
   }
 
@@ -158,7 +161,10 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   }
 
   const actor = caller.membership;
-  if (!can(actor.role, "services", "write")) {
+  // Editing an existing service is not the same permission as adding one: a
+  // Master may add, and `create_only` is what stops that from becoming the
+  // ability to rewrite the prices everyone else is costed against.
+  if (!canManageCatalogue(actor.role, "services")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage services", requestIdentifier);
   }
 
