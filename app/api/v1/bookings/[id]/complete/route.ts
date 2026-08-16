@@ -7,7 +7,7 @@ import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "@/lib/booking-http";
-import { cancelPendingNotifications } from "@/lib/booking-notifications";
+import { cancelPendingNotifications, notifyVisitCompleted } from "@/lib/booking-notifications";
 import { bookingLinesOf, loadBooking, transitionBooking } from "@/lib/booking-service";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -181,6 +181,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       // past. Dropped here rather than left for the dispatcher's guard, which
       // would count it as an undeliverable message in section 7.10's numbers.
       await cancelPendingNotifications(tx, moved.booking.id);
+
+      // Queued after the cancellation above, not before: that call clears every
+      // message still pending for this booking, and the thank-you is the one
+      // message the completion creates rather than invalidates.
+      await notifyVisitCompleted(tx, {
+        organizationId: actor.organizationId,
+        bookingId: moved.booking.id,
+      });
 
       await recordPilotProductEvent(tx, {
         organizationId: actor.organizationId,

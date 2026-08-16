@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getOpsApiToken } from "@/env";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
-import { dispatchDueNotifications } from "@/lib/notification-dispatch";
+import { dispatchDueNotifications, sweepDueNotifications } from "@/lib/notification-dispatch";
 import { logEvent } from "@/lib/logger";
 
 /**
@@ -24,8 +24,15 @@ import { logEvent } from "@/lib/logger";
  * connection is exactly what the tenant boundary is built to avoid handing to
  * request-serving code.
  */
+/**
+ * `organization_id` is optional so one call can drain every tenant: that is the
+ * shape a scheduler needs, and the alternative — asking the database which
+ * organizations have something due — is what would put operator credentials
+ * inside a cron job. Named explicitly rather than defaulted, so an operator
+ * draining one studio still says which one.
+ */
 const bodySchema = z.object({
-  organization_id: z.uuid(),
+  organization_id: z.uuid().optional(),
   limit: z.int().min(1).max(100).optional(),
 });
 
@@ -56,10 +63,12 @@ export async function POST(request: Request) {
     });
   }
 
-  const summary = await dispatchDueNotifications({
-    organizationId: parsed.data.organization_id,
-    limit: parsed.data.limit,
-  });
+  const summary = parsed.data.organization_id
+    ? await dispatchDueNotifications({
+        organizationId: parsed.data.organization_id,
+        limit: parsed.data.limit,
+      })
+    : await sweepDueNotifications({ limit: parsed.data.limit });
 
   return apiSuccess(
     {

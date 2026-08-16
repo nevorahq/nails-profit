@@ -10,7 +10,11 @@ import { getPublicNotificationChannel } from "@/env";
 import { loadBookingDraft, loadSlotContext } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
 import { issueManageLink, managePath } from "@/lib/booking-manage-link";
-import { notifyBooking, scheduleBookingReminder } from "@/lib/booking-notifications";
+import {
+  notifyBooking,
+  notifyStaffOfRequest,
+  scheduleBookingReminder,
+} from "@/lib/booking-notifications";
 import { isContactVerified } from "@/lib/booking-verification";
 import { createBooking } from "@/lib/booking-service";
 import { isExclusionViolation, isUniqueViolation } from "@/lib/db-errors";
@@ -284,6 +288,17 @@ async function handlePost(
         template:
           created.status === "confirmed" ? "booking.confirmed" : "booking.pending_confirmation",
       });
+      // The other half of the same event: the client was told the request was
+      // sent, and until now nobody told the studio it had arrived. Written in
+      // this transaction like every other message, so a request that rolls back
+      // never summons anyone.
+      if (created.status === "pending_confirmation") {
+        await notifyStaffOfRequest(tx, {
+          organizationId: organization.id,
+          bookingId: created.bookingId,
+        });
+      }
+
       // A request the studio has not answered is not something to remind about
       // yet; confirming it schedules the reminder.
       if (created.status === "confirmed") {

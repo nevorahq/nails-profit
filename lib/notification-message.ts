@@ -20,6 +20,20 @@ export const bookingNotificationTemplates = [
   "booking.reminder",
   "booking.cancelled",
   "booking.link_reissued",
+  /**
+   * After the visit: thanks, and the way back. The appointment is over, so
+   * there is nothing left to manage — the link is the studio's booking page,
+   * not the client's manage page.
+   */
+  "booking.visit_completed",
+  /**
+   * The one message addressed to the studio rather than to the client: a
+   * request is waiting for somebody to answer it, and nothing else tells them.
+   * Everything above reaches a client's phone or inbox; this reaches the master
+   * the appointment was booked with, and the owner when that master has no
+   * account linked yet.
+   */
+  "booking.staff_requested",
 ] as const;
 
 export type BookingNotificationTemplate = (typeof bookingNotificationTemplates)[number];
@@ -32,7 +46,14 @@ const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.reminder": "notify.reminder",
   "booking.cancelled": "notify.cancelled",
   "booking.link_reissued": "notify.linkReissued",
+  "booking.visit_completed": "notify.visitCompleted",
+  "booking.staff_requested": "notify.staffRequested",
 };
+
+/** Templates whose reader is the studio, not the client. */
+export const staffNotificationTemplates: readonly BookingNotificationTemplate[] = [
+  "booking.staff_requested",
+];
 
 export type NotificationFacts = Readonly<{
   template: BookingNotificationTemplate;

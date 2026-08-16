@@ -2274,13 +2274,19 @@ export const notificationOutbox = pgTable(
     template: text("template").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     /**
-     * The one thing a message cannot be rebuilt from the database without: the
-     * one-time code, which is stored nowhere else in the clear. It is written
-     * for verification messages only and cleared the moment the row leaves the
+     * What a message cannot be rebuilt from the database without.
+     *
+     * The one-time code, which is stored nowhere else in the clear: written for
+     * verification messages only and cleared the moment the row leaves the
      * queue, so a code lives here for minutes rather than for the history's
      * lifetime.
+     *
+     * And, for the messages addressed to the studio, which of its people this
+     * row is for. Two rows about one request — the master it was booked with
+     * and the owner's copy — are otherwise identical, and the recipient is
+     * resolved at delivery, so it has to be written down here.
      */
-    payload: jsonb("payload").$type<{ code?: string }>(),
+    payload: jsonb("payload").$type<{ code?: string; recipient?: "specialist" | "owner" }>(),
     status: notificationStatus("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull().defaultNow(),
