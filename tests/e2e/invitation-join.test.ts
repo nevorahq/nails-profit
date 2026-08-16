@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { db } from "@/db";
 import { invitations, memberships, users } from "@/db/schema";
 import { invitationTokenFromNext, previewInvitation } from "@/lib/invitation-preview";
+import { setNotificationProvider } from "@/lib/notification-provider";
 import { dataOf, errorCodeOf, signIn, signUp } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, type Studio } from "../helpers/studio";
@@ -124,13 +125,30 @@ describe("sending the invitation email", () => {
     const { token } = await invite("public-url@studio.example");
     const original = process.env.NEXT_PUBLIC_APP_URL;
     process.env.NEXT_PUBLIC_APP_URL = "https://nailsprofit.example";
-    // The provider is `log` in tests, so this exercises the guard and the
-    // dispatch path without a provider account being involved.
+
+    /*
+     * The provider is stubbed because this suite reads the real `.env`, where
+     * `NOTIFICATION_PROVIDER` is `resend` and the key is the production one.
+     * Without this the test posts a genuine invitation to an address that does
+     * not exist, and two of those bounces are already on the sending domain's
+     * record — which is a cost paid in the deliverability of real mail.
+     */
+    const delivered: string[] = [];
+    setNotificationProvider({
+      name: "test",
+      async send(message) {
+        delivered.push(message.destination);
+        return { ok: true, providerMessageId: `test:${delivered.length}` };
+      },
+    });
+
     try {
       const response = await studio.owner.post("/api/v1/invitations/send", { token });
       expect(response.status).toBe(200);
       expect(dataOf<{ sent: boolean }>(response).sent).toBe(true);
+      expect(delivered).toEqual(["public-url@studio.example"]);
     } finally {
+      setNotificationProvider(null);
       process.env.NEXT_PUBLIC_APP_URL = original;
     }
   });
