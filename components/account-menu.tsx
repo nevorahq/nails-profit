@@ -67,6 +67,16 @@ export function AccountMenu({
 
   async function signOut() {
     setPending(true);
+    /*
+     * The preview selection goes first, and unconditionally. It is bound to the
+     * signed-out account's id, so leaving it behind could not hand the next
+     * person someone else's view — but it would leave the browser carrying a
+     * cookie that makes every tenant transaction read-only for a session it no
+     * longer describes, which reads as a broken application rather than as a
+     * stale cookie. Cheap to send, and it cannot fail in a way that should stop
+     * a sign-out.
+     */
+    await fetch("/api/v1/preview", { method: "DELETE" }).catch(() => {});
     await authClient.signOut();
     // `replace`, not `push`: Back must not return to a page that now redirects.
     router.replace("/login");

@@ -267,6 +267,13 @@
       "when": 1786807728329,
       "tag": "0037_material_template_optional_package",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786867218235,
+      "tag": "0038_glorious_blockbuster",
+      "breakpoints": true
     }
   ]
 }

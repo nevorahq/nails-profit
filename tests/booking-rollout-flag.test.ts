@@ -80,7 +80,22 @@ const BOOKING_TABLES = [
  * their data whatever level the studio's booking module is on, and a switch
  * that also switches off a legal obligation would be the wrong switch.
  */
-const OUTSIDE_THE_FLAG = [join(API_ROOT, "clients", "[id]", "route.ts")];
+const OUTSIDE_THE_FLAG = [
+  join(API_ROOT, "clients", "[id]", "route.ts"),
+  /*
+   * Removing a master is a team operation, not a booking one. Gating it would
+   * mean a studio that switched the booking module off could no longer fix a
+   * master entered with a typo — the same shape of wrong switch as above.
+   *
+   * It reaches booking tables only for a master who has none of their rows
+   * that matter: the handler counts `booking` first and archives instead of
+   * deleting the moment it finds one, so what it clears is the rota, the
+   * assignments and any standing hold of somebody who never took an
+   * appointment. Every one of those is `ON DELETE restrict`, which is why the
+   * route has to name them rather than leave it to a cascade.
+   */
+  join(API_ROOT, "specialists", "[id]", "route.ts"),
+];
 
 function routeFiles(directory: string, found: string[] = []): string[] {
   for (const entry of readdirSync(directory)) {

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { businessTypes, type BusinessType } from "@/i18n/business-labels";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -40,15 +39,11 @@ function currencyName(code: string, locale: AppLocale): string {
 export function OrganizationSettings({
   locale,
   currency,
-  businessType,
-  slug,
   practicalCapacityBasisPoints,
   canEdit,
 }: {
   locale: AppLocale;
   currency: string;
-  businessType: BusinessType;
-  slug: string | null;
   practicalCapacityBasisPoints: number;
   canEdit: boolean;
 }) {
@@ -58,14 +53,11 @@ export function OrganizationSettings({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [publicSlug, setPublicSlug] = useState(slug ?? "");
   const [capacity, setCapacity] = useState(String(practicalCapacityBasisPoints / 100));
 
   async function change(patch: {
     locale?: AppLocale;
     currency?: string;
-    type?: BusinessType;
-    slug?: string | null;
     practical_capacity_basis_points?: number;
   }) {
     setPending(true);
@@ -144,29 +136,19 @@ export function OrganizationSettings({
       <p className="muted">{t("settings.currencyHint")}</p>
 
       {/*
-        Set apart from the two above, and the hint is the reason. Language and
-        currency change what gets recorded; this one changes only what the
-        reports call things. A switch that sits in a settings panel next to
-        «Валюта» will be read as a financial setting unless it says otherwise,
-        and an owner who believes it recomputes their year will never touch it.
+        «Формат работы» is not offered here.
+
+        It is chosen when the workspace is created and it decides nothing about
+        money — only whether the reports say «оплата труда мастеров» or «оплата
+        вашего труда» (see `i18n/business-labels.ts`). A control that changes
+        wording, sitting between currency and the capacity rate, read as a
+        financial setting and earned a paragraph of reassurance to say it was
+        not one.
+
+        The value is still editable through `PATCH /api/v1/organizations/settings`,
+        which is what an owner who really does change shape needs — and how this
+        comes back if it turns out they do so often enough to need a screen.
       */}
-      <div className="inline-form">
-        <label>
-          {t("settings.businessType")}
-          <select
-            value={businessType}
-            disabled={!canEdit || pending}
-            onChange={(event) => change({ type: event.target.value as BusinessType })}
-          >
-            {businessTypes.map((option) => (
-              <option key={option} value={option}>
-                {t(`businessType.${option}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <p className="muted">{t("settings.businessTypeHint")}</p>
 
       {/*
         Stored in basis points and shown as a percentage, because 75 is what an
@@ -203,33 +185,10 @@ export function OrganizationSettings({
       </form>
       <p className="muted">{t("settings.practicalCapacityHint")}</p>
 
-      <form
-        className="inline-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void change({ slug: publicSlug.trim() || null });
-        }}
-      >
-        <label>
-          {t("settings.bookingSlug")}
-          <input
-            value={publicSlug}
-            disabled={!canEdit || pending}
-            placeholder="studio-name"
-            autoComplete="off"
-            onChange={(event) => setPublicSlug(event.target.value.toLowerCase())}
-          />
-        </label>
-        <button className="secondary-button" type="submit" disabled={!canEdit || pending}>
-          {t("settings.bookingSlugSave")}
-        </button>
-      </form>
-      <p className="muted">{t("settings.bookingSlugHint")}</p>
-      {slug && (
-        <a className="text-link" href={`/book/${slug}`} target="_blank" rel="noreferrer">
-          /book/{slug}
-        </a>
-      )}
+      {/* The booking address moved to «Онлайн-запись», next to the addresses it
+          publishes and the switch that publishes them. It answers a question
+          about that screen, and answering it three screens away is how it read
+          as a general organization setting nobody had a reason to open. */}
 
       <div aria-live="polite" aria-atomic="true">
         {pending && <p className="muted">{t("common.saving")}</p>}

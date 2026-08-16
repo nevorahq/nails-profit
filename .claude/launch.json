@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "nails-profit-local-db",
+      "runtimeExecutable": "./scripts/dev-local.sh",
+      "runtimeArgs": [],
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

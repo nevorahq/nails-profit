@@ -12,10 +12,13 @@ export function LoginForm({
   initialMode = "signin",
   locale,
   next,
+  activeEmail = null,
 }: {
   initialMode?: "signin" | "signup";
   locale: AppLocale;
   next?: string;
+  /** Who is signed in in this browser already, and about to be replaced. */
+  activeEmail?: string | null;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
@@ -59,6 +62,9 @@ export function LoginForm({
       </Link>
       <h1>{mode === "signup" ? t("auth.signUpTitle") : t("auth.welcomeBack")}</h1>
       <p>{t("auth.subtitle")}</p>
+      {activeEmail && (
+        <div className="warning-banner">{t("auth.activeSession", { email: activeEmail })}</div>
+      )}
       <form onSubmit={submit}>
         {mode === "signup" && (
           <label>

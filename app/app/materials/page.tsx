@@ -3,6 +3,7 @@ import { MaterialCatalogue } from "@/components/material-catalogue";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
 import { loadMaterials } from "@/lib/materials";
+import { loadMaterialStock } from "@/lib/material-stock";
 import { loadMaterialTemplates } from "@/lib/material-templates";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -19,12 +20,13 @@ export default async function MaterialsPage() {
   }
 
   const canManage = canManageCatalogue(membership.role, "materials");
-  const [rows, templates] = await Promise.all([
+  const [rows, templates, stock] = await Promise.all([
     loadMaterials(membership.organizationId),
     // Loaded on the server: the catalogue is 155 rows of product data, and
     // fetching it from the browser would put a spinner in front of the search
     // box the owner is already typing into.
     canManage ? loadMaterialTemplates(locale) : Promise.resolve([]),
+    loadMaterialStock(membership.organizationId),
   ]);
 
   return (
@@ -50,6 +52,7 @@ export default async function MaterialsPage() {
       <MaterialCatalogue
         materials={rows}
         templates={templates}
+        stock={stock}
         locale={locale}
         canManage={canManage}
       />

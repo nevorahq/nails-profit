@@ -13,7 +13,7 @@ import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
-import { can, scopeFor } from "@/domain/rbac";
+import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { isPilotAccessEnforced } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
@@ -24,6 +24,7 @@ import { formatBasisPoints, formatMoneyMinor, formatPercentDelta } from "@/lib/f
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
+import { getActiveMembership } from "@/lib/membership";
 import { loadOnboarding } from "@/lib/onboarding";
 
 /**
@@ -73,6 +74,23 @@ export default async function AppPage({
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/login");
 
+  /*
+   * The one page that resolves its own membership rather than going through
+   * `requireWorkspace`, because it owns the two states that have no workspace
+   * to require: an account with no organization yet, and a pilot account not
+   * enrolled. Both are answered below with a full-page card.
+   *
+   * The identity it resolves by must still be the effective one. An owner
+   * looking at a colleague's interface gets the colleague's navigation from the
+   * shell, and a dashboard that quietly answered with the owner's own figures
+   * underneath it would be worse than showing nothing: the owner would read
+   * their studio's revenue believing it was one master's. `getActiveMembership`
+   * is the memoized resolution the shell already made, so this costs nothing
+   * and cannot disagree with it.
+   */
+  const caller = await getActiveMembership();
+  const effectiveUserId = caller.session ? (caller.membership?.userId ?? caller.userId) : session.user.id;
+
   const [membership] = await db
     .select({
       organization: organizations,
@@ -80,7 +98,7 @@ export default async function AppPage({
     })
     .from(memberships)
     .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-    .where(eq(memberships.userId, session.user.id))
+    .where(eq(memberships.userId, effectiveUserId))
     .limit(1);
 
   if (!membership) {
@@ -224,7 +242,21 @@ export default async function AppPage({
         : null;
 
     const people = await loadSpecialistOptions(tx);
-    const onboarding = await loadOnboarding(tx);
+    /*
+     * «Первый расчёт» is a setup checklist, and all five of its steps are
+     * catalogue work: a specialist with a commission rule, a priced material, a
+     * service, a recipe, a first closed visit. A role that cannot write the
+     * shared catalogue cannot advance any of them, so for a master the panel is
+     * five links to pages they do not have — a permanent, unfinishable list on
+     * the one screen they open every morning.
+     *
+     * Not computed rather than not rendered: the progress costs several
+     * queries, and nobody should pay for them to produce something the page
+     * then drops.
+     */
+    const onboarding = canManageCatalogue(membership.role, "services")
+      ? await loadOnboarding(tx)
+      : null;
 
     return {
       ...dashboard,
@@ -341,7 +373,7 @@ export default async function AppPage({
         />
       </details>
 
-      {!data.onboarding.complete && (
+      {data.onboarding && !data.onboarding.complete && (
         <OnboardingPanel progress={data.onboarding} locale={locale} />
       )}
 

@@ -20,6 +20,7 @@ import { commissionBases, commissionTypes, type TaxRates } from "@/domain/costin
 import { expenseCategories } from "@/domain/expense-categories";
 import { materialCostingModes } from "@/domain/material-pricing";
 import { materialDataSources, materialKinds } from "@/domain/material-provenance";
+import { materialStockCheckBases } from "@/domain/material-stock";
 import type { MaterialUsageSource } from "@/domain/material-usage";
 import { memberRoles } from "@/domain/rbac";
 import type { LocalizedText } from "@/i18n/localized-text";
@@ -36,6 +37,7 @@ export const materialCostingMode = pgEnum("material_costing_mode", materialCosti
 // database and the code cannot drift into disagreeing about what a source is.
 export const materialDataSource = pgEnum("material_data_source", materialDataSources);
 export const materialKind = pgEnum("material_kind", materialKinds);
+export const materialStockCheckBasis = pgEnum("material_stock_check_basis", materialStockCheckBases);
 // Generated from the domain list so a category can never exist in one and not
 // the other.
 export const expenseCategory = pgEnum("expense_category", expenseCategories);
@@ -373,6 +375,122 @@ export const materialPriceVersions = pgTable(
     index("material_price_org_material_idx").on(table.organizationId, table.materialId),
     check("material_price_non_negative", sql`${table.packagePriceMinor} >= 0`),
     check("material_package_size_positive", sql`${table.packageSizeMilliUnits} > 0`),
+  ],
+);
+
+/**
+ * A crate of gel actually bought, spec CST-011 and section 34 of the materials
+ * brief.
+ *
+ * Two things it is not. It is not a second cost basis: recording a purchase
+ * writes a `material_price_version` and points at it, so what a future visit is
+ * costed on stays the one append-only history it has always been. And it is not
+ * a warehouse receipt — there is no lot, no location, no reservation. It exists
+ * so the estimated balance has a positive side to it, and so the card can say
+ * whether the price on file still resembles what is being paid.
+ *
+ * The packaging is copied rather than read from the material, because a studio
+ * that switched from 15 ml bottles to a 30 ml one has bought both, and the
+ * quantity that reaches the balance depends on which.
+ */
+export const materialPurchases = pgTable(
+  "material_purchase",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => materials.id, { onDelete: "restrict" }),
+    /** Packages bought, not base units: the owner counts bottles. */
+    packageQuantity: integer("package_quantity").notNull(),
+    packageSizeMilliUnits: bigint("package_size_milli_units", { mode: "number" }).notNull(),
+    unitPackageCostMinor: bigint("unit_package_cost_minor", { mode: "number" }).notNull(),
+    /**
+     * Generated rather than written, so the two figures can never disagree.
+     * The brief lists `totalCost` as a field; storing it as a column the
+     * application also computes would be a second truth one insert away from
+     * drifting.
+     */
+    totalCostMinor: bigint("total_cost_minor", { mode: "number" }).generatedAlwaysAs(
+      sql`package_quantity * unit_package_cost_minor`,
+    ),
+    currency: currency("currency").notNull(),
+    /**
+     * When it was bought, which is not when it was typed in. A receipt entered
+     * a week late belongs to the week it was paid — the balance and the monthly
+     * comparison both read this column.
+     */
+    purchasedAt: timestamp("purchased_at", { withTimezone: true }).notNull().defaultNow(),
+    supplier: text("supplier"),
+    note: text("note"),
+    /**
+     * The price version this purchase produced. Nullable: a backdated receipt
+     * entered after a newer price is on file records what was paid without
+     * pretending to be the current cost basis.
+     */
+    priceVersionId: uuid("price_version_id").references(() => materialPriceVersions.id, {
+      onDelete: "set null",
+    }),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("material_purchase_org_material_idx").on(
+      table.organizationId,
+      table.materialId,
+      table.purchasedAt,
+    ),
+    check("material_purchase_quantity_positive", sql`${table.packageQuantity} > 0`),
+    check("material_purchase_size_positive", sql`${table.packageSizeMilliUnits} > 0`),
+    check("material_purchase_cost_non_negative", sql`${table.unitPackageCostMinor} >= 0`),
+  ],
+);
+
+/**
+ * What was actually left on the shelf when somebody looked, spec section 38.
+ *
+ * The measurement that makes the estimate self-correcting. Append-only like
+ * every other history in this schema: a count is something that happened at a
+ * time, and editing yesterday's count would move a balance that has already
+ * been reported. `domain/material-stock.ts` reads the newest one as the
+ * baseline and replays only what came after it.
+ *
+ * Stored in base units even though the interface asks for a rough share of a
+ * package, because "≈25%" is a question about a bottle and the balance is
+ * arithmetic over millilitres. The conversion belongs to the screen that knows
+ * which bottle was being looked at.
+ */
+export const materialStockChecks = pgTable(
+  "material_stock_check",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    materialId: uuid("material_id")
+      .notNull()
+      .references(() => materials.id, { onDelete: "restrict" }),
+    observedQuantityMilliUnits: bigint("observed_quantity_milli_units", { mode: "number" }).notNull(),
+    /**
+     * Whether the figure was eyeballed against a bucket or actually measured.
+     * The calibration suggestion is worth more from a scale than from a glance,
+     * and a later iteration that weights them needs to be able to tell.
+     */
+    basis: materialStockCheckBasis("basis").notNull().default("bucket"),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+    note: text("note"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("material_stock_check_org_material_idx").on(
+      table.organizationId,
+      table.materialId,
+      table.checkedAt,
+    ),
+    check("material_stock_check_non_negative", sql`${table.observedQuantityMilliUnits} >= 0`),
   ],
 );
 

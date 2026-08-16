@@ -1,8 +1,21 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { memberships, specialists } from "@/db/schema";
+import {
+  availabilityExceptions,
+  bookingHolds,
+  bookings,
+  commissionRuleServices,
+  commissionRules,
+  laborCostRules,
+  memberships,
+  scheduleRules,
+  specialistLocations,
+  specialistServices,
+  specialists,
+  visits,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
@@ -166,37 +179,134 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
 
   const { id } = await context.params;
 
-  const archived = await withTenant(actor.organizationId, async (tx) => {
+  const outcome = await withTenant(actor.organizationId, async (tx) => {
     const [existing] = await tx
       .select()
       .from(specialists)
       .where(and(eq(specialists.id, id), isNull(specialists.archivedAt)))
       .limit(1);
     if (!existing) return null;
-    if (existing.userId) return { blocked: true } as const;
 
-    const [specialist] = await tx
-      .update(specialists)
-      .set({ archivedAt: new Date(), updatedBy: actor.userId, updatedAt: new Date(), version: sql`${specialists.version} + 1` })
-      .where(eq(specialists.id, id))
-      .returning({ id: specialists.id });
+    /*
+     * An account has to be unlinked first, and that is the point of the two
+     * steps rather than a formality: while the link stands, a person can sign
+     * in and the master's own visits, clients and dashboard resolve through
+     * this row. Removing it underneath a live session would log somebody into
+     * a product that answers FORBIDDEN to everything.
+     */
+    if (existing.userId) return { blocked: "account" } as const;
 
+    /*
+     * A master who has worked is history, and this is where the difference
+     * between the two words in the interface lives.
+     *
+     * `visit.specialist_id` is `ON DELETE restrict` and their commission is
+     * inside every `financial_snapshot` those visits wrote — deleting the row
+     * would either be refused by the database or leave months of payroll with
+     * nobody attached to it. A booking is the same claim about the future.
+     * Those rows are archived; the delete below is for the master who was
+     * entered by mistake and never worked a day.
+     */
+    const [{ value: visitCount }] = await tx
+      .select({ value: count() })
+      .from(visits)
+      .where(eq(visits.specialistId, id));
+    const [{ value: bookingCount }] = await tx
+      .select({ value: count() })
+      .from(bookings)
+      .where(eq(bookings.specialistId, id));
+
+    if (visitCount > 0 || bookingCount > 0) {
+      const [specialist] = await tx
+        .update(specialists)
+        .set({
+          archivedAt: new Date(),
+          updatedBy: actor.userId,
+          updatedAt: new Date(),
+          version: sql`${specialists.version} + 1`,
+        })
+        .where(eq(specialists.id, id))
+        .returning({ id: specialists.id });
+
+      await recordAuditEvent(tx, {
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        eventType: "specialist.archived",
+        entityType: "specialist",
+        entityId: specialist.id,
+        before: { name: existing.name },
+        after: { archived_at: new Date().toISOString(), visits: visitCount, bookings: bookingCount },
+        requestId: requestIdentifier,
+      });
+
+      return { archived: specialist.id, visitCount, bookingCount } as const;
+    }
+
+    /*
+     * Nothing of theirs outlives them. Every row below describes this master
+     * and only this master — where they work, what they do, when, and what
+     * they are paid — and each reference is `restrict`, which is the database
+     * insisting the decision be taken here rather than by a cascade nobody
+     * reviewed. Leaves first, then the row itself.
+     */
+    const rules = await tx
+      .select({ id: commissionRules.id })
+      .from(commissionRules)
+      .where(eq(commissionRules.specialistId, id));
+    if (rules.length > 0) {
+      await tx.delete(commissionRuleServices).where(
+        inArray(commissionRuleServices.commissionRuleId, rules.map((rule) => rule.id)),
+      );
+    }
+
+    await tx.delete(bookingHolds).where(eq(bookingHolds.specialistId, id));
+    await tx.delete(availabilityExceptions).where(eq(availabilityExceptions.specialistId, id));
+    await tx.delete(scheduleRules).where(eq(scheduleRules.specialistId, id));
+    await tx.delete(specialistServices).where(eq(specialistServices.specialistId, id));
+    await tx.delete(specialistLocations).where(eq(specialistLocations.specialistId, id));
+    await tx.delete(commissionRules).where(eq(commissionRules.specialistId, id));
+    await tx.delete(laborCostRules).where(eq(laborCostRules.specialistId, id));
+    await tx.delete(specialists).where(eq(specialists.id, id));
+
+    /*
+     * The whole row, because the audit event is the only place this master will
+     * exist afterwards and "who did we remove" has to be answerable from it.
+     */
     await recordAuditEvent(tx, {
       organizationId: actor.organizationId,
       actorUserId: actor.userId,
-      eventType: "specialist.archived",
+      eventType: "specialist.deleted",
       entityType: "specialist",
-      entityId: specialist.id,
-      before: { name: existing.name },
-      after: { archived_at: new Date().toISOString() },
+      entityId: existing.id,
+      before: {
+        name: existing.name,
+        cooperation_type: existing.cooperationType,
+        is_principal: existing.isPrincipal,
+      },
+      after: null,
       requestId: requestIdentifier,
     });
 
-    return specialist;
+    return { deleted: existing.id } as const;
   });
 
-  if (!archived) return apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", requestIdentifier);
-  if ("blocked" in archived) return apiError(409, "SPECIALIST_HAS_ACCOUNT", "Cannot delete a specialist with a linked account", requestIdentifier);
+  if (!outcome) {
+    return apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", requestIdentifier);
+  }
+  if ("blocked" in outcome) {
+    return apiError(
+      409,
+      "SPECIALIST_HAS_ACCOUNT",
+      "Unlink the account before removing the specialist",
+      requestIdentifier,
+    );
+  }
+  if ("archived" in outcome) {
+    return apiSuccess(
+      { id: outcome.archived, removed: "archived" as const, visits: outcome.visitCount, bookings: outcome.bookingCount },
+      requestIdentifier,
+    );
+  }
 
-  return apiSuccess({ id: archived.id }, requestIdentifier);
+  return apiSuccess({ id: outcome.deleted, removed: "deleted" as const }, requestIdentifier);
 }

@@ -33,7 +33,6 @@ export default async function SettingsPage() {
   const {
     membership,
     organizationName,
-    organizationSlug,
     locale,
     currency,
     businessType,
@@ -155,7 +154,12 @@ export default async function SettingsPage() {
 
   const members: TeamMember[] = canReadTeam
     ? await db
-        .select({ user_id: memberships.userId, email: users.email, role: memberships.role })
+        .select({
+          id: memberships.id,
+          user_id: memberships.userId,
+          email: users.email,
+          role: memberships.role,
+        })
         .from(memberships)
         .innerJoin(users, eq(memberships.userId, users.id))
         .where(eq(memberships.organizationId, membership.organizationId))
@@ -168,8 +172,6 @@ export default async function SettingsPage() {
         <OrganizationSettings
           locale={locale}
           currency={currency}
-          businessType={businessType}
-          slug={organizationSlug}
           practicalCapacityBasisPoints={practicalCapacityBasisPoints}
           canEdit={can(membership.role, "organization_settings", "write")}
         />
@@ -206,6 +208,21 @@ export default async function SettingsPage() {
           members={members}
           canManage={can(membership.role, "user_management", "write")}
           locale={locale}
+          /*
+           * Owner only, and never from inside a preview — an owner two levels
+           * deep would be choosing a colleague to watch while wearing another
+           * colleague's face. `POST /api/v1/preview` refuses both cases on the
+           * server; this only keeps the control from being offered.
+           */
+          canPreview={membership.role === "owner" && membership.preview === null}
+          /*
+           * Who is asking, so the row for the person themselves offers no
+           * removal and a manager is not offered an owner. Both are refused by
+           * the endpoint as well — this decides what the screen shows, not what
+           * the server allows.
+           */
+          currentUserId={membership.userId}
+          currentRole={membership.role}
         />
       )}
       {canReadData && (

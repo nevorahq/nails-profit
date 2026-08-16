@@ -1,7 +1,16 @@
-import { eq, sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { locations } from "@/db/schema";
+import {
+  availabilityExceptions,
+  bookingHolds,
+  bookingSettings,
+  bookings,
+  locations,
+  scheduleRules,
+  specialistLocations,
+  workplaces,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { checkSlug } from "@/domain/slug";
@@ -133,4 +142,102 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     throw error;
   }
+}
+
+/**
+ * Removing an address that was never used.
+ *
+ * The rule this file states at the top still holds: an address a client was
+ * booked at is a record of where money was earned, and it is archived rather
+ * than deleted. What that rule never covered is the address typed with a
+ * misspelling and abandoned five seconds later — it is a record of nothing, and
+ * leaving it on the screen forever as «в архиве» is the product being pedantic
+ * rather than careful.
+ *
+ * So: a booking is what makes an address history. One row in `booking` and this
+ * refuses and says to archive instead. With none, the address goes, and its own
+ * configuration goes with it — settings, seats, assignments, the rota, day
+ * exceptions and any hold still standing. Those describe *this* address and
+ * mean nothing without it; every one of them is `ON DELETE restrict`, which is
+ * the database making sure the decision is taken here rather than by a cascade
+ * nobody reviewed.
+ */
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const requestIdentifier = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) {
+    return apiError(401, "UNAUTHENTICATED", "Authentication is required", requestIdentifier);
+  }
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", requestIdentifier);
+  }
+
+  const actor = caller.membership;
+  if (!can(actor.role, "organization_settings", "write")) {
+    return apiError(403, "FORBIDDEN", "This role cannot manage locations", requestIdentifier);
+  }
+  const disabled = await bookingModuleRefusal(actor.organizationId, requestIdentifier, "write");
+  if (disabled) return disabled;
+
+  const { id } = await context.params;
+
+  const outcome = await withTenant(actor.organizationId, async (tx) => {
+    const [existing] = await tx.select().from(locations).where(eq(locations.id, id)).limit(1);
+    if (!existing) return null;
+
+    const [{ value: bookingCount }] = await tx
+      .select({ value: count() })
+      .from(bookings)
+      .where(eq(bookings.locationId, id));
+    if (bookingCount > 0) return { blocked: bookingCount } as const;
+
+    // Order matters: holds and exceptions point at the rota's address, and every
+    // reference is `restrict`, so the leaves go before the address itself.
+    await tx.delete(bookingHolds).where(eq(bookingHolds.locationId, id));
+    await tx.delete(availabilityExceptions).where(eq(availabilityExceptions.locationId, id));
+    await tx.delete(scheduleRules).where(eq(scheduleRules.locationId, id));
+    await tx.delete(specialistLocations).where(eq(specialistLocations.locationId, id));
+    await tx.delete(workplaces).where(eq(workplaces.locationId, id));
+    await tx.delete(bookingSettings).where(eq(bookingSettings.locationId, id));
+    await tx.delete(locations).where(eq(locations.id, id));
+
+    /*
+     * The whole row, not just its id. The audit event is the only place this
+     * address will exist afterwards, so a later question about what was removed
+     * has to be answerable from the event alone.
+     */
+    await recordAuditEvent(tx, {
+      organizationId: actor.organizationId,
+      actorUserId: actor.userId,
+      eventType: "location.deleted",
+      entityType: "location",
+      entityId: existing.id,
+      before: {
+        slug: existing.slug,
+        name: existing.name,
+        address: existing.address,
+        timezone: existing.timezone,
+        status: existing.status,
+      },
+      after: null,
+      requestId: requestIdentifier,
+    });
+
+    return { deleted: existing.id } as const;
+  });
+
+  if (!outcome) {
+    return apiError(404, "LOCATION_NOT_FOUND", "No location with this ID", requestIdentifier);
+  }
+  if ("blocked" in outcome) {
+    return apiError(
+      409,
+      "LOCATION_HAS_BOOKINGS",
+      "The address has bookings and can only be archived",
+      requestIdentifier,
+      { details: { booking_count: outcome.blocked } },
+    );
+  }
+
+  return apiSuccess({ id: outcome.deleted }, requestIdentifier);
 }

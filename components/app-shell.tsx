@@ -4,6 +4,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { BrandMark, NavIcon } from "@/components/icons";
 import { bottomNavFor, navFor, navGroups, type NavItem } from "@/components/nav-items";
 import { NavLink } from "@/components/nav-link";
+import { PreviewBanner, type PreviewBannerContext } from "@/components/preview-banner";
 import { TopbarTitle } from "@/components/topbar-title";
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
@@ -33,12 +34,22 @@ export function AppShell({
   role,
   organizationName,
   userEmail,
+  preview = null,
+  stalePreview = false,
 }: {
   children: React.ReactNode;
   locale: AppLocale;
   role: MemberRole;
   organizationName: string;
   userEmail: string;
+  /**
+   * Set while an owner is looking at a colleague's interface. Everything else
+   * on this screen — `role`, `userEmail`, the figures below — is already the
+   * colleague's, which is what makes the banner necessary rather than merely
+   * informative.
+   */
+  preview?: PreviewBannerContext | null;
+  stalePreview?: boolean;
 }) {
   const t = getTranslator(locale);
   const items = navFor(role);
@@ -49,7 +60,9 @@ export function AppShell({
   ];
 
   return (
-    <div className="app-shell-root">
+    <div className={`app-shell-root${preview ? " app-shell-previewing" : ""}`}>
+      <PreviewBanner preview={preview} stale={stalePreview} locale={locale} />
+
       <header className="app-topbar">
         {/*
           Two cells rather than one flat row: at the desktop breakpoint this

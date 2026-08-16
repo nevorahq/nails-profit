@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import type { AppLocale } from "@/i18n/messages";
 import { getActiveMembership } from "@/lib/membership";
+import { readPreviewCookie } from "@/lib/preview-request";
 
 /**
  * The shell for every signed-in screen.
@@ -31,12 +32,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .where(eq(organizations.id, caller.membership.organizationId))
     .limit(1);
 
+  const { preview } = caller.membership;
+  // A selection the membership check refused: the colleague left the team, or
+  // the cookie outlived the account that set it. The shell renders owner mode
+  // and asks the banner to clear the dead cookie — see its `stale` prop.
+  const stalePreview = preview === null && (await readPreviewCookie()) !== null;
+
   return (
     <AppShell
       locale={(organization?.locale ?? "ru") as AppLocale}
       role={caller.membership.role}
       organizationName={organization?.name ?? ""}
       userEmail={caller.membership.userEmail}
+      preview={
+        preview && {
+          targetName: preview.targetName,
+          targetEmail: preview.targetEmail,
+          targetRole: preview.targetRole,
+          actorEmail: preview.actorEmail,
+        }
+      }
+      stalePreview={stalePreview}
     >
       {children}
     </AppShell>

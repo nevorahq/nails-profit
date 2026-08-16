@@ -25,6 +25,23 @@
   --warning-border: #d4bd83;
   --warning-soft: #f8f0dc;
   --shadow: 0 24rem 80rem rgba(15, 42, 29, 0.14);
+
+  /*
+   * Soft UI. Both shadows are the palette restated, not new colour: the light
+   * one is white, the dark one is `--forest-950` at low alpha. Nothing here
+   * introduces a hue the product did not already have.
+   *
+   * The offsets say where the light is — top-left, consistently, on every
+   * surface. Inconsistency is what makes this style look broken rather than
+   * soft: one element lit from the other side reads as a rendering bug.
+   */
+  --neu-light: rgba(255, 255, 255, 0.92);
+  --neu-dark: rgba(15, 42, 29, 0.13);
+  --neu-dark-soft: rgba(15, 42, 29, 0.07);
+  --neu-raised: -7rem -7rem 16rem var(--neu-light), 7rem 7rem 18rem var(--neu-dark);
+  --neu-raised-sm: -3rem -3rem 8rem var(--neu-light), 3rem 3rem 9rem var(--neu-dark);
+  --neu-inset: inset 4rem 4rem 9rem var(--neu-dark-soft), inset -3rem -3rem 8rem var(--neu-light);
+  --neu-pressed: inset 3rem 3rem 8rem var(--neu-dark), inset -2rem -2rem 6rem var(--neu-light);
 }
 
 * { box-sizing: border-box; }
@@ -150,15 +167,50 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .consent-field a, .legal-footer a { color: var(--accent); text-underline-offset: 4rem; }
 .legal-footer { display: flex; gap: 18rem; flex-wrap: wrap; margin-top: 28rem; color: var(--muted); font-size: 13rem; }
 
+/*
+ * The landing page, on the product's own five colours.
+ *
+ * It used to carry a private palette — a warm cream canvas, a terracotta
+ * accent, a plum ink — that shared nothing with the application behind the
+ * «Войти» button. Someone arriving from the landing changed colour worlds at
+ * the moment they signed in, which is the one seam a marketing page exists to
+ * avoid. These names stay, because every rule below already speaks through
+ * them; only what they resolve to changes, and now each one resolves to a token
+ * from `:root`.
+ *
+ * Contrast was the constraint that decided the mapping rather than taste.
+ * `--sage-600` reaches 3.0:1 on the canvas, so it carries figures and shapes
+ * but never small text; `--forest-700` reaches 7.0:1 and takes everything that
+ * has to be read. That is why the accent is the darker green and the mid green
+ * is kept for the things that are looked at rather than read.
+ */
 .marketing-page {
-  --marketing-canvas: #f7f3ed;
-  --marketing-surface: #fffcf8;
-  --marketing-ink: #241e26;
-  --marketing-muted: #706872;
-  --marketing-line: #d9d0c6;
-  --marketing-accent: #d75b45;
-  --marketing-accent-dark: #b84535;
-  --marketing-profit: #2f7552;
+  --marketing-canvas: var(--leaf-100);
+  --marketing-surface: var(--surface-strong);
+  /** One step below the canvas: tab strips, meter tracks, the closing panel. */
+  --marketing-sunken: var(--surface);
+  --marketing-ink: var(--forest-950);
+  --marketing-muted: var(--forest-700);
+  --marketing-line: var(--line);
+  /** Interactive and emphatic, and dark enough to be read at 10rem. */
+  --marketing-accent: var(--forest-700);
+  --marketing-accent-dark: var(--forest-950);
+  /** Small shapes nobody reads: the middle segment of the margin meter. */
+  --marketing-decor: var(--sage-300);
+  /*
+   * The corner disc, which the header and the kicker sit on top of. At full
+   * strength `--sage-300` leaves small text at 4.47:1 — under the 4.5:1 that
+   * body copy needs, and by little enough to be missed by a check that reads
+   * the canvas instead of what is actually behind the glyphs. Thinned against
+   * the canvas it lands at 5.5:1 and keeps the tonal shift the shape is for.
+   */
+  --marketing-wash: rgba(174, 195, 176, 0.55);
+  /** The colour money is written in, on light and dark alike. */
+  --marketing-profit: var(--sage-600);
+  /** On the ink-filled panels: the calculator card and the hero stamp. */
+  --marketing-on-dark: var(--surface-strong);
+  --marketing-on-dark-muted: var(--sage-300);
+  --marketing-on-dark-line: rgba(174, 195, 176, 0.28);
   position: relative;
   overflow: hidden;
   color: var(--marketing-ink);
@@ -173,7 +225,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   width: min(650rem, 180vw);
   height: 650rem;
   border-radius: 50%;
-  background: #ece5da;
+  background: var(--marketing-wash);
   content: "";
 }
 .marketing-page > *:not(.marketing-grain) { position: relative; z-index: 1; }
@@ -196,11 +248,11 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 .marketing-brand { display: inline-flex; align-items: center; gap: 10rem; color: var(--marketing-ink); font-size: 18rem; font-weight: 700; letter-spacing: -.035em; text-decoration: none; }
 .marketing-brand sup { margin-left: 2rem; color: var(--marketing-accent); font-size: 9rem; letter-spacing: 0; vertical-align: top; }
-.marketing-mark { display: inline-grid; width: 32rem; height: 32rem; place-items: center; border: 1rem solid var(--marketing-ink); border-radius: 50%; color: var(--marketing-ink); font-family: Georgia, serif; font-size: 10rem; letter-spacing: -.08em; }
+.marketing-mark { display: inline-grid; width: 32rem; height: 32rem; place-items: center; border: 1rem solid var(--marketing-ink); border-radius: 50%; color: var(--marketing-ink); font-size: 10rem; letter-spacing: -.08em; }
 .marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 30rem; }
 .marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color 140ms ease; }
 .marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
-.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: #fffaf5; font-size: 13rem; font-weight: 700; text-decoration: none; transition: background 160ms ease, transform 160ms ease; }
+.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background 160ms ease, transform 160ms ease; }
 .marketing-cta:hover { background: var(--marketing-accent-dark); transform: translateY(-2rem); }
 .marketing-cta span { font-size: 18rem; font-weight: 400; line-height: 1; }
 .marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 7rem; }
@@ -208,7 +260,16 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-hero { display: grid; grid-template-columns: minmax(0, .94fr) minmax(440rem, 1.06fr); align-items: center; gap: clamp(42rem, 6vw, 120rem); width: min(1248rem, calc(100% - 96rem)); min-height: 720rem; margin: 0 auto; padding: 76rem 0 92rem; }
 .marketing-kicker { display: flex; align-items: center; gap: 10rem; margin: 0 0 20rem; color: var(--marketing-accent); font-size: 11rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .marketing-kicker span { width: 18rem; height: 1rem; background: currentColor; }
-.hero-copy h1, .section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(52rem, 5.2vw, 84rem); font-weight: 600; line-height: .99; letter-spacing: -.06em; }
+.hero-copy h1, .section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { margin: 0; font-size: clamp(52rem, 5.2vw, 84rem); font-weight: 750; line-height: 1.02; letter-spacing: -.045em; }
+/*
+ * The slant is the browser's, and deliberately left that way. Onest ships
+ * no italic face — every loaded face reports `style: normal` — so `<em>`
+ * here is a synthesised oblique. Pinning the angle with `oblique 11deg`
+ * reads like the careful fix and is the opposite of one: Chrome answers a
+ * specified angle on a font that has no oblique face by declining to
+ * synthesise at all, which stands the line back up and leaves the emphasis
+ * carried by colour alone.
+ */
 .hero-copy h1 em { color: var(--marketing-accent); font-weight: inherit; }
 .marketing-intro { max-width: 510rem; margin: 28rem 0 32rem; color: var(--marketing-muted); font-size: 18rem; line-height: 1.55; }
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 22rem; }
@@ -217,24 +278,24 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .hero-fine-print { max-width: 330rem; margin: 42rem 0 0; color: var(--marketing-muted); font-size: 11rem; line-height: 1.45; }
 .hero-visual { position: relative; min-height: 550rem; padding: 0 38rem 38rem 0; }
 .hero-visual > img { display: block; width: 100%; height: 520rem; border-radius: 10rem; object-fit: cover; object-position: 55% center; filter: saturate(.84) contrast(.98); }
-.hero-visual::after { position: absolute; inset: 0 38rem 38rem 0; border-radius: 10rem; background: linear-gradient(130deg, rgba(36,30,38,.08), transparent 52%); content: ""; pointer-events: none; }
+.hero-visual::after { position: absolute; inset: 0 38rem 38rem 0; border-radius: 10rem; background: linear-gradient(130deg, rgba(15, 42, 29, .08), transparent 52%); content: ""; pointer-events: none; }
 .hero-sun { position: absolute; top: -28rem; right: -12rem; width: 154rem; height: 154rem; border-radius: 50%; background: var(--marketing-accent); mix-blend-mode: multiply; opacity: .94; }
-.hero-calculation { position: absolute; right: 0; bottom: 0; width: 312rem; padding: 20rem; border: 1rem solid rgba(36,30,38,.16); border-radius: 8rem; background: rgba(255,252,248,.96); box-shadow: 0 22rem 54rem rgba(50,36,35,.15); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
+.hero-calculation { position: absolute; right: 0; bottom: 0; width: 312rem; padding: 20rem; border: 1rem solid var(--marketing-line); border-radius: 8rem; background: rgba(251, 253, 248, .96); box-shadow: 0 22rem 54rem rgba(15, 42, 29, .15); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
 .calculation-topline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rem; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .calculation-topline i { display: block; width: 7rem; height: 7rem; border-radius: 50%; background: var(--marketing-profit); }
 .hero-calculation > strong { display: block; margin-bottom: 16rem; font-size: 15rem; letter-spacing: -.02em; }
 .calculation-row, .calculation-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; padding: 6rem 0; font-size: 12rem; }
 .calculation-row span { color: var(--marketing-muted); }.calculation-row b { font-size: 12rem; font-weight: 600; }.calculation-total { margin-top: 7rem; padding: 13rem 0 3rem; border-top: 1rem solid var(--marketing-line); }.calculation-total span { font-weight: 700; }.calculation-total strong { color: var(--marketing-profit); font-size: 21rem; letter-spacing: -.04em; }
-.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 6rem; background: #eee7de; }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all 150ms ease; }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem rgba(36,30,38,.07); }
-.hero-stamp { position: absolute; bottom: 70rem; left: -50rem; display: grid; gap: 4rem; width: 92rem; height: 92rem; place-content: center; border-radius: 50%; background: var(--marketing-ink); color: var(--marketing-surface); font-family: Georgia, serif; text-align: center; transform: rotate(-12deg); }.hero-stamp span:first-child { color: #e9a998; font-size: 11rem; }.hero-stamp span:last-child { font-size: 11rem; line-height: 1; }
+.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 6rem; background: var(--marketing-sunken); }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all 150ms ease; }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
+.hero-stamp { position: absolute; bottom: 70rem; left: -50rem; display: grid; gap: 4rem; width: 92rem; height: 92rem; place-content: center; border-radius: 50%; background: var(--marketing-ink); color: var(--marketing-surface); text-align: center; transform: rotate(-12deg); }.hero-stamp span:first-child { color: var(--marketing-on-dark-muted); font-size: 11rem; }.hero-stamp span:last-child { font-size: 11rem; line-height: 1; }
 
-.section-wrap { width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; }.marketing-reason { display: grid; grid-template-columns: .85fr 1.15fr; gap: clamp(45rem, 9vw, 180rem); padding: 124rem 0; border-top: 1rem solid var(--marketing-line); }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: clamp(35rem, 3.4vw, 57rem); }.section-lead > p:last-child, .product-copy > p:last-child, .calculator-copy > p:last-child { max-width: 475rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }.marketing-pillars { display: grid; border-top: 1rem solid var(--marketing-line); }.marketing-pillar { display: grid; grid-template-columns: 56rem 1fr minmax(160rem, .85fr); align-items: baseline; gap: 14rem; padding: 22rem 0; border-bottom: 1rem solid var(--marketing-line); }.marketing-pillar > span { color: var(--marketing-accent); font-family: Georgia, serif; font-size: 14rem; }.marketing-pillar h3 { margin: 0; font-size: 17rem; letter-spacing: -.03em; }.marketing-pillar p { margin: 0; color: var(--marketing-muted); font-size: 13rem; line-height: 1.5; }
+.section-wrap { width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; }.marketing-reason { display: grid; grid-template-columns: .85fr 1.15fr; gap: clamp(45rem, 9vw, 180rem); padding: 124rem 0; border-top: 1rem solid var(--marketing-line); }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: clamp(35rem, 3.4vw, 57rem); }.section-lead > p:last-child, .product-copy > p:last-child, .calculator-copy > p:last-child { max-width: 475rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }.marketing-pillars { display: grid; border-top: 1rem solid var(--marketing-line); }.marketing-pillar { display: grid; grid-template-columns: 56rem 1fr minmax(160rem, .85fr); align-items: baseline; gap: 14rem; padding: 22rem 0; border-bottom: 1rem solid var(--marketing-line); }.marketing-pillar > span { color: var(--marketing-accent); font-size: 14rem; font-variant-numeric: tabular-nums; }.marketing-pillar h3 { margin: 0; font-size: 17rem; letter-spacing: -.03em; }.marketing-pillar p { margin: 0; color: var(--marketing-muted); font-size: 13rem; line-height: 1.5; }
 
-.marketing-product { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(50rem, 8vw, 140rem); padding: 108rem 0; }.product-photo { position: relative; padding-bottom: 45rem; }.product-photo img { display: block; width: 100%; height: 490rem; border-radius: 8rem; object-fit: cover; object-position: 70% center; filter: saturate(.75); }.product-photo p { position: absolute; right: -28rem; bottom: 0; display: flex; align-items: center; gap: 11rem; width: 250rem; margin: 0; padding: 15rem 17rem; border-radius: 7rem; background: var(--marketing-profit); color: #f7f3ed; font-size: 11rem; line-height: 1.4; }.product-photo p span { font-size: 17rem; }.product-report { margin-top: 34rem; padding: 22rem; border: 1rem solid var(--marketing-line); border-radius: 8rem; background: var(--marketing-surface); }.report-heading, .report-labels { display: flex; justify-content: space-between; gap: 12rem; }.report-heading { font-size: 13rem; font-weight: 700; }.report-status { padding: 3rem 7rem; border-radius: 99rem; background: #ddebe3; color: var(--marketing-profit); font-size: 10rem; }.report-bar { display: flex; height: 13rem; margin: 24rem 0 7rem; overflow: hidden; border-radius: 2rem; background: #eee7de; }.report-bar i:nth-child(1) { width: 54%; background: var(--marketing-profit); }.report-bar i:nth-child(2) { width: 7%; background: #8e9d84; }.report-bar i:nth-child(3) { width: 39%; background: var(--marketing-accent); }.report-labels { color: var(--marketing-muted); font-size: 10rem; }.product-report p { margin: 21rem 0 16rem; font-size: 12rem; line-height: 1.5; }.product-report button { display: inline-flex; align-items: center; gap: 18rem; padding: 0; border: 0; background: transparent; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; cursor: pointer; }.product-report button span { font-size: 17rem; }
+.marketing-product { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(50rem, 8vw, 140rem); padding: 108rem 0; }.product-photo { position: relative; padding-bottom: 45rem; }.product-photo img { display: block; width: 100%; height: 490rem; border-radius: 8rem; object-fit: cover; object-position: 70% center; filter: saturate(.75); }.product-photo p { position: absolute; right: -28rem; bottom: 0; display: flex; align-items: center; gap: 11rem; width: 250rem; margin: 0; padding: 15rem 17rem; border-radius: 7rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 11rem; line-height: 1.4; }.product-photo p span { font-size: 17rem; }.product-report { margin-top: 34rem; padding: 22rem; border: 1rem solid var(--marketing-line); border-radius: 8rem; background: var(--marketing-surface); }.report-heading, .report-labels { display: flex; justify-content: space-between; gap: 12rem; }.report-heading { font-size: 13rem; font-weight: 700; }.report-status { padding: 3rem 7rem; border-radius: 99rem; background: var(--marketing-canvas); color: var(--marketing-accent); font-size: 10rem; }.report-bar { display: flex; height: 13rem; margin: 24rem 0 7rem; overflow: hidden; border-radius: 2rem; background: var(--marketing-sunken); }.report-bar i:nth-child(1) { width: 54%; background: var(--marketing-profit); }.report-bar i:nth-child(2) { width: 7%; background: var(--marketing-decor); }.report-bar i:nth-child(3) { width: 39%; background: var(--marketing-accent); }.report-labels { color: var(--marketing-muted); font-size: 10rem; }.product-report p { margin: 21rem 0 16rem; font-size: 12rem; line-height: 1.5; }.product-report button { display: inline-flex; align-items: center; gap: 18rem; padding: 0; border: 0; background: transparent; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; cursor: pointer; }.product-report button span { font-size: 17rem; }
 
-.marketing-calculator { display: grid; grid-template-columns: .78fr 1.22fr; align-items: start; gap: clamp(50rem, 10vw, 180rem); padding: 116rem 0; border-top: 1rem solid var(--marketing-line); }.calculator-card { display: grid; gap: 26rem; padding: 29rem; border-radius: 10rem; background: var(--marketing-ink); box-shadow: 0 24rem 50rem rgba(36,30,38,.16); color: var(--marketing-surface); }.calculator-card label { display: grid; grid-template-columns: 1fr auto; gap: 11rem 16rem; color: #d9d0c6; font-size: 12rem; font-weight: 600; }.calculator-card output { color: #fffaf5; font-family: Georgia, serif; font-size: 17rem; }.calculator-card input { grid-column: 1 / -1; width: 100%; height: 15rem; appearance: none; border-radius: 99rem; background: #504950; cursor: pointer; }.calculator-card input::-webkit-slider-thumb { width: 18rem; height: 18rem; appearance: none; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-accent); box-shadow: 0 0 0 1rem #fffaf5; }.calculator-result { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 5rem 16rem; padding-top: 22rem; border-top: 1rem solid #5e575f; }.calculator-result > span { color: #d9d0c6; font-size: 12rem; font-weight: 700; }.calculator-result > strong { color: #a9d6bd; font-family: Georgia, serif; font-size: 36rem; letter-spacing: -.06em; }.calculator-result > div { display: flex; grid-column: 1 / -1; justify-content: space-between; padding-top: 12rem; color: #d9d0c6; font-size: 11rem; }.calculator-result b { color: #fffaf5; font-size: 13rem; }.calculator-card small { color: #aea5ad; font-size: 10rem; line-height: 1.45; }
+.marketing-calculator { display: grid; grid-template-columns: .78fr 1.22fr; align-items: start; gap: clamp(50rem, 10vw, 180rem); padding: 116rem 0; border-top: 1rem solid var(--marketing-line); }.calculator-card { display: grid; gap: 26rem; padding: 29rem; border-radius: 10rem; background: var(--marketing-ink); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); color: var(--marketing-on-dark); }.calculator-card label { display: grid; grid-template-columns: 1fr auto; gap: 11rem 16rem; color: var(--marketing-on-dark-muted); font-size: 12rem; font-weight: 600; }.calculator-card output { color: var(--marketing-on-dark); font-size: 17rem; font-weight: 650; font-variant-numeric: tabular-nums; }.calculator-card input { grid-column: 1 / -1; width: 100%; height: 15rem; appearance: none; border-radius: 99rem; background: var(--marketing-muted); cursor: pointer; }.calculator-card input::-webkit-slider-thumb { width: 18rem; height: 18rem; appearance: none; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 1rem var(--marketing-on-dark); }.calculator-result { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 5rem 16rem; padding-top: 22rem; border-top: 1rem solid var(--marketing-on-dark-line); }.calculator-result > span { color: var(--marketing-on-dark-muted); font-size: 12rem; font-weight: 700; }.calculator-result > strong { color: var(--marketing-profit); font-size: 36rem; font-weight: 750; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }.calculator-result > div { display: flex; grid-column: 1 / -1; justify-content: space-between; padding-top: 12rem; color: var(--marketing-on-dark-muted); font-size: 11rem; }.calculator-result b { color: var(--marketing-on-dark); font-size: 13rem; }.calculator-card small { color: var(--marketing-on-dark-muted); font-size: 10rem; line-height: 1.45; }
 
-.marketing-final { display: grid; justify-items: center; padding: 136rem 8vw; border-radius: 12rem; background: #eee7de; text-align: center; }.marketing-final .marketing-mark { margin-bottom: 27rem; }.marketing-final h2 { max-width: 780rem; }.marketing-final p { max-width: 500rem; margin: 22rem 0 30rem; color: var(--marketing-muted); font-size: 15rem; line-height: 1.55; }.marketing-footer { display: flex; align-items: center; justify-content: space-between; width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; padding: 34rem 0; color: var(--marketing-muted); font-size: 11rem; }.marketing-footer div { display: flex; gap: 22rem; }.marketing-footer a { text-decoration: none; }.marketing-footer a:hover { color: var(--marketing-ink); }
+.marketing-final { display: grid; justify-items: center; padding: 136rem 8vw; border-radius: 12rem; background: var(--marketing-sunken); text-align: center; }.marketing-final .marketing-mark { margin-bottom: 27rem; }.marketing-final h2 { max-width: 780rem; }.marketing-final p { max-width: 500rem; margin: 22rem 0 30rem; color: var(--marketing-muted); font-size: 15rem; line-height: 1.55; }.marketing-footer { display: flex; align-items: center; justify-content: space-between; width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; padding: 34rem 0; color: var(--marketing-muted); font-size: 11rem; }.marketing-footer div { display: flex; gap: 22rem; }.marketing-footer a { text-decoration: none; }.marketing-footer a:hover { color: var(--marketing-ink); }
 
 .marketing-reveal { animation: marketing-enter 650ms cubic-bezier(.2,.8,.2,1) both; }.marketing-reveal-delayed { animation-delay: 130ms; }@keyframes marketing-enter { from { opacity: 0; transform: translateY(22rem); } to { opacity: 1; transform: none; } }@keyframes calculation-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8rem); } }
 
@@ -247,7 +308,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 @media (prefers-reduced-motion: reduce) { .marketing-page *, .marketing-page *::before, .marketing-page *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 .product-report a { display: inline-flex; align-items: center; gap: 18rem; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; text-decoration: none; }
 .product-report a span { font-size: 17rem; }
-.calculator-card input::-moz-range-thumb { width: 13rem; height: 13rem; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-accent); box-shadow: 0 0 0 1rem #fffaf5; }
+.calculator-card input::-moz-range-thumb { width: 13rem; height: 13rem; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 1rem var(--marketing-on-dark); }
 .workspace-card { width: min(100%, 520rem); }
 
 .app-header h1 { font-size: 42rem; margin: 10rem 0 0; }
@@ -861,6 +922,374 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .tab-nav { gap: 38rem; min-width: max-content; max-width: none; overflow: visible; }
 }
 
+/*
+ * Онлайн-запись: выравнивание одного экрана.
+ *
+ * Scoped to `.booking-panel` rather than folded into `.inline-form`, which
+ * every other screen in the product uses. The problem here is specific: this
+ * page is five small forms and a list of cards, and the forms were laid out by
+ * `flex-wrap` — so fields landed on ragged columns, and a heading or a hint
+ * dropped into a form became one more flex item sitting beside the inputs
+ * instead of above or below them. Inside one address card that produced four
+ * different left edges: 260, 267, 271 and 384.
+ */
+
+/* Fields line up in real columns instead of wrapping wherever they fit. `end`
+   keeps every control on one baseline, so a label of two lines does not push
+   its input out of step with the row. */
+.booking-panel .inline-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190rem, 1fr));
+  align-items: end;
+  gap: 16rem 18rem;
+  margin-bottom: 0;
+}
+
+/* Buttons keep the height of a field and end the row rather than stretching
+   across a column of their own width. */
+.booking-panel .inline-form > button { justify-self: start; }
+
+/* A note about a form spans it, instead of taking a column of its own and
+   reading as a field with no input. Applies to every paragraph in these forms,
+   not just the one that started it: «Параметры записи» carries four of them
+   between its controls. */
+.booking-panel .inline-form > p { grid-column: 1 / -1; margin: 0; }
+
+/* Sub-headings start a section, so the space before them has to be bigger than
+   any gap inside one — otherwise the panel reads as one flat list of controls.
+   `DESIGN.md`: «между смысловыми секциями 32–48 px, не одинаковые 24 px
+   повсюду». */
+.booking-panel h3 { margin: 34rem 0 14rem; font-size: 18rem; }
+
+/* The list of addresses reads as a list: cards separated from each other by a
+   little, and from the block above by a lot. */
+.booking-panel details.calendar-entry { margin: 10rem 0 0; }
+.booking-panel details.calendar-entry:first-of-type { margin-top: 30rem; }
+.booking-panel details.calendar-entry[open] { background: var(--surface-strong); }
+
+/* One padding for everything under the summary, so the heading, the fields and
+   the actions share the edge the title already sits on. */
+.booking-panel .calendar-entry-body { padding: 0 16rem 18rem; }
+.booking-panel .calendar-entry-body h3:first-child { margin-top: 4rem; }
+/* `.inline-action` carries a left margin and its own padding, which put the
+   first one 7px right of the fields above it. Only the first: the gap between
+   the actions themselves is what that margin is for. */
+.booking-panel .calendar-entry-actions { margin-top: 16rem; }
+.booking-panel .calendar-entry-actions > :first-child { margin-left: 0; padding-left: 0; }
+
+/* The public address, its link and its rule are one thought; the list below is
+   the next one. */
+.booking-panel .booking-public-address { margin: 18rem 0 0; }
+.booking-panel .booking-public-address + p.muted { margin-top: 10rem; }
+
+/* A picker that chooses what the form below edits is part of that form, not a
+   paragraph floating above it. */
+.booking-panel > label { display: flex; flex-direction: column; gap: 6rem; margin: 18rem 0 16rem; font-size: 13rem; font-weight: 600; color: var(--muted); max-width: 320rem; }
+.booking-panel > label + label { margin-top: 0; }
+
+
+/* ==========================================================================
+   Soft UI (neumorphism)
+   ==========================================================================
+   Surfaces are extruded from the ground rather than drawn on it: one light
+   source at the top-left, a light edge facing it and a soft shadow away from
+   it. Borders mostly go, because an edge that is already modelled does not
+   need a line as well; controls the user types into are pushed *in* instead of
+   out, which is the whole vocabulary of this style — raised means "press me",
+   inset means "fill me".
+
+   Two things deliberately survive it.
+
+   `:focus-visible` keeps its solid ring. Soft UI is a low-contrast style and
+   its usual failure is a focus state you cannot find; that ring is the one
+   thing on the screen allowed to be hard.
+
+   Text, accents and every semantic colour are untouched. This layer changes
+   how a surface is *modelled*, never what colour it is — the palette is the
+   same one the product shipped with.
+
+   Scoped to the application, the auth cards and the public booking page. The
+   marketing page runs its own palette and its own type scale, and pulling it
+   into this would be a redesign of a different thing.
+   ========================================================================== */
+
+.app-frame .panel,
+.public-booking-shell .panel {
+  border: 0;
+  border-radius: 28rem;
+  box-shadow: var(--neu-raised);
+}
+
+.auth-card {
+  border: 0;
+  box-shadow: var(--neu-raised);
+}
+
+/* Fields are pressed into the surface: the same shadows, inverted. */
+.app-frame input:not([type="checkbox"]):not([type="radio"]),
+.app-frame select,
+.app-frame textarea,
+.auth-card input,
+.auth-card select,
+.public-booking-shell input,
+.public-booking-shell select,
+.public-booking-shell textarea {
+  border: 0;
+  border-radius: 14rem;
+  background: var(--surface);
+  box-shadow: var(--neu-inset);
+}
+
+/* The accent button keeps its fill — it is the one element that should read as
+   a decision rather than as a surface. It gains the modelling, not a colour. */
+.app-frame .primary-button,
+.auth-card .primary-button,
+.public-booking-shell .primary-button {
+  box-shadow: var(--neu-raised-sm);
+}
+
+.app-frame .primary-button:active:not(:disabled),
+.auth-card .primary-button:active:not(:disabled) {
+  transform: none;
+  box-shadow: var(--neu-pressed);
+}
+
+.app-frame .secondary-button,
+.auth-card .secondary-button,
+.public-booking-shell .secondary-button {
+  border: 0;
+  background: var(--surface);
+  box-shadow: var(--neu-raised-sm);
+}
+
+.app-frame .secondary-button:hover:not(:disabled),
+.public-booking-shell .secondary-button:hover:not(:disabled) {
+  background: var(--surface-strong);
+}
+
+.app-frame .secondary-button:active:not(:disabled) {
+  box-shadow: var(--neu-pressed);
+}
+
+/* Cards in a list are raised too, so a list reads as a stack of objects. */
+.app-frame .calendar-entry {
+  border: 0;
+  border-radius: 20rem;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/*
+ * The status stripe survives the loss of the outline.
+ *
+ * Every other border on this card goes, because the modelling replaces it. This
+ * one is not decoration: it is how a cancelled appointment is told from a
+ * confirmed one at a glance, and this style offers nothing that carries a
+ * *category*. Width and style only — the colour keeps coming from the
+ * `.status-*` rules above, which stay the single place a status is coloured.
+ */
+.app-frame .calendar-entry[class*="status-"] {
+  border-left-style: solid;
+  border-left-width: 4rem;
+}
+
+.app-frame .calendar-entry[open] { box-shadow: var(--neu-raised); }
+
+/* Notices keep their semantic colour and lose the outline. */
+.app-frame .warning-banner,
+.public-booking-shell .warning-banner {
+  border: 0;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* Cards nested inside a panel are raised a little, never as much as the panel
+   holding them: two identical elevations next to each other read as one flat
+   sheet with a seam. */
+.app-frame .metric-card,
+.app-frame .metric,
+.app-frame .checkbox-set,
+.app-frame .empty-state,
+.public-booking-shell .metric-card {
+  border: 0;
+  box-shadow: var(--neu-raised-sm);
+}
+
+.app-frame .empty-state { box-shadow: var(--neu-raised); }
+
+/* A table that is not inside a panel — the material, service and client lists
+   are laid out that way — needs a surface of its own. On a flat design its own
+   row rules were enough to hold it together; extruded surfaces around it leave
+   it looking like it fell out of one. */
+.app-shell > .data-table {
+  background: var(--surface);
+  border-radius: 24rem;
+  box-shadow: var(--neu-raised);
+  padding: 8rem 14rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.app-shell > .data-table th,
+.app-shell > .data-table td { border-bottom-color: var(--neu-dark-soft); }
+.app-shell > .data-table tr:last-child td { border-bottom: 0; }
+
+/* Grouping in the sidebar was a rule; here the space does that work. */
+.app-frame .sidebar-group { border: 0; }
+
+/* The badge sits on a surface, so it is pressed into it rather than outlined. */
+.app-frame .badge-accent { border: 0; box-shadow: var(--neu-raised-sm); }
+
+/*
+ * Checkboxes and radios, everywhere, in one place.
+ *
+ * They are written a dozen different ways across the components — some in a
+ * `.checkbox-field` label, some in `.radio-row`, most in a bare `<label>` — so
+ * styling them per component would leave the next one to be written wrong
+ * again. Two things were actually broken, not merely unstyled:
+ *
+ *   `flex: none` — inside a flex or grid label the native box was being
+ *   stretched and squashed. Measured 20×13 on the booking page: a square
+ *   control rendered as a rectangle.
+ *
+ *   The layout rule below — `.inline-form label` sets `flex-direction: column`,
+ *   which is right for "caption above field" and wrong for a checkbox, so the
+ *   box sat *above* its own text instead of beside it.
+ *
+ * `:has()` is what lets one rule catch every label that holds one, whatever
+ * class its author happened to give it.
+ */
+.app-frame input[type="checkbox"],
+.app-frame input[type="radio"],
+.auth-card input[type="checkbox"],
+.auth-card input[type="radio"],
+.public-booking-shell input[type="checkbox"],
+.public-booking-shell input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 20rem;
+  height: 20rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6rem;
+  background: var(--surface);
+  box-shadow: var(--neu-inset);
+  cursor: pointer;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.app-frame input[type="radio"],
+.auth-card input[type="radio"],
+.public-booking-shell input[type="radio"] { border-radius: 999rem; }
+
+/* Checked is raised and filled: the one state that has to be readable from
+   across the room, in the accent the product already uses. */
+.app-frame input[type="checkbox"]:checked,
+.auth-card input[type="checkbox"]:checked,
+.public-booking-shell input[type="checkbox"]:checked {
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23f3f7ed' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.4l3 3 6-6.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 13rem;
+  box-shadow: var(--neu-raised-sm);
+}
+
+.app-frame input[type="radio"]:checked,
+.auth-card input[type="radio"]:checked,
+.public-booking-shell input[type="radio"]:checked {
+  background-image: radial-gradient(circle at center, var(--accent) 0 32%, transparent 34%);
+  box-shadow: var(--neu-raised-sm);
+}
+
+.app-frame input[type="checkbox"]:disabled,
+.app-frame input[type="radio"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/*
+ * The consent box on the public page keeps its own size, and that is not a
+ * style preference: 44rem is the touch target section 7.8 requires, and the
+ * rule above had quietly shrunk the one control a client on a phone has to hit
+ * before they can book. It also draws its own checkmark through `::after`, so
+ * the shared background check is turned off here rather than layered on top of
+ * it. Only the modelling is new.
+ */
+.public-booking-shell .public-booking-consent input[type="checkbox"],
+.public-booking-shell .public-booking-consent input[type="checkbox"]:checked {
+  width: 44rem;
+  height: 44rem;
+  border-radius: 14rem;
+  background-image: none;
+}
+
+/* A label holding one is a row, centred, with one gap — whatever class it has. */
+.app-frame label:has(> input[type="checkbox"]),
+.app-frame label:has(> input[type="radio"]),
+.auth-card label:has(> input[type="checkbox"]),
+.auth-card label:has(> input[type="radio"]),
+.public-booking-shell label:has(> input[type="checkbox"]),
+.public-booking-shell label:has(> input[type="radio"]) {
+  display: flex;
+  flex-direction: row;
+  /*
+   * The first line, not the middle of the paragraph.
+   *
+   * The consent label on the public booking page runs to two lines, and
+   * centring put the box between them — reading as a mark against the gap
+   * rather than against the sentence. The box is 20rem and a line box is
+   * ~19rem, so top-aligning lands it on the first line in both cases.
+   */
+  align-items: flex-start;
+  gap: 10rem;
+  font-size: 14rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* The `padding-bottom` that used to drop this label onto a field's baseline is
+   wrong once the row is centred on the box itself. */
+.app-frame .inline-form label.checkbox-field { padding-bottom: 0; }
+
+/* Stacked options need air between them; without it a group of five reads as a
+   paragraph with dots. */
+.app-frame .checkbox-set label:has(> input[type="checkbox"]),
+.app-frame .checkbox-set label:has(> input[type="radio"]),
+.auth-card fieldset label:has(> input[type="radio"]),
+.public-booking-options label:has(> input[type="checkbox"]) { padding: 7rem 0; }
+
+.app-frame .checkbox-set legend { margin-bottom: 4rem; }
+
+/* ---- Sidebar and topbar ------------------------------------------------- */
+
+/* Both frame the page, so they read as the ground the panels sit on rather
+   than as two more cards: no rules, and the separation is a soft shadow. */
+.app-topbar { border-bottom: 0; box-shadow: 0 6rem 18rem var(--neu-dark-soft); }
+
+/* A nav item is pressed *into* the rail when it is the page you are on. That is
+   this style's own way of saying "here", and it is not the only one: the fill,
+   the weight and the leading bar all stay, because section 7.8 forbids letting
+   one signal carry a state alone. */
+.app-frame .sidebar-link.active {
+  box-shadow: var(--neu-pressed);
+  border-radius: 14rem;
+}
+
+.app-frame .sidebar-link:hover:not(.active) { box-shadow: var(--neu-raised-sm); border-radius: 14rem; }
+
+.app-frame .bottom-link.active { box-shadow: var(--neu-pressed); border-radius: 14rem; }
+
+/* The account chip in the header is a control, so it is modelled like one. */
+.app-frame .topbar-account { border: 0; box-shadow: var(--neu-raised-sm); }
+.app-frame .topbar-account:hover { box-shadow: var(--neu-pressed); }
+
+/* The bars that frame the app are surfaces as well. */
+.bottom-nav {
+  border-top: 0;
+  box-shadow: 0 -6rem 18rem var(--neu-dark);
+}
+
 /* Same trap as the block above: media queries take px. */
 @media (max-width: 680px) {
   .app-header { flex-direction: column; align-items: flex-start; gap: 14rem; }
@@ -869,6 +1298,8 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .calendar-facts { grid-template-columns: 1fr; gap: 6rem; }
   .calendar-facts dd + dt { margin-top: 12rem; }
   .inline-form { flex-direction: column; align-items: stretch; }
+  .booking-panel .inline-form { grid-template-columns: 1fr; }
+  .booking-panel > label { max-width: none; }
   .inline-form input, .inline-form select { min-width: 0; width: 100%; }
   /* The tables scroll rather than squashing the numbers: at 360rem the margin
      column must stay readable. */
@@ -970,6 +1401,57 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * open yet — but keep their `aria-label` and touch target so wiring one in
  * later is a click handler, not a markup change.
  */
+/*
+ * The "посмотреть как" bar.
+ *
+ * Pinned rather than merely present: in preview every other signal on the
+ * screen — navigation, account chip, figures — is the previewed colleague's,
+ * so this is the only thing left saying whose screen this is, and an indicator
+ * that scrolls away is one an owner can be reading numbers without.
+ *
+ * It takes the topbar's place at the top of the viewport instead of stacking
+ * with it. Two sticky bars would need this one's height as a number, and that
+ * number is wrong the moment the text wraps on a narrow screen; letting the
+ * topbar scroll normally for the duration of preview costs nothing and has no
+ * breakpoint to get wrong.
+ */
+.preview-banner {
+  position: sticky;
+  z-index: 100;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8rem 16rem;
+  padding: 10rem 16rem;
+  border-bottom: 1rem solid var(--warning-border);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.preview-banner-text { display: flex; flex-direction: column; gap: 2rem; min-width: 0; }
+.preview-banner-text strong { font-size: 14rem; font-weight: 750; }
+.preview-banner-detail { font-size: 12rem; opacity: 0.85; }
+
+.preview-banner-exit {
+  flex: none;
+  min-height: 36rem;
+  border: 1rem solid var(--warning-border);
+  border-radius: 999rem;
+  background: var(--surface);
+  color: var(--warning);
+  padding: 6rem 16rem;
+  font-size: 13rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.preview-banner-exit:hover:not(:disabled) { background: var(--surface-strong); }
+.preview-banner-exit:disabled { opacity: 0.6; cursor: default; }
+
+.app-shell-previewing .app-topbar { position: static; }
+
 .app-topbar {
   position: sticky;
   z-index: 95;

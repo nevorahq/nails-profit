@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
+import { db } from "@/db";
+import { memberships } from "@/db/schema";
 import { memberRoles, type MemberRole } from "@/domain/rbac";
 import { anonymous, dataOf, listRoutes, loadRoute, type Actor } from "../helpers/api";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
@@ -84,6 +87,24 @@ async function freshInvitation(fixture: Fixture) {
   return dataOf<{ id: string }>(
     await fixture.studio.owner.post("/api/v1/invitations", { email, role: "master" }),
   ).id;
+}
+
+/**
+ * A colleague who exists only to be removed by the case below.
+ *
+ * Fresh per call, like the invitation above, and for a sharper reason: the
+ * roles allowed to remove someone actually succeed, so pointing the case at a
+ * fixture member would delete an actor the rest of the matrix still needs.
+ */
+async function freshMembership(fixture: Fixture) {
+  const email = `removed-${crypto.randomUUID()}@studio.example`;
+  const member = await inviteMember(fixture.studio.owner, email, "master");
+  const [row] = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(eq(memberships.userId, member.userId))
+    .limit(1);
+  return row.id;
 }
 
 const cases: readonly Case[] = [
@@ -247,6 +268,33 @@ const cases: readonly Case[] = [
     request: async (fixture) => ({
       path: `/api/v1/materials/${fixture.studio.materialId}/prices`,
       body: { package_price_minor: 10_000, package_size: 10 },
+    }),
+  },
+  {
+    route: "/api/v1/materials/[id]/purchases",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "The purchase log is part of reading a material",
+    request: async (fixture) => ({ path: `/api/v1/materials/${fixture.studio.materialId}/purchases` }),
+  },
+  {
+    route: "/api/v1/materials/[id]/purchases",
+    method: "POST",
+    allowed: CATALOGUE_MANAGERS,
+    note: "A purchase restates the cost basis every other master is costed by",
+    request: async (fixture) => ({
+      path: `/api/v1/materials/${fixture.studio.materialId}/purchases`,
+      body: { package_quantity: 1, package_size: 15, unit_package_cost_minor: 18_000 },
+    }),
+  },
+  {
+    route: "/api/v1/materials/[id]/stock-checks",
+    method: "POST",
+    allowed: CATALOGUE_MANAGERS,
+    note: "A count re-baselines the shared balance and argues about the shared norms",
+    request: async (fixture) => ({
+      path: `/api/v1/materials/${fixture.studio.materialId}/stock-checks`,
+      body: { observed_quantity: 5 },
     }),
   },
   {
@@ -518,6 +566,16 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/specialists/[id]",
+    method: "DELETE",
+    allowed: CATALOGUE_MANAGERS,
+    // The fixture's master has a visit, so a permitted caller is archived with
+    // a 200 rather than deleted — which keeps the row every other case here
+    // depends on, and is the behaviour the endpoint is meant to have.
+    note: "Removing a master is the same decision as hiring one",
+    request: async (fixture) => ({ path: `/api/v1/specialists/${fixture.studio.specialistId}` }),
+  },
+  {
     route: "/api/v1/specialists/[id]/commission-rules",
     method: "POST",
     allowed: CATALOGUE_MANAGERS,
@@ -613,6 +671,32 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/invitations/accept", body: { token: "not-a-token" } }),
   },
   {
+    route: "/api/v1/memberships/[id]",
+    method: "DELETE",
+    allowed: CATALOGUE_MANAGERS,
+    note: "user_management write; «кроме Owner», сам себя и последний владелец — в member-removal",
+    request: async (fixture) => ({
+      path: `/api/v1/memberships/${await freshMembership(fixture)}`,
+    }),
+  },
+  {
+    route: "/api/v1/preview",
+    method: "POST",
+    allowed: ["owner"],
+    note: "«Посмотреть как» — административный взгляд владельца; ни одна другая роль его не имеет",
+    request: async (fixture) => ({
+      path: "/api/v1/preview",
+      body: { member_user_id: fixture.actors.master.userId },
+    }),
+  },
+  {
+    route: "/api/v1/preview",
+    method: "DELETE",
+    allowed: ALL_ROLES,
+    note: "Leaving preview is never refused: a mode nobody can exit is worse than one nobody entered",
+    request: async () => ({ path: "/api/v1/preview" }),
+  },
+  {
     route: "/api/v1/me/permissions",
     method: "GET",
     allowed: ALL_ROLES,
@@ -683,6 +767,16 @@ const cases: readonly Case[] = [
       path: `/api/v1/locations/${fixture.locationId}`,
       body: { name: "Основной адрес" },
     }),
+  },
+  {
+    route: "/api/v1/locations/[id]",
+    method: "DELETE",
+    allowed: ["owner"],
+    // The fixture's address carries a booking, so a permitted caller is refused
+    // with 409 rather than 403 — which is what this matrix asserts, and it
+    // keeps the row from deleting the address every other case depends on.
+    note: "organization_settings write; removing an address is the same decision as creating one",
+    request: async (fixture) => ({ path: `/api/v1/locations/${fixture.locationId}` }),
   },
   {
     route: "/api/v1/locations/[id]/booking-settings",
@@ -1050,6 +1144,23 @@ describe("RBAC and tenant isolation", () => {
         label: "material price",
         path: (f) => `/api/v1/materials/${f.studio.materialId}/prices`,
         body: { package_price_minor: 1_000, package_size: 1 },
+      },
+      {
+        method: "DELETE",
+        label: "location",
+        path: (f) => `/api/v1/locations/${f.locationId}`,
+      },
+      {
+        method: "POST",
+        label: "material purchase",
+        path: (f) => `/api/v1/materials/${f.studio.materialId}/purchases`,
+        body: { package_quantity: 1, package_size: 1, unit_package_cost_minor: 1_000 },
+      },
+      {
+        method: "POST",
+        label: "material stock check",
+        path: (f) => `/api/v1/materials/${f.studio.materialId}/stock-checks`,
+        body: { observed_quantity: 1 },
       },
       {
         method: "PUT",

@@ -31,7 +31,7 @@ import type { MemberRole } from "@/domain/rbac";
  * says what is still missing before a client could book.
  */
 export default async function BookingSetupPage() {
-  const { membership, bookingAccess, locale } = await requireWorkspace();
+  const { membership, bookingAccess, locale, organizationSlug } = await requireWorkspace();
   const t = getTranslator(locale);
 
   // Reading the setup is the `bookings` read scope; changing it is the
@@ -122,6 +122,7 @@ export default async function BookingSetupPage() {
         assignments={data.assignments}
         rota={data.rota as RotaRule[]}
         bookingAccess={bookingAccess}
+        organizationSlug={organizationSlug}
         canManage={canManageCatalogue(membership.role, "bookings")}
         canPublish={can(membership.role, "organization_settings", "write")}
         canSaveRota={can(membership.role, "bookings", "write")}

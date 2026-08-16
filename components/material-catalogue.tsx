@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 
 import type { MaterialCostingMode } from "@/domain/material-pricing";
 import { fromMilliUnits } from "@/domain/units";
+import type { MaterialStockRow } from "@/lib/material-stock";
 import { NameCombobox } from "@/components/name-combobox";
 import type { MaterialTemplateRow } from "@/lib/material-templates";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import type { MaterialRow } from "@/lib/materials";
@@ -20,6 +21,38 @@ type PriceDraft = {
   divisor: string;
   currency: "MDL" | "EUR";
 };
+
+type PurchaseDraft = {
+  materialId: string;
+  quantity: string;
+  size: string;
+  price: string;
+  supplier: string;
+  purchasedAt: string;
+};
+
+type StockCheckDraft = {
+  materialId: string;
+  /** Share of one package, the only form a person can answer without a scale. */
+  share: number | null;
+  exact: string;
+};
+
+/**
+ * The five answers the stock question offers, section 38.
+ *
+ * Buckets rather than a number field, because the honest input here is a
+ * glance at a bottle. The share is of one package: the screen knows which
+ * package the material is priced in, so it can turn "≈half" into millilitres
+ * before it reaches the server, which stores nothing but the quantity.
+ */
+const STOCK_BUCKETS: readonly { share: number; key: MessageKey }[] = [
+  { share: 0.05, key: "materials.bucketEmpty" },
+  { share: 0.25, key: "materials.bucketQuarter" },
+  { share: 0.5, key: "materials.bucketHalf" },
+  { share: 0.75, key: "materials.bucketThreeQuarters" },
+  { share: 0.95, key: "materials.bucketFull" },
+];
 
 type MaterialDraft = {
   id: string;
@@ -189,11 +222,14 @@ export function buildMaterialSubmitRequest({
 export function MaterialCatalogue({
   materials,
   templates,
+  stock,
   locale,
   canManage,
 }: {
   materials: MaterialRow[];
   templates: readonly MaterialTemplateRow[];
+  /** Empty for a workspace that has never recorded a purchase; the column then reads «нет данных». */
+  stock: readonly MaterialStockRow[];
   locale: AppLocale;
   canManage: boolean;
 }) {
@@ -236,7 +272,14 @@ export function MaterialCatalogue({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<MaterialDraft | null>(null);
   const [pricing, setPricing] = useState<PriceDraft | null>(null);
+  const [purchasing, setPurchasing] = useState<PurchaseDraft | null>(null);
+  const [checking, setChecking] = useState<StockCheckDraft | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
+
+  const stockByMaterial = new Map(stock.map((row) => [row.material_id, row]));
+  // One place the table's width is decided, so a new column cannot leave an
+  // editor row spanning the wrong number of cells.
+  const columnCount = canManage ? 5 : 4;
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
@@ -383,6 +426,130 @@ export function MaterialCatalogue({
     router.refresh();
   }
 
+  function startPurchase(material: MaterialRow) {
+    setEditing(null);
+    setPricing(null);
+    setChecking(null);
+    setPurchasing({
+      materialId: material.id,
+      quantity: "1",
+      // Prefilled from the packaging already on file, because buying the same
+      // bottle again is the common case and the owner should only have to type
+      // what changed — the price.
+      size:
+        material.current_price && material.current_price.costing_mode === "quantity"
+          ? String(fromMilliUnits(material.current_price.package_size_milli_units))
+          : "",
+      price: "",
+      supplier: "",
+      purchasedAt: "",
+    });
+  }
+
+  async function savePurchase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!purchasing) return;
+
+    const quantity = Number(purchasing.quantity);
+    const size = Number(purchasing.size);
+    const amountMinor = Math.round(Number(purchasing.price) * 100);
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 1 ||
+      !Number.isFinite(size) ||
+      size <= 0 ||
+      !Number.isSafeInteger(amountMinor) ||
+      amountMinor < 0
+    ) {
+      setError(t("materials.completePrice"));
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+
+    const response = await fetch(`/api/v1/materials/${purchasing.materialId}/purchases`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        package_quantity: quantity,
+        package_size: size,
+        unit_package_cost_minor: amountMinor,
+        ...(purchasing.supplier.trim() ? { supplier: purchasing.supplier.trim() } : {}),
+        // A date-only field means midnight local time, which is what someone
+        // entering last Tuesday's receipt means by it.
+        ...(purchasing.purchasedAt
+          ? { purchased_at: new Date(`${purchasing.purchasedAt}T12:00:00`).toISOString() }
+          : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      setError(await responseError(response, t("materials.purchaseFailed")));
+      setPending(false);
+      return;
+    }
+
+    setPurchasing(null);
+    setPending(false);
+    router.refresh();
+  }
+
+  function startStockCheck(material: MaterialRow) {
+    setEditing(null);
+    setPricing(null);
+    setPurchasing(null);
+    setChecking({ materialId: material.id, share: null, exact: "" });
+  }
+
+  async function saveStockCheck(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!checking) return;
+
+    const material = materials.find((row) => row.id === checking.materialId);
+    const packageSize =
+      material?.current_price && material.current_price.costing_mode === "quantity"
+        ? fromMilliUnits(material.current_price.package_size_milli_units)
+        : null;
+
+    /*
+     * A bucket is a share of one package, so it can only be answered when the
+     * packaging is known. Without it the field falls back to a plain quantity —
+     * a material priced per service has no bottle to be a quarter of.
+     */
+    const observed =
+      checking.share !== null && packageSize !== null
+        ? checking.share * packageSize
+        : Number(checking.exact);
+
+    if (!Number.isFinite(observed) || observed < 0) {
+      setError(t("materials.stockCheckFailed"));
+      return;
+    }
+
+    setPending(true);
+    setError(null);
+
+    const response = await fetch(`/api/v1/materials/${checking.materialId}/stock-checks`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        observed_quantity: Math.round(observed * 1000) / 1000,
+        basis: checking.share !== null && packageSize !== null ? "bucket" : "measured",
+      }),
+    });
+
+    if (!response.ok) {
+      setError(await responseError(response, t("materials.stockCheckFailed")));
+      setPending(false);
+      return;
+    }
+
+    setChecking(null);
+    setPending(false);
+    router.refresh();
+  }
+
   async function archiveMaterial(id: string) {
     setPending(true);
     setError(null);
@@ -401,6 +568,17 @@ export function MaterialCatalogue({
 
   const missingPrice = materials.filter((material) => material.current_price === null).length;
   const materialSuggestions = availableMaterialSuggestions(materials, templates, addName);
+
+  /*
+   * Section 49: the overview leads with what needs doing, not with a table.
+   * Only «low» and «out» qualify — a material nobody has recorded buying is
+   * unknown rather than urgent, and listing every unknown would make the block
+   * a second copy of the catalogue on the first day of use.
+   */
+  const needAttention = materials.flatMap((material) => {
+    const row = stockByMaterial.get(material.id);
+    return row && (row.status === "low" || row.status === "out") ? [{ material, row }] : [];
+  });
 
   function chooseMaterialSuggestion(suggestion: MaterialSuggestion) {
     setAddName(suggestion.name);
@@ -425,6 +603,22 @@ export function MaterialCatalogue({
         <div className="warning-banner">
           {t("materials.missingPriceBanner", { count: missingPrice })}
         </div>
+      )}
+
+      {needAttention.length > 0 && (
+        <section className="panel">
+          <h2>{t("materials.attentionTitle")}</h2>
+          <ul className="compact-list">
+            {needAttention.map(({ material, row }) => (
+              <li key={material.id}>
+                <strong>{material.name}</strong>
+                {" — "}
+                {describeStock(row, t)}
+              </li>
+            ))}
+          </ul>
+          <p className="muted">{t("materials.attentionHint")}</p>
+        </section>
       )}
 
       {canManage && (
@@ -510,13 +704,14 @@ export function MaterialCatalogue({
             <th>{t("common.material")}</th>
             <th>{t("materials.costingMode")}</th>
             <th>{t("materials.currentPrice")}</th>
+            <th>{t("materials.stock")}</th>
             {canManage && <th>{t("materials.actions")}</th>}
           </tr>
         </thead>
         <tbody>
           {materials.length === 0 && (
             <tr>
-              <td colSpan={canManage ? 4 : 3} className="muted">{t("materials.none")}</td>
+              <td colSpan={columnCount} className="muted">{t("materials.none")}</td>
             </tr>
           )}
           {materials.map((material) => (
@@ -544,6 +739,7 @@ export function MaterialCatalogue({
                     : "—"}
                 </td>
                 <td>{renderCurrentPrice(material, tag, t)}</td>
+                <td>{renderStock(stockByMaterial.get(material.id), material, tag, t)}</td>
                 {canManage && (
                   <td className="material-actions">
                     <button className="inline-action" type="button" disabled={pending} onClick={() => startMaterialEdit(material)}>
@@ -551,6 +747,12 @@ export function MaterialCatalogue({
                     </button>
                     <button className="inline-action" type="button" disabled={pending} onClick={() => startPriceEdit(material)}>
                       {t("materials.newPrice")}
+                    </button>
+                    <button className="inline-action" type="button" disabled={pending} onClick={() => startPurchase(material)}>
+                      {t("materials.purchase")}
+                    </button>
+                    <button className="inline-action" type="button" disabled={pending} onClick={() => startStockCheck(material)}>
+                      {t("materials.stockCheck")}
                     </button>
                     {confirmArchive === material.id ? (
                       <>
@@ -572,7 +774,7 @@ export function MaterialCatalogue({
 
               {editing?.id === material.id && (
                 <tr className="material-editor-row">
-                  <td colSpan={4}>
+                  <td colSpan={columnCount}>
                     <form className="inline-form" onSubmit={saveMaterial}>
                       <label>
                         {t("materials.name")}
@@ -592,7 +794,7 @@ export function MaterialCatalogue({
 
               {pricing?.materialId === material.id && (
                 <tr className="material-editor-row">
-                  <td colSpan={4}>
+                  <td colSpan={columnCount}>
                     <form className="inline-form" onSubmit={savePrice}>
                       <ModeField value={pricing.mode} onChange={(mode) => setPricing({ ...pricing, mode, divisor: "" })} t={t} />
                       <PriceFields mode={pricing.mode} t={t} price={pricing.price} divisor={pricing.divisor} onPrice={(price) => setPricing({ ...pricing, price })} onDivisor={(divisor) => setPricing({ ...pricing, divisor })} />
@@ -615,9 +817,142 @@ export function MaterialCatalogue({
                 </tr>
               )}
 
+              {purchasing?.materialId === material.id && (
+                <tr className="material-editor-row">
+                  <td colSpan={columnCount}>
+                    <form className="inline-form" onSubmit={savePurchase}>
+                      <label>
+                        {t("materials.purchaseQuantity")}
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          required
+                          value={purchasing.quantity}
+                          onChange={(event) => setPurchasing({ ...purchasing, quantity: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        {t("materials.packageSize")}
+                        <input
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          required
+                          value={purchasing.size}
+                          onChange={(event) => setPurchasing({ ...purchasing, size: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        {t("materials.packagePrice")}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          required
+                          value={purchasing.price}
+                          onChange={(event) => setPurchasing({ ...purchasing, price: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        {t("materials.purchaseDate")}
+                        <input
+                          type="date"
+                          value={purchasing.purchasedAt}
+                          onChange={(event) => setPurchasing({ ...purchasing, purchasedAt: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        {t("materials.supplier")}
+                        <input
+                          maxLength={200}
+                          value={purchasing.supplier}
+                          onChange={(event) => setPurchasing({ ...purchasing, supplier: event.target.value })}
+                        />
+                      </label>
+                      <button className="primary-button" type="submit" disabled={pending}>
+                        {pending ? t("common.saving") : t("materials.savePurchase")}
+                      </button>
+                      <button className="secondary-button" type="button" disabled={pending} onClick={() => setPurchasing(null)}>
+                        {t("common.cancel")}
+                      </button>
+                    </form>
+                    <p className="muted">{t("materials.purchaseHint")}</p>
+                  </td>
+                </tr>
+              )}
+
+              {checking?.materialId === material.id && (
+                <tr className="material-editor-row">
+                  <td colSpan={columnCount}>
+                    <form className="inline-form" onSubmit={saveStockCheck}>
+                      {/* The established shape for a mutually exclusive choice:
+                          one option per line, as the commission and visit forms
+                          already render theirs. No new styles for this screen. */}
+                      <fieldset className="checkbox-set costing-view">
+                        <legend>{t("materials.stockCheckQuestion")}</legend>
+                        {hasPackage(material) ? (
+                          STOCK_BUCKETS.map((bucket) => (
+                            <label className="checkbox-field" key={bucket.key}>
+                              <input
+                                type="radio"
+                                name={`stock-${material.id}`}
+                                checked={checking.share === bucket.share}
+                                onChange={() => setChecking({ ...checking, share: bucket.share })}
+                              />
+                              {t(bucket.key)}
+                            </label>
+                          ))
+                        ) : (
+                          // No packaging on file, so there is no bottle to be a
+                          // quarter of. The honest fallback is the quantity itself.
+                          <label>
+                            {t("materials.quantity")}
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              required
+                              value={checking.exact}
+                              onChange={(event) => setChecking({ ...checking, exact: event.target.value })}
+                            />
+                          </label>
+                        )}
+                      </fieldset>
+                      {(() => {
+                        const expected = expectedStockLabel(
+                          stockByMaterial.get(material.id),
+                          material,
+                          tag,
+                          t,
+                        );
+                        return expected === null ? null : (
+                          <p className="muted">
+                            {t("materials.stockCheckExpected", { amount: expected })}
+                          </p>
+                        );
+                      })()}
+                      <button
+                        className="primary-button"
+                        type="submit"
+                        disabled={pending || (hasPackage(material) && checking.share === null)}
+                      >
+                        {pending ? t("common.saving") : t("materials.stockCheckSave")}
+                      </button>
+                      <button className="secondary-button" type="button" disabled={pending} onClick={() => setChecking(null)}>
+                        {t("common.cancel")}
+                      </button>
+                    </form>
+                    <p className="muted">{t("materials.stockCheckHint")}</p>
+                  </td>
+                </tr>
+              )}
+
+              {renderCalibration(stockByMaterial.get(material.id), material, tag, t, columnCount)}
+
               {material.price_history.length > 0 && (
                 <tr className="material-history-row">
-                  <td colSpan={canManage ? 4 : 3}>
+                  <td colSpan={columnCount}>
                     <details>
                       <summary>{t("materials.priceHistory")} ({material.price_history.length})</summary>
                       <ul className="compact-list material-price-history">
@@ -754,6 +1089,118 @@ function describePrice(
   }
   const perUnit = Math.round(price.package_price_minor * 1000 / price.package_size_milli_units);
   return `${money} / ${divisor} ${t(`unit.${unit}` as MessageKey)} (${formatMoneyMinor(perUnit, price.currency, locale)} / ${t(`unit.${unit}` as MessageKey)})`;
+}
+
+/** True when the material is priced by a package the buckets can be a share of. */
+function hasPackage(material: MaterialRow): boolean {
+  return material.current_price?.costing_mode === "quantity";
+}
+
+function formatQuantity(milliUnits: number, unit: string, locale: string, t: Translate) {
+  const amount = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
+    fromMilliUnits(milliUnits),
+  );
+  return `${amount} ${t(`unit.${unit}` as MessageKey)}`;
+}
+
+/**
+ * The balance in words. Procedures first and the raw quantity second, section
+ * 36: "≈18 процедур" is the decision, "6.84 ml" is homework.
+ */
+function describeStock(row: MaterialStockRow, t: Translate): string {
+  if (row.status === "out") return t("materials.stockOut");
+  if (row.remaining_services !== null) {
+    return t("materials.stockRemaining", { count: row.remaining_services });
+  }
+  /*
+   * There is stock but no visit has ever used this material, so there is no
+   * usage figure to turn it into procedures. "In stock" is the honest answer;
+   * saying it needs attention would raise an alarm about a full bottle.
+   */
+  return t("materials.stockOnHand");
+}
+
+function renderStock(
+  row: MaterialStockRow | undefined,
+  material: MaterialRow,
+  locale: string,
+  t: Translate,
+) {
+  // Absent or unknown are the same answer on screen, and it is not "0".
+  if (!row || row.balance_milli_units === null) {
+    return <span className="muted">{t("materials.stockUnknown")}</span>;
+  }
+
+  const quantity = formatQuantity(
+    Math.max(0, row.balance_milli_units),
+    material.base_unit,
+    locale,
+    t,
+  );
+
+  return (
+    <>
+      <strong className={row.status === "ok" ? undefined : "badge-warning"}>
+        {describeStock(row, t)}
+      </strong>
+      <span className="unit-hint">{quantity}</span>
+      <span className="unit-hint">
+        {row.basis === "check" && row.baseline_at
+          ? t("materials.stockBasisCheck", {
+              date: new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
+                new Date(row.baseline_at),
+              ),
+            })
+          : t("materials.stockBasisPurchases")}
+      </span>
+    </>
+  );
+}
+
+/** What the estimate predicts right now, shown beside the count being entered. */
+function expectedStockLabel(
+  row: MaterialStockRow | undefined,
+  material: MaterialRow,
+  locale: string,
+  t: Translate,
+): string | null {
+  if (!row || row.balance_milli_units === null) return null;
+  return formatQuantity(Math.max(0, row.balance_milli_units), material.base_unit, locale, t);
+}
+
+/**
+ * The calibration hint, section 39.
+ *
+ * Shown, never applied. A norm is what the owner said their work costs, and one
+ * eyeballed bottle is not grounds for rewriting it behind their back — so this
+ * says which way the estimate is off and leaves the recipe alone.
+ */
+function renderCalibration(
+  row: MaterialStockRow | undefined,
+  material: MaterialRow,
+  locale: string,
+  t: Translate,
+  columnCount: number,
+) {
+  if (!row?.calibration?.significant) return null;
+
+  const expected = formatQuantity(row.calibration.expectedMilliUnits, material.base_unit, locale, t);
+  const observed = formatQuantity(row.calibration.observedMilliUnits, material.base_unit, locale, t);
+
+  return (
+    <tr className="material-history-row">
+      <td colSpan={columnCount}>
+        <p className="muted">
+          {t(
+            row.calibration.driftMilliUnits < 0
+              ? "materials.calibrationFaster"
+              : "materials.calibrationSlower",
+            { expected, observed },
+          )}
+        </p>
+      </td>
+    </tr>
+  );
 }
 
 async function responseError(response: Response, fallback: string) {

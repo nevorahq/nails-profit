@@ -1,11 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef, type FormEvent } from "react";
 
-import type { AppLocale } from "@/i18n/messages";
+import { canManageRole, type MemberRole } from "@/domain/rbac";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 
 export type TeamMember = {
+  /** The membership, not the account — removing one never touches the other. */
+  id: string;
   user_id: string;
   email: string;
   role: string;
@@ -26,13 +30,78 @@ export function TeamManager({
   members,
   canManage,
   locale,
+  canPreview = false,
+  currentUserId,
+  currentRole,
 }: {
   members: TeamMember[];
   canManage: boolean;
   locale: AppLocale;
+  /** Whether to offer "посмотреть как" beside each colleague. Owners only. */
+  canPreview?: boolean;
+  /** The signed-in member, so their own row offers no removal. */
+  currentUserId: string;
+  currentRole: MemberRole;
 }) {
   const t = getTranslator(locale);
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  /**
+   * Ending someone's part in the studio. Their account survives — this removes
+   * the membership, archives the specialist row and ends their sessions, which
+   * is the difference between "больше не работает здесь" and "перестал
+   * существовать". The server decides all of it again; see
+   * `app/api/v1/memberships/[id]/route.ts`.
+   */
+  async function removeMember(membershipId: string) {
+    setPending(true);
+    setError(null);
+
+    const response = await fetch(`/api/v1/memberships/${membershipId}`, { method: "DELETE" });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const code = body?.error?.code;
+      setError(getErrorMessage(code, body?.error?.message ?? t("team.removeFailed"), locale));
+      setConfirmRemove(null);
+      setPending(false);
+      return;
+    }
+
+    setConfirmRemove(null);
+    setPending(false);
+    router.refresh();
+  }
+
+  /**
+   * Opening a colleague's view. Not a sign-in: the owner's session is left
+   * exactly as it is and only the rendering context changes, which is the whole
+   * difference between this and typing the master's password — that would take
+   * the owner's own session with it, because a browser holds one session per
+   * origin.
+   */
+  async function enterPreview(userId: string) {
+    setPreviewing(userId);
+    setError(null);
+
+    const response = await fetch("/api/v1/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ member_user_id: userId }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setError(body?.error?.message ?? t("team.previewFailed"));
+      setPreviewing(null);
+      return;
+    }
+
+    router.push("/app");
+    router.refresh();
+  }
 
   const [step, setStep] = useState<Step>("idle");
   const [pending, setPending] = useState(false);
@@ -163,6 +232,10 @@ export function TeamManager({
     (invitation) => invitation.status === "pending" || invitation.status === "expired",
   );
 
+  // One actions column, shared by both controls: a manager gets removal without
+  // preview, an owner gets both, and everyone else gets no column at all.
+  const showActions = canPreview || canManage;
+
   return (
     <section className="panel">
       <h2>{t("team.membersTitle")}</h2>
@@ -171,17 +244,87 @@ export function TeamManager({
           <tr>
             <th>Email</th>
             <th>{t("team.inviteRole")}</th>
+            {showActions && <th>{t("team.invitationActions")}</th>}
           </tr>
         </thead>
         <tbody>
-          {members.map((m) => (
-            <tr key={m.user_id}>
-              <td>{m.email}</td>
-              <td>{t(`roles.${m.role}` as MessageKey)}</td>
-            </tr>
-          ))}
+          {members.map((m) => {
+            /*
+             * Nobody removes themselves, and a manager may not remove an owner
+             * — section 6.1's «кроме Owner», read here from the same function
+             * the endpoint reads it from. Both are refused server-side too;
+             * this only keeps the screen from offering what would be refused.
+             */
+            const removable =
+              canManage &&
+              m.user_id !== currentUserId &&
+              canManageRole(currentRole, m.role as MemberRole);
+
+            return (
+              <tr key={m.user_id}>
+                <td>{m.email}</td>
+                <td>{t(`roles.${m.role}` as MessageKey)}</td>
+                {showActions && (
+                  <td>
+                    {/*
+                      No preview beside another owner: preview may only ever
+                      narrow what a request can do, and one owner wearing
+                      another's view would be the single case that does not.
+                      `POST /api/v1/preview` refuses it too.
+                    */}
+                    {canPreview && m.role !== "owner" && (
+                      <button
+                        className="inline-action"
+                        type="button"
+                        disabled={previewing !== null || pending}
+                        onClick={() => enterPreview(m.user_id)}
+                      >
+                        {previewing === m.user_id ? t("preview.entering") : t("team.previewAction")}
+                      </button>
+                    )}
+                    {removable &&
+                      (confirmRemove === m.id ? (
+                        <>
+                          <button
+                            className="inline-action danger"
+                            type="button"
+                            disabled={pending}
+                            onClick={() => removeMember(m.id)}
+                          >
+                            {t("team.removeConfirm")}
+                          </button>
+                          <button
+                            className="inline-action"
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setConfirmRemove(null)}
+                          >
+                            {t("common.cancel")}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="inline-action danger"
+                          type="button"
+                          disabled={pending}
+                          onClick={() => setConfirmRemove(m.id)}
+                        >
+                          {t("team.remove")}
+                        </button>
+                      ))}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+
+      {canManage && (
+        <p className="muted" style={{ marginTop: "12rem", fontSize: "13rem" }}>
+          {t("team.removeHint")}
+        </p>
+      )}
 
       {!canManage && (
         <p className="muted" style={{ marginTop: "16rem" }}>

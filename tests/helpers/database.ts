@@ -63,6 +63,10 @@ const TABLES_IN_DELETE_ORDER = [
   "service_add_on",
   "add_on",
   "specialist",
+  // Before `material_price_version`, which a purchase points at, and before
+  // `material`, which both point at.
+  "material_purchase",
+  "material_stock_check",
   "material_price_version",
   "material",
   // Global product data rather than a tenant's rows, but truncated all the

@@ -92,6 +92,8 @@ export function SpecialistManager({
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /** Which master is one click from being removed. Null while nobody is. */
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [exceptionOpen, setExceptionOpen] = useState(false);
   const [serviceEditor, setServiceEditor] = useState<ServiceEditor | null>(null);
@@ -249,8 +251,18 @@ export function SpecialistManager({
     await send(`/api/v1/specialists/${specialistId}`, { is_principal: value }, undefined, "PATCH");
   }
 
+  /**
+   * Removing a master, in two clicks on purpose.
+   *
+   * The row goes for good when the master never worked — the one entered with a
+   * typo, or the one who never started. A master who has visits or bookings is
+   * archived instead and the answer says so: their commission is inside every
+   * financial snapshot those visits wrote, and a payroll month with nobody
+   * attached to it is not a tidier database, it is a broken report.
+   */
   async function deleteSpecialist(specialistId: string) {
-    await send(`/api/v1/specialists/${specialistId}`, null, undefined, "DELETE");
+    const removed = await send(`/api/v1/specialists/${specialistId}`, null, undefined, "DELETE");
+    if (removed) setConfirmDelete(null);
   }
 
   function editServices(person: SpecialistRow) {
@@ -527,16 +539,40 @@ export function SpecialistManager({
                 ) : (
                   <div className="inline-actions">
                     <span className="badge-warning">{t("specialists.notLinked")}</span>
-                    {canManage && (
-                      <button
-                        className="inline-action danger"
-                        type="button"
-                        disabled={pending}
-                        onClick={() => deleteSpecialist(person.id)}
-                      >
-                        {t("common.delete")}
-                      </button>
-                    )}
+                    {canManage &&
+                      (confirmDelete === person.id ? (
+                        <>
+                          <button
+                            className="inline-action danger"
+                            type="button"
+                            disabled={pending}
+                            onClick={() => deleteSpecialist(person.id)}
+                          >
+                            {t("specialists.deleteConfirm")}
+                          </button>
+                          <button
+                            className="inline-action"
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setConfirmDelete(null)}
+                          >
+                            {t("common.cancel")}
+                          </button>
+                          <span className="muted">{t("specialists.deleteHint")}</span>
+                        </>
+                      ) : (
+                        <button
+                          className="inline-action danger"
+                          type="button"
+                          disabled={pending}
+                          onClick={() => {
+                            setError(null);
+                            setConfirmDelete(person.id);
+                          }}
+                        >
+                          {t("common.delete")}
+                        </button>
+                      ))}
                   </div>
                 )}
               </td>
