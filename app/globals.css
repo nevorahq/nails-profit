@@ -42,6 +42,22 @@
   --neu-raised-sm: -3rem -3rem 8rem var(--neu-light), 3rem 3rem 9rem var(--neu-dark);
   --neu-inset: inset 4rem 4rem 9rem var(--neu-dark-soft), inset -3rem -3rem 8rem var(--neu-light);
   --neu-pressed: inset 3rem 3rem 8rem var(--neu-dark), inset -2rem -2rem 6rem var(--neu-light);
+
+  /*
+   * One motion system for the whole product. `--ease-standard` is the
+   * Material "standard" curve — decelerate in, accelerate out — used for
+   * every transition and entrance animation below. Two durations cover the
+   * two things that move: `--duration-fast` for a hover/focus state change,
+   * `--duration-base` for a panel opening or closing. Looping, decorative
+   * animations (a floating card, a loading shimmer) are deliberately left
+   * outside this system — they read as ambient motion, not a response to
+   * input, and forcing them onto the same curve/duration makes them look
+   * mechanical rather than calm.
+   */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 300ms;
+  --duration-slow: 400ms;
 }
 
 * { box-sizing: border-box; }
@@ -118,7 +134,7 @@ h3 { font-size: 21rem; line-height: 1.25; }
 small { font-size: 12rem; }
 
 .landing-shell, .app-shell { min-height: 100vh; padding: 28rem clamp(24rem, 6vw, 96rem) 64rem; }
-.app-shell { animation: page-enter 320ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.app-shell { animation: page-enter var(--duration-slow) var(--ease-standard) both; }
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(8px); }
 }
@@ -135,7 +151,7 @@ small { font-size: 12rem; }
 h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.045em; margin: 20rem 0; }
 .hero p { color: var(--muted); font-size: clamp(17rem, 2vw, 21rem); line-height: 1.6; max-width: 680rem; margin-bottom: 36rem; }
 
-.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background 150ms, transform 150ms; }
+.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
 .primary-button:hover:not(:disabled) { background: var(--accent-dark); transform: translateY(-1rem); }
 .primary-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
@@ -250,9 +266,9 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-brand sup { margin-left: 2rem; color: var(--marketing-accent); font-size: 9rem; letter-spacing: 0; vertical-align: top; }
 .marketing-mark { display: inline-grid; width: 32rem; height: 32rem; place-items: center; border: 1rem solid var(--marketing-ink); border-radius: 50%; color: var(--marketing-ink); font-size: 10rem; letter-spacing: -.08em; }
 .marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 30rem; }
-.marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color 140ms ease; }
+.marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color var(--duration-fast) var(--ease-standard); }
 .marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
-.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background 160ms ease, transform 160ms ease; }
+.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
 .marketing-cta:hover { background: var(--marketing-accent-dark); transform: translateY(-2rem); }
 .marketing-cta span { font-size: 18rem; font-weight: 400; line-height: 1; }
 .marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 7rem; }
@@ -286,7 +302,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .hero-calculation > strong { display: block; margin-bottom: 16rem; font-size: 15rem; letter-spacing: -.02em; }
 .calculation-row, .calculation-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; padding: 6rem 0; font-size: 12rem; }
 .calculation-row span { color: var(--marketing-muted); }.calculation-row b { font-size: 12rem; font-weight: 600; }.calculation-total { margin-top: 7rem; padding: 13rem 0 3rem; border-top: 1rem solid var(--marketing-line); }.calculation-total span { font-weight: 700; }.calculation-total strong { color: var(--marketing-profit); font-size: 21rem; letter-spacing: -.04em; }
-.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 6rem; background: var(--marketing-sunken); }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all 150ms ease; }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
+.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 6rem; background: var(--marketing-sunken); }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all var(--duration-fast) var(--ease-standard); }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
 .hero-stamp { position: absolute; bottom: 70rem; left: -50rem; display: grid; gap: 4rem; width: 92rem; height: 92rem; place-content: center; border-radius: 50%; background: var(--marketing-ink); color: var(--marketing-surface); text-align: center; transform: rotate(-12deg); }.hero-stamp span:first-child { color: var(--marketing-on-dark-muted); font-size: 11rem; }.hero-stamp span:last-child { font-size: 11rem; line-height: 1; }
 
 .section-wrap { width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; }.marketing-reason { display: grid; grid-template-columns: .85fr 1.15fr; gap: clamp(45rem, 9vw, 180rem); padding: 124rem 0; border-top: 1rem solid var(--marketing-line); }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: clamp(35rem, 3.4vw, 57rem); }.section-lead > p:last-child, .product-copy > p:last-child, .calculator-copy > p:last-child { max-width: 475rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }.marketing-pillars { display: grid; border-top: 1rem solid var(--marketing-line); }.marketing-pillar { display: grid; grid-template-columns: 56rem 1fr minmax(160rem, .85fr); align-items: baseline; gap: 14rem; padding: 22rem 0; border-bottom: 1rem solid var(--marketing-line); }.marketing-pillar > span { color: var(--marketing-accent); font-size: 14rem; font-variant-numeric: tabular-nums; }.marketing-pillar h3 { margin: 0; font-size: 17rem; letter-spacing: -.03em; }.marketing-pillar p { margin: 0; color: var(--marketing-muted); font-size: 13rem; line-height: 1.5; }
@@ -297,7 +313,9 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .marketing-final { display: grid; justify-items: center; padding: 136rem 8vw; border-radius: 12rem; background: var(--marketing-sunken); text-align: center; }.marketing-final .marketing-mark { margin-bottom: 27rem; }.marketing-final h2 { max-width: 780rem; }.marketing-final p { max-width: 500rem; margin: 22rem 0 30rem; color: var(--marketing-muted); font-size: 15rem; line-height: 1.55; }.marketing-footer { display: flex; align-items: center; justify-content: space-between; width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; padding: 34rem 0; color: var(--marketing-muted); font-size: 11rem; }.marketing-footer div { display: flex; gap: 22rem; }.marketing-footer a { text-decoration: none; }.marketing-footer a:hover { color: var(--marketing-ink); }
 
-.marketing-reveal { animation: marketing-enter 650ms cubic-bezier(.2,.8,.2,1) both; }.marketing-reveal-delayed { animation-delay: 130ms; }@keyframes marketing-enter { from { opacity: 0; transform: translateY(22rem); } to { opacity: 1; transform: none; } }@keyframes calculation-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8rem); } }
+.marketing-reveal { animation: marketing-enter var(--duration-slow) var(--ease-standard) both; }.marketing-reveal-delayed { animation-delay: 130ms; }@keyframes marketing-enter { from { opacity: 0; transform: translateY(22rem); } to { opacity: 1; transform: none; } }
+/* Ambient loops, intentionally outside the standard motion system — see the note by --ease-standard. */
+@keyframes calculation-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8rem); } }
 
 @media (max-width: 900px) {
   .marketing-hero { grid-template-columns: 1fr; padding-top: 72rem; }.hero-copy { max-width: 680rem; }.hero-visual { width: min(100%, 680rem); margin-left: auto; }.marketing-reason, .marketing-calculator { grid-template-columns: 1fr; gap: 48rem; }.marketing-product { grid-template-columns: 1fr; }.product-photo { width: min(100%, 680rem); }.product-copy { max-width: 680rem; }.marketing-pillars { max-width: 760rem; }
@@ -305,7 +323,6 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 @media (max-width: 680px) {
   .marketing-nav, .marketing-hero, .section-wrap, .marketing-footer { width: min(100% - 40rem, 620rem); }.marketing-nav { min-height: 74rem; }.marketing-nav-links, .marketing-login { display: none; }.marketing-nav-actions { gap: 0; }.marketing-cta-small { min-height: 36rem; font-size: 11rem; }.marketing-brand { font-size: 16rem; }.marketing-mark { width: 29rem; height: 29rem; }.marketing-hero { min-height: 0; gap: 54rem; padding: 54rem 0 70rem; }.hero-copy h1 { font-size: clamp(43rem, 13vw, 59rem); }.marketing-intro { margin: 23rem 0 27rem; font-size: 16rem; }.hero-fine-print { margin-top: 28rem; }.hero-visual { min-height: 405rem; padding-right: 18rem; padding-bottom: 20rem; }.hero-visual > img { height: 386rem; }.hero-sun { top: -17rem; right: -4rem; width: 92rem; height: 92rem; }.hero-calculation { right: 0; width: min(280rem, 80%); padding: 16rem; }.hero-stamp { bottom: 36rem; left: -12rem; width: 66rem; height: 66rem; }.hero-stamp span:last-child { font-size: 8rem; }.hero-stamp span:first-child { font-size: 9rem; }.marketing-reason, .marketing-product, .marketing-calculator { gap: 38rem; padding: 76rem 0; }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: 37rem; }.marketing-pillar { grid-template-columns: 40rem 1fr; gap: 7rem; }.marketing-pillar p { grid-column: 2; margin-top: 4rem; }.product-photo { padding-bottom: 28rem; }.product-photo img { height: 355rem; }.product-photo p { right: -5rem; width: 230rem; padding: 12rem 14rem; }.product-report { margin-top: 26rem; }.marketing-calculator { padding-bottom: 78rem; }.calculator-card { gap: 22rem; padding: 21rem; }.calculator-result > strong { font-size: 31rem; }.marketing-final { padding: 82rem 22rem; }.marketing-final p { font-size: 14rem; }.marketing-footer { align-items: flex-start; flex-direction: column; gap: 17rem; padding: 25rem 0; }.marketing-footer div { gap: 16rem; }
 }
-@media (prefers-reduced-motion: reduce) { .marketing-page *, .marketing-page *::before, .marketing-page *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 .product-report a { display: inline-flex; align-items: center; gap: 18rem; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; text-decoration: none; }
 .product-report a span { font-size: 17rem; }
 .calculator-card input::-moz-range-thumb { width: 13rem; height: 13rem; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 1rem var(--marketing-on-dark); }
@@ -474,11 +491,11 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* --- Phase 2: catalogue, recipe editor and the financial insight panel --- */
 
 .tab-nav { display: flex; gap: 18rem; align-items: center; max-width: 100%; overflow-x: auto; padding: 4rem 4rem 20rem; scrollbar-width: thin; }
-.tab-nav a { color: var(--muted); font-size: 14rem; text-decoration: none; font-weight: 600; padding: 8rem 0; transition: transform 200ms ease, color 150ms ease; }
+.tab-nav a { color: var(--muted); font-size: 14rem; text-decoration: none; font-weight: 600; padding: 8rem 0; transition: transform var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
 .tab-nav a.active { color: var(--accent); transform: scale(1.2); font-weight: 700; }
 
 .button-row { display: flex; gap: 12rem; justify-content: center; flex-wrap: wrap; }
-.secondary-button { min-height: 44rem; display: inline-flex; align-items: center; padding: 14rem 22rem; border-radius: 999rem; border: 1rem solid var(--sage-600); background: rgba(243, 247, 237, 0.6); color: var(--ink); font-size: 16rem; font-weight: 700; text-decoration: none; cursor: pointer; transition: background 150ms, border-color 150ms; }
+.secondary-button { min-height: 44rem; display: inline-flex; align-items: center; padding: 14rem 22rem; border-radius: 999rem; border: 1rem solid var(--sage-600); background: rgba(243, 247, 237, 0.6); color: var(--ink); font-size: 16rem; font-weight: 700; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
 .secondary-button:hover:not(:disabled) { background: var(--sage-300); border-color: var(--forest-700); }
 /* A minor action inside a table cell: it has to stay a real button for the
    keyboard, but it must not weigh as much as the form's primary action. */
@@ -511,13 +528,13 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .compose-wrap {
   display: grid;
   grid-template-rows: 1fr;
-  transition: grid-template-rows 380ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows var(--duration-base) var(--ease-standard);
 }
 .compose-wrap.is-closed { grid-template-rows: 0fr; }
 .compose-wrap > .compose-inner {
   overflow: hidden;
   opacity: 1;
-  transition: opacity 260ms ease, transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity var(--duration-base) var(--ease-standard), transform var(--duration-base) var(--ease-standard);
 }
 .compose-wrap:not(.is-closed) > .compose-inner { overflow: visible; }
 .compose-wrap.is-closed > .compose-inner {
@@ -879,7 +896,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-summary p { margin: 0; }
 .public-booking-consent { grid-template-columns: 44rem 1fr; align-items: center; margin: 0; font-size: 14rem; cursor: pointer; }
 .public-booking-consent input { appearance: none; display: grid; place-items: center; width: 44rem; height: 44rem; margin: 0; border: 1rem solid var(--sage-600); border-radius: 12rem; background: var(--surface-strong); cursor: pointer; }
-.public-booking-consent input::after { content: ""; width: 9rem; height: 17rem; border: solid var(--on-accent); border-width: 0 3rem 3rem 0; transform: rotate(45deg) scale(0); transition: transform 120ms ease; }
+.public-booking-consent input::after { content: ""; width: 9rem; height: 17rem; border: solid var(--on-accent); border-width: 0 3rem 3rem 0; transform: rotate(45deg) scale(0); transition: transform var(--duration-fast) var(--ease-standard); }
 .public-booking-consent input:checked { background: var(--accent); }
 .public-booking-consent input:checked::after { transform: rotate(45deg) scale(1); }
 .public-booking-consent a { display: inline-flex; min-height: 44rem; align-items: center; margin-block: -12rem; }
@@ -892,6 +909,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .form-error-summary a { display: inline-flex; align-items: center; min-height: 44rem; color: inherit; font-size: 14rem; font-weight: 650; text-underline-offset: 3rem; }
 .public-booking-status { margin: 22rem 0 0; padding: 14rem 16rem; border-radius: 14rem; background: var(--sage-300); color: var(--forest-950); font-weight: 700; }
 .public-booking-loading { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
+/* Ambient loop, intentionally outside the standard motion system — see the note by --ease-standard. */
 .public-booking-loading > span:not(.sr-only) { min-height: 60rem; border-radius: 14rem; background: linear-gradient(100deg, var(--sage-300) 20%, var(--surface-strong) 45%, var(--sage-300) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
 @keyframes booking-skeleton { to { background-position-x: -220%; } }
 .public-booking-nearest, .public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 20rem; background: var(--surface-strong); }
@@ -1180,7 +1198,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   background: var(--surface);
   box-shadow: var(--neu-inset);
   cursor: pointer;
-  transition: background-color 120ms ease, box-shadow 120ms ease;
+  transition: background-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .app-frame input[type="radio"],
@@ -1287,6 +1305,8 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* The account chip in the header is a control, so it is modelled like one. */
 .app-frame .topbar-account { border: 0; box-shadow: var(--neu-raised-sm); }
 .app-frame .topbar-account:hover { box-shadow: var(--neu-pressed); }
+.app-frame .topbar-notifications { box-shadow: var(--neu-raised-sm); }
+.app-frame .topbar-notifications:hover { box-shadow: var(--neu-pressed); }
 
 /* The bars that frame the app are surfaces as well. */
 .bottom-nav {
@@ -1353,14 +1373,14 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .add-form-wrap {
     display: grid;
     grid-template-rows: 1fr;
-    transition: grid-template-rows 380ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: grid-template-rows var(--duration-base) var(--ease-standard);
   }
   .add-form-wrap.add-form-closed { grid-template-rows: 0fr; }
   .add-form-inner {
     overflow: hidden;
     opacity: 1;
     transform: translateY(0);
-    transition: opacity 300ms ease, transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity var(--duration-base) var(--ease-standard), transform var(--duration-base) var(--ease-standard);
   }
   .add-form-wrap.add-form-closed .add-form-inner {
     opacity: 0;
@@ -1579,6 +1599,57 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 .account-menu-item:hover { background: var(--leaf-100); }
 .account-menu-item:disabled { color: var(--muted); cursor: progress; }
+
+/*
+ * The bell sits before the account chip, same panel shape reused
+ * (`.account-menu-panel`) rather than a shape of its own — one visual
+ * language for "a button in the topbar that opens a list".
+ */
+.notifications-menu { position: relative; display: flex; }
+
+.topbar-notifications {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36rem;
+  height: 36rem;
+  flex: none;
+  border: 0;
+  border-radius: 999rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.topbar-notifications:hover { background: var(--leaf-100); }
+
+/* A dot rather than a count: the list itself is the count, one tap away. */
+.topbar-notifications-badge {
+  position: absolute;
+  top: 6rem;
+  right: 6rem;
+  width: 8rem;
+  height: 8rem;
+  border-radius: 999rem;
+  background: var(--accent);
+  box-shadow: 0 0 0 2rem var(--surface-strong);
+}
+
+.notifications-panel { min-width: 280rem; }
+.notifications-empty { padding: 10rem 12rem; color: var(--muted); font-size: 13rem; }
+.notifications-list { display: grid; gap: 2rem; max-height: 360rem; overflow-y: auto; }
+
+.notifications-item {
+  display: grid;
+  gap: 2rem;
+  padding: 10rem 12rem;
+  border-radius: 10rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+.notifications-item:hover { background: var(--leaf-100); }
+.notifications-item strong { font-size: 13rem; font-weight: 700; overflow-wrap: anywhere; }
+.notifications-item small { color: var(--muted); font-size: 12rem; }
 
 /* Reused from the account chip that used to sit at the foot of the sidebar —
    same fallback-to-initial rule as `.avatar` for a specialist with no photo. */
@@ -1825,7 +1896,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
     font-size: 15rem;
     font-weight: 650;
     text-decoration: none;
-    transition: background 150ms ease, color 150ms ease;
+    transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
   }
 
   .sidebar-link:hover { background: var(--leaf-100); color: var(--ink); }
@@ -2095,7 +2166,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 
 .calendar-compose > summary::-webkit-details-marker { display: none; }
-.calendar-compose > summary::before { content: "▸"; color: var(--muted); transition: transform 150ms ease; }
+.calendar-compose > summary::before { content: "▸"; color: var(--muted); transition: transform var(--duration-fast) var(--ease-standard); }
 .calendar-compose[open] > summary::before { transform: rotate(90deg); }
 .calendar-compose > summary:hover { background: var(--leaf-100); }
 .calendar-compose > summary h2 { margin: 0; }
@@ -2129,7 +2200,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   color: var(--ink);
   font-size: 15rem;
   text-decoration: none;
-  transition: background 150ms;
+  transition: background var(--duration-fast) var(--ease-standard);
 }
 
 .calendar-step + .calendar-step { border-left: 1rem solid var(--sage-600); }
