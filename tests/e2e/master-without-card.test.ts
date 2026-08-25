@@ -16,7 +16,7 @@ import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/stu
  * owner's calendar was the correct place for it, and the master had no calendar
  * of their own to receive anything.
  *
- * The two steps below are what the "Создать карточку и привязать" control does.
+ * The two steps below are creation and linking done separately, on purpose.
  */
 let studio: Studio;
 

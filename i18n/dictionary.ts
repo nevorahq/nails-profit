@@ -575,9 +575,6 @@ const ru = {
     other:
       "У {count} мастеров нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
   },
-  "specialists.membersWithoutCard":
-    "У этих участников есть аккаунт, но нет карточки мастера. Пока карточки нет, они не видят своих записей и на них нельзя записать клиента:",
-  "specialists.createCardFor": "Создать карточку и привязать",
   "specialists.perService": "{amount} за услугу",
   "specialists.afterMaterials": "{rate} после материалов",
   "specialists.ofRevenue": "{rate} от выручки",
@@ -793,6 +790,9 @@ const ru = {
   "specialists.add": "Добавить мастера",
   "specialists.hideAddTitle": "Скрыть форму добавления",
   "specialists.namePlaceholder": "Ирина",
+  "specialists.memberSearchTitle": "Участники без карточки",
+  "specialists.noUnlinkedMembers": "Все участники уже привязаны к карточке мастера.",
+  "specialists.customNameHint": "Можно продолжить ввод и добавить нового мастера.",
   "specialists.specialist": "Мастер",
   "specialists.cooperation": "Сотрудничество",
   "specialists.defaultRule": "Комиссия по умолчанию",
@@ -1836,9 +1836,6 @@ const ro: Record<MessageKey, Message> = {
     other:
       "{count} de maeștri nu au regulă de comision. Serviciile nu pot fi calculate: comisionul nu se consideră zero până nu este definită regula.",
   },
-  "specialists.membersWithoutCard":
-    "Acești membri au cont, dar nu au fișă de maestru. Fără fișă ei nu își văd programările și clienții nu pot fi programați la ei:",
-  "specialists.createCardFor": "Creați fișa și conectați",
   "specialists.perService": "{amount} pe serviciu",
   "specialists.afterMaterials": "{rate} după materiale",
   "specialists.ofRevenue": "{rate} din încasări",
@@ -2053,6 +2050,9 @@ const ro: Record<MessageKey, Message> = {
   "specialists.add": "Adaugă maestru",
   "specialists.hideAddTitle": "Ascundeți formularul de adăugare",
   "specialists.namePlaceholder": "Irina",
+  "specialists.memberSearchTitle": "Membri fără fișă",
+  "specialists.noUnlinkedMembers": "Toți membrii sunt deja conectați la o fișă de maestru.",
+  "specialists.customNameHint": "Puteți continua să scrieți și să adăugați un maestru nou.",
   "specialists.specialist": "Maestru",
   "specialists.cooperation": "Colaborare",
   "specialists.defaultRule": "Comision implicit",
@@ -3086,9 +3086,6 @@ const en: Record<MessageKey, Message> = {
     other:
       "{count} specialists have no commission rule. Services cannot be costed: commission is not treated as zero until a rule is set.",
   },
-  "specialists.membersWithoutCard":
-    "These members have an account but no specialist card. Without one they see none of their own appointments and no client can be booked to them:",
-  "specialists.createCardFor": "Create a card and link it",
   "specialists.perService": "{amount} per service",
   "specialists.afterMaterials": "{rate} after materials",
   "specialists.ofRevenue": "{rate} of revenue",
@@ -3302,6 +3299,9 @@ const en: Record<MessageKey, Message> = {
   "specialists.add": "Add a specialist",
   "specialists.hideAddTitle": "Hide the add-specialist form",
   "specialists.namePlaceholder": "Irina",
+  "specialists.memberSearchTitle": "Members without a card",
+  "specialists.noUnlinkedMembers": "Every member is already linked to a specialist card.",
+  "specialists.customNameHint": "Keep typing to add a new specialist.",
   "specialists.specialist": "Specialist",
   "specialists.cooperation": "Cooperation",
   "specialists.defaultRule": "Default commission",

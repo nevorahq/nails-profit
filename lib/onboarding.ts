@@ -182,7 +182,7 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
   const [closedVisits] = await tx.select({ value: count() }).from(visits);
 
   const steps: OnboardingStep[] = [
-    { key: "specialist", done: withRule.value > 0, href: "/app/specialists" },
+    { key: "specialist", done: withRule.value > 0, href: "/app/settings" },
     // The catalogue, with the add form already open — the step asks for one
     // material with a purchase price, and importing a file is the answer to a
     // different question. An owner who has a price list can still reach

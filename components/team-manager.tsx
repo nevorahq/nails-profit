@@ -352,7 +352,14 @@ export function TeamManager({
                     booked, and nothing else on this screen would say so.
                   */}
                   {m.role === "master" && m.has_specialist_card === false && (
-                    <span className="badge-warning">{t("team.noSpecialistCard")}</span>
+                    <button
+                      type="button"
+                      className="badge-warning"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => router.push("/app/specialists")}
+                    >
+                      {t("team.noSpecialistCard")}
+                    </button>
                   )}
                 </td>
                 {showActions && (

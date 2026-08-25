@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
+import { NameCombobox } from "@/components/name-combobox";
 
 export type OrganizationMember = {
   user_id: string;
@@ -104,6 +105,7 @@ export function SpecialistManager({
    * the guaranteed-amount field only for a hybrid, and remembering which
    * services a rule pays on. An empty list means every service.
    */
+  const [addName, setAddName] = useState("");
   const [addRuleType, setAddRuleType] = useState("percentage");
   const [exceptionRuleType, setExceptionRuleType] = useState("percentage");
   const [coveredServiceIds, setCoveredServiceIds] = useState<string[]>([]);
@@ -214,7 +216,10 @@ export function SpecialistManager({
       },
       form,
     );
-    if (ok) setAddOpen(false);
+    if (ok) {
+      setAddOpen(false);
+      setAddName("");
+    }
   }
 
   async function addException(event: FormEvent<HTMLFormElement>) {
@@ -247,39 +252,6 @@ export function SpecialistManager({
 
   async function unlinkAccount(specialistId: string) {
     await send(`/api/v1/specialists/${specialistId}`, { user_id: null }, undefined, "PATCH");
-  }
-
-  /**
-   * A card for a colleague who has an account but no place in the catalogue.
-   *
-   * Accepting an invitation creates the membership and nothing else, and every
-   * "own" scope a master has — their calendar, their visits, their commission —
-   * resolves through `specialist.user_id`. Until a card exists and is linked,
-   * they sign in to an empty product and appointments booked for the studio go
-   * to whichever card the client could actually pick. Two requests because the
-   * link is a separate operation on purpose: creation is catalogue work, the
-   * link is an access decision.
-   */
-  async function createCardFor(member: OrganizationMember) {
-    setPending(true);
-    setError(null);
-    const response = await fetch("/api/v1/specialists", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: member.name?.trim() || member.email.split("@")[0],
-        cooperation_type: "commission",
-      }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? t("common.saveFailed"));
-      setPending(false);
-      return;
-    }
-    const created = (await response.json()) as { data: { id: string } };
-    setPending(false);
-    await send(`/api/v1/specialists/${created.data.id}`, { user_id: member.user_id }, undefined, "PATCH");
   }
 
   async function setPrincipal(specialistId: string, value: boolean) {
@@ -349,37 +321,9 @@ export function SpecialistManager({
   // choices which cannot work is worse than a shorter one.
   const linked = new Set(specialists.map((person) => person.user_id).filter(Boolean));
   const unlinkedMembers = members.filter((member) => !linked.has(member.user_id));
-  /*
-   * A master with no card is the one case worth interrupting for. A manager or
-   * an analyst never works a chair, so their absence from the catalogue is
-   * correct; a master's absence means an account that sees nothing and
-   * appointments that cannot be booked to them.
-   */
-  const mastersWithoutCard = unlinkedMembers.filter((member) => member.role === "master");
 
   return (
     <>
-      {canManage && mastersWithoutCard.length > 0 && (
-        <div className="warning-banner">
-          {t("specialists.membersWithoutCard")}
-          <ul>
-            {mastersWithoutCard.map((member) => (
-              <li key={member.user_id}>
-                {member.email}{" "}
-                <button
-                  className="inline-action"
-                  type="button"
-                  disabled={pending}
-                  onClick={() => createCardFor(member)}
-                >
-                  {t("specialists.createCardFor")}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {withoutRule.length > 0 && (
         <div className="warning-banner">
 {t("specialists.withoutRuleBanner", { count: withoutRule.length })}
@@ -398,10 +342,25 @@ export function SpecialistManager({
             <section className="panel">
               <h2>{t("specialists.add")}</h2>
               <form className="inline-form" onSubmit={createSpecialist}>
-                <label>
-                  {t("specialists.name")}
-                  <input name="name" required maxLength={200} placeholder={t("specialists.namePlaceholder")} />
-                </label>
+                <NameCombobox
+                  id="specialist-name"
+                  name="name"
+                  label={t("specialists.name")}
+                  placeholder={t("specialists.namePlaceholder")}
+                  title={t("specialists.memberSearchTitle")}
+                  emptyLabel={t("specialists.noUnlinkedMembers")}
+                  footnote={t("specialists.customNameHint")}
+                  required
+                  maxLength={200}
+                  value={addName}
+                  options={unlinkedMembers.map((member) => ({
+                    key: member.user_id,
+                    label: member.name?.trim() || member.email.split("@")[0],
+                    hint: `${member.email} · ${t(`roles.${member.role}` as MessageKey)}`,
+                  }))}
+                  onChange={setAddName}
+                  onSelect={(option) => setAddName(option.label)}
+                />
                 <label>
                   {t("specialists.cooperation")}
                   <select name="cooperation_type" defaultValue="commission">
