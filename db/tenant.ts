@@ -20,11 +20,23 @@ export type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>
  * Ordering matters: PostgreSQL accepts `SET TRANSACTION` alongside the
  * `set_config` above but not after real work has begun, so it is issued here
  * and not left to the caller.
+ *
+ * The timeout guards against a request whose client goes away mid-transaction
+ * (Next.js logs it as "the destination stream closed early") — `work` then
+ * never sends its next statement, or COMMIT, and the connection sits "idle in
+ * transaction" with nothing to end it. `max: 2` in development means two such
+ * orphans are enough to exhaust the whole pool: every later request that needs
+ * a connection queues behind them and hangs, indistinguishable from the page
+ * itself being slow, until the process restarts. Set here rather than as a
+ * connection-startup parameter in `db/index.ts` because Supabase's pooler
+ * silently drops that form — `set_config(..., true)` is a normal statement
+ * inside the transaction it protects, so nothing about the pooler affects it.
  */
 export async function withTenant<T>(organizationId: string, work: (tx: TenantTransaction) => Promise<T>) {
   const readOnly = await isPreviewRequested();
 
   return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('idle_in_transaction_session_timeout', '30000', true)`);
     await tx.execute(sql`select set_config('app.current_organization_id', ${organizationId}, true)`);
     if (readOnly) await tx.execute(sql`set transaction read only`);
     return work(tx);

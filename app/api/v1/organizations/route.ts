@@ -56,6 +56,9 @@ export async function POST(request: Request) {
   }
 
   const organization = await db.transaction(async (tx) => {
+    // A client that goes away mid-transaction must not hold the lock below
+    // forever — see the comment on the same guard in `db/tenant.ts`.
+    await tx.execute(sql`select set_config('idle_in_transaction_session_timeout', '30000', true)`);
     // "One organization per user" is an MVP product policy, not a domain
     // invariant — Studio orgs will need several memberships per user later, so
     // this is serialized with a lock rather than frozen into a unique index.

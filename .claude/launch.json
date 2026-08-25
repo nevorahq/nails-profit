@@ -14,6 +14,21 @@
       "runtimeArgs": [],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "nails-profit-preview-3100",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DATABASE_URL=postgres://nail_profit_app:nail_profit_app@localhost:55432/nail_profit_test",
+        "NEXT_PUBLIC_APP_URL=http://localhost:3100",
+        "BETTER_AUTH_URL=http://localhost:3100",
+        "npx",
+        "next",
+        "start",
+        "-p",
+        "3100"
+      ],
+      "port": 3100
     }
   ]
 }

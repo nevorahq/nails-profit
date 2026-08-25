@@ -34,7 +34,15 @@ function connection() {
   if (existing) return (client = existing);
 
   const created = postgres(getServerEnv().DATABASE_URL, {
-    max: process.env.NODE_ENV === "production" ? 10 : 2,
+    // A single request can legitimately want more than one connection at
+    // once: `/app/materials` alone runs two `withTenant` transactions and a
+    // plain read concurrently. `max: 2` left that third piece of work queued
+    // behind the other two for the whole page, and reproduced reliably as the
+    // page hanging rather than erroring — indistinguishable from "the
+    // destination stream closed early". Development gets the same 10 as
+    // production so the ordinary case has headroom instead of sitting at the
+    // edge of capacity.
+    max: 10,
     prepare: false,
   });
   client = created;
