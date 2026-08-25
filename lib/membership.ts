@@ -3,10 +3,10 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import { db } from "@/db";
-import { memberships, organizations, pilotEnrollments, users } from "@/db/schema";
+import { memberships, organizations, organizationSubscriptions, pilotEnrollments, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import type { MemberRole } from "@/domain/rbac";
-import { getPublicAppUrl, isPilotAccessEnforced } from "@/env";
+import { getPublicAppUrl, isPilotAccessEnforced, isSubscriptionAccessEnforced } from "@/env";
 import { auth } from "@/lib/auth";
 import { checkRequestOrigin } from "@/lib/csrf";
 import { logEvent } from "@/lib/logger";
@@ -108,12 +108,36 @@ async function loadAuthenticatedMembership(): Promise<CallerResult> {
         })
       : null;
 
+  /**
+   * Independent of the pilot gate above and off by default, same reasoning as
+   * `isSubscriptionAccessEnforced`'s own doc comment: a pilot studio's access
+   * must not start depending on a subscription row it was never meant to have.
+   */
+  const subscriptionRowStatus =
+    row && isSubscriptionAccessEnforced()
+      ? await withTenant(row.organizationId, async (tx) => {
+          const [subscription] = await tx
+            .select({ status: organizationSubscriptions.status })
+            .from(organizationSubscriptions)
+            .limit(1);
+          return subscription?.status ?? null;
+        })
+      : null;
+  // `past_due` still grants access: Paddle/Lemon Squeezy are already retrying
+  // the charge themselves (their dunning, not ours), so this is the grace
+  // period rather than a lapse.
+  const subscriptionGrantsAccess =
+    subscriptionRowStatus === "trialing" ||
+    subscriptionRowStatus === "active" ||
+    subscriptionRowStatus === "past_due";
+
   return {
     session: true,
     userId: session.user.id,
     membership:
       row &&
-      (!isPilotAccessEnforced() || pilotStatus === "active")
+      (!isPilotAccessEnforced() || pilotStatus === "active") &&
+      (!isSubscriptionAccessEnforced() || subscriptionGrantsAccess)
       ? {
           userId: session.user.id,
           userEmail: session.user.email,

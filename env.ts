@@ -92,6 +92,56 @@ export function getResendWebhookSecret() {
   return value;
 }
 
+/** Unset disables the public Paddle webhook route (fail closed). */
+export function getPaddleWebhookSecret() {
+  const value = process.env.PADDLE_WEBHOOK_SECRET?.trim();
+  if (!value) return null;
+  if (value.length < 16) throw new Error("PADDLE_WEBHOOK_SECRET must be at least 16 characters");
+  return value;
+}
+
+/** Unset disables the public Lemon Squeezy webhook route (fail closed). */
+export function getLemonSqueezyWebhookSecret() {
+  const value = process.env.LEMON_SQUEEZY_WEBHOOK_SECRET?.trim();
+  if (!value) return null;
+  if (value.length < 16) throw new Error("LEMON_SQUEEZY_WEBHOOK_SECRET must be at least 16 characters");
+  return value;
+}
+
+/**
+ * The "start subscription" button's own configuration — public by nature,
+ * same as a Stripe publishable key: Paddle's own docs call this a
+ * client-side token, safe to ship in the browser bundle, unlike
+ * `PADDLE_WEBHOOK_SECRET` above. Placeholder/unset on purpose until Paddle
+ * confirms a seller account is possible without an EU/US entity (open
+ * question from the payments research); `null` hides the button rather than
+ * rendering one that opens a checkout for nothing real.
+ */
+export function getPaddleCheckoutConfig() {
+  const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN?.trim();
+  const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID?.trim();
+  return clientToken && priceId ? { clientToken, priceId } : null;
+}
+
+/** Same reasoning as `getPaddleCheckoutConfig`, for Lemon Squeezy's plain hosted-checkout link. */
+export function getLemonSqueezyCheckoutUrl() {
+  const value = process.env.NEXT_PUBLIC_LEMON_SQUEEZY_CHECKOUT_URL?.trim();
+  return value || null;
+}
+
+/**
+ * Independent of `PILOT_ACCESS_ENFORCEMENT`: a pilot studio's access is
+ * decided by its own `pilot_enrollment` row, and turning subscription
+ * billing on for everyone else must not silently start requiring it from
+ * pilots too.
+ */
+export function isSubscriptionAccessEnforced() {
+  const value = process.env.SUBSCRIPTION_ACCESS_ENFORCEMENT;
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error("SUBSCRIPTION_ACCESS_ENFORCEMENT must be true or false");
+}
+
 /** The token the notification dispatch job authenticates with; unset disables the route. */
 export function getOpsApiToken() {
   const value = process.env.OPS_API_TOKEN?.trim();

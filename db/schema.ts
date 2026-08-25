@@ -1559,6 +1559,75 @@ export const pilotEnrollments = pgTable(
   ],
 );
 
+export const billingProvider = pgEnum("billing_provider", ["paddle", "lemon_squeezy"]);
+export const subscriptionStatus = pgEnum("subscription_status", [
+  "trialing",
+  "active",
+  "past_due",
+  "paused",
+  "canceled",
+]);
+
+/**
+ * The automated counterpart to `pilotEnrollments` above: that table is the
+ * pilot program's own manual, per-wave ledger (an operator's record of who
+ * paid and renewed), not a general billing table. This one is driven
+ * entirely by Paddle/Lemon Squeezy webhooks and never touched by a human, so
+ * the two stay separate rather than growing one table two ways.
+ */
+export const organizationSubscriptions = pgTable(
+  "organization_subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    provider: billingProvider("provider").notNull(),
+    providerCustomerId: text("provider_customer_id").notNull(),
+    providerSubscriptionId: text("provider_subscription_id").notNull(),
+    // Opaque on purpose: what it buys is a Paddle/Lemon Squeezy product-side
+    // decision, not a schema one, so a new tier or a price change never needs
+    // a migration here.
+    providerPriceId: text("provider_price_id").notNull(),
+    status: subscriptionStatus("status").notNull(),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    /** The provider's hosted customer portal, when its webhook payload carries one. */
+    manageUrl: text("manage_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("organization_subscription_org_idx").on(table.organizationId),
+    uniqueIndex("organization_subscription_provider_sub_idx").on(
+      table.provider,
+      table.providerSubscriptionId,
+    ),
+  ],
+);
+
+/**
+ * Both providers retry a webhook that did not get a 200 back, so durable
+ * deduplication is what stops a resent `subscription.updated` from being
+ * applied twice — same reasoning as `notificationProviderEvents` below.
+ */
+export const billingProviderEvents = pgTable(
+  "billing_provider_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    provider: billingProvider("provider").notNull(),
+    providerEventId: text("provider_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("billing_provider_event_provider_id_idx").on(table.provider, table.providerEventId),
+  ],
+);
+
 /**
  * Versioned, PII-free product telemetry for Gate 6. `entity_id` is always an
  * internal identifier (or the organization id for lifecycle events), making

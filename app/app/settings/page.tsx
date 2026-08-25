@@ -1,5 +1,6 @@
 import { asc, eq, isNull } from "drizzle-orm";
 
+import { BillingSettings, type CheckoutConfig, type SubscriptionStatusRow } from "@/components/billing-settings";
 import { DataManagement } from "@/components/data-management";
 import { LaborCostManager, type LaborCostRow } from "@/components/labor-cost-manager";
 import { OrganizationSettings } from "@/components/organization-settings";
@@ -10,6 +11,7 @@ import {
   laborCostRules,
   memberships,
   organizations,
+  organizationSubscriptions,
   paymentMethods,
   specialists,
   taxRules,
@@ -18,6 +20,7 @@ import {
 import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
+import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
 import { monthBounds, monthOf } from "@/lib/period";
 import { requireWorkspace } from "@/lib/workspace";
@@ -152,6 +155,27 @@ export default async function SettingsPage() {
       }))
     : null;
 
+  const subscription: SubscriptionStatusRow | null = canReadOrg
+    ? (
+        await withTenant(membership.organizationId, (tx) =>
+          tx
+            .select({
+              provider: organizationSubscriptions.provider,
+              status: organizationSubscriptions.status,
+              current_period_end: organizationSubscriptions.currentPeriodEnd,
+              manage_url: organizationSubscriptions.manageUrl,
+            })
+            .from(organizationSubscriptions)
+            .limit(1),
+        )
+      )[0] ?? null
+    : null;
+
+  const checkout: CheckoutConfig = {
+    paddle: getPaddleCheckoutConfig(),
+    lemonSqueezyUrl: getLemonSqueezyCheckoutUrl(),
+  };
+
   const memberRows = canReadTeam
     ? await db
         .select({
@@ -201,6 +225,14 @@ export default async function SettingsPage() {
           currency={currency}
           practicalCapacityBasisPoints={practicalCapacityBasisPoints}
           canEdit={can(membership.role, "organization_settings", "write")}
+        />
+      )}
+      {canReadOrg && (
+        <BillingSettings
+          subscription={subscription}
+          checkout={checkout}
+          organizationId={membership.organizationId}
+          locale={locale}
         />
       )}
       {labour && (
