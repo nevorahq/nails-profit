@@ -105,7 +105,7 @@ export async function POST(request: Request) {
    */
   let provider;
   try {
-    provider = notificationProvider();
+    provider = notificationProvider("email");
   } catch (cause) {
     logEvent("error", "invitation.email_misconfigured", {}, {
       invitation_id: invitation.id,

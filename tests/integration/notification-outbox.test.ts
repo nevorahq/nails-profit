@@ -10,6 +10,7 @@ import {
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
 import { createBooking } from "@/lib/booking-service";
+import { handleVerifiedMessaggioWebhook } from "@/lib/messaggio-webhook";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import {
   setNotificationProvider,
@@ -135,7 +136,11 @@ describe("notification outbox", () => {
     expect(sent.every((message) => message.body.includes("Green Nails"))).toBe(true);
   });
 
-  test("Resend queues email only instead of dead-lettering an impossible SMS", async () => {
+  test("Resend for email does not stop SMS from also being queued", async () => {
+    // The two channels are chosen independently (see `notifyBooking`): which
+    // adapter answers for email must not decide whether SMS is attempted at
+    // all — it used to, back when there was no SMS adapter and queuing one
+    // meant dead-lettering it forever.
     process.env.NOTIFICATION_PROVIDER = "resend";
     const sent = fakeProvider([]);
     await withTenant(organizationId, (tx) =>
@@ -143,8 +148,8 @@ describe("notification outbox", () => {
     );
 
     const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
-    expect(summary).toMatchObject({ claimed: 1, sent: 1, deadLettered: 0 });
-    expect(sent).toEqual([expect.objectContaining({ channel: "email", destination: "client@example.com" })]);
+    expect(summary).toMatchObject({ claimed: 2, sent: 2, deadLettered: 0 });
+    expect(sent.map((message) => message.channel).sort()).toEqual(["email", "sms"]);
   });
 
   test("a sent message is not sent again", async () => {
@@ -214,6 +219,64 @@ describe("notification outbox", () => {
       data: { email_id: "unknown", tags: {} },
     };
     await expect(handleVerifiedResendWebhook(common, "evt-no-tags")).resolves.toBe("unmatched");
+    expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
+  });
+
+  test("Messaggio delivery reports are deduplicated and cannot rewind delivery state", async () => {
+    setNotificationProvider({
+      name: "messaggio-test",
+      async send() {
+        return { ok: true, providerMessageId: "messaggio-msg-1" };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    await dispatchDueNotifications({ organizationId, now });
+
+    const [sms] = (await rows()).filter((row) => row.channel === "sms");
+    const report = (status: number) => ({
+      type: "status",
+      message_id: "messaggio-msg-1",
+      external_id: `${organizationId}:${sms.id}`,
+      status,
+    });
+
+    // 100: "message sent to provider" — the closest SMS gets to a good
+    // terminal status in Messaggio's own table (section 3.1).
+    await expect(
+      handleVerifiedMessaggioWebhook(report(100), new Date("2026-09-01T09:02:00.000Z")),
+    ).resolves.toBe("recorded");
+    await expect(
+      handleVerifiedMessaggioWebhook(report(100), new Date("2026-09-01T09:02:00.000Z")),
+    ).resolves.toBe("duplicate");
+    // A different status (so a different provider event id) but chronologically
+    // earlier — recorded for audit, must not replace the newer "sent" summary.
+    // Messaggio's report carries no event time of its own, so this is the only
+    // lever a test has on ordering: the `receivedAt` argument.
+    await expect(
+      handleVerifiedMessaggioWebhook(report(60), new Date("2026-09-01T09:01:00.000Z")),
+    ).resolves.toBe("recorded");
+
+    const [after] = (await rows()).filter((row) => row.channel === "sms");
+    expect(after.providerStatus).toBe("sent");
+    expect(after.providerEventAt?.toISOString()).toBe("2026-09-01T09:02:00.000Z");
+    expect(
+      (await adminDb.select().from(notificationProviderEvents)).filter(
+        (event) => event.notificationId === sms.id,
+      ),
+    ).toHaveLength(2);
+  });
+
+  test("Messaggio reports with no matching transaction id or message are acknowledged but ignored", async () => {
+    await expect(
+      handleVerifiedMessaggioWebhook({
+        type: "status",
+        message_id: "unknown",
+        external_id: "not-a-colon-joined-reference",
+        status: 100,
+      }),
+    ).resolves.toBe("unmatched");
     expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
   });
 

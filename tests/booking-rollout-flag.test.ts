@@ -56,6 +56,8 @@ const BOOKING_SURFACE = [
   join(API_ROOT, "public", "booking"),
   join(API_ROOT, "public", "bookings"),
   join(API_ROOT, "specialists", "[id]", "locations"),
+  // The topbar's notification list: pending_confirmation bookings, read-only.
+  join(API_ROOT, "notifications"),
 ];
 
 /** Tables that belong to the booking module and to nothing else. */

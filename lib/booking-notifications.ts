@@ -11,7 +11,6 @@ import {
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { reminderTimeFor } from "@/domain/notification-schedule";
-import { getNotificationProviderName } from "@/env";
 import type { BookingNotificationTemplate } from "@/lib/notification-message";
 
 export type { BookingNotificationTemplate };
@@ -229,6 +228,16 @@ async function insertOutbox(
  * routes that used to do this by hand disagreed about it: one looked up the
  * email, the other assumed there was none. A booking with no client — a staff
  * placeholder in the calendar — notifies nobody, and that is not an error.
+ *
+ * Email and SMS queue independently of one another's provider: `notificationProvider`
+ * (see `lib/notification-provider.ts`) resolves each channel to its own adapter, or to
+ * `log` when that channel has none configured — either way delivery is attempted rather
+ * than the row sitting in `dead_letter` forever. This used to special-case
+ * `NOTIFICATION_PROVIDER === "resend"` into email-only, from when there was no SMS
+ * adapter at all and queuing one would have meant exactly that dead-lettering; now that
+ * Messaggio is a real, independently-configured channel, the only question is whether
+ * the client left a phone number or an email, not which provider happens to answer for
+ * the other channel.
  */
 export async function notifyBooking(
   tx: TenantTransaction,
@@ -254,15 +263,10 @@ export async function notifyBooking(
     .limit(1);
   if (!client) return [] as Channel[];
 
-  const channels: Channel[] =
-    getNotificationProviderName() === "resend"
-      ? client.email
-        ? ["email"]
-        : []
-      : [
-          ...(client.phone ? (["sms"] as const) : []),
-          ...(client.email ? (["email"] as const) : []),
-        ];
+  const channels: Channel[] = [
+    ...(client.phone ? (["sms"] as const) : []),
+    ...(client.email ? (["email"] as const) : []),
+  ];
 
   for (const channel of channels) {
     await enqueueBookingNotification(tx, {

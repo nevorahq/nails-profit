@@ -219,7 +219,7 @@ async function deliver(
 
   let result;
   try {
-    result = await notificationProvider().send(prepared.message);
+    result = await notificationProvider(prepared.message.channel).send(prepared.message);
   } catch (error) {
     // A provider adapter that throws is a provider that did not answer, which
     // is the definition of an error worth retrying.

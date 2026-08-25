@@ -224,7 +224,7 @@ export function MetricIcon({ name }: { name: "revenue" | "expenses" | "profit" }
  * The account menu's glyphs, kept separate from `NavIcon` because neither
  * names a navigation section.
  */
-export function ChromeIcon({ name }: { name: "chevron" | "signOut" }) {
+export function ChromeIcon({ name }: { name: "chevron" | "signOut" | "bell" }) {
   const paths: Record<typeof name, React.ReactNode> = {
     chevron: <path d="M6 9l6 6 6-6" />,
     // Выйти — a door with an arrow leaving through it.
@@ -233,6 +233,12 @@ export function ChromeIcon({ name }: { name: "chevron" | "signOut" }) {
         <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
         <path d="M10 8l-4 4 4 4" />
         <path d="M6 12h9" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5z" />
+        <path d="M9.5 18.5a2.5 2.5 0 0 0 5 0" />
       </>
     ),
   };

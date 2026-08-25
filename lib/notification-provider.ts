@@ -1,4 +1,4 @@
-import { getNotificationProviderName, getResendConfig } from "@/env";
+import { getMessaggioConfig, getNotificationProviderName, getResendConfig, getSmsProviderName } from "@/env";
 import { logEvent } from "@/lib/logger";
 
 /**
@@ -129,6 +129,113 @@ export function createResendNotificationProvider(
   };
 }
 
+const MESSAGGIO_ENDPOINT = "https://msg.messaggio.com/api/v1/send";
+
+/**
+ * Messaggio has no tags/metadata field on a message — only the free-text
+ * `options.external_id`, which its documentation describes as "used to
+ * identify messages by the user in the system and transmitted together with
+ * the delivery status." The outbox row's own identity is packed into it here
+ * and unpacked by `lib/messaggio-webhook.ts`. Colon-joined rather than JSON:
+ * the field is meant for a short reference string.
+ */
+export function messaggioExternalId(message: OutgoingMessage): string {
+  const organizationId = message.tags?.find((tag) => tag.name === "organization_id")?.value;
+  const notificationId = message.tags?.find((tag) => tag.name === "notification_id")?.value;
+  return organizationId && notificationId
+    ? `${organizationId}:${notificationId}`
+    : message.idempotencyKey;
+}
+
+/** The inverse of `messaggioExternalId` — null for anything not in that shape. */
+export function parseMessaggioExternalId(
+  value: string,
+): Readonly<{ organizationId: string; notificationId: string }> | null {
+  const [organizationId, notificationId] = value.split(":");
+  return organizationId && notificationId ? { organizationId, notificationId } : null;
+}
+
+/** A code and a title/detail pair — the shape of both a top-level and a per-recipient failure. */
+function messaggioFailureCode(title: string | undefined, fallback: string) {
+  return `messaggio_${(title ?? fallback).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+}
+
+/**
+ * Messaggio's multichannel API (`msg.messaggio.com`), roadmap section 7.7's
+ * second channel: SMS to Moldovan numbers at Moldcell/Orange/Unité rates.
+ * JSON over HTTPS like this codebase's other providers, authenticated by a
+ * single `Messaggio-Login` header — its documentation shows no separate
+ * signing secret, so there is none to compute here.
+ *
+ * `phone` in the outgoing request is digits only, no leading "+"; `destination`
+ * on `OutgoingMessage` carries it in E.164 form (`domain/phone.ts`), so the one
+ * translation this adapter owns is stripping that "+".
+ */
+export function createMessaggioNotificationProvider(
+  config: Readonly<{ login: string; from: string }>,
+  fetchImpl: typeof fetch = fetch,
+): NotificationProvider {
+  return {
+    name: "messaggio",
+    async send(message) {
+      if (message.channel !== "sms") {
+        return { ok: false, code: "messaggio_unsupported_channel", retryable: false };
+      }
+
+      const phone = message.destination.replace(/^\+/, "");
+
+      const response = await fetchImpl(MESSAGGIO_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "messaggio-login": config.login,
+        },
+        body: JSON.stringify({
+          recipients: [{ phone }],
+          channels: ["sms"],
+          options: { external_id: messaggioExternalId(message) },
+          sms: { from: config.from, content: [{ type: "text", text: message.body }] },
+        }),
+      });
+
+      // 400/403/422 are this request being wrong in a way retrying will not
+      // fix; 500 is the one status the documentation itself asks the caller
+      // to repeat.
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as
+          | Readonly<{ title?: string }>
+          | null;
+        return {
+          ok: false,
+          code: messaggioFailureCode(body?.title, `http_${response.status}`),
+          retryable: response.status === 500,
+        };
+      }
+
+      const body = (await response.json().catch(() => null)) as
+        | Readonly<{
+            messages?: readonly Readonly<{
+              message_id?: string;
+              error?: Readonly<{ title?: string }>;
+            }>[];
+          }>
+        | null;
+      const sent = body?.messages?.[0];
+      if (!sent) return { ok: false, code: "messaggio_invalid_response", retryable: true };
+
+      // A 200 with a per-recipient error is what an invalid phone number looks
+      // like: the request itself was fine, this one recipient was not.
+      if (sent.error) {
+        return { ok: false, code: messaggioFailureCode(sent.error.title, "recipient_error"), retryable: false };
+      }
+
+      return sent.message_id
+        ? { ok: true, providerMessageId: sent.message_id }
+        : { ok: false, code: "messaggio_missing_message_id", retryable: true };
+    },
+  };
+}
+
 let override: NotificationProvider | null = null;
 
 /** Tests install a provider that fails on purpose; nothing else calls this. */
@@ -136,8 +243,21 @@ export function setNotificationProvider(provider: NotificationProvider | null) {
   override = provider;
 }
 
-export function notificationProvider(): NotificationProvider {
+/**
+ * Email and SMS are chosen independently — `NOTIFICATION_PROVIDER` picks the
+ * email adapter, `SMS_PROVIDER` picks the SMS one — so finishing SMS
+ * onboarding can never silently change what sends the emails already in
+ * production, and vice versa.
+ */
+export function notificationProvider(channel: "email" | "sms"): NotificationProvider {
   if (override) return override;
+
+  if (channel === "sms") {
+    return getSmsProviderName() === "messaggio"
+      ? createMessaggioNotificationProvider(getMessaggioConfig())
+      : logNotificationProvider;
+  }
+
   return getNotificationProviderName() === "resend"
     ? createResendNotificationProvider(getResendConfig())
     : logNotificationProvider;

@@ -82,6 +82,56 @@ export function getResendConfig() {
   });
 }
 
+/**
+ * Which SMS adapter sends a message, independent of `NOTIFICATION_PROVIDER`
+ * (email): a studio that has Resend configured for email but has not yet
+ * finished onboarding with an SMS provider must not have its email silently
+ * fall back to `log` because one shared switch tried to cover both channels.
+ */
+export function getSmsProviderName() {
+  const value = (process.env.SMS_PROVIDER ?? "log").trim();
+  if (value === "log" || value === "messaggio") return value;
+  throw new Error("SMS_PROVIDER must be log or messaggio");
+}
+
+const messaggioEnvSchema = z.object({
+  // The value of the `Messaggio-Login` header — the whole of this API's
+  // authentication. Its own documentation shows no separate secret.
+  login: z.string().trim().min(1),
+  // Messaggio's own limit on a registered sender name.
+  from: z.string().trim().min(1).max(11),
+});
+
+/**
+ * Server-only credentials for the Messaggio SMS adapter (`msg.messaggio.com`,
+ * not the older `bulk.sms-online.com` gateway an earlier version of this
+ * adapter targeted). `MESSAGGIO_API_KEY` is what the dashboard calls the
+ * login it hands out; `MESSAGGIO_LOGIN` is accepted too, matching the
+ * documentation's own name for the header — same reasoning as
+ * `RESEND_FROM`/`RESEND_FROM_EMAIL` above.
+ */
+export function getMessaggioConfig() {
+  return messaggioEnvSchema.parse({
+    login: process.env.MESSAGGIO_LOGIN ?? process.env.MESSAGGIO_API_KEY,
+    from: process.env.MESSAGGIO_SENDER_ID ?? process.env.MESSAGGIO_FROM,
+  });
+}
+
+/**
+ * Unlike Resend, Messaggio's delivery-report callback carries no signature —
+ * its API documentation does not describe one. The token below stands in for
+ * that: it is the last path segment of the URL registered in the Messaggio
+ * account's own Bulk system settings, so a request that does not know it
+ * cannot reach this route at all. Unset disables the route (fail closed),
+ * same as `getResendWebhookSecret`.
+ */
+export function getMessaggioWebhookToken() {
+  const value = process.env.MESSAGGIO_WEBHOOK_TOKEN?.trim();
+  if (!value) return null;
+  if (value.length < 20) throw new Error("MESSAGGIO_WEBHOOK_TOKEN must be at least 20 characters");
+  return value;
+}
+
 /** Unset disables the public Resend webhook route (fail closed). */
 export function getResendWebhookSecret() {
   const value = process.env.RESEND_WEBHOOK_SECRET?.trim();

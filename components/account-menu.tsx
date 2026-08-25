@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ChromeIcon } from "@/components/icons";
@@ -8,6 +8,7 @@ import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
+import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
 /**
  * The account chip in the topbar, and the menu it opens.
@@ -36,34 +37,7 @@ export function AccountMenu({
 
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    // A click anywhere else closes it — including on the topbar's other
-    // buttons, which is why this listens on the document rather than on a
-    // backdrop element: a backdrop would swallow that first click.
-    function onPointerDown(event: MouseEvent) {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      // Escape hands focus back to what opened the menu; without this it lands
-      // on `<body>` and the next Tab starts from the top of the page.
-      trigger.current?.focus();
-    }
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
 
   async function signOut() {
     setPending(true);

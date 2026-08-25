@@ -4,6 +4,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { BrandMark, NavIcon } from "@/components/icons";
 import { bottomNavFor, navFor, navGroups, type NavItem } from "@/components/nav-items";
 import { NavLink } from "@/components/nav-link";
+import { NotificationsMenu } from "@/components/notifications-menu";
 import { PreviewBanner, type PreviewBannerContext } from "@/components/preview-banner";
 import { TopbarTitle } from "@/components/topbar-title";
 import type { MemberRole } from "@/domain/rbac";
@@ -87,6 +88,7 @@ export function AppShell({
           <TopbarTitle titles={titles} fallback={organizationName} />
 
           <div className="topbar-actions">
+            <NotificationsMenu locale={locale} />
             <AccountMenu locale={locale} role={role} userEmail={userEmail} />
           </div>
         </div>

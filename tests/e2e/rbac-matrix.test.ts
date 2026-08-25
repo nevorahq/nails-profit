@@ -189,6 +189,14 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/webhooks/resend", body: {} }),
   },
   {
+    route: "/api/v1/webhooks/messaggio/[token]",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Delivery report authenticated by the token in the URL itself, not a user session; 404 without a matching MESSAGGIO_WEBHOOK_TOKEN",
+    request: async () => ({ path: "/api/v1/webhooks/messaggio/placeholder-token", body: {} }),
+  },
+  {
     route: "/api/v1/public/bookings/[token]",
     method: "GET",
     allowed: ALL_ROLES,
@@ -875,6 +883,13 @@ const cases: readonly Case[] = [
     allowed: ALL_ROLES,
     note: "bookings read; a Master sees their own calendar",
     request: async () => ({ path: "/api/v1/bookings" }),
+  },
+  {
+    route: "/api/v1/notifications",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read, same scope as GET /api/v1/bookings — pending_confirmation requests for the topbar bell",
+    request: async () => ({ path: "/api/v1/notifications" }),
   },
   {
     route: "/api/v1/bookings",

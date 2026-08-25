@@ -516,7 +516,7 @@ describe("public online booking", () => {
       expect(errorCodeOf(refused)).toBe("VERIFICATION_REQUIRED");
     });
 
-    test("Resend verifies email and never queues an SMS", async () => {
+    test("Resend verifies email; the booking itself still reaches every channel the client left", async () => {
       process.env.NOTIFICATION_PROVIDER = "resend";
       try {
         await holdOne("2026-10-14");
@@ -559,12 +559,17 @@ describe("public online booking", () => {
         );
         expect(created.status).toBe("confirmed");
 
+        // Verification picked one channel (email, since NOTIFICATION_PROVIDER
+        // is resend) — but the client also left a phone number, and every
+        // `notifyBooking` call (confirmation, then the reminder queued right
+        // behind it) reaches every channel the client can be reached on,
+        // independent of which provider answers for email. Two calls, two
+        // channels each.
         const rows = await adminDb
           .select({ channel: notificationOutbox.channel })
           .from(notificationOutbox)
           .where(eq(notificationOutbox.bookingId, created.id));
-        expect(rows.length).toBeGreaterThan(0);
-        expect(rows.every((row) => row.channel === "email")).toBe(true);
+        expect(rows.map((row) => row.channel).sort()).toEqual(["email", "email", "sms", "sms"]);
       } finally {
         delete process.env.NOTIFICATION_PROVIDER;
       }

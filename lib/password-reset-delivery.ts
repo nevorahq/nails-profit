@@ -60,7 +60,7 @@ export const productionRefusalDelivery: PasswordResetDelivery = {
 /** Production account recovery through the provider chosen for Phase 7. */
 export const resendPasswordResetDelivery: PasswordResetDelivery = {
   async send({ email, url }) {
-    const result = await notificationProvider().send({
+    const result = await notificationProvider("email").send({
       channel: "email",
       destination: email,
       subject: "Reset your Nail Profit OS password",
