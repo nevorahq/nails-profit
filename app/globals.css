@@ -1474,6 +1474,73 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .preview-banner-exit:hover:not(:disabled) { background: var(--surface-strong); }
 .preview-banner-exit:disabled { opacity: 0.6; cursor: default; }
 
+.cookie-consent-banner {
+  position: fixed;
+  z-index: 200;
+  left: 16rem;
+  right: 16rem;
+  bottom: 16rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rem 16rem;
+  max-width: 640rem;
+  margin: 0 auto;
+  padding: 18rem 20rem;
+  border: 1rem solid var(--line);
+  border-radius: 16rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+  animation: cookie-consent-enter var(--duration-slow) var(--ease-standard) both;
+}
+
+.cookie-consent-text { display: flex; flex-direction: column; gap: 4rem; min-width: 0; }
+.cookie-consent-text strong { font-size: 15rem; font-weight: 750; color: var(--ink); }
+.cookie-consent-description { font-size: 13rem; line-height: 1.5; color: var(--muted); }
+
+.cookie-consent-actions { display: flex; flex: none; gap: 8rem; }
+
+.cookie-consent-decline, .cookie-consent-accept {
+  min-height: 40rem;
+  border-radius: 999rem;
+  padding: 8rem 18rem;
+  font-size: 13rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.cookie-consent-decline { border: 1rem solid var(--line); background: var(--surface); color: var(--ink); }
+.cookie-consent-decline:hover { background: var(--paper); }
+
+.cookie-consent-accept { border: 0; background: var(--accent); color: var(--on-accent); }
+.cookie-consent-accept:hover { background: var(--accent-dark); }
+
+.cookie-consent-reopen {
+  position: fixed;
+  z-index: 200;
+  right: 16rem;
+  bottom: 16rem;
+  min-height: 36rem;
+  border: 1rem solid var(--line);
+  border-radius: 999rem;
+  padding: 8rem 16rem;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 12rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.cookie-consent-reopen:hover { background: var(--surface); color: var(--ink); }
+
+@keyframes cookie-consent-enter {
+  from { opacity: 0; transform: translateY(16rem); }
+  to { opacity: 1; transform: none; }
+}
+
 .app-shell-previewing .app-topbar { position: static; }
 
 .app-topbar {

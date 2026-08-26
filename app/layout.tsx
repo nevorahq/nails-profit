@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Onest } from "next/font/google";
 
 import "./globals.css";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
+import { PostHogProvider } from "@/components/posthog-provider";
+import { getPostHogConfig } from "@/env";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { resolveLocale } from "@/lib/locale";
@@ -39,6 +42,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const locale = await resolveLocale();
   const t = getTranslator(locale);
+  const posthogConfig = getPostHogConfig();
 
   return (
     <html lang={localeTag(locale)}>
@@ -49,6 +53,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <div id="main-content" tabIndex={-1}>
           {children}
         </div>
+        <PostHogProvider config={posthogConfig} />
+        <CookieConsentBanner locale={locale} />
       </body>
     </html>
   );

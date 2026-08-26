@@ -180,6 +180,18 @@ export function getLemonSqueezyCheckoutUrl() {
 }
 
 /**
+ * PostHog's project key is meant to ship in the browser bundle — same class of
+ * value as `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` above, not a secret. Key and host
+ * are required together so a missing host can never silently default to the
+ * wrong data region (PostHog Cloud EU vs US matters for GDPR).
+ */
+export function getPostHogConfig() {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim();
+  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim();
+  return key && host ? { key, host } : null;
+}
+
+/**
  * Independent of `PILOT_ACCESS_ENFORCEMENT`: a pilot studio's access is
  * decided by its own `pilot_enrollment` row, and turning subscription
  * billing on for everyone else must not silently start requiring it from
