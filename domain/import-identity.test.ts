@@ -10,7 +10,7 @@ describe("normalizeKeyPart", () => {
 
   it("unifies the dashes Word substitutes", () => {
     // Word turns a typed hyphen into an en dash; the owner sees no difference
-    // and would not accept "you now have two materials" as an explanation.
+    // and would not accept "you now have two services" as an explanation.
     expect(normalizeKeyPart("Гель–лак")).toBe(normalizeKeyPart("Гель-лак"));
     expect(normalizeKeyPart("Гель—лак")).toBe(normalizeKeyPart("Гель-лак"));
     expect(normalizeKeyPart("Гель−лак")).toBe(normalizeKeyPart("Гель-лак"));
@@ -23,18 +23,18 @@ describe("normalizeKeyPart", () => {
 
 describe("fingerprintRow", () => {
   it("is stable across a re-import of the same row", () => {
-    expect(fingerprintRow("material", ["Гель-лак", "ml"])).toBe(
-      fingerprintRow("material", [" гель-лак ", "ML"]),
+    expect(fingerprintRow("service", ["Гель-лак", "ml"])).toBe(
+      fingerprintRow("service", [" гель-лак ", "ML"]),
     );
   });
 
   it("does not collide across entity types", () => {
-    // "Френч" is a plausible name for both a service and a material.
-    expect(fingerprintRow("service", ["Френч"])).not.toBe(fingerprintRow("material", ["Френч"]));
+    // "Френч" is a plausible name for both a service and a client's nickname.
+    expect(fingerprintRow("service", ["Френч"])).not.toBe(fingerprintRow("client", ["Френч"]));
   });
 
   it("keeps an empty part in position", () => {
-    expect(fingerprintRow("material", ["Гель", ""])).not.toBe(fingerprintRow("material", ["", "Гель"]));
+    expect(fingerprintRow("service", ["Гель", ""])).not.toBe(fingerprintRow("service", ["", "Гель"]));
   });
 });
 
@@ -57,8 +57,8 @@ describe("rowIdentity", () => {
   });
 
   it("gives the same identity to the same row in a second file", () => {
-    expect(rowIdentity("material", null, ["Гель-лак"])).toEqual(
-      rowIdentity("material", undefined, ["ГЕЛЬ-ЛАК"]),
+    expect(rowIdentity("service", null, ["Гель-лак"])).toEqual(
+      rowIdentity("service", undefined, ["ГЕЛЬ-ЛАК"]),
     );
   });
 });

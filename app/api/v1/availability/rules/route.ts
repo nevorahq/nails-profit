@@ -14,7 +14,7 @@ import { getActiveMembership } from "@/lib/membership";
  * Weekly working patterns, roadmap section 7.6.
  *
  * PUT replaces the pattern for one specialist at one location from a given
- * local date onward, the way the recipe endpoint replaces a service's recipe:
+ * local date onward, replacing what stood there before:
  * the previous rules are closed rather than deleted, by setting their
  * `effective_to` to the new `effective_from`. Exclusive end, inclusive start —
  * the same handover the commission rules use, so a question about last Tuesday

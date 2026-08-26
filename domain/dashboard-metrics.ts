@@ -17,8 +17,6 @@ export type VisitMetricRow = Readonly<{
   commissionMinor: number | null;
   /** Null when the visit could not be costed; never read as zero. */
   contributionMarginMinor: number | null;
-  materialCostMinor: number | null;
-  normativeMaterialCostMinor: number | null;
   /**
    * The `costing-v2` terms, each null on a snapshot written before they
    * existed. Read as zero when summing — nothing was charged then, because
@@ -37,7 +35,7 @@ export type VisitMetricRow = Readonly<{
    * `durationMinutes` above comes from the financial snapshot and is null
    * whenever the margin could not be computed — which is right for a profit per
    * hour and wrong for capacity. An hour worked is an hour of the rota used up
-   * whether or not a material had a price, so utilization counts this one.
+   * whether or not the visit could be costed, so utilization counts this one.
    */
   workedMinutes: number;
   incompleteReasons: readonly string[];
@@ -80,8 +78,8 @@ export type DashboardMetrics = Readonly<{
   costedRevenueMinor: number;
   /**
    * What the work cost: the sum of every costed visit's commission. Needed as
-   * its own line by the monthly P&L, which lists materials and labour
-   * separately rather than only their combined effect on the margin.
+   * its own line by the monthly P&L, which lists labour separately rather than
+   * only its combined effect on the margin.
    */
   labourCostMinor: number;
   /**
@@ -114,10 +112,6 @@ export type DashboardMetrics = Readonly<{
    * would report a studio as idle because a price was missing.
    */
   bookedDurationMinutes: number;
-  /** CST-007 at the level of a period: what the recipes said versus what was used. */
-  normativeMaterialCostMinor: number;
-  actualMaterialCostMinor: number;
-  materialDeviationMinor: number;
   /** DSH-008: what stops the remaining visits from being costed. */
   incompleteVisits: number;
   incompleteRevenueMinor: number;
@@ -146,12 +140,6 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
 
   const sumOf = (pick: (row: VisitMetricRow) => number | null) =>
     costed.reduce((total, row) => total + (pick(row) ?? 0), 0);
-
-  const normativeMaterialCostMinor = costed.reduce(
-    (total, row) => total + (row.normativeMaterialCostMinor ?? 0),
-    0,
-  );
-  const actualMaterialCostMinor = costed.reduce((total, row) => total + (row.materialCostMinor ?? 0), 0);
 
   const incomplete = rows.filter((row) => !isCosted(row));
   const incompleteReasonCounts: Record<string, number> = {};
@@ -185,9 +173,6 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
         : roundRatio(contributionMarginMinor * 60, costedDurationMinutes),
     costedDurationMinutes,
     bookedDurationMinutes: rows.reduce((total, row) => total + row.workedMinutes, 0),
-    normativeMaterialCostMinor,
-    actualMaterialCostMinor,
-    materialDeviationMinor: actualMaterialCostMinor - normativeMaterialCostMinor,
     incompleteVisits: incomplete.length,
     incompleteRevenueMinor: incomplete.reduce((total, row) => total + row.revenueMinor, 0),
     incompleteReasonCounts,

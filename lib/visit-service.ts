@@ -1,16 +1,11 @@
-import { and, desc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   addOns,
   commissionRuleServices,
   commissionRules,
-  consumptions,
   financialSnapshots,
-  materialPriceVersions,
-  materials,
   paymentMethods,
-  recipeItems,
-  recipes,
   services,
   specialists,
   taxRules,
@@ -28,7 +23,7 @@ import {
 import { hasAnyTax, selectTaxRates } from "@/domain/tax-rules";
 import type { Currency } from "@/domain/money";
 import type { MemberRole } from "@/domain/rbac";
-import { calculateVisitProfit, type ConsumptionSnapshot, type VisitProfit } from "@/domain/visit-profit";
+import { calculateVisitProfit, type VisitProfit } from "@/domain/visit-profit";
 import { recordAuditEvent } from "@/lib/audit";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 
@@ -37,7 +32,7 @@ import { recordPilotProductEvent } from "@/lib/pilot-events";
  *
  * Everything the catalogue contributes is copied at closing time. After that the
  * visit is self-contained: re-costing it reads only its own rows, so a later
- * price change, recipe edit or commission change cannot reach it.
+ * price change or commission change cannot reach it.
  */
 
 export type VisitDraftLine = Readonly<{
@@ -50,18 +45,8 @@ export type VisitDraftLine = Readonly<{
   durationMinutes: number;
 }>;
 
-export type VisitDraftConsumption = Readonly<{
-  materialId: string;
-  materialNameSnapshot: string;
-  baseUnitSnapshot: "ml" | "g" | "piece";
-  normativeQuantityMilliUnits: number;
-  packagePriceMinorSnapshot: number | null;
-  packageSizeMilliUnitsSnapshot: number | null;
-}>;
-
 export type VisitDraft = Readonly<{
   lines: VisitDraftLine[];
-  consumptions: VisitDraftConsumption[];
   plannedDurationMinutes: number;
   commission: {
     type: Commission["type"];
@@ -91,8 +76,6 @@ export type VisitDraft = Readonly<{
    * must not change when the flag is switched later.
    */
   masterIsPrincipal: boolean;
-  /** False when the service or a selected add-on has no saved recipe version. */
-  standardUsageKnown: boolean;
 }>;
 
 /**
@@ -113,13 +96,6 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
         draft.commission!.serviceIds.length === 0 ||
         draft.commission!.serviceIds.includes(line.serviceId ?? draft.lines[0]?.serviceId ?? ""),
     })),
-    consumptions: draft.consumptions.map((line) => ({
-      materialId: line.materialId,
-      normativeQuantityMilliUnits: line.normativeQuantityMilliUnits,
-      actualQuantityMilliUnits: null,
-      packagePriceMinor: line.packagePriceMinorSnapshot,
-      packageSizeMilliUnits: line.packageSizeMilliUnitsSnapshot,
-    })),
     commission: toCommission({
       id: "draft",
       serviceId: null,
@@ -132,7 +108,6 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
     commissionBase: draft.commission.base,
     plannedDurationMinutes: draft.plannedDurationMinutes,
     actualDurationMinutes: null,
-    standardUsageKnown: draft.standardUsageKnown,
     ...(draft.payment
       ? { payment: { basisPoints: draft.payment.basisPoints, fixedFeeMinor: draft.payment.fixedFeeMinor } }
       : {}),
@@ -140,40 +115,9 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
   });
 }
 
-async function activeRecipeItems(tx: TenantTransaction, target: { serviceId?: string; addOnId?: string }, at: Date) {
-  const [recipe] = await tx
-    .select({ id: recipes.id })
-    .from(recipes)
-    .where(
-      and(
-        target.serviceId ? eq(recipes.serviceId, target.serviceId) : eq(recipes.addOnId, target.addOnId!),
-        lte(recipes.activeFrom, at),
-      ),
-    )
-    .orderBy(desc(recipes.activeFrom), desc(recipes.recipeVersion))
-    .limit(1);
-
-  if (!recipe) return { configured: false as const, items: [] };
-
-  const items = await tx
-    .select({
-      materialId: recipeItems.materialId,
-      quantity: recipeItems.normativeQuantityMilliUnits,
-      materialName: materials.name,
-      baseUnit: materials.baseUnit,
-    })
-    .from(recipeItems)
-    .innerJoin(materials, eq(recipeItems.materialId, materials.id))
-    .where(eq(recipeItems.recipeId, recipe.id));
-
-  return { configured: true as const, items };
-}
-
 /**
  * Turns a service, its chosen add-ons and a specialist into the rows a visit
- * will own. Quantities for a material used by both the service and an add-on
- * are summed here, so the visit carries one line per material and the cost is
- * rounded once.
+ * will own.
  */
 export async function buildVisitDraft(
   tx: TenantTransaction,
@@ -218,72 +162,6 @@ export async function buildVisitDraft(
       durationMinutes: addOn.durationDeltaMinutes,
     })),
   ];
-
-  const merged = new Map<string, VisitDraftConsumption>();
-  const recipeSources = [
-    await activeRecipeItems(tx, { serviceId: service.id }, input.at),
-    ...(await Promise.all(chosen.map((addOn) => activeRecipeItems(tx, { addOnId: addOn.id }, input.at)))),
-  ];
-
-  for (const source of recipeSources) {
-    for (const item of source.items) {
-      const existing = merged.get(item.materialId);
-      if (existing) {
-        merged.set(item.materialId, {
-          ...existing,
-          normativeQuantityMilliUnits: existing.normativeQuantityMilliUnits + item.quantity,
-        });
-        continue;
-      }
-
-      merged.set(item.materialId, {
-        materialId: item.materialId,
-        materialNameSnapshot: item.materialName,
-        baseUnitSnapshot: item.baseUnit,
-        normativeQuantityMilliUnits: item.quantity,
-        // Null when nothing was on file at closing time. Never zero.
-        packagePriceMinorSnapshot: null,
-        packageSizeMilliUnitsSnapshot: null,
-      });
-    }
-  }
-
-  /*
-   * One current-price query for the whole merged recipe. The previous loop did
-   * one query per material, so a realistic manicure recipe closed with 10–15
-   * avoidable round trips.
-   */
-  const materialIds = [...merged.keys()];
-  const currentPrices =
-    materialIds.length === 0
-      ? []
-      : await tx
-          .selectDistinctOn([materialPriceVersions.materialId], {
-            materialId: materialPriceVersions.materialId,
-            packagePriceMinor: materialPriceVersions.packagePriceMinor,
-            packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
-          })
-          .from(materialPriceVersions)
-          .where(
-            and(
-              inArray(materialPriceVersions.materialId, materialIds),
-              lte(materialPriceVersions.validFrom, input.at),
-            ),
-          )
-          .orderBy(
-            materialPriceVersions.materialId,
-            desc(materialPriceVersions.validFrom),
-            desc(materialPriceVersions.createdAt),
-          );
-  const priceByMaterial = new Map(currentPrices.map((price) => [price.materialId, price]));
-  for (const [materialId, line] of merged) {
-    const price = priceByMaterial.get(materialId);
-    merged.set(materialId, {
-      ...line,
-      packagePriceMinorSnapshot: price?.packagePriceMinor ?? null,
-      packageSizeMilliUnitsSnapshot: price?.packageSizeMilliUnits ?? null,
-    });
-  }
 
   const [person] = await tx
     .select({ isPrincipal: specialists.isPrincipal })
@@ -356,7 +234,6 @@ export async function buildVisitDraft(
 
   return {
     lines,
-    consumptions: [...merged.values()],
     plannedDurationMinutes: lines.reduce((total, line) => total + line.durationMinutes, 0),
     commission: rule
       ? {
@@ -369,7 +246,6 @@ export async function buildVisitDraft(
       : null,
     currency: (service.currency ?? "MDL") as Currency,
     masterIsPrincipal: person?.isPrincipal ?? false,
-    standardUsageKnown: recipeSources.every((source) => source.configured),
     payment: paymentMethod
       ? {
           methodId: paymentMethod.id,
@@ -396,7 +272,6 @@ export type RecordVisitInput = Readonly<{
   actualDurationMinutes: number | null;
   /** Omitted takes the studio's default method; explicit null means cash. */
   paymentMethodId?: string | null;
-  consumption: readonly Readonly<{ materialId: string; actualQuantityMilliUnits: number }>[];
   requestId: string;
   /** Optional for server-to-server callers; the browser always sends one. */
   completionKey?: string;
@@ -416,7 +291,6 @@ export type VisitFailure =
   | "service_not_found"
   | "missing_commission_rule"
   | "missing_duration"
-  | "invalid_material_override"
   | "idempotency_conflict";
 
 /**
@@ -434,11 +308,6 @@ export const VISIT_FAILURES: Readonly<
     message: "The specialist has no commission rule",
   },
   missing_duration: { status: 422, code: "MISSING_DURATION", message: "The service has no duration" },
-  invalid_material_override: {
-    status: 422,
-    code: "INVALID_MATERIAL_OVERRIDE",
-    message: "A material override does not belong to this organization",
-  },
   idempotency_conflict: {
     status: 409,
     code: "IDEMPOTENCY_CONFLICT",
@@ -447,8 +316,8 @@ export const VISIT_FAILURES: Readonly<
 };
 
 /**
- * Closing a visit: the catalogue snapshot, the lines, the consumptions, the
- * financial snapshot and the events that follow from it.
+ * Closing a visit: the catalogue snapshot, the lines, the financial snapshot
+ * and the events that follow from it.
  *
  * One function rather than one per caller. Gate 7 asks that "booking → visit →
  * profit даёт те же финансовые snapshots, что и ручной visit flow", and the
@@ -473,62 +342,6 @@ export async function recordCompletedVisit(
   if (!draft.commission) return { ok: false, failure: "missing_commission_rule" };
   if (draft.plannedDurationMinutes <= 0) return { ok: false, failure: "missing_duration" };
 
-  const actualByMaterial = new Map(
-    input.consumption.map((entry) => [entry.materialId, entry.actualQuantityMilliUnits]),
-  );
-
-  /*
-   * Validate and snapshot extra exception materials before writing the visit.
-   * Returning a domain refusal after inserts would commit a partial visit,
-   * because a refusal is data rather than a thrown transaction error.
-   */
-  const standardMaterialIds = new Set(draft.consumptions.map((line) => line.materialId));
-  const extraMaterialIds = [...actualByMaterial.keys()].filter((id) => !standardMaterialIds.has(id));
-  const extraMaterials =
-    extraMaterialIds.length === 0
-      ? []
-      : await tx
-          .select({ id: materials.id, name: materials.name, baseUnit: materials.baseUnit })
-          .from(materials)
-          .where(inArray(materials.id, extraMaterialIds));
-  if (extraMaterials.length !== extraMaterialIds.length) {
-    return { ok: false, failure: "invalid_material_override" };
-  }
-
-  const extraPrices =
-    extraMaterialIds.length === 0
-      ? []
-      : await tx
-          .selectDistinctOn([materialPriceVersions.materialId], {
-            materialId: materialPriceVersions.materialId,
-            packagePriceMinor: materialPriceVersions.packagePriceMinor,
-            packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
-          })
-          .from(materialPriceVersions)
-          .where(
-            and(
-              inArray(materialPriceVersions.materialId, extraMaterialIds),
-              lte(materialPriceVersions.validFrom, input.completedAt),
-            ),
-          )
-          .orderBy(
-            materialPriceVersions.materialId,
-            desc(materialPriceVersions.validFrom),
-            desc(materialPriceVersions.createdAt),
-          );
-  const extraPriceByMaterial = new Map(extraPrices.map((price) => [price.materialId, price]));
-  const completionConsumptions: VisitDraftConsumption[] = [
-    ...draft.consumptions,
-    ...extraMaterials.map((material) => ({
-      materialId: material.id,
-      materialNameSnapshot: material.name,
-      baseUnitSnapshot: material.baseUnit,
-      normativeQuantityMilliUnits: 0,
-      packagePriceMinorSnapshot: extraPriceByMaterial.get(material.id)?.packagePriceMinor ?? null,
-      packageSizeMilliUnitsSnapshot: extraPriceByMaterial.get(material.id)?.packageSizeMilliUnits ?? null,
-    })),
-  ];
-
   const insertVisit = tx
     .insert(visits)
     .values({
@@ -548,7 +361,6 @@ export async function recordCompletedVisit(
       commissionBase: draft.commission.base,
       currency: draft.currency,
       masterIsPrincipal: draft.masterIsPrincipal,
-      standardMaterialUsageKnown: draft.standardUsageKnown,
       paymentMethodId: draft.payment?.methodId ?? null,
       paymentCommissionBasisPointsSnapshot: draft.payment?.basisPoints ?? null,
       paymentFixedFeeMinorSnapshot: draft.payment?.fixedFeeMinor ?? null,
@@ -607,24 +419,6 @@ export async function recordCompletedVisit(
       updatedBy: input.actor.userId,
     })),
   );
-
-  if (completionConsumptions.length > 0) {
-    await tx.insert(consumptions).values(
-      completionConsumptions.map((line) => ({
-        organizationId: input.organizationId,
-        visitId: visit.id,
-        materialId: line.materialId,
-        materialNameSnapshot: line.materialNameSnapshot,
-        baseUnitSnapshot: line.baseUnitSnapshot,
-        normativeQuantityMilliUnits: line.normativeQuantityMilliUnits,
-        actualQuantityMilliUnits: actualByMaterial.get(line.materialId) ?? null,
-        packagePriceMinorSnapshot: line.packagePriceMinorSnapshot,
-        packageSizeMilliUnitsSnapshot: line.packageSizeMilliUnitsSnapshot,
-        createdBy: input.actor.userId,
-        updatedBy: input.actor.userId,
-      })),
-    );
-  }
 
   const recalculated = await recalculateVisitProfit(tx, visit.id);
   const snapshot = await writeFinancialSnapshot(tx, {
@@ -711,15 +505,6 @@ export async function recalculateVisitProfit(
   if (!visit) return null;
 
   const lines = await tx.select().from(visitLines).where(eq(visitLines.visitId, visit.id));
-  const used = await tx.select().from(consumptions).where(eq(consumptions.visitId, visit.id));
-
-  const snapshots: ConsumptionSnapshot[] = used.map((row) => ({
-    materialId: row.materialId,
-    normativeQuantityMilliUnits: row.normativeQuantityMilliUnits,
-    actualQuantityMilliUnits: row.actualQuantityMilliUnits,
-    packagePriceMinor: row.packagePriceMinorSnapshot,
-    packageSizeMilliUnits: row.packageSizeMilliUnitsSnapshot,
-  }));
 
   const profit = calculateVisitProfit({
     // The visit's own currency, never a constant: re-costing used to stamp
@@ -733,7 +518,6 @@ export async function recalculateVisitProfit(
       refundMinor: line.refundMinor,
       commissionable: line.commissionable,
     })),
-    consumptions: snapshots,
     /*
      * Read off the visit, never resolved afresh. A studio that signs a cheaper
      * acquiring contract or meets a new VAT rate must not have last quarter
@@ -763,7 +547,6 @@ export async function recalculateVisitProfit(
     }),
     plannedDurationMinutes: visit.plannedDurationMinutes,
     actualDurationMinutes: visit.actualDurationMinutes,
-    standardUsageKnown: visit.standardMaterialUsageKnown,
   });
 
   return { visit, profit };
@@ -801,14 +584,12 @@ export async function writeFinancialSnapshot(
     snapshotVersion: (previous?.snapshotVersion ?? 0) + 1,
     currency: visit.currency,
     revenueMinor: profit.revenueMinor,
-    normativeMaterialCostMinor: profit.deviation.normativeCostMinor,
-    materialUsageSource: profit.materialUsageSource,
     createdBy: input.actorUserId,
   };
 
-  // An incomplete visit still gets a snapshot: the revenue and the normative
-  // cost are known, and CST-010 needs the row in order to list what is missing.
-  // Every figure that depends on the unknown stays null rather than zero.
+  // An incomplete visit still gets a snapshot: the revenue is known, and
+  // CST-010 needs the row in order to list what is missing. Every figure that
+  // depends on the unknown stays null rather than zero.
   const [snapshot] = await tx
     .insert(financialSnapshots)
     .values(
@@ -816,7 +597,6 @@ export async function writeFinancialSnapshot(
         ? {
             ...common,
             formulaVersion: profit.costing.formulaVersion,
-            materialCostMinor: profit.costing.materialCostMinor,
             commissionMinor: profit.costing.commissionMinor,
             netRevenueMinor: profit.costing.netRevenueMinor,
             vatMinor: profit.costing.vatMinor,

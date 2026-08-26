@@ -8,7 +8,6 @@ import {
 import { importTemplates, type ImportableEntity } from "@/domain/import-templates";
 import type { Capability, MemberRole } from "@/domain/rbac";
 import { canManageCatalogue } from "@/domain/rbac";
-import { fromMilliUnits } from "@/domain/units";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 import type { AppLocale } from "@/i18n/messages";
 
@@ -20,11 +19,10 @@ import type { AppLocale } from "@/i18n/messages";
  * Section 6.1 has no "import" row, and inventing one would put a permission in
  * the product that the spec never granted. Import is a bulk write of ordinary
  * catalogue rows, so it borrows the capability of what it writes — at scope
- * "all", since a Master's `own`-scoped materials permission covers recording
- * their own consumption, not replacing the studio's catalogue.
+ * "all", since a Master's `create_only` services permission covers adding their
+ * own, not replacing the studio's catalogue.
  */
 const ENTITY_CAPABILITY: Record<ImportableEntity, Capability> = {
-  material: "materials",
   service: "services",
   specialist: "commissions",
   client: "clients",
@@ -112,10 +110,6 @@ function formatCell(value: unknown, type: FieldType, format: PreviewFormat): str
   switch (type) {
     case "money":
       return typeof value === "number" ? formatMoneyMinor(value, format.currency, locale) : String(value);
-    case "quantity":
-      return typeof value === "number"
-        ? new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(fromMilliUnits(value))
-        : String(value);
     case "duration":
       return typeof value === "number" ? formatDuration(value) : String(value);
     case "percent":

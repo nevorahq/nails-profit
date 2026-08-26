@@ -56,7 +56,6 @@ export function toCommission(rule: CommissionRuleRow): Commission {
       }
       return { type: "fixed", amountMinor: rule.fixedAmountMinor };
     case "percentage":
-    case "percentage_after_materials":
       if (rule.basisPoints === null) {
         throw new Error(`Commission rule ${rule.id} is ${rule.type} but has no rate`);
       }

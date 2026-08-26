@@ -80,7 +80,6 @@ export async function GET(request: Request) {
               contribution_margin_minor: costing.costing.contributionMarginMinor,
               margin_basis_points: costing.costing.marginBasisPoints,
               profit_per_hour_minor: costing.costing.profitPerHourMinor,
-              material_cost_minor: costing.costing.materialCostMinor,
               commission_minor: costing.costing.commissionMinor,
             }
           : { status: "incomplete", reasons: costing.reasons },

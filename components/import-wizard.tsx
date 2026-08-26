@@ -60,7 +60,7 @@ const encodingLabels: Record<string, string> = {
 export function ImportWizard({ entities, locale }: { entities: string[]; locale: AppLocale }) {
   const router = useRouter();
   const t = getTranslator(locale);
-  const [entity, setEntity] = useState(entities[0] ?? "material");
+  const [entity, setEntity] = useState(entities[0] ?? "service");
   const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);

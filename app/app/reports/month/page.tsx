@@ -61,8 +61,6 @@ export default async function MonthReportPage({
     switch (rule.type) {
       case "percentage":
         return rate ?? "—";
-      case "percentage_after_materials":
-        return rate ? t("specialists.afterMaterials", { rate }) : "—";
       case "fixed":
         return rule.fixedAmountMinor === null ? "—" : money(rule.fixedAmountMinor);
       case "hybrid":
@@ -160,10 +158,6 @@ export default async function MonthReportPage({
                     <td>{cost(pl.turnoverTaxMinor)}</td>
                   </tr>
                 )}
-                <tr>
-                  <td className="pl-label">{t("pl.materials")}</td>
-                  <td>{cost(pl.materialCostMinor)}</td>
-                </tr>
                 <tr className={pl.payrollTaxMinor > 0 || pl.paymentCommissionMinor > 0 ? undefined : "pl-subtotal"}>
                   <td className="pl-label">{t(businessLabel.labour[businessType])}</td>
                   <td>{cost(pl.labourCostMinor)}</td>
@@ -523,31 +517,6 @@ export default async function MonthReportPage({
             </section>
           )}
 
-          {pl.materialCostMinor > 0 && (
-            <section className="panel">
-              <h2>{t("pl.materialBreakdown")}</h2>
-              <table className="data-table pl-table">
-                <tbody>
-                  {report.materialBreakdown.map((line) => (
-                    <tr key={line.category}>
-                      <td>{t(`pl.materialCategory.${line.category}` as MessageKey)}</td>
-                      <td>{money(line.costMinor)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td>{t("expenses.total")}</td>
-                    <td>
-                      <strong>{money(pl.materialCostMinor)}</strong>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-              <p className="pl-note">{t("pl.materialBreakdownHint")}</p>
-            </section>
-          )}
-
           {overheadLines.length > 0 && (
             <section className="panel">
               <h2>{t("pl.overheadTitle")}</h2>
@@ -602,39 +571,6 @@ export default async function MonthReportPage({
               </table>
             </section>
           )}
-
-          {/*
-            Bought against used. The material catalogue has no editing screen at
-            present, so this line is how a drifting price makes itself known
-            instead of quietly inflating the margin — see section 8 of the plan.
-          */}
-          <section className="panel">
-            <h2>{t("pl.reconciliationTitle")}</h2>
-            <table className="data-table pl-table">
-              <tbody>
-                <tr>
-                  <td>{t("pl.purchased")}</td>
-                  <td>{money(pl.materialsPurchasedMinor)}</td>
-                </tr>
-                <tr className="pl-subtotal">
-                  <td className="pl-label">{t("pl.consumed")}</td>
-                  <td>{cost(pl.materialCostMinor)}</td>
-                </tr>
-                <tr>
-                  <td>{t("pl.difference")}</td>
-                  <td className={pl.materialsReconciliationMinor < 0 ? "metric-negative" : undefined}>
-                    {money(pl.materialsReconciliationMinor)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p className="pl-note">{t("pl.reconciliationHint")}</p>
-            {(pl.incompleteReasonCounts.missing_material_price ?? 0) > 0 && (
-              <p className="pl-note">
-                {t("pl.unpricedMaterials", { count: pl.incompleteReasonCounts.missing_material_price })}
-              </p>
-            )}
-          </section>
         </>
       )}
     </main>

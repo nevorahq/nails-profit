@@ -12,8 +12,8 @@ import { closeTestConnections, resetDatabase } from "../helpers/database";
  */
 function tinyImport() {
   const form = new FormData();
-  form.set("entity", "material");
-  form.set("file", new File(["Наименование;Единица;Объём упаковки;Цена\r\nТоп;ml;10;120"], "one.csv"));
+  form.set("entity", "service");
+  form.set("file", new File(["Наименование;Цена;Длительность\r\nТоп-услуга;600;90"], "one.csv"));
   return form;
 }
 

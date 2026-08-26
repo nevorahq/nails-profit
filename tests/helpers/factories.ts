@@ -2,19 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import {
   commissionRules,
-  materialPriceVersions,
-  materials,
   memberships,
   organizations,
-  recipeItems,
-  recipes,
   services,
   specialists,
   users,
 } from "@/db/schema";
 import type { CommissionBase, CommissionType } from "@/domain/costing";
 import type { MemberRole } from "@/domain/rbac";
-import { toMilliUnits } from "@/domain/units";
 import { adminDb } from "./database";
 
 /**
@@ -73,68 +68,6 @@ export async function createLocation(
   await adminDb.insert(bookingSettings).values({ organizationId, locationId: location.id });
 
   return location;
-}
-
-export async function createMaterial(
-  organizationId: string,
-  options: {
-    name?: string;
-    baseUnit?: "ml" | "g" | "piece";
-    packagePriceMinor?: number;
-    packageSize?: number;
-    createdBy?: string;
-    /**
-     * When the price starts applying. A visit is priced by the version whose
-     * `validFrom` precedes it, so a fixture dated "now" leaves a visit set in
-     * the past with no price at all — and the visit is then correctly reported
-     * as incomplete rather than costed at zero.
-     */
-    priceValidFrom?: Date;
-  } = {},
-) {
-  const [material] = await adminDb
-    .insert(materials)
-    .values({
-      organizationId,
-      name: options.name ?? "Material",
-      baseUnit: options.baseUnit ?? "ml",
-    })
-    .returning();
-
-  if (options.packagePriceMinor !== undefined && options.packageSize !== undefined) {
-    const owner = options.createdBy ?? (await createUser()).id;
-    await adminDb.insert(materialPriceVersions).values({
-      organizationId,
-      materialId: material.id,
-      packagePriceMinor: options.packagePriceMinor,
-      packageSizeMilliUnits: toMilliUnits(options.packageSize),
-      currency: "MDL",
-      createdBy: owner,
-      ...(options.priceValidFrom ? { validFrom: options.priceValidFrom } : {}),
-    });
-  }
-
-  return material;
-}
-
-export async function addMaterialPrice(
-  organizationId: string,
-  materialId: string,
-  options: { packagePriceMinor: number; packageSize: number; createdBy: string; validFrom?: Date },
-) {
-  const [version] = await adminDb
-    .insert(materialPriceVersions)
-    .values({
-      organizationId,
-      materialId,
-      packagePriceMinor: options.packagePriceMinor,
-      packageSizeMilliUnits: toMilliUnits(options.packageSize),
-      currency: "MDL",
-      createdBy: options.createdBy,
-      validFrom: options.validFrom ?? new Date(),
-    })
-    .returning();
-  return version;
 }
 
 export async function createService(
@@ -222,37 +155,6 @@ export async function createCommissionRule(
   return rule;
 }
 
-/** Writes a recipe version with its items, the way the recipe endpoint does. */
-export async function createRecipe(
-  organizationId: string,
-  serviceId: string,
-  items: { materialId: string; quantity: number }[],
-  options: { recipeVersion?: number; activeFrom?: Date } = {},
-) {
-  const [recipe] = await adminDb
-    .insert(recipes)
-    .values({
-      organizationId,
-      serviceId,
-      recipeVersion: options.recipeVersion ?? 1,
-      activeFrom: options.activeFrom ?? new Date(Date.now() - 60_000),
-    })
-    .returning();
-
-  if (items.length > 0) {
-    await adminDb.insert(recipeItems).values(
-      items.map((item) => ({
-        organizationId,
-        recipeId: recipe.id,
-        materialId: item.materialId,
-        normativeQuantityMilliUnits: toMilliUnits(item.quantity),
-      })),
-    );
-  }
-
-  return recipe;
-}
-
 export async function createAddOn(
   organizationId: string,
   options: { name?: string; priceDeltaMinor?: number; durationDeltaMinutes?: number } = {},
@@ -268,29 +170,6 @@ export async function createAddOn(
     })
     .returning();
   return addOn;
-}
-
-export async function createAddOnRecipe(
-  organizationId: string,
-  addOnId: string,
-  items: { materialId: string; quantity: number }[],
-) {
-  const [recipe] = await adminDb
-    .insert(recipes)
-    .values({ organizationId, addOnId, recipeVersion: 1, activeFrom: new Date(Date.now() - 60_000) })
-    .returning();
-
-  if (items.length > 0) {
-    await adminDb.insert(recipeItems).values(
-      items.map((item) => ({
-        organizationId,
-        recipeId: recipe.id,
-        materialId: item.materialId,
-        normativeQuantityMilliUnits: toMilliUnits(item.quantity),
-      })),
-    );
-  }
-  return recipe;
 }
 
 export async function createClient(

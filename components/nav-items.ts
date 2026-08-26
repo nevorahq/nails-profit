@@ -34,7 +34,6 @@ export type IconName =
   | "clients"
   | "services"
   | "addOns"
-  | "materials"
   | "expenses"
   | "specialists"
   | "import"
@@ -52,7 +51,6 @@ export const navItems: readonly NavItem[] = [
 
   { href: "/app/services", key: "nav.services", group: "catalogue", icon: "services" },
   { href: "/app/add-ons", key: "nav.addOns", group: "catalogue", icon: "addOns" },
-  { href: "/app/materials", key: "nav.materials", group: "catalogue", icon: "materials" },
   { href: "/app/expenses", key: "nav.expenses", group: "catalogue", icon: "expenses" },
 
   { href: "/app/specialists", key: "nav.specialists", group: "team", icon: "specialists" },
@@ -73,7 +71,7 @@ export const navGroups: readonly { group: NavGroup; key: MessageKey | null }[] =
 /**
  * Sections a master is not offered.
  *
- * The first four are organization-wide and were never theirs. Visits and
+ * The first three are organization-wide and were never theirs. Visits and
  * clients are different: their pages do scope correctly to the master's own
  * rows, and they were kept for that reason — but the master's day is the
  * calendar, where the appointment they are about to work is also the thing they
@@ -89,7 +87,6 @@ const MASTER_HIDDEN: ReadonlySet<string> = new Set([
   "/app/import",
   "/app/specialists",
   "/app/add-ons",
-  "/app/materials",
   "/app/visits",
   "/app/clients",
 ]);

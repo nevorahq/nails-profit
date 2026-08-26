@@ -22,7 +22,6 @@ describe("navigation", () => {
       "/app/clients",
       "/app/services",
       "/app/add-ons",
-      "/app/materials",
       "/app/expenses",
       "/app/specialists",
       "/app/import",

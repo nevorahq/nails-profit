@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   byCategory,
   expensesForMonth,
-  purchasedMaterialsMinor,
   totalByClass,
   type PeriodExpenseRow,
 } from "@/domain/expense-periods";
@@ -107,8 +106,10 @@ describe("totals", () => {
   it("keeps what a visit already counted out of the overhead", () => {
     const totals = totalByClass(expensesForMonth(march, "2026-03"));
 
-    expect(totals.overhead).toBe(950_00);
-    expect(totals.cash_only).toBe(900_00);
+    // Materials sit on the overhead side now: nothing counts their cost a
+    // second time, so the month they were bought in is the month they cost.
+    expect(totals.overhead).toBe(1_450_00);
+    expect(totals.cash_only).toBe(400_00);
   });
 
   it("lists only the categories that occurred", () => {
@@ -118,19 +119,9 @@ describe("totals", () => {
     expect(Object.keys(totals)).not.toContain("transport");
   });
 
-  it("adds up what was bought on materials, for the reconciliation", () => {
-    const rows = [
-      ...march,
-      row({ id: "gloves", category: "consumables", amountMinor: 60_00 }),
-    ];
-
-    expect(purchasedMaterialsMinor(expensesForMonth(rows, "2026-03"))).toBe(560_00);
-  });
-
   it("answers zero for a month with nothing in it", () => {
     const totals = totalByClass(expensesForMonth(march, "2026-09"));
 
     expect(totals).toEqual({ overhead: 0, cash_only: 0 });
-    expect(purchasedMaterialsMinor([])).toBe(0);
   });
 });

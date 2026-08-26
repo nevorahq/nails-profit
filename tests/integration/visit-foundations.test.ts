@@ -12,12 +12,8 @@ import {
 } from "@/lib/visit-service";
 import { adminDb, resetDatabase } from "../helpers/database";
 import {
-  createAddOn,
-  createAddOnRecipe,
   createCommissionRule,
-  createMaterial,
   createOrganization,
-  createRecipe,
   createService,
   createSpecialist,
   createUser,
@@ -41,20 +37,13 @@ describe("visit foundations", () => {
     const specialistId = (await createSpecialist(organizationId, { isPrincipal: options.isPrincipal })).id;
     await createCommissionRule(organizationId, specialistId, { basisPoints: 4_000 });
 
-    // 100 per 10 ml, so 10 per ml — the canonical fixture, in whichever currency.
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
     const service = await createService(organizationId, {
       priceMinor: 60_000,
       durationMinutes: 90,
       currency: options.currency,
     });
-    await createRecipe(organizationId, service.id, [{ materialId: material.id, quantity: 2 }]);
 
-    return { organizationId, specialistId, serviceId: service.id, materialId: material.id };
+    return { organizationId, specialistId, serviceId: service.id };
   }
 
   async function close(scene: Awaited<ReturnType<typeof studio>>) {
@@ -68,7 +57,6 @@ describe("visit foundations", () => {
         addOnIds: [],
         completedAt: new Date(),
         actualDurationMinutes: 90,
-        consumption: [{ materialId: scene.materialId, actualQuantityMilliUnits: 2_000 }],
         requestId: "test",
       });
       if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
@@ -120,8 +108,8 @@ describe("visit foundations", () => {
 
       expect(visit.currency).toBe("MDL");
       expect(snapshot.currency).toBe("MDL");
-      // The canonical scenario: 600 − 20 materials − 240 commission.
-      expect(snapshot.contributionMarginMinor).toBe(34_000);
+      // The canonical scenario: 600 − 240 commission.
+      expect(snapshot.contributionMarginMinor).toBe(36_000);
     });
   });
 
@@ -230,24 +218,23 @@ describe("visit foundations", () => {
       const complete = await studio();
       await close(complete);
 
-      // No standard profile is saved, so the margin cannot be computed — the
-      // snapshot is still written, and still carries a version.
-      const incomplete = await studio();
-      const unconfigured = await createService(incomplete.organizationId, {
-        priceMinor: 60_000,
+      // A visit that took nothing in has no margin to state, and the snapshot
+      // is still written — with a version, and with the reason on it.
+      const free = await studio();
+      const gratis = await createService(free.organizationId, {
+        priceMinor: 0,
         durationMinutes: 90,
       });
-      await withTenant(incomplete.organizationId, async (tx) => {
+      await withTenant(free.organizationId, async (tx) => {
         const result = await recordCompletedVisit(tx, {
-          organizationId: incomplete.organizationId,
+          organizationId: free.organizationId,
           actor: { userId, role: "owner" },
-          serviceId: unconfigured.id,
-          specialistId: incomplete.specialistId,
+          serviceId: gratis.id,
+          specialistId: free.specialistId,
           clientId: null,
           addOnIds: [],
           completedAt: new Date(),
           actualDurationMinutes: 90,
-          consumption: [],
           requestId: "test",
         });
         if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
@@ -266,150 +253,6 @@ describe("visit foundations", () => {
     });
   });
 
-  describe("standard material cost", () => {
-    it("closes without an actual-use form and uses the saved profile", async () => {
-      const scene = await studio();
-
-      const result = await withTenant(scene.organizationId, (tx) =>
-        recordCompletedVisit(tx, {
-          organizationId: scene.organizationId,
-          actor: { userId, role: "owner" },
-          serviceId: scene.serviceId,
-          specialistId: scene.specialistId,
-          clientId: null,
-          addOnIds: [],
-          completedAt: new Date(),
-          actualDurationMinutes: 90,
-          consumption: [],
-          requestId: "standard-close",
-        }),
-      );
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
-      expect(result.snapshot.materialUsageSource).toBe("standard");
-      expect(result.snapshot.materialCostMinor).toBe(2_000);
-      expect(result.snapshot.incompleteReasons).toEqual([]);
-    });
-
-    it("includes a selected add-on profile exactly once", async () => {
-      const scene = await studio();
-      const addOn = await createAddOn(scene.organizationId, { priceDeltaMinor: 5_000 });
-      await createAddOnRecipe(scene.organizationId, addOn.id, [
-        { materialId: scene.materialId, quantity: 1 },
-      ]);
-
-      const result = await withTenant(scene.organizationId, (tx) =>
-        recordCompletedVisit(tx, {
-          organizationId: scene.organizationId,
-          actor: { userId, role: "owner" },
-          serviceId: scene.serviceId,
-          specialistId: scene.specialistId,
-          clientId: null,
-          addOnIds: [addOn.id],
-          completedAt: new Date(),
-          actualDurationMinutes: 90,
-          consumption: [],
-          requestId: "add-on-close",
-        }),
-      );
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
-      expect(result.snapshot.materialUsageSource).toBe("standard");
-      expect(result.snapshot.materialCostMinor).toBe(3_000);
-    });
-
-    it("does not treat a missing add-on profile as zero", async () => {
-      const scene = await studio();
-      const addOn = await createAddOn(scene.organizationId);
-
-      const result = await withTenant(scene.organizationId, (tx) =>
-        recordCompletedVisit(tx, {
-          organizationId: scene.organizationId,
-          actor: { userId, role: "owner" },
-          serviceId: scene.serviceId,
-          specialistId: scene.specialistId,
-          clientId: null,
-          addOnIds: [addOn.id],
-          completedAt: new Date(),
-          actualDurationMinutes: 90,
-          consumption: [],
-          requestId: "missing-add-on-profile",
-        }),
-      );
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
-      expect(result.snapshot.materialCostMinor).toBeNull();
-      expect(result.snapshot.incompleteReasons).toContain("missing_standard_usage");
-    });
-
-    it("adds an exceptional material that is absent from the standard profile", async () => {
-      const scene = await studio();
-      const extra = await createMaterial(scene.organizationId, {
-        name: "Стразы",
-        baseUnit: "piece",
-        packagePriceMinor: 5_000,
-        packageSize: 10,
-        createdBy: userId,
-      });
-
-      const result = await withTenant(scene.organizationId, (tx) =>
-        recordCompletedVisit(tx, {
-          organizationId: scene.organizationId,
-          actor: { userId, role: "owner" },
-          serviceId: scene.serviceId,
-          specialistId: scene.specialistId,
-          clientId: null,
-          addOnIds: [],
-          completedAt: new Date(),
-          actualDurationMinutes: 90,
-          consumption: [{ materialId: extra.id, actualQuantityMilliUnits: 1_000 }],
-          requestId: "extra-material-close",
-        }),
-      );
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
-      expect(result.snapshot.materialUsageSource).toBe("actual");
-      expect(result.snapshot.materialCostMinor).toBe(2_500);
-    });
-
-    it("rejects a cross-tenant material override before any visit is written", async () => {
-      const scene = await studio();
-      const otherOwner = (await createUser("other-material-owner@example.com")).id;
-      const otherOrganization = (await createOrganization({ ownerId: otherOwner })).id;
-      const foreignMaterial = await createMaterial(otherOrganization, {
-        packagePriceMinor: 5_000,
-        packageSize: 10,
-        createdBy: otherOwner,
-      });
-
-      const result = await withTenant(scene.organizationId, (tx) =>
-        recordCompletedVisit(tx, {
-          organizationId: scene.organizationId,
-          actor: { userId, role: "owner" },
-          serviceId: scene.serviceId,
-          specialistId: scene.specialistId,
-          clientId: null,
-          addOnIds: [],
-          completedAt: new Date(),
-          actualDurationMinutes: 90,
-          consumption: [{ materialId: foreignMaterial.id, actualQuantityMilliUnits: 1_000 }],
-          requestId: "foreign-extra-material",
-        }),
-      );
-
-      expect(result).toEqual({ ok: false, failure: "invalid_material_override" });
-      const rows = await adminDb
-        .select({ id: visits.id })
-        .from(visits)
-        .where(eq(visits.organizationId, scene.organizationId));
-      expect(rows).toHaveLength(0);
-    });
-  });
-
   describe("completion idempotency", () => {
     it("replays the same key without creating a second visit or snapshot", async () => {
       const scene = await studio();
@@ -423,7 +266,6 @@ describe("visit foundations", () => {
         addOnIds: [],
         completedAt,
         actualDurationMinutes: 90,
-        consumption: [],
         requestId: "idempotent-close",
         completionKey: "visit-foundations-key",
         completionFingerprint: "same-request",
@@ -461,7 +303,6 @@ describe("visit foundations", () => {
         addOnIds: [],
         completedAt: new Date(),
         actualDurationMinutes: 90,
-        consumption: [],
         requestId: "idempotency-conflict",
         completionKey: "conflicting-visit-key",
       } as const;

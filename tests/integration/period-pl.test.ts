@@ -9,10 +9,8 @@ import { loadPeriodPL } from "@/lib/period";
 import { adminDb, resetDatabase } from "../helpers/database";
 import {
   createCommissionRule,
-  createMaterial,
   createLocation,
   createOrganization,
-  createRecipe,
   createService,
   createSpecialist,
   createUser,
@@ -33,9 +31,8 @@ describe("the monthly P&L", () => {
   let organizationId: string;
   let specialistId: string;
   let serviceId: string;
-  let materialId: string;
 
-  async function closeVisit(at: Date, options: { actualQuantityMilliUnits?: number | null } = {}) {
+  async function closeVisit(at: Date) {
     return withTenant(organizationId, async (tx) => {
       const result = await recordCompletedVisit(tx, {
         organizationId,
@@ -46,10 +43,6 @@ describe("the monthly P&L", () => {
         addOnIds: [],
         completedAt: at,
         actualDurationMinutes: 90,
-        consumption:
-          options.actualQuantityMilliUnits === null
-            ? []
-            : [{ materialId, actualQuantityMilliUnits: options.actualQuantityMilliUnits ?? 2_000 }],
         requestId: "test",
       });
       if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
@@ -86,7 +79,7 @@ describe("the monthly P&L", () => {
 
   /*
    * The catalogue is dated before every visit in this file. A commission rule
-   * and a recipe are both chosen by `activeFrom <= completedAt`, so fixtures
+   * is chosen by `activeFrom <= completedAt`, so fixtures
    * created "now" would leave a visit dated last March with no rule at all —
    * which the service correctly refuses rather than costing at zero.
    */
@@ -102,19 +95,8 @@ describe("the monthly P&L", () => {
       activeFrom: CATALOGUE_FROM,
     });
 
-    // 100 per 10 ml → 10 per ml; the recipe uses 2 ml, so 20 of materials.
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-      priceValidFrom: CATALOGUE_FROM,
-    });
-    materialId = material.id;
     const service = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
     serviceId = service.id;
-    await createRecipe(organizationId, service.id, [{ materialId: material.id, quantity: 2 }], {
-      activeFrom: CATALOGUE_FROM,
-    });
   });
 
   it("takes its revenue from the visits' own snapshots", async () => {
@@ -148,12 +130,13 @@ describe("the monthly P&L", () => {
 
     const { pl } = await report("2026-03");
 
-    // 600 − 20 materials − 240 commission = 340, less 200 of rent.
-    expect(pl.contributionMarginMinor).toBe(34_000);
-    expect(pl.overheadMinor).toBe(20_000);
-    expect(pl.operatingProfitMinor).toBe(14_000);
-    // The gel and the wage left the account and are reported — just not twice.
-    expect(pl.cashOnlyMinor).toBe(74_000);
+    // 600 − 240 commission = 360, less 200 of rent and the 500 of gel that is
+    // now an ordinary cost of the month it was bought in.
+    expect(pl.contributionMarginMinor).toBe(36_000);
+    expect(pl.overheadMinor).toBe(70_000);
+    expect(pl.operatingProfitMinor).toBe(-34_000);
+    // Only the wage is held back, and it is reported rather than hidden.
+    expect(pl.cashOnlyMinor).toBe(24_000);
   });
 
   /*
@@ -216,7 +199,6 @@ describe("the monthly P&L", () => {
         addOnIds: [],
         completedAt: new Date("2026-03-11T10:00:00.000Z"),
         actualDurationMinutes: 90,
-        consumption: [{ materialId, actualQuantityMilliUnits: 2_000 }],
         requestId: "test",
       });
       if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
@@ -225,25 +207,24 @@ describe("the monthly P&L", () => {
 
     const { pl } = await report("2026-03");
 
-    expect(pl.contributionMarginMinor).toBe(68_000);
+    expect(pl.contributionMarginMinor).toBe(72_000);
     expect(pl.principalLabourMinor).toBe(mine.snapshot.commissionMinor);
     expect(pl.principalLabourMinor).toBe(24_000);
-    // 680 of margin plus the 240 that never left, and no rent to pay.
-    expect(pl.operatingProfitMinor).toBe(92_000);
+    // 720 of margin plus the 240 that never left, and no rent to pay.
+    expect(pl.operatingProfitMinor).toBe(96_000);
   });
 
-  it("compares what was bought against what the visits used", async () => {
+  it("charges a purchase of materials to the month it was bought in", async () => {
     await closeVisit(new Date("2026-03-10T10:00:00.000Z"));
     await record({ name: "Гель", category: "materials", amountMinor: 50_000, spentOn: "2026-03-02" });
 
-    const result = await report("2026-03");
-    const { pl } = result;
+    const { pl } = await report("2026-03");
 
-    expect(pl.materialsPurchasedMinor).toBe(50_000);
-    expect(pl.materialCostMinor).toBe(2_000);
-    expect(pl.materialsReconciliationMinor).toBe(48_000);
-    expect(result.materialBreakdown.reduce((sum, line) => sum + line.costMinor, 0)).toBe(2_000);
-    expect(result.materialBreakdown.find((line) => line.category === "nail_materials")?.costMinor).toBe(2_000);
+    // No consumption carries this cost any more, so the ledger row is the only
+    // place it reaches the profit — as plain overhead.
+    expect(pl.overheadMinor).toBe(50_000);
+    expect(pl.overheadByCategory).toMatchObject({ materials: 50_000 });
+    expect(pl.operatingProfitMinor).toBe(36_000 - 50_000);
   });
 
   it("leaves a row in another currency out and says how many", async () => {
@@ -512,13 +493,13 @@ describe("the monthly P&L", () => {
     /*
      * The numerator counts hours worked, not hours costed. A visit whose margin
      * could not be computed still occupied the chair, and reporting the studio
-     * as idle because a material had no price would be a figure about the data
+     * as idle because of a gap in the data would be a figure about the data
      * dressed up as a figure about the business.
      */
-    it("counts a standard-costed visit's time when no actual override exists", async () => {
+    it("counts every closed visit's time towards utilization", async () => {
       await roster();
       await closeVisit(new Date("2026-03-04T10:00:00.000Z"));
-      await closeVisit(new Date("2026-03-05T10:00:00.000Z"), { actualQuantityMilliUnits: null });
+      await closeVisit(new Date("2026-03-05T10:00:00.000Z"));
 
       const { pl, capacity } = await report("2026-03");
 
@@ -541,7 +522,7 @@ describe("the monthly P&L", () => {
 
       const { pl, capacity } = await report("2026-03");
 
-      // Revenue 600, contribution 340 — the visit is the whole mix.
+      // Revenue 600, contribution 360 — the visit is the whole mix.
       expect(capacity.contributionBasisPoints).toBe(
         Math.round((pl.contributionMarginMinor / pl.revenueMinor) * 10_000),
       );
@@ -562,17 +543,18 @@ describe("the monthly P&L", () => {
       await adminDb.insert(ownerDraws).values({ organizationId, amountMinor, currency, occurredOn });
     }
 
-    it("counts a purchase of materials that the profit statement does not", async () => {
+    it("counts a wage paid out that the profit statement does not", async () => {
       await closeVisit(new Date("2026-03-04T10:00:00.000Z"));
-      await record({ name: "Гель", category: "materials", amountMinor: 15_000, spentOn: "2026-03-02" });
+      await record({ name: "Выплата", category: "payroll", amountMinor: 15_000, spentOn: "2026-03-31" });
 
       const { pl, cashFlow } = await report("2026-03");
 
-      // The purchase is `cash_only`, so it changes no profit line...
+      // The wage is `cash_only`, so it changes no profit line — the work was
+      // already counted through the visit's commission...
       expect(pl.overheadMinor).toBe(0);
       expect(pl.cashOnlyMinor).toBe(15_000);
-      // ...and it is the whole point of this one.
-      expect(cashFlow.spentFromLedgerMinor).toBe(15_000);
+      // ...and it is reported on its own line here rather than in the total.
+      expect(cashFlow.ledgerPayrollMinor).toBe(15_000);
     });
 
     it("leaves ledger payroll out of the cash and says how much", async () => {
@@ -640,14 +622,14 @@ describe("the monthly P&L", () => {
     });
   });
 
-  it("treats missing actual usage as the normal standard-cost path", async () => {
+  it("costs every closed visit of the month", async () => {
     await closeVisit(new Date("2026-03-10T10:00:00.000Z"));
-    await closeVisit(new Date("2026-03-11T10:00:00.000Z"), { actualQuantityMilliUnits: null });
+    await closeVisit(new Date("2026-03-11T10:00:00.000Z"));
 
     const { pl } = await report("2026-03");
 
     expect(pl.revenueMinor).toBe(120_000);
-    expect(pl.contributionMarginMinor).toBe(68_000);
+    expect(pl.contributionMarginMinor).toBe(72_000);
     expect(pl.incompleteVisits).toBe(0);
     expect(pl.incompleteRevenueMinor).toBe(0);
     expect(pl.incompleteReasonCounts).toEqual({});

@@ -313,10 +313,6 @@ describe("booking lifecycle", () => {
     }>(
       await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {
         version: created.version,
-        // What only the appointment knows. Without it the margin stays
-        // incomplete by design: section 8.8.1 never reads a missing actual
-        // consumption as zero.
-        consumption: [{ material_id: studio.materialId, actual_quantity: CANONICAL.recipeQuantity }],
       }),
     );
 
@@ -335,7 +331,6 @@ describe("booking lifecycle", () => {
       await manual.owner.post("/api/v1/visits", {
         service_id: manual.serviceId,
         specialist_id: manual.specialistId,
-        consumption: [{ material_id: manual.materialId, actual_quantity: CANONICAL.recipeQuantity }],
       }),
     );
     expect(byHand.snapshot.revenue_minor).toBe(completed.visit.snapshot.revenue_minor);

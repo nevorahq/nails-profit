@@ -8,18 +8,12 @@ import { roundRatio, type Currency } from "@/domain/money";
  * Adding it is the one place in the redesign where a working integrity rule had
  * to be rewritten rather than extended, which is why it waited until last.
  */
-export const commissionTypes = [
-  "percentage",
-  "fixed",
-  "percentage_after_materials",
-  "hybrid",
-] as const;
+export const commissionTypes = ["percentage", "fixed", "hybrid"] as const;
 export type CommissionType = (typeof commissionTypes)[number];
 
 export type Commission =
   | { type: "percentage"; basisPoints: number }
   | { type: "fixed"; amountMinor: number }
-  | { type: "percentage_after_materials"; basisPoints: number }
   | { type: "hybrid"; basisPoints: number; amountMinor: number };
 
 /**
@@ -30,8 +24,13 @@ export type Commission =
  * the database keep the version they were written with and are never
  * recomputed — that is the whole point of storing it, and the reason this is a
  * constant rather than a literal repeated at each call site.
+ *
+ * `costing-v3` is the first version with no material term. It is not a
+ * refinement of `costing-v2` — the same visit costs strictly more under it,
+ * because what the materials used to take off the margin is simply not
+ * subtracted any more. Nothing recomputes an older snapshot into it.
  */
-export const CURRENT_FORMULA_VERSION = "costing-v2";
+export const CURRENT_FORMULA_VERSION = "costing-v3";
 export type FormulaVersion = typeof CURRENT_FORMULA_VERSION;
 
 /**
@@ -77,21 +76,19 @@ export type PaymentCost = Readonly<{
 /**
  * What a percentage commission is a percentage *of*.
  *
- * Two values, not the four v1 of the plan listed, because two of those four are
- * already in the model and would have become a second way to say the same
- * thing. «After materials» is a commission *type*
- * (`percentage_after_materials`), and «only these services» is a filter over
- * the visit's lines rather than a different arithmetic — see
- * `domain/visit-profit.ts`, which applies it. What is left is the one question
- * the model could not answer: whether the master is paid on the sticker price
- * or on what the client actually paid after a discount.
+ * Two values, not the four v1 of the plan listed, because the other two are not
+ * bases at all. «Only these services» is a filter over the visit's lines rather
+ * than a different arithmetic — see `domain/visit-profit.ts`, which applies it;
+ * «after materials» was a commission type, and went with the material engine.
+ * What is left is the one question the model could not answer: whether the
+ * master is paid on the sticker price or on what the client actually paid after
+ * a discount.
  */
 export const commissionBases = ["full_price", "after_discount"] as const;
 export type CommissionBase = (typeof commissionBases)[number];
 
 export type CostingInput = Readonly<{
   priceMinor: number;
-  materialCostMinor: number | null;
   durationMinutes: number;
   currency: Currency;
   commission: Commission;
@@ -114,9 +111,6 @@ export type CostingInput = Readonly<{
   taxes?: TaxRates;
 }>;
 
-/** Why a costing could not be completed. Drives the CST-010 list. */
-export type IncompleteReason = "missing_material_cost";
-
 type CostingCommon = {
   formulaVersion: FormulaVersion;
   currency: Currency;
@@ -126,15 +120,18 @@ type CostingCommon = {
 };
 
 /**
- * Spec section 8.8.1: a missing material cost is never treated as zero. Rather
- * than throwing, the calculation returns `incompleteCostData` so the visit can
- * still be stored and listed (CST-010). The incomplete branch carries no
- * figures at all — a partial number here would be read as a real margin.
+ * Every input this engine needs is now something the caller always has, so the
+ * result is a single shape rather than a union.
+ *
+ * It used to have an incomplete branch, because a material with no purchase
+ * price left the cost of the visit genuinely unknown and section 8.8.1 forbade
+ * reading that as zero. With materials out of the product there is no such gap:
+ * a price and a duration are enough, and both are required. A visit can still
+ * be *reported* incomplete — see `VisitIncompleteReason` — but for reasons this
+ * arithmetic never sees.
  */
 export type CostingResult = Readonly<
-  | (CostingCommon & {
-      incompleteCostData: false;
-      materialCostMinor: number;
+  CostingCommon & {
       commissionMinor: number;
       /**
        * Revenue once the state's share is out of it: the price less any VAT
@@ -157,11 +154,7 @@ export type CostingResult = Readonly<
        */
       marginBasisPoints: number | null;
       profitPerHourMinor: number;
-    })
-  | (CostingCommon & {
-      incompleteCostData: true;
-      incompleteReasons: readonly IncompleteReason[];
-    })
+    }
 >;
 
 function assertNonNegativeInteger(value: number, field: string) {
@@ -175,20 +168,6 @@ export function calculateCosting(input: CostingInput): CostingResult {
   if (!Number.isSafeInteger(input.durationMinutes) || input.durationMinutes <= 0) {
     throw new RangeError("durationMinutes must be a positive integer");
   }
-
-  if (input.materialCostMinor === null) {
-    return {
-      formulaVersion: CURRENT_FORMULA_VERSION,
-      currency: input.currency,
-      priceMinor: input.priceMinor,
-      durationMinutes: input.durationMinutes,
-      incompleteCostData: true,
-      incompleteReasons: ["missing_material_cost"],
-      explanation: [`price:${input.priceMinor}`, "materials:unknown", `duration_minutes:${input.durationMinutes}`],
-    };
-  }
-
-  assertNonNegativeInteger(input.materialCostMinor, "materialCostMinor");
 
   // The revenue, unless the caller worked out a narrower base from the lines.
   const percentageBase = input.commissionBaseMinor ?? input.priceMinor;
@@ -204,14 +183,6 @@ export function calculateCosting(input: CostingInput): CostingResult {
       assertNonNegativeInteger(input.commission.amountMinor, "commission.amountMinor");
       commissionMinor = input.commission.amountMinor;
       break;
-    case "percentage_after_materials": {
-      assertNonNegativeInteger(input.commission.basisPoints, "commission.basisPoints");
-      // Materials come off the whole visit's cost even when the percentage
-      // applies to part of it: the master used the whole bottle either way.
-      const afterMaterials = Math.max(0, percentageBase - input.materialCostMinor);
-      commissionMinor = roundRatio(afterMaterials * input.commission.basisPoints, 10_000);
-      break;
-    }
     case "hybrid": {
       /*
        * A guaranteed amount plus a share. The two parts are added, never
@@ -283,7 +254,6 @@ export function calculateCosting(input: CostingInput): CostingResult {
 
   const contributionMarginMinor =
     netRevenueMinor -
-    input.materialCostMinor -
     commissionMinor -
     payrollTaxMinor -
     paymentCommissionMinor -
@@ -300,8 +270,6 @@ export function calculateCosting(input: CostingInput): CostingResult {
     currency: input.currency,
     priceMinor: input.priceMinor,
     durationMinutes: input.durationMinutes,
-    incompleteCostData: false,
-    materialCostMinor: input.materialCostMinor,
     commissionMinor,
     netRevenueMinor,
     vatMinor,
@@ -314,7 +282,6 @@ export function calculateCosting(input: CostingInput): CostingResult {
     explanation: [
       `price:${input.priceMinor}`,
       ...(vatMinor > 0 ? [`vat:${vatMinor}`] : []),
-      `materials:${input.materialCostMinor}`,
       `commission:${commissionMinor}`,
       ...(payrollTaxMinor > 0 ? [`payroll_tax:${payrollTaxMinor}`] : []),
       ...(paymentCommissionMinor > 0 ? [`payment_commission:${paymentCommissionMinor}`] : []),

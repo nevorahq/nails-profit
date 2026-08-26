@@ -7,7 +7,6 @@ import { allocatedFixedCostMinor } from "@/domain/capacity";
 import { can } from "@/domain/rbac";
 import { ServiceDetail, type ServiceDetailData } from "@/components/service-detail";
 import { resolveLocalizedText } from "@/i18n/localized-text";
-import { loadMaterials } from "@/lib/materials";
 import { loadPeriodPL, monthOf } from "@/lib/period";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { getTranslator } from "@/i18n/t";
@@ -115,21 +114,12 @@ export default async function ServicePage({
 
   if (!loaded) notFound();
 
-  const materials = await loadMaterials(membership.organizationId);
-
   const data: ServiceDetailData = {
     id: loaded.service.id,
     name: loaded.service.name as Record<string, string>,
     price_minor: loaded.service.priceMinor,
     duration_minutes: loaded.service.durationMinutes,
     currency: loaded.service.currency,
-    recipe: loaded.costing.lines.map((line) => ({
-      material_id: line.materialId,
-      material_name: line.materialName,
-      base_unit: line.baseUnit,
-      quantity_milli_units: line.quantityMilliUnits,
-      cost_minor: line.costMinor,
-    })),
     costing:
       loaded.costing.status === "complete"
         ? {
@@ -138,23 +128,17 @@ export default async function ServicePage({
             currency: loaded.costing.currency,
             price_minor: loaded.costing.costing.priceMinor,
             duration_minutes: loaded.costing.costing.durationMinutes,
-            material_cost_minor: loaded.costing.costing.materialCostMinor,
             commission_minor: loaded.costing.costing.commissionMinor,
             contribution_margin_minor: loaded.costing.costing.contributionMarginMinor,
             margin_basis_points: loaded.costing.costing.marginBasisPoints,
             profit_per_hour_minor: loaded.costing.costing.profitPerHourMinor,
           }
-        : {
-            status: "incomplete",
-            reasons: [...loaded.costing.reasons],
-            unpriced_material_ids: [...loaded.costing.unpricedMaterialIds],
-          },
+        : { status: "incomplete", reasons: [...loaded.costing.reasons] },
   };
 
   return (
     <ServiceDetail
       service={data}
-      materials={materials}
       displayName={resolveLocalizedText(loaded.service.name, locale, locale) ?? t("common.unnamed")}
       addOns={loaded.catalogue.map((addOn) => ({
         id: addOn.id,

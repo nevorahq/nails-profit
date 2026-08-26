@@ -9,9 +9,7 @@ import { adminDb, resetDatabase } from "../helpers/database";
 import { expectDatabaseError } from "../helpers/expect-database-error";
 import {
   createCommissionRule,
-  createMaterial,
   createOrganization,
-  createRecipe,
   createService,
   createSpecialist,
   createUser,
@@ -30,7 +28,6 @@ describe("commission rules v2", () => {
   let organizationId: string;
   let specialistId: string;
   let serviceId: string;
-  let materialId: string;
 
   const CATALOGUE_FROM = new Date("2025-01-01T00:00:00.000Z");
   const MARCH = new Date("2026-03-10T10:00:00.000Z");
@@ -46,7 +43,6 @@ describe("commission rules v2", () => {
         addOnIds: options.addOnIds ?? [],
         completedAt: MARCH,
         actualDurationMinutes: 90,
-        consumption: [{ materialId, actualQuantityMilliUnits: 2_000 }],
         requestId: "test",
       });
       if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
@@ -72,18 +68,8 @@ describe("commission rules v2", () => {
     organizationId = (await createOrganization({ ownerId: userId })).id;
     specialistId = (await createSpecialist(organizationId)).id;
 
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-      priceValidFrom: CATALOGUE_FROM,
-    });
-    materialId = material.id;
     const service = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
     serviceId = service.id;
-    await createRecipe(organizationId, service.id, [{ materialId: material.id, quantity: 2 }], {
-      activeFrom: CATALOGUE_FROM,
-    });
   });
 
   it("costs a plain percentage rule exactly as it always did", async () => {
@@ -95,7 +81,7 @@ describe("commission rules v2", () => {
     const { visit, snapshot } = await close();
 
     expect(snapshot.commissionMinor).toBe(24_000);
-    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.contributionMarginMinor).toBe(36_000);
     // The default base is stored rather than left null, so the visit says what
     // it was costed on instead of relying on a reader knowing the default.
     expect(visit.commissionBase).toBe("after_discount");
@@ -259,7 +245,6 @@ describe("commission rules v2", () => {
     it("accepts each well-formed shape", async () => {
       for (const values of [
         { type: "percentage" as const, basisPoints: 4_000, fixedAmountMinor: null },
-        { type: "percentage_after_materials" as const, basisPoints: 3_000, fixedAmountMinor: null },
         { type: "fixed" as const, basisPoints: null, fixedAmountMinor: 12_000 },
         { type: "hybrid" as const, basisPoints: 1_500, fixedAmountMinor: 8_000 },
       ]) {

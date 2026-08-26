@@ -214,13 +214,6 @@ function serialize(
     duration_minutes: service.durationMinutes,
     currency: service.currency,
     version: service.version,
-    recipe: costing.lines.map((line) => ({
-      material_id: line.materialId,
-      material_name: line.materialName,
-      base_unit: line.baseUnit,
-      quantity_milli_units: line.quantityMilliUnits,
-      cost_minor: line.costMinor,
-    })),
     costing:
       costing.status === "complete"
         ? {
@@ -228,17 +221,12 @@ function serialize(
             formula_version: costing.costing.formulaVersion,
             currency: costing.currency,
             price_minor: costing.costing.priceMinor,
-            material_cost_minor: costing.costing.materialCostMinor,
             commission_minor: costing.costing.commissionMinor,
             contribution_margin_minor: costing.costing.contributionMarginMinor,
             margin_basis_points: costing.costing.marginBasisPoints,
             profit_per_hour_minor: costing.costing.profitPerHourMinor,
             explanation: costing.costing.explanation,
           }
-        : {
-            status: "incomplete",
-            reasons: costing.reasons,
-            unpriced_material_ids: costing.unpricedMaterialIds,
-          },
+        : { status: "incomplete", reasons: costing.reasons },
   };
 }

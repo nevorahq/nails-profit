@@ -35,7 +35,7 @@ function connection() {
 
   const created = postgres(getServerEnv().DATABASE_URL, {
     // A single request can legitimately want more than one connection at
-    // once: `/app/materials` alone runs two `withTenant` transactions and a
+    // once: `/app/services` alone runs two `withTenant` transactions and a
     // plain read concurrently. `max: 2` left that third piece of work queued
     // behind the other two for the whole page, and reproduced reliably as the
     // page hanging rather than erroring — indistinguishable from "the

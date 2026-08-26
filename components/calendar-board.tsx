@@ -75,25 +75,15 @@ const CANCELLATION_REASONS = ["client_request", "studio_request", "no_contact", 
 
 type Alternative = Readonly<{ date: string; slots: string[] }>;
 
-type RecipeMaterial = {
-  material_id: string;
-  material_name: string;
-  base_unit: string;
-  normative_quantity_milli_units: number;
-};
-
-type BookingRecipe = {
+type BookingPreview = {
   durationMinutes: number;
-  materials: RecipeMaterial[];
-  materialOptions: { id: string; name: string; base_unit: string }[];
   preview:
     | {
         status: "complete";
-        material_cost_minor: number;
         commission_minor: number;
         contribution_margin_minor: number;
       }
-    | { status: "incomplete"; material_cost_minor: number | null; reasons: string[] };
+    | { status: "incomplete"; reasons: string[] };
 };
 
 /* --- The day view's time grid --- */
@@ -180,7 +170,7 @@ export function CalendarBoard({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [recipes, setRecipes] = useState<Record<string, BookingRecipe | "loading" | "error">>({});
+  const [previews, setPreviews] = useState<Record<string, BookingPreview | "loading" | "error">>({});
   // The alternatives arrive as UTC instants and have to be read back in the
   // zone of the location they belong to, so the zone travels with them.
   const [alternatives, setAlternatives] = useState<{ zone: string; entries: Alternative[] }>({
@@ -379,52 +369,34 @@ export function CalendarBoard({
     }
   }
 
-  async function loadRecipe(bookingId: string) {
-    if (recipes[bookingId]) return;
-    setRecipes((prev) => ({ ...prev, [bookingId]: "loading" }));
-    const response = await fetch(`/api/v1/bookings/${bookingId}/recipe`);
+  async function loadPreview(bookingId: string) {
+    if (previews[bookingId]) return;
+    setPreviews((prev) => ({ ...prev, [bookingId]: "loading" }));
+    const response = await fetch(`/api/v1/bookings/${bookingId}/preview`);
     if (response.ok) {
-      const body = (await response.json()) as { data: BookingRecipe };
-      setRecipes((prev) => ({ ...prev, [bookingId]: body.data }));
+      const body = (await response.json()) as { data: BookingPreview };
+      setPreviews((prev) => ({ ...prev, [bookingId]: body.data }));
     } else {
-      setRecipes((prev) => ({ ...prev, [bookingId]: "error" }));
+      setPreviews((prev) => ({ ...prev, [bookingId]: "error" }));
     }
   }
 
   async function complete(booking: CalendarBooking, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const recipe = recipes[booking.id];
-    const materials = typeof recipe === "object" && recipe !== null ? recipe.materials : [];
-
     const durationRaw = String(data.get("actual_duration") ?? "").trim();
-    const consumption = materials.flatMap((m) => {
-      const raw = String(data.get(`actual-${m.material_id}`) ?? "").trim();
-      if (raw === "") return [];
-      const quantity = Number(raw);
-      return Number.isFinite(quantity)
-        ? [{ material_id: m.material_id, actual_quantity: quantity }]
-        : [];
-    });
-    const extraMaterialId = String(data.get("extra_material_id") ?? "").trim();
-    const extraQuantityRaw = String(data.get("extra_quantity") ?? "").trim();
-    const extraQuantity = Number(extraQuantityRaw);
-    if (extraMaterialId && extraQuantityRaw && Number.isFinite(extraQuantity) && extraQuantity > 0) {
-      consumption.push({ material_id: extraMaterialId, actual_quantity: extraQuantity });
-    }
 
     const payload = {
       version: booking.version,
       ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
-      consumption,
     };
     await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
       key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
     });
   }
 
-  async function completeWithStandard(booking: CalendarBooking) {
-    const payload = { version: booking.version, consumption: [] };
+  async function completeNow(booking: CalendarBooking) {
+    const payload = { version: booking.version };
     await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
       key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
     });
@@ -890,7 +862,7 @@ export function CalendarBoard({
                         event.currentTarget.open &&
                         booking.status === "confirmed"
                       ) {
-                        loadRecipe(booking.id);
+                        loadPreview(booking.id);
                       }
                     }}
                   >
@@ -949,23 +921,15 @@ export function CalendarBoard({
                           )}
                           {booking.status === "confirmed" && (
                             <>
-                              {recipes[booking.id] === "loading" && (
-                                <p className="muted">{t("calendar.loadingRecipe")}</p>
+                              {previews[booking.id] === "loading" && (
+                                <p className="muted">{t("calendar.loadingPreview")}</p>
                               )}
-                              {typeof recipes[booking.id] === "object" && recipes[booking.id] !== null && (
+                              {typeof previews[booking.id] === "object" && previews[booking.id] !== null && (
                                 (() => {
-                                  const preview = (recipes[booking.id] as BookingRecipe).preview;
+                                  const preview = (previews[booking.id] as BookingPreview).preview;
                                   return (
                                     <div className="visit-card-metrics calendar-completion-preview">
-                                      <div>
-                                        <span>{t("closeVisit.materials")}</span>
-                                        <strong>
-                                          {preview.material_cost_minor === null
-                                            ? "—"
-                                            : `≈ ${money(preview.material_cost_minor)}`}
-                                        </strong>
-                                      </div>
-                                      {preview.status === "complete" && (
+                                      {preview.status === "complete" ? (
                                         <>
                                           <div>
                                             <span>{t("visits.masterEarnings")}</span>
@@ -976,15 +940,13 @@ export function CalendarBoard({
                                             <strong>{money(preview.contribution_margin_minor)}</strong>
                                           </div>
                                         </>
-                                      )}
-                                      {preview.status === "incomplete" && (
+                                      ) : (
                                         <p className="warning-banner">
                                           {preview.reasons
                                             .map((reason) => t(`reason.${reason}` as MessageKey))
                                             .join("; ")}
                                         </p>
                                       )}
-                                      <p className="muted">{t("closeVisit.standardUse")}</p>
                                     </div>
                                   );
                                 })()
@@ -993,17 +955,17 @@ export function CalendarBoard({
                                 type="button"
                                 className="primary-button"
                                 disabled={pending}
-                                onClick={() => completeWithStandard(booking)}
+                                onClick={() => completeNow(booking)}
                               >
                                 {pending ? t("common.saving") : t("calendar.complete")}
                               </button>
                               <details
                                 className="calendar-subform"
                               >
-                                <summary>{t("closeVisit.modifyUse")}</summary>
+                                <summary>{t("closeVisit.modifyDuration")}</summary>
                                 <form className="inline-form" onSubmit={(e) => complete(booking, e)}>
                                   {(() => {
-                                    const r = recipes[booking.id];
+                                    const r = previews[booking.id];
                                     const dur = typeof r === "object" && r !== null ? r.durationMinutes : undefined;
                                     return (
                                       <label>
@@ -1019,79 +981,6 @@ export function CalendarBoard({
                                       </label>
                                     );
                                   })()}
-                                  {recipes[booking.id] === "error" && (
-                                    <p className="muted">{t("closeVisit.noRecipe")}</p>
-                                  )}
-                                  {typeof recipes[booking.id] === "object" && recipes[booking.id] !== null && (
-                                    (() => {
-                                      const recipe = recipes[booking.id] as BookingRecipe;
-                                      return recipe.materials.length > 0 ? (
-                                        <>
-                                        <table className="data-table">
-                                          <thead>
-                                            <tr>
-                                              <th>{t("common.material")}</th>
-                                              <th>{t("closeVisit.norm")}</th>
-                                              <th>{t("closeVisit.actual")}</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {recipe.materials.map((m) => (
-                                              <tr key={m.material_id}>
-                                                <td>{m.material_name}</td>
-                                                <td className="muted">
-                                                  {m.normative_quantity_milli_units / 1000} {m.base_unit}
-                                                </td>
-                                                <td>
-                                                  <input
-                                                    aria-label={`${t("closeVisit.actual")} — ${m.material_name}`}
-                                                    name={`actual-${m.material_id}`}
-                                                    type="number"
-                                                    step="0.001"
-                                                    min="0"
-                                                    placeholder={String(m.normative_quantity_milli_units / 1000)}
-                                                  />
-                                                  <span className="unit-hint">{m.base_unit}</span>
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                        {recipe.materialOptions.some(
-                                          (option) => !recipe.materials.some((material) => material.material_id === option.id),
-                                        ) && (
-                                          <fieldset className="checkbox-set">
-                                            <legend>{t("visits.extraMaterial")}</legend>
-                                            <label>
-                                              {t("common.material")}
-                                              <select name="extra_material_id" defaultValue="">
-                                                <option value="">—</option>
-                                                {recipe.materialOptions
-                                                  .filter(
-                                                    (option) =>
-                                                      !recipe.materials.some(
-                                                        (material) => material.material_id === option.id,
-                                                      ),
-                                                  )
-                                                  .map((option) => (
-                                                    <option key={option.id} value={option.id}>
-                                                      {option.name} ({option.base_unit})
-                                                    </option>
-                                                  ))}
-                                              </select>
-                                            </label>
-                                            <label>
-                                              {t("closeVisit.actual")}
-                                              <input name="extra_quantity" type="number" step="0.001" min="0.001" />
-                                            </label>
-                                          </fieldset>
-                                        )}
-                                        </>
-                                      ) : (
-                                        <p className="muted">{t("closeVisit.noRecipe")}</p>
-                                      );
-                                    })()
-                                  )}
                                   <button className="primary-button" type="submit" disabled={pending}>
                                     {pending ? t("common.saving") : t("calendar.complete")}
                                   </button>

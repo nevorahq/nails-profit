@@ -79,13 +79,6 @@ const PATHS: Readonly<Record<IconName, React.ReactNode>> = {
       <circle cx="14.5" cy="17" r="2.5" />
     </>
   ),
-  // Материалы — a consumable bottle with a measured fill.
-  materials: (
-    <>
-      <path d="M9 3h6M10 3v4l-3 4v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-8l-3-4V3" />
-      <path d="M7 14h10M10 17h4" />
-    </>
-  ),
   // Затраты — a wallet with its clasp pocket.
   expenses: (
     <>

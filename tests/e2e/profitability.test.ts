@@ -9,8 +9,8 @@ import { CANONICAL, createCanonicalStudio, type Studio } from "../helpers/studio
 /**
  * Spec section 17.1, end-to-end scenario A.
  *
- * A service at 600 MDL, a 40% commission and a 35 MDL recipe must produce the
- * same six figures in the service card, in the visit and on the dashboard. The
+ * A service at 600 MDL and a 40% commission must produce the same figures in
+ * the service card, in the visit and on the dashboard. The
  * roadmap's Gate 2 uses the same numbers, and this is the test that proves the
  * product — not the formula module — arrives at them: every step of the setup
  * is an HTTP request an owner's browser would make, from sign-up onward.
@@ -34,7 +34,6 @@ describe("scenario A: profitability", () => {
 
     expect(service.costing).toMatchObject({
       status: "complete",
-      material_cost_minor: CANONICAL.materialCostMinor,
       commission_minor: CANONICAL.commissionMinor,
       contribution_margin_minor: CANONICAL.contributionMarginMinor,
       margin_basis_points: CANONICAL.marginBasisPoints,
@@ -48,7 +47,6 @@ describe("scenario A: profitability", () => {
         service_id: studio.serviceId,
         specialist_id: studio.specialistId,
         actual_duration_minutes: CANONICAL.serviceDurationMinutes,
-        consumption: [{ material_id: studio.materialId, actual_quantity: CANONICAL.recipeQuantity }],
       }),
     );
 
@@ -65,7 +63,6 @@ describe("scenario A: profitability", () => {
     );
 
     expect(visits.find((visit) => visit.id === created.id)?.snapshot).toMatchObject({
-      material_cost_minor: CANONICAL.materialCostMinor,
       commission_minor: CANONICAL.commissionMinor,
       contribution_margin_minor: CANONICAL.contributionMarginMinor,
       margin_basis_points: CANONICAL.marginBasisPoints,
@@ -83,7 +80,6 @@ describe("scenario A: profitability", () => {
       costedVisits: 1,
       revenueMinor: CANONICAL.servicePriceMinor,
       costedRevenueMinor: CANONICAL.servicePriceMinor,
-      actualMaterialCostMinor: CANONICAL.materialCostMinor,
       contributionMarginMinor: CANONICAL.contributionMarginMinor,
       marginBasisPoints: CANONICAL.marginBasisPoints,
       profitPerHourMinor: CANONICAL.profitPerHourMinor,

@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { consumptions, visitLines, visits } from "@/db/schema";
+import { visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { toMilliUnits } from "@/domain/units";
 import { loadDashboard } from "@/lib/dashboard";
 import { buildVisitDraft, recalculateVisitProfit, writeFinancialSnapshot } from "@/lib/visit-service";
 import { resetDatabase } from "../helpers/database";
 import {
   createCommissionRule,
-  createMaterial,
   createOrganization,
-  createRecipe,
   createService,
   createSpecialist,
   createUser,
@@ -31,12 +28,10 @@ describe("Studio Ledger", () => {
   let userId: string;
   let specialistId: string;
   let otherSpecialistId: string;
-  let materialId: string;
 
   async function closeVisit(options: {
     serviceId: string;
     specialistId?: string;
-    actualQuantity: number | null;
     completedAt?: Date;
   }) {
     return withTenant(organizationId, async (tx) => {
@@ -78,23 +73,6 @@ describe("Studio Ledger", () => {
         })),
       );
 
-      if (draft.consumptions.length > 0) {
-        await tx.insert(consumptions).values(
-          draft.consumptions.map((line) => ({
-            organizationId,
-            visitId: visit.id,
-            materialId: line.materialId,
-            materialNameSnapshot: line.materialNameSnapshot,
-            baseUnitSnapshot: line.baseUnitSnapshot,
-            normativeQuantityMilliUnits: line.normativeQuantityMilliUnits,
-            actualQuantityMilliUnits:
-              options.actualQuantity === null ? null : toMilliUnits(options.actualQuantity),
-            packagePriceMinorSnapshot: line.packagePriceMinorSnapshot,
-            packageSizeMilliUnitsSnapshot: line.packageSizeMilliUnitsSnapshot,
-          })),
-        );
-      }
-
       const profit = (await recalculateVisitProfit(tx, visit.id))!.profit;
       const snapshot = await writeFinancialSnapshot(tx, {
         organizationId,
@@ -126,27 +104,16 @@ describe("Studio Ledger", () => {
       activeFrom: EPOCH,
     });
 
-    // 100 MDL for 10 ml, so 10 MDL per ml.
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
-    materialId = material.id;
   });
 
-  async function serviceWithRecipe(name: string, priceMinor: number, durationMinutes: number) {
-    const service = await createService(organizationId, { name, priceMinor, durationMinutes });
-    await createRecipe(organizationId, service.id, [{ materialId, quantity: 2 }], {
-      activeFrom: EPOCH,
-    });
-    return service;
+  async function service(name: string, priceMinor: number, durationMinutes: number) {
+    return createService(organizationId, { name, priceMinor, durationMinutes });
   }
 
   it("totals exactly what the visits report individually", async () => {
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    const first = await closeVisit({ serviceId: service.id, actualQuantity: 2 });
-    const second = await closeVisit({ serviceId: service.id, actualQuantity: 3 });
+    const svc = await service("Маникюр", 60_000, 90);
+    const first = await closeVisit({ serviceId: svc.id });
+    const second = await closeVisit({ serviceId: svc.id });
 
     const { metrics } = await dashboard();
 
@@ -160,14 +127,11 @@ describe("Studio Ledger", () => {
   it("counts a corrected visit once, at its newest version", async () => {
     // Summing every snapshot version would double-count every correction. This
     // is the failure Gate 3's "агрегаты сходятся с суммой snapshots" catches.
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    const { visitId } = await closeVisit({ serviceId: service.id, actualQuantity: 2 });
+    const manicure = await service("Маникюр", 60_000, 90);
+    const { visitId } = await closeVisit({ serviceId: manicure.id });
 
     const corrected = await withTenant(organizationId, async (tx) => {
-      await tx
-        .update(consumptions)
-        .set({ actualQuantityMilliUnits: toMilliUnits(5) })
-        .where(eq(consumptions.visitId, visitId));
+      await tx.update(visitLines).set({ refundMinor: 10_000 }).where(eq(visitLines.visitId, visitId));
       const profit = (await recalculateVisitProfit(tx, visitId))!.profit;
       return writeFinancialSnapshot(tx, {
         organizationId,
@@ -181,31 +145,28 @@ describe("Studio Ledger", () => {
 
     expect(metrics.visits).toBe(1);
     expect(corrected.snapshotVersion).toBe(2);
-    // 340 was version 1; only the 310 of version 2 counts.
+    // 360 was version 1; only the 300 of version 2 counts.
     expect(metrics.contributionMarginMinor).toBe(corrected.contributionMarginMinor);
-    expect(metrics.contributionMarginMinor).toBe(31_000);
+    expect(metrics.contributionMarginMinor).toBe(30_000);
   });
 
-  it("does not restate a period when a material price changes afterwards", async () => {
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    await closeVisit({ serviceId: service.id, actualQuantity: 2 });
+  it("does not restate a period when the service price changes afterwards", async () => {
+    const manicure = await service("Маникюр", 60_000, 90);
+    await closeVisit({ serviceId: manicure.id });
     const before = await dashboard();
 
-    const { addMaterialPrice } = await import("../helpers/factories");
-    await addMaterialPrice(organizationId, materialId, {
-      packagePriceMinor: 50_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
+    const { services } = await import("@/db/schema");
+    const { adminDb } = await import("../helpers/database");
+    await adminDb.update(services).set({ priceMinor: 90_000 }).where(eq(services.id, manicure.id));
 
     const after = await dashboard();
     expect(after.metrics.contributionMarginMinor).toBe(before.metrics.contributionMarginMinor);
   });
 
-  it("costs a visit from standard usage when no actual override is supplied", async () => {
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    await closeVisit({ serviceId: service.id, actualQuantity: 2 });
-    await closeVisit({ serviceId: service.id, actualQuantity: null });
+  it("costs every closed visit and leaves none incomplete", async () => {
+    const manicure = await service("Маникюр", 60_000, 90);
+    await closeVisit({ serviceId: manicure.id });
+    await closeVisit({ serviceId: manicure.id });
 
     const { metrics } = await dashboard();
 
@@ -214,20 +175,18 @@ describe("Studio Ledger", () => {
     expect(metrics.costedVisits).toBe(2);
     expect(metrics.incompleteVisits).toBe(0);
     expect(metrics.incompleteRevenueMinor).toBe(0);
-    expect(metrics.marginBasisPoints).toBe(5_667);
+    expect(metrics.marginBasisPoints).toBe(6_000);
     expect(metrics.incompleteReasonCounts).toEqual({});
   });
 
   it("filters by period", async () => {
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
+    const svc = await service("Маникюр", 60_000, 90);
     await closeVisit({
-      serviceId: service.id,
-      actualQuantity: 2,
+      serviceId: svc.id,
       completedAt: new Date("2026-06-15T10:00:00Z"),
     });
     await closeVisit({
-      serviceId: service.id,
-      actualQuantity: 2,
+      serviceId: svc.id,
       completedAt: new Date("2026-08-15T10:00:00Z"),
     });
 
@@ -241,9 +200,9 @@ describe("Studio Ledger", () => {
   });
 
   it("filters by specialist", async () => {
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    await closeVisit({ serviceId: service.id, actualQuantity: 2 });
-    await closeVisit({ serviceId: service.id, actualQuantity: 2, specialistId: otherSpecialistId });
+    const svc = await service("Маникюр", 60_000, 90);
+    await closeVisit({ serviceId: svc.id });
+    await closeVisit({ serviceId: svc.id, specialistId: otherSpecialistId });
 
     const mine = await dashboard({ specialistId });
     expect(mine.metrics.visits).toBe(1);
@@ -253,10 +212,10 @@ describe("Studio Ledger", () => {
   });
 
   it("ranks by margin while showing that per hour the order differs", async () => {
-    const long = await serviceWithRecipe("Наращивание", 100_000, 180);
-    const quick = await serviceWithRecipe("Экспресс", 30_000, 30);
-    await closeVisit({ serviceId: long.id, actualQuantity: 2 });
-    await closeVisit({ serviceId: quick.id, actualQuantity: 2 });
+    const long = await service("Наращивание", 100_000, 180);
+    const quick = await service("Экспресс", 30_000, 30);
+    await closeVisit({ serviceId: long.id });
+    await closeVisit({ serviceId: quick.id });
 
     const { metrics } = await dashboard();
 
@@ -268,27 +227,16 @@ describe("Studio Ledger", () => {
     );
   });
 
-  it("compares recipe cost against what was used", async () => {
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    await closeVisit({ serviceId: service.id, actualQuantity: 3 });
-
-    const { metrics } = await dashboard();
-
-    expect(metrics.normativeMaterialCostMinor).toBe(2_000);
-    expect(metrics.actualMaterialCostMinor).toBe(3_000);
-    expect(metrics.materialDeviationMinor).toBe(1_000);
-  });
-
   it("names an archived service by what the visit recorded", async () => {
-    const service = await serviceWithRecipe("Старое название", 60_000, 90);
-    await closeVisit({ serviceId: service.id, actualQuantity: 2 });
+    const svc = await service("Старое название", 60_000, 90);
+    await closeVisit({ serviceId: svc.id });
 
     const { services } = await import("@/db/schema");
     const { adminDb } = await import("../helpers/database");
     await adminDb
       .update(services)
       .set({ archivedAt: new Date(), name: { ru: "Переименована" } })
-      .where(eq(services.id, service.id));
+      .where(eq(services.id, svc.id));
 
     const { metrics } = await dashboard();
     expect(metrics.ranking[0].serviceName).toBe("Старое название");
@@ -306,11 +254,10 @@ describe("Studio Ledger", () => {
     const other = await createOrganization({ name: "Other" });
     const otherSpecialist = await createSpecialist(other.id);
     await createCommissionRule(other.id, otherSpecialist.id, { basisPoints: 4_000 });
-    const otherService = await createService(other.id, { priceMinor: 999_000, durationMinutes: 90 });
-    await createRecipe(other.id, otherService.id, []);
+    await createService(other.id, { priceMinor: 999_000, durationMinutes: 90 });
 
-    const service = await serviceWithRecipe("Маникюр", 60_000, 90);
-    await closeVisit({ serviceId: service.id, actualQuantity: 2 });
+    const svc = await service("Маникюр", 60_000, 90);
+    await closeVisit({ serviceId: svc.id });
 
     const { metrics } = await dashboard();
     expect(metrics.visits).toBe(1);

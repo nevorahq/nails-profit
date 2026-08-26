@@ -6,8 +6,8 @@ import { selectLaborRules, type LaborCostRuleRow } from "@/domain/labor-cost";
 import { buildPeriodPL } from "@/domain/period-pl";
 
 /*
- * The canonical studio, one visit at a time: 600 charged, 20 of materials,
- * 40% commission — margin 340. Six of them make a month worth reporting.
+ * The canonical studio, one visit at a time: 600 charged, 40% commission —
+ * margin 360. Six of them make a month worth reporting.
  */
 function visit(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitMetricRow {
   return {
@@ -15,9 +15,7 @@ function visit(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitM
     serviceName: "Маникюр",
     revenueMinor: 600_00,
     commissionMinor: 240_00,
-    contributionMarginMinor: 340_00,
-    materialCostMinor: 20_00,
-    normativeMaterialCostMinor: 20_00,
+    contributionMarginMinor: 360_00,
     vatMinor: null,
     turnoverTaxMinor: null,
     payrollTaxMinor: null,
@@ -82,32 +80,45 @@ describe("buildPeriodPL", () => {
     );
 
     expect(report.revenueMinor).toBe(1_800_00);
-    expect(report.materialCostMinor).toBe(60_00);
     expect(report.labourCostMinor).toBe(720_00);
-    expect(report.contributionMarginMinor).toBe(1_020_00);
+    expect(report.contributionMarginMinor).toBe(1_080_00);
     expect(report.overheadMinor).toBe(800_00);
-    expect(report.operatingProfitMinor).toBe(220_00);
+    expect(report.operatingProfitMinor).toBe(280_00);
   });
 
   /*
-   * The defect this whole stage exists to close. A crate of gel and a wage paid
-   * out are money leaving the account, and both are already counted — the gel
-   * through the visits that used it, the wage through their commissions.
-   * Subtracting them again would charge the month twice.
+   * The defect this whole stage exists to close. A wage paid out is money
+   * leaving the account, and it is already counted through each visit's
+   * commission. Subtracting it again would charge the month twice.
+   *
+   * A crate of gel used to be held back the same way, because the visits that
+   * consumed it carried its cost. Nothing carries it now, so it is ordinary
+   * overhead and does come out of the profit — see `domain/expense-classes.ts`.
    */
   it("does not subtract what a visit already counted", () => {
     const visits = [visit({ visitId: "1" }), visit({ visitId: "2" }), visit({ visitId: "3" })];
     const withoutLedgerNoise = pl(visits, [expense({ id: "rent" })]);
     const withLedgerNoise = pl(visits, [
       expense({ id: "rent" }),
-      expense({ id: "gel", category: "materials", amountMinor: 500_00 }),
       expense({ id: "wage", category: "payroll", amountMinor: 720_00 }),
     ]);
 
     expect(withLedgerNoise.operatingProfitMinor).toBe(withoutLedgerNoise.operatingProfitMinor);
-    // Shown all the same — 1220 left the account and the report says so.
-    expect(withLedgerNoise.cashOnlyMinor).toBe(1_220_00);
-    expect(withLedgerNoise.cashOnlyByCategory).toEqual({ materials: 500_00, payroll: 720_00 });
+    // Shown all the same — 720 left the account and the report says so.
+    expect(withLedgerNoise.cashOnlyMinor).toBe(720_00);
+    expect(withLedgerNoise.cashOnlyByCategory).toEqual({ payroll: 720_00 });
+  });
+
+  it("subtracts a crate of gel from the month it was bought in", () => {
+    const visits = [visit({ visitId: "1" })];
+    const without = pl(visits, [expense({ id: "rent" })]);
+    const withGel = pl(visits, [
+      expense({ id: "rent" }),
+      expense({ id: "gel", category: "materials", amountMinor: 500_00 }),
+    ]);
+
+    expect(withGel.operatingProfitMinor).toBe(without.operatingProfitMinor - 500_00);
+    expect(withGel.overheadByCategory).toMatchObject({ materials: 500_00 });
   });
 
   describe("the owner who also works", () => {
@@ -156,7 +167,7 @@ describe("buildPeriodPL", () => {
       const report = pl([visit({ visitId: "1" })], [expense({ id: "rent" })]);
 
       expect(report.principalLabourMinor).toBe(0);
-      expect(report.operatingProfitMinor).toBe(340_00 - 800_00);
+      expect(report.operatingProfitMinor).toBe(360_00 - 800_00);
     });
   });
 
@@ -164,7 +175,7 @@ describe("buildPeriodPL", () => {
     it("reports a loss as a loss", () => {
       const report = pl([visit({ visitId: "1" })], [expense({ id: "rent", amountMinor: 5_000_00 })]);
 
-      expect(report.operatingProfitMinor).toBe(340_00 - 5_000_00);
+      expect(report.operatingProfitMinor).toBe(360_00 - 5_000_00);
       expect(report.operatingMarginBasisPoints).toBeLessThan(0);
     });
 
@@ -182,7 +193,7 @@ describe("buildPeriodPL", () => {
 
       expect(report.overheadMinor).toBe(0);
       expect(report.overheadByCategory).toEqual({});
-      expect(report.operatingProfitMinor).toBe(340_00);
+      expect(report.operatingProfitMinor).toBe(360_00);
     });
 
     /*
@@ -198,51 +209,17 @@ describe("buildPeriodPL", () => {
             visitId: "uncosted",
             contributionMarginMinor: null,
             commissionMinor: null,
-            materialCostMinor: null,
-            incompleteReasons: ["missing_material_price"],
+            incompleteReasons: ["no_revenue"],
           }),
         ],
         [],
       );
 
       expect(report.revenueMinor).toBe(1_200_00);
-      expect(report.contributionMarginMinor).toBe(340_00);
+      expect(report.contributionMarginMinor).toBe(360_00);
       expect(report.incompleteVisits).toBe(1);
       expect(report.incompleteRevenueMinor).toBe(600_00);
-      expect(report.incompleteReasonCounts).toEqual({ missing_material_price: 1 });
-    });
-  });
-
-  describe("the materials reconciliation", () => {
-    it("compares what was bought against what was used", () => {
-      const report = pl(
-        [visit({ visitId: "1" }), visit({ visitId: "2" })],
-        [
-          expense({ id: "gel", category: "materials", amountMinor: 480_00 }),
-          expense({ id: "gloves", category: "consumables", amountMinor: 60_00 }),
-          expense({ id: "rent" }),
-        ],
-      );
-
-      expect(report.materialsPurchasedMinor).toBe(540_00);
-      expect(report.materialCostMinor).toBe(40_00);
-      expect(report.materialsReconciliationMinor).toBe(500_00);
-    });
-
-    it("goes negative when more was used than bought this month", () => {
-      const report = pl([visit({ visitId: "1" })], []);
-
-      expect(report.materialsPurchasedMinor).toBe(0);
-      expect(report.materialsReconciliationMinor).toBe(-20_00);
-    });
-
-    it("stays out of the profit either way", () => {
-      const withPurchase = pl([visit({ visitId: "1" })], [
-        expense({ id: "gel", category: "materials", amountMinor: 480_00 }),
-      ]);
-      const without = pl([visit({ visitId: "1" })], []);
-
-      expect(withPurchase.operatingProfitMinor).toBe(without.operatingProfitMinor);
+      expect(report.incompleteReasonCounts).toEqual({ no_revenue: 1 });
     });
   });
 
@@ -312,7 +289,7 @@ describe("buildPeriodPL", () => {
       expect(report.principalLabourMinor).toBe(480_00);
       expect(report.ownerWageMinor).toBe(480_00);
       expect(report.economicProfitMinor).toBe(report.contributionMarginMinor - report.overheadMinor);
-      expect(report.economicProfitMinor).toBe(680_00 - 800_00);
+      expect(report.economicProfitMinor).toBe(720_00 - 800_00);
     });
 
     it("shows the gap when the owner prices their hour above the market", () => {
@@ -323,8 +300,8 @@ describe("buildPeriodPL", () => {
 
       // Booked 240, values the work at 600: the business is 360 short of paying
       // for the owner's own time, and the number says so rather than hiding it.
-      expect(report.operatingProfitMinor).toBe(340_00 + 240_00);
-      expect(report.economicProfitMinor).toBe(580_00 - 600_00);
+      expect(report.operatingProfitMinor).toBe(360_00 + 240_00);
+      expect(report.economicProfitMinor).toBe(600_00 - 600_00);
     });
 
     /*
@@ -338,8 +315,8 @@ describe("buildPeriodPL", () => {
       });
 
       expect(report.principalLabourMinor).toBe(0);
-      expect(report.operatingProfitMinor).toBe(340_00);
-      expect(report.economicProfitMinor).toBe(340_00 - 900_00);
+      expect(report.operatingProfitMinor).toBe(360_00);
+      expect(report.economicProfitMinor).toBe(360_00 - 900_00);
     });
 
     it("says nothing rather than zero when no wage was ever stated", () => {
@@ -349,7 +326,7 @@ describe("buildPeriodPL", () => {
       expect(report.economicProfitMinor).toBeNull();
       expect(report.safeToWithdrawMinor).toBeNull();
       // The operating profit is still knowable and still shown.
-      expect(report.operatingProfitMinor).toBe(580_00);
+      expect(report.operatingProfitMinor).toBe(600_00);
     });
 
     it("takes a share of the revenue when that is how the owner pays themselves", () => {
@@ -377,8 +354,8 @@ describe("buildPeriodPL", () => {
         reserveMinor: 300_00,
       });
 
-      expect(report.economicProfitMinor).toBe(680_00 - 200_00);
-      expect(report.safeToWithdrawMinor).toBe(480_00 - 300_00);
+      expect(report.economicProfitMinor).toBe(720_00 - 200_00);
+      expect(report.safeToWithdrawMinor).toBe(520_00 - 300_00);
     });
 
     it("never invites a withdrawal out of a losing month", () => {
@@ -415,15 +392,14 @@ describe("buildPeriodPL", () => {
           visitId: "2",
           contributionMarginMinor: null,
           commissionMinor: null,
-          materialCostMinor: null,
-          incompleteReasons: ["missing_actual_consumption"],
+          incompleteReasons: ["no_revenue"],
         }),
       ],
       [expense({ id: "rent", amountMinor: 100_00 })],
     );
 
-    // 340 − 100 = 240 over 1200 taken in, not over the 600 that could be costed.
-    expect(report.operatingProfitMinor).toBe(240_00);
-    expect(report.operatingMarginBasisPoints).toBe(2_000);
+    // 360 − 100 = 260 over 1200 taken in, not over the 600 that could be costed.
+    expect(report.operatingProfitMinor).toBe(260_00);
+    expect(report.operatingMarginBasisPoints).toBe(2_167);
   });
 });

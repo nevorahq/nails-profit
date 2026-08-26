@@ -9,8 +9,6 @@ function row(overrides: Partial<VisitMetricRow> & { visitId: string }): VisitMet
     revenueMinor: 60_000,
     commissionMinor: null,
     contributionMarginMinor: 34_000,
-    materialCostMinor: 2_000,
-    normativeMaterialCostMinor: 2_000,
     vatMinor: null,
     turnoverTaxMinor: null,
     payrollTaxMinor: null,
@@ -63,9 +61,8 @@ describe("aggregateVisitMetrics", () => {
       row({
         visitId: "uncosted",
         contributionMarginMinor: null,
-        materialCostMinor: null,
         durationMinutes: null,
-        incompleteReasons: ["missing_actual_consumption"],
+        incompleteReasons: ["no_revenue"],
       }),
     ]);
 
@@ -79,26 +76,12 @@ describe("aggregateVisitMetrics", () => {
 
   it("counts why the uncosted visits could not be costed", () => {
     const metrics = aggregateVisitMetrics([
-      row({ visitId: "a", contributionMarginMinor: null, incompleteReasons: ["missing_actual_consumption"] }),
-      row({ visitId: "b", contributionMarginMinor: null, incompleteReasons: ["missing_actual_consumption"] }),
-      row({ visitId: "c", contributionMarginMinor: null, incompleteReasons: ["missing_material_price"] }),
+      row({ visitId: "a", contributionMarginMinor: null, incompleteReasons: ["no_revenue"] }),
+      row({ visitId: "b", contributionMarginMinor: null, incompleteReasons: ["no_revenue"] }),
+      row({ visitId: "c", contributionMarginMinor: null, incompleteReasons: [] }),
     ]);
 
-    expect(metrics.incompleteReasonCounts).toEqual({
-      missing_actual_consumption: 2,
-      missing_material_price: 1,
-    });
-  });
-
-  it("compares what the recipes said with what was used", () => {
-    const metrics = aggregateVisitMetrics([
-      row({ visitId: "1", normativeMaterialCostMinor: 2_000, materialCostMinor: 3_000 }),
-      row({ visitId: "2", normativeMaterialCostMinor: 2_000, materialCostMinor: 1_500 }),
-    ]);
-
-    expect(metrics.normativeMaterialCostMinor).toBe(4_000);
-    expect(metrics.actualMaterialCostMinor).toBe(4_500);
-    expect(metrics.materialDeviationMinor).toBe(500);
+    expect(metrics.incompleteReasonCounts).toEqual({ no_revenue: 2 });
   });
 
   it("ranks services by margin and reports profit per hour beside it", () => {

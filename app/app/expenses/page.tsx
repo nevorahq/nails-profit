@@ -14,10 +14,11 @@ import { requireWorkspace } from "@/lib/workspace";
 /**
  * The expense ledger: what the business paid for, recorded as lump sums.
  *
- * This replaces the material catalogue that answered on `/app/materials`. The
- * materials themselves are untouched — the API, the recipes and the CSV import
- * all still have them — but they are no longer a section of the interface, and
- * `lib/materials.ts` is where their loader lives now.
+ * Since the material engine was removed this is where a crate of gel is
+ * recorded, and the only place it reaches the accounts: one amount on the day
+ * it was bought, counted as ordinary overhead by
+ * `domain/expense-classes.ts` rather than held back against a consumption that
+ * no longer happens.
  */
 export default async function ExpensesPage({
   searchParams,

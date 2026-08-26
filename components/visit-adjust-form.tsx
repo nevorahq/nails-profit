@@ -16,34 +16,16 @@ export type AdjustLine = {
   refundMinor: number;
 };
 
-export type AdjustMaterial = {
-  materialId: string;
-  materialName: string;
-  baseUnit: string;
-  normativeQuantityMilliUnits: number;
-  actualQuantityMilliUnits: number | null;
-};
-
-export type ExtraMaterialOption = {
-  id: string;
-  name: string;
-  baseUnit: string;
-};
-
 export function VisitAdjustForm({
   visitId,
-  materials,
   lines,
-  extraMaterials,
   currency,
   plannedDurationMinutes,
   actualDurationMinutes,
   locale,
 }: {
   visitId: string;
-  materials: AdjustMaterial[];
   lines: AdjustLine[];
-  extraMaterials: ExtraMaterialOption[];
   currency: string;
   plannedDurationMinutes: number;
   actualDurationMinutes: number | null;
@@ -61,18 +43,7 @@ export function VisitAdjustForm({
     setError(null);
     const data = new FormData(event.currentTarget);
 
-    const consumption = materials.map((m) => {
-      const raw = String(data.get(`actual-${m.materialId}`) ?? "").trim();
-      return {
-        material_id: m.materialId,
-        actual_quantity: raw === "" ? null : Number(raw),
-      };
-    });
-
     const durationRaw = String(data.get("actual_duration") ?? "").trim();
-    const extraMaterialId = String(data.get("extra_material_id") ?? "").trim();
-    const extraQuantityRaw = String(data.get("extra_quantity") ?? "").trim();
-    const extraQuantity = Number(extraQuantityRaw);
 
     /*
      * Every line is sent, including the untouched zeros. A refund is a state
@@ -88,12 +59,7 @@ export function VisitAdjustForm({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        consumption,
         refunds,
-        extra_consumption:
-          extraMaterialId && extraQuantityRaw && Number.isFinite(extraQuantity) && extraQuantity > 0
-            ? [{ material_id: extraMaterialId, actual_quantity: extraQuantity }]
-            : [],
         ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
       }),
     });
@@ -111,7 +77,7 @@ export function VisitAdjustForm({
 
   return (
     <details className="calendar-subform">
-      <summary>{t("closeVisit.modifyUse")}</summary>
+      <summary>{t("closeVisit.modifyDuration")}</summary>
       <form className="inline-form" onSubmit={submit}>
         <label>
           {t("closeVisit.actualMinutes")}
@@ -124,65 +90,6 @@ export function VisitAdjustForm({
             defaultValue={actualDurationMinutes ?? undefined}
           />
         </label>
-
-        {materials.length > 0 && (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t("common.material")}</th>
-                <th>{t("closeVisit.norm")}</th>
-                <th>{t("closeVisit.actual")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {materials.map((m) => (
-                <tr key={m.materialId}>
-                  <td>{m.materialName}</td>
-                  <td className="muted">
-                    {m.normativeQuantityMilliUnits / 1000} {m.baseUnit}
-                  </td>
-                  <td>
-                    <input
-                      aria-label={`${t("closeVisit.actual")} — ${m.materialName}`}
-                      name={`actual-${m.materialId}`}
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      defaultValue={
-                        m.actualQuantityMilliUnits !== null
-                          ? m.actualQuantityMilliUnits / 1000
-                          : undefined
-                      }
-                      placeholder={String(m.normativeQuantityMilliUnits / 1000)}
-                    />
-                    <span className="unit-hint">{m.baseUnit}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {extraMaterials.length > 0 && (
-          <fieldset className="checkbox-set">
-            <legend>{t("visits.extraMaterial")}</legend>
-            <label>
-              {t("common.material")}
-              <select name="extra_material_id" defaultValue="">
-                <option value="">—</option>
-                {extraMaterials.map((material) => (
-                  <option key={material.id} value={material.id}>
-                    {material.name} ({material.baseUnit})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("closeVisit.actual")}
-              <input name="extra_quantity" type="number" step="0.001" min="0.001" />
-            </label>
-          </fieldset>
-        )}
 
         {lines.length > 0 && (
           <table className="data-table">

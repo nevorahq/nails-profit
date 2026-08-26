@@ -1,5 +1,5 @@
 import type { ExpenseCategory } from "@/domain/expense-categories";
-import { expenseClassOf, purchasedMaterialCategories, type ExpenseClass } from "@/domain/expense-classes";
+import { expenseClassOf, type ExpenseClass } from "@/domain/expense-classes";
 
 /**
  * Turning the ledger into "what this month cost".
@@ -91,14 +91,4 @@ export function byCategory(
     totals[row.category] = (totals[row.category] ?? 0) + row.amountMinor;
   }
   return totals;
-}
-
-/**
- * What was spent on materials this month, whether or not any of it was used —
- * the purchase side of the reconciliation in `domain/period-pl.ts`.
- */
-export function purchasedMaterialsMinor(resolved: readonly ResolvedExpense[]): number {
-  return resolved
-    .filter((row) => purchasedMaterialCategories.includes(row.category))
-    .reduce((total, row) => total + row.amountMinor, 0);
 }

@@ -25,7 +25,7 @@ export type IdempotencyClaim =
    * The same request was already answered; return that answer verbatim.
    *
    * `bookingId` for the mutations that produce one row, `result` for those that
-   * do not: a bulk paste that created 28 materials has no single row to point
+   * do not: a bulk import that created 28 rows has no single row to point
    * at, and "created: 28" is the only honest replay of it.
    */
   | Readonly<{

@@ -14,23 +14,6 @@ export type PilotEventName =
   | "import_completed"
   | "import_failed"
   /**
-   * Material entry friction, epic E3.1 §F5 — the input to the later decision
-   * about whether an AI extraction feature is worth building.
-   *
-   * Server-side only. The events §3.5 names for the browser
-   * (`material_entry_started`, `material_form_abandoned`) would need an
-   * endpoint that accepts telemetry from a client, which this product does not
-   * have; what is measurable here is what was saved, how, and how long the
-   * request took.
-   *
-   * The mode travels as booleans and counts rather than as a string, because
-   * `metadata` is numbers and booleans by design — see `ProductEventInput`.
-   */
-  | "material_saved"
-  | "material_price_updated"
-  | "bulk_paste_confirmed"
-  | "fast_setup_completed"
-  /**
    * The booking funnel, roadmap section 7.10. Deduplicated by booking id like
    * every other event here, so each answers whether something happened to an
    * appointment rather than how many times: an appointment moved twice counts
@@ -91,10 +74,10 @@ export async function recordPilotProductEvent(tx: TenantTransaction, event: Prod
 }
 
 /**
- * Costing inputs can become complete from several directions: a recipe, a
- * purchase price, service details or a commission rule. After any of those
- * writes, re-evaluate the small pilot catalogue and record each service's first
- * trustworthy calculation. The event is deduplicated forever by service id.
+ * Costing inputs can become complete from two directions: service details or a
+ * commission rule. After either of those writes, re-evaluate the small pilot
+ * catalogue and record each service's first trustworthy calculation. The event
+ * is deduplicated forever by service id.
  */
 export async function recordCompletedServiceCostEvents(
   tx: TenantTransaction,
@@ -127,7 +110,6 @@ export async function recordCompletedServiceCostEvents(
       source: "api",
       entityType: "service",
       entityId: service.id,
-      metadata: { material_lines: costing.lines.length },
     });
   }
 }

@@ -1,10 +1,10 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
 
 import { ToolIcon } from "@/components/icons";
 import { PeriodFilter } from "@/components/period-filter";
-import { type AdjustLine, type AdjustMaterial, VisitAdjustForm } from "@/components/visit-adjust-form";
-import { clients, consumptions, financialSnapshots, materials, specialists, users, visitLines, visits } from "@/db/schema";
+import { type AdjustLine, VisitAdjustForm } from "@/components/visit-adjust-form";
+import { clients, financialSnapshots, specialists, users, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
@@ -84,28 +84,7 @@ export default async function VisitsPage({
       }),
     );
 
-    const visitIds = detailed.map((d) => d.visit.id);
-
-    const consumptionRows =
-      visitIds.length > 0
-        ? await tx
-            .select()
-            .from(consumptions)
-            .where(inArray(consumptions.visitId, visitIds))
-        : [];
-
-    const consumptionsByVisit = new Map<string, typeof consumptionRows>();
-    for (const row of consumptionRows) {
-      consumptionsByVisit.set(row.visitId, [...(consumptionsByVisit.get(row.visitId) ?? []), row]);
-    }
-
-    const materialOptions = await tx
-      .select({ id: materials.id, name: materials.name, baseUnit: materials.baseUnit })
-      .from(materials)
-      .where(isNull(materials.archivedAt))
-      .orderBy(asc(materials.name));
-
-    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null, consumptionsByVisit, materialOptions };
+    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null };
   });
 
   const withMargin = data.detailed.filter(
@@ -208,24 +187,12 @@ export default async function VisitsPage({
               {group.rows.map(({ visit, snapshot, lines, clientName }) => {
                 const serviceLine = lines.find((line) => line.kind === "service");
                 const incomplete = !snapshot || snapshot.contributionMarginMinor === null;
-                const visitConsumptions = data.consumptionsByVisit.get(visit.id) ?? [];
-                const adjustMaterials: AdjustMaterial[] = visitConsumptions.map((c) => ({
-                  materialId: c.materialId,
-                  materialName: c.materialNameSnapshot,
-                  baseUnit: c.baseUnitSnapshot,
-                  normativeQuantityMilliUnits: c.normativeQuantityMilliUnits,
-                  actualQuantityMilliUnits: c.actualQuantityMilliUnits,
-                }));
                 const adjustLines: AdjustLine[] = lines.map((line) => ({
                   id: line.id,
                   name: resolveLocalizedText(line.nameSnapshot, locale, locale) ?? "—",
                   chargedMinor: line.priceMinor - line.discountMinor,
                   refundMinor: line.refundMinor,
                 }));
-                const presentMaterialIds = new Set(adjustMaterials.map((material) => material.materialId));
-                const extraMaterials = data.materialOptions.filter(
-                  (material) => !presentMaterialIds.has(material.id),
-                );
                 return (
                   <li key={visit.id} className={`visit-card${incomplete ? " is-incomplete" : ""}`}>
                     <div className="visit-card-head">
@@ -258,9 +225,7 @@ export default async function VisitsPage({
                           </span>
                           <VisitAdjustForm
                             visitId={visit.id}
-                            materials={adjustMaterials}
                             lines={adjustLines}
-                            extraMaterials={extraMaterials}
                             currency={currency}
                             plannedDurationMinutes={visit.plannedDurationMinutes}
                             actualDurationMinutes={visit.actualDurationMinutes}
@@ -273,19 +238,6 @@ export default async function VisitsPage({
                         <div>
                           <span>{t("visits.revenue")}</span>
                           <strong>{money(snapshot!.revenueMinor)}</strong>
-                        </div>
-                        <div>
-                          <span>{t("closeVisit.materials")}</span>
-                          <strong>
-                            {money(snapshot!.materialCostMinor!)}{" "}
-                            <span className="unit-hint">
-                              {snapshot!.materialUsageSource === "actual"
-                                ? t("visits.materialSource.actual")
-                                : snapshot!.materialUsageSource === "standard"
-                                  ? t("visits.materialSource.standard")
-                                  : t("visits.materialSource.legacy")}
-                            </span>
-                          </strong>
                         </div>
                         <div>
                           <span>{t("visits.keeps")}</span>
@@ -319,9 +271,7 @@ export default async function VisitsPage({
                     {!incomplete && (
                       <VisitAdjustForm
                         visitId={visit.id}
-                        materials={adjustMaterials}
                         lines={adjustLines}
-                        extraMaterials={extraMaterials}
                         currency={currency}
                         plannedDurationMinutes={visit.plannedDurationMinutes}
                         actualDurationMinutes={visit.actualDurationMinutes}

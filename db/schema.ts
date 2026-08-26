@@ -18,10 +18,6 @@ import {
 
 import { commissionBases, commissionTypes, type TaxRates } from "@/domain/costing";
 import { expenseCategories } from "@/domain/expense-categories";
-import { materialCostingModes } from "@/domain/material-pricing";
-import { materialDataSources, materialKinds } from "@/domain/material-provenance";
-import { materialStockCheckBases } from "@/domain/material-stock";
-import type { MaterialUsageSource } from "@/domain/material-usage";
 import { memberRoles } from "@/domain/rbac";
 import type { LocalizedText } from "@/i18n/localized-text";
 
@@ -31,13 +27,6 @@ export const organizationType = pgEnum("organization_type", ["solo", "studio"]);
 export const memberRole = pgEnum("member_role", memberRoles);
 export const currency = pgEnum("currency", ["MDL", "EUR"]);
 export const locale = pgEnum("locale", ["ru", "ro", "en"]);
-export const unit = pgEnum("material_unit", ["ml", "g", "piece"]);
-export const materialCostingMode = pgEnum("material_costing_mode", materialCostingModes);
-// Generated from the domain lists for the same reason as the roles above: the
-// database and the code cannot drift into disagreeing about what a source is.
-export const materialDataSource = pgEnum("material_data_source", materialDataSources);
-export const materialKind = pgEnum("material_kind", materialKinds);
-export const materialStockCheckBasis = pgEnum("material_stock_check_basis", materialStockCheckBases);
 // Generated from the domain list so a category can never exist in one and not
 // the other.
 export const expenseCategory = pgEnum("expense_category", expenseCategories);
@@ -230,277 +219,12 @@ export const memberships = pgTable(
 );
 
 /**
- * The curated catalogue behind Fast Setup, epic E3.1 §F1.
+ * A purchase recorded as a lump sum: rent, a lamp, an ad, a box of gel.
  *
- * Global on purpose: it carries no organization_id because it is product data,
- * not tenant data — the same bottle of base coat is the same bottle in every
- * salon, and copying 120 rows into each new organization would make a shared
- * correction impossible to ship. A template is only ever read; what a tenant
- * owns is the `material` it creates from one.
- *
- * `systemKey` is the bridge to the recipe presets in `domain/material-presets`,
- * which map by `material.sku = 'SYSTEM:<key>'`. Without it a Fast Setup that
- * created fourteen materials would leave every preset recipe unable to find
- * them, and the owner would finish onboarding with a catalogue that still
- * costs nothing.
- */
-export const materialTemplates = pgTable(
-  "material_template",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    /**
-     * The seed file's own identifier, and the only thing the seed matches on.
-     *
-     * A natural key over brand, name and packaging would look sufficient and is
-     * not: correcting a template's package size — the whole reason the
-     * catalogue is curated centrally — would then insert a second row instead
-     * of fixing the first, and every organization that had already used it
-     * would keep pointing at the wrong one.
-     */
-    slug: text("slug").notNull(),
-    /** Null for generic entries: "coloured gel polish" belongs to no brand. */
-    brand: text("brand"),
-    name: jsonb("name").$type<LocalizedText>().notNull(),
-    /** Ties the template to a recipe-preset ingredient; null when it maps to none. */
-    systemKey: text("system_key"),
-    category: text("category").notNull(),
-    /**
-     * Thousandths of the base unit — or null when the catalogue does not claim
-     * to know the packaging.
-     *
-     * Null is the honest answer for a generic entry: "База" is sold in 8, 12,
-     * 15 and 35 ml bottles, and picking one would put a number into the
-     * denominator of every cost derived from it that nobody verified. The owner
-     * supplies the size of the bottle in front of them.
-     */
-    packageSizeMilliUnits: bigint("package_size_milli_units", { mode: "number" }),
-    baseUnit: unit("base_unit").notNull(),
-    kind: materialKind("kind").notNull().default("sku"),
-    /** The 12–18 rows Fast Setup offers first; the rest are found by search. */
-    isCore: boolean("is_core").notNull().default(false),
-    profiles: text("profiles").array().notNull().default(sql`'{}'::text[]`),
-    sortOrder: integer("sort_order").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("material_template_slug_idx").on(table.slug),
-    index("material_template_core_idx").on(table.isCore, table.sortOrder),
-    check(
-      "material_template_size_positive",
-      sql`${table.packageSizeMilliUnits} is null or ${table.packageSizeMilliUnits} > 0`,
-    ),
-  ],
-);
-
-export const materials = pgTable(
-  "material",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    // Spec section 11.2 lists Material with a plain name; only Service,
-    // ServiceCategory and AddOn carry localized names.
-    name: text("name").notNull(),
-    // CST-001 catalogue fields. Optional: a solo master rarely tracks suppliers,
-    // and requiring them would block the first calculation for no benefit.
-    sku: text("sku"),
-    category: text("category"),
-    supplier: text("supplier"),
-    baseUnit: unit("base_unit").notNull(),
-    /** E3.1 §F2. Inert in the costing arithmetic; see `domain/material-provenance`. */
-    kind: materialKind("kind").notNull().default("sku"),
-    /** E3.1 §F5. How this row first entered the catalogue. */
-    source: materialDataSource("source").notNull().default("manual"),
-    templateId: uuid("template_id").references(() => materialTemplates.id, {
-      onDelete: "set null",
-    }),
-    /**
-     * The name with everything a spreadsheet varies stripped out, so that
-     * `Гель-лак`, `гель лак ` and `ГЕЛЬ–ЛАК` collapse to one value.
-     *
-     * Generated by the database rather than by the application because it backs
-     * a unique index, and an index is only as trustworthy as the writer that
-     * maintains it: a second pasted block arriving while the first is still
-     * committing would pass an application-side check and still create the
-     * duplicate. Mirrors `normalizeKeyPart` in `domain/import-identity`, which
-     * stays the reader-side normalizer for import fingerprints.
-     */
-    matchKey: text("match_key").generatedAlwaysAs(
-      sql`lower(regexp_replace(name, '[^0-9a-zа-яîăâșț]+', '', 'gi'))`,
-    ),
-    archivedAt: timestamp("archived_at", { withTimezone: true }),
-    ...auditColumns,
-  },
-  (table) => [
-    index("material_org_idx").on(table.organizationId),
-    // Partial on `archived_at`, so that archiving a material frees its name for
-    // reuse — a studio that stopped buying a brand and started again should not
-    // be told the row already exists when nothing on their screen shows it.
-    uniqueIndex("material_natural_key")
-      .on(table.organizationId, table.matchKey, table.baseUnit)
-      .where(sql`${table.archivedAt} is null`),
-  ],
-);
-
-export const materialPriceVersions = pgTable(
-  "material_price_version",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    materialId: uuid("material_id")
-      .notNull()
-      .references(() => materials.id, { onDelete: "restrict" }),
-    packagePriceMinor: bigint("package_price_minor", { mode: "number" }).notNull(),
-    packageSizeMilliUnits: bigint("package_size_milli_units", { mode: "number" }).notNull(),
-    /** How the user entered this ratio; the costing arithmetic remains shared. */
-    costingMode: materialCostingMode("costing_mode").notNull().default("quantity"),
-    /**
-     * E3.1 §F5, per version rather than per material: a material created from a
-     * template whose price was later pasted has two different provenances, and
-     * only the price history can say which number came from where.
-     */
-    priceSource: materialDataSource("price_source").notNull().default("manual"),
-    currency: currency("currency").notNull(),
-    validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("material_price_org_material_idx").on(table.organizationId, table.materialId),
-    check("material_price_non_negative", sql`${table.packagePriceMinor} >= 0`),
-    check("material_package_size_positive", sql`${table.packageSizeMilliUnits} > 0`),
-  ],
-);
-
-/**
- * A crate of gel actually bought, spec CST-011 and section 34 of the materials
- * brief.
- *
- * Two things it is not. It is not a second cost basis: recording a purchase
- * writes a `material_price_version` and points at it, so what a future visit is
- * costed on stays the one append-only history it has always been. And it is not
- * a warehouse receipt — there is no lot, no location, no reservation. It exists
- * so the estimated balance has a positive side to it, and so the card can say
- * whether the price on file still resembles what is being paid.
- *
- * The packaging is copied rather than read from the material, because a studio
- * that switched from 15 ml bottles to a 30 ml one has bought both, and the
- * quantity that reaches the balance depends on which.
- */
-export const materialPurchases = pgTable(
-  "material_purchase",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    materialId: uuid("material_id")
-      .notNull()
-      .references(() => materials.id, { onDelete: "restrict" }),
-    /** Packages bought, not base units: the owner counts bottles. */
-    packageQuantity: integer("package_quantity").notNull(),
-    packageSizeMilliUnits: bigint("package_size_milli_units", { mode: "number" }).notNull(),
-    unitPackageCostMinor: bigint("unit_package_cost_minor", { mode: "number" }).notNull(),
-    /**
-     * Generated rather than written, so the two figures can never disagree.
-     * The brief lists `totalCost` as a field; storing it as a column the
-     * application also computes would be a second truth one insert away from
-     * drifting.
-     */
-    totalCostMinor: bigint("total_cost_minor", { mode: "number" }).generatedAlwaysAs(
-      sql`package_quantity * unit_package_cost_minor`,
-    ),
-    currency: currency("currency").notNull(),
-    /**
-     * When it was bought, which is not when it was typed in. A receipt entered
-     * a week late belongs to the week it was paid — the balance and the monthly
-     * comparison both read this column.
-     */
-    purchasedAt: timestamp("purchased_at", { withTimezone: true }).notNull().defaultNow(),
-    supplier: text("supplier"),
-    note: text("note"),
-    /**
-     * The price version this purchase produced. Nullable: a backdated receipt
-     * entered after a newer price is on file records what was paid without
-     * pretending to be the current cost basis.
-     */
-    priceVersionId: uuid("price_version_id").references(() => materialPriceVersions.id, {
-      onDelete: "set null",
-    }),
-    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("material_purchase_org_material_idx").on(
-      table.organizationId,
-      table.materialId,
-      table.purchasedAt,
-    ),
-    check("material_purchase_quantity_positive", sql`${table.packageQuantity} > 0`),
-    check("material_purchase_size_positive", sql`${table.packageSizeMilliUnits} > 0`),
-    check("material_purchase_cost_non_negative", sql`${table.unitPackageCostMinor} >= 0`),
-  ],
-);
-
-/**
- * What was actually left on the shelf when somebody looked, spec section 38.
- *
- * The measurement that makes the estimate self-correcting. Append-only like
- * every other history in this schema: a count is something that happened at a
- * time, and editing yesterday's count would move a balance that has already
- * been reported. `domain/material-stock.ts` reads the newest one as the
- * baseline and replays only what came after it.
- *
- * Stored in base units even though the interface asks for a rough share of a
- * package, because "≈25%" is a question about a bottle and the balance is
- * arithmetic over millilitres. The conversion belongs to the screen that knows
- * which bottle was being looked at.
- */
-export const materialStockChecks = pgTable(
-  "material_stock_check",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    materialId: uuid("material_id")
-      .notNull()
-      .references(() => materials.id, { onDelete: "restrict" }),
-    observedQuantityMilliUnits: bigint("observed_quantity_milli_units", { mode: "number" }).notNull(),
-    /**
-     * Whether the figure was eyeballed against a bucket or actually measured.
-     * The calibration suggestion is worth more from a scale than from a glance,
-     * and a later iteration that weights them needs to be able to tell.
-     */
-    basis: materialStockCheckBasis("basis").notNull().default("bucket"),
-    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
-    note: text("note"),
-    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("material_stock_check_org_material_idx").on(
-      table.organizationId,
-      table.materialId,
-      table.checkedAt,
-    ),
-    check("material_stock_check_non_negative", sql`${table.observedQuantityMilliUnits} >= 0`),
-  ],
-);
-
-/**
- * A purchase recorded as a lump sum: rent, a lamp, an ad, a box of files.
- *
- * Deliberately not a `material`. A material is priced per base unit so a recipe
- * can consume 0.3 ml of it; an expense is a single amount that happened once and
- * has no unit, no package and no consumption. Forcing one into the other would
- * mean inventing a package size, which `baseUnitCostMinor` would then divide by.
+ * One amount that happened once — no unit, no package, no per-visit
+ * consumption. This is now the only place materials reach the accounts at all,
+ * which is why `domain/expense-classes.ts` counts the `materials` and
+ * `consumables` categories as ordinary overhead rather than holding them back.
  *
  * Rows are archived, never deleted, for the reason section 15.3 gives for the
  * organization itself: financial records are kept even when the person who
@@ -650,7 +374,7 @@ export const services = pgTable(
   ],
 );
 
-/** SRV-003: an add-on shifts a service's price, duration and recipe. */
+/** SRV-003: an add-on shifts a service's price and duration. */
 export const addOns = pgTable(
   "add_on",
   {
@@ -785,7 +509,7 @@ export const commissionRules = pgTable(
     check(
       "commission_rule_shape",
       sql`(${table.type}::text = 'fixed' and ${table.fixedAmountMinor} is not null and ${table.basisPoints} is null)
-        or (${table.type}::text in ('percentage', 'percentage_after_materials') and ${table.basisPoints} is not null and ${table.fixedAmountMinor} is null)
+        or (${table.type}::text = 'percentage' and ${table.basisPoints} is not null and ${table.fixedAmountMinor} is null)
         or (${table.type}::text = 'hybrid' and ${table.basisPoints} is not null and ${table.fixedAmountMinor} is not null)`,
     ),
     check(
@@ -987,58 +711,6 @@ export const taxRules = pgTable(
   ],
 );
 
-/**
- * CST-005. A recipe belongs to exactly one of a service or an add-on, and is
- * versioned: CST-004 and the roadmap both require that editing a recipe leave
- * finished visits untouched, so a new version is written instead of an update.
- */
-export const recipes = pgTable(
-  "recipe",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    serviceId: uuid("service_id").references(() => services.id, { onDelete: "cascade" }),
-    addOnId: uuid("add_on_id").references(() => addOns.id, { onDelete: "cascade" }),
-    recipeVersion: integer("recipe_version").notNull().default(1),
-    activeFrom: timestamp("active_from", { withTimezone: true }).notNull().defaultNow(),
-    ...auditColumns,
-  },
-  (table) => [
-    index("recipe_service_idx").on(table.organizationId, table.serviceId, table.activeFrom),
-    index("recipe_add_on_idx").on(table.organizationId, table.addOnId, table.activeFrom),
-    check(
-      "recipe_single_target",
-      sql`(${table.serviceId} is not null and ${table.addOnId} is null)
-        or (${table.serviceId} is null and ${table.addOnId} is not null)`,
-    ),
-  ],
-);
-
-export const recipeItems = pgTable(
-  "recipe_item",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    recipeId: uuid("recipe_id")
-      .notNull()
-      .references(() => recipes.id, { onDelete: "cascade" }),
-    materialId: uuid("material_id")
-      .notNull()
-      .references(() => materials.id, { onDelete: "restrict" }),
-    /** Thousandths of the material's base unit, matching `domain/units.ts`. */
-    normativeQuantityMilliUnits: bigint("normative_quantity_milli_units", { mode: "number" }).notNull(),
-    ...auditColumns,
-  },
-  (table) => [
-    uniqueIndex("recipe_item_material_idx").on(table.recipeId, table.materialId),
-    check("recipe_item_quantity_positive", sql`${table.normativeQuantityMilliUnits} > 0`),
-  ],
-);
-
 export const invitationStatus = pgEnum("invitation_status", ["pending", "accepted", "revoked"]);
 
 /**
@@ -1172,11 +844,6 @@ export const visits = pgTable(
      */
     masterIsPrincipal: boolean("master_is_principal"),
     /**
-     * Whether every sold line had a saved standard material profile at close.
-     * True by default preserves the interpretation of legacy visits.
-     */
-    standardMaterialUsageKnown: boolean("standard_material_usage_known").notNull().default(true),
-    /**
      * How it was paid, and what the acquirer took, copied at closing time.
      *
      * `set null` on the reference and the rate kept separately: deleting a
@@ -1233,7 +900,7 @@ export const visits = pgTable(
     check(
       "visit_commission_shape",
       sql`(${table.commissionType}::text = 'fixed' and ${table.commissionFixedAmountMinor} is not null and ${table.commissionBasisPoints} is null)
-        or (${table.commissionType}::text in ('percentage', 'percentage_after_materials') and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)
+        or (${table.commissionType}::text = 'percentage' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)
         or (${table.commissionType}::text = 'hybrid' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is not null)`,
     ),
     check(
@@ -1304,48 +971,6 @@ export const visitLines = pgTable(
 );
 
 /**
- * CST-006: the recipe is copied into the visit and the master fills in what was
- * actually used. The purchase price is snapshotted as the package pair rather
- * than a rounded per-unit cost, so the arithmetic stays exact — the same reason
- * `materialCostMinor` never multiplies a rounded unit price.
- */
-export const consumptions = pgTable(
-  "consumption",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
-    visitId: uuid("visit_id")
-      .notNull()
-      .references(() => visits.id, { onDelete: "cascade" }),
-    materialId: uuid("material_id")
-      .notNull()
-      .references(() => materials.id, { onDelete: "restrict" }),
-    materialNameSnapshot: text("material_name_snapshot").notNull(),
-    baseUnitSnapshot: unit("base_unit_snapshot").notNull(),
-    normativeQuantityMilliUnits: bigint("normative_quantity_milli_units", { mode: "number" }).notNull(),
-    /** Null until the master records it; never read as zero. */
-    actualQuantityMilliUnits: bigint("actual_quantity_milli_units", { mode: "number" }),
-    packagePriceMinorSnapshot: bigint("package_price_minor_snapshot", { mode: "number" }),
-    packageSizeMilliUnitsSnapshot: bigint("package_size_milli_units_snapshot", { mode: "number" }),
-    ...auditColumns,
-  },
-  (table) => [
-    uniqueIndex("consumption_visit_material_idx").on(table.visitId, table.materialId),
-    check("consumption_normative_non_negative", sql`${table.normativeQuantityMilliUnits} >= 0`),
-    check(
-      "consumption_actual_non_negative",
-      sql`${table.actualQuantityMilliUnits} is null or ${table.actualQuantityMilliUnits} >= 0`,
-    ),
-    check(
-      "consumption_package_size_positive",
-      sql`${table.packageSizeMilliUnitsSnapshot} is null or ${table.packageSizeMilliUnitsSnapshot} > 0`,
-    ),
-  ],
-);
-
-/**
  * Append-only financial result of a visit, spec section 11.2 and 8.8.1.
  *
  * Adjusting a visit writes a new version; nothing here is ever updated. That is
@@ -1366,10 +991,6 @@ export const financialSnapshots = pgTable(
     formulaVersion: text("formula_version").notNull(),
     currency: currency("currency").notNull(),
     revenueMinor: bigint("revenue_minor", { mode: "number" }).notNull(),
-    materialCostMinor: bigint("material_cost_minor", { mode: "number" }),
-    normativeMaterialCostMinor: bigint("normative_material_cost_minor", { mode: "number" }),
-    /** Null identifies a legacy snapshot whose stored cost remains authoritative. */
-    materialUsageSource: text("material_usage_source").$type<MaterialUsageSource>(),
     /**
      * What the master's work cost. The name stays as it is: renaming a column
      * every reader of history already knows would buy a better word at the
@@ -1401,10 +1022,6 @@ export const financialSnapshots = pgTable(
     uniqueIndex("financial_snapshot_visit_version_idx").on(table.visitId, table.snapshotVersion),
     index("financial_snapshot_org_idx").on(table.organizationId, table.createdAt),
     check("financial_snapshot_version_positive", sql`${table.snapshotVersion} > 0`),
-    check(
-      "financial_snapshot_material_source",
-      sql`${table.materialUsageSource} is null or ${table.materialUsageSource} in ('standard', 'actual')`,
-    ),
   ],
 );
 
@@ -1689,11 +1306,7 @@ export const pilotInteractionKind = pgEnum("pilot_interaction_kind", [
   "support",
   "decision",
 ]);
-export const pilotDecisionType = pgEnum("pilot_decision_type", [
-  "price",
-  "service_composition",
-  "material_consumption",
-]);
+export const pilotDecisionType = pgEnum("pilot_decision_type", ["price", "service_composition"]);
 
 /** Founder/operator work is entered through the local operator CLI, never a
  * tenant-facing endpoint. There is intentionally no notes field: support logs
@@ -2212,8 +1825,8 @@ export const bookingIdempotencyKeys = pgTable(
      * The answer that was sent, for retries whose result is not a booking.
      *
      * E3.1 needs "the same key returns the same counts and creates nothing",
-     * and `booking_id` cannot carry that: a bulk paste that created 28
-     * materials has no single row to point at. The table was already generic
+     * and `booking_id` cannot carry that: a bulk import that created 28 rows
+     * has no single row to point at. The table was already generic
      * over `scope`; this is the missing half of it. The name stays
      * `booking_idempotency_key` because renaming a table is the one change in
      * this migration that would not roll back cleanly.
@@ -2415,7 +2028,6 @@ export const notificationProviderEvents = pgTable(
 
 export const organizationRelations = relations(organizations, ({ many }) => ({
   memberships: many(memberships),
-  materials: many(materials),
   services: many(services),
 }));
 

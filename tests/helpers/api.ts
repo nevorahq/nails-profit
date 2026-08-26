@@ -53,7 +53,7 @@ const matchable = routes
    * which makes it intransitive, and V8's sort then reorders pairs that do
    * matter as soon as an unrelated route is added. That is not hypothetical —
    * adding `/api/v1/payment-methods/[id]` was enough to send
-   * `/api/v1/materials/from-templates` to `materials/[id]`. Ties are broken by name
+   * `/api/v1/bookings/[id]/preview` to `bookings/[id]`. Ties are broken by name
    * and then by length so the order is decided by the routes themselves rather
    * than by how many of them there happen to be.
    */

@@ -1,7 +1,7 @@
 import type { DashboardMetrics } from "@/domain/dashboard-metrics";
 import { laborCostTotals, type LaborCostRuleRow } from "@/domain/labor-cost";
 import { roundRatio } from "@/domain/money";
-import { byCategory, purchasedMaterialsMinor, totalByClass, type ResolvedExpense } from "@/domain/expense-periods";
+import { byCategory, totalByClass, type ResolvedExpense } from "@/domain/expense-periods";
 
 /**
  * The month's profit and loss.
@@ -61,7 +61,6 @@ export type PeriodPL = Readonly<{
   turnoverTaxMinor: number;
   payrollTaxMinor: number;
   paymentCommissionMinor: number;
-  materialCostMinor: number;
   labourCostMinor: number;
   contributionMarginMinor: number;
 
@@ -110,11 +109,6 @@ export type PeriodPL = Readonly<{
   cashOnlyMinor: number;
   cashOnlyByCategory: Readonly<Record<string, number>>;
 
-  /** Bought this month, from the ledger. */
-  materialsPurchasedMinor: number;
-  /** Bought minus used. Diagnostic, in no profit line. */
-  materialsReconciliationMinor: number;
-
   incompleteVisits: number;
   incompleteRevenueMinor: number;
   incompleteReasonCounts: Readonly<Record<string, number>>;
@@ -148,8 +142,6 @@ export function buildPeriodPL(input: PeriodPLInput): PeriodPL {
   const economicProfitMinor =
     labour.ownerMinor === null ? null : operatingProfitMinor - labour.ownerMinor;
 
-  const materialsPurchasedMinor = purchasedMaterialsMinor(input.expenses);
-
   return {
     month: input.month,
 
@@ -158,7 +150,6 @@ export function buildPeriodPL(input: PeriodPLInput): PeriodPL {
     turnoverTaxMinor: metrics.turnoverTaxMinor,
     payrollTaxMinor: metrics.payrollTaxMinor,
     paymentCommissionMinor: metrics.paymentCommissionMinor,
-    materialCostMinor: metrics.actualMaterialCostMinor,
     labourCostMinor: metrics.labourCostMinor,
     contributionMarginMinor: metrics.contributionMarginMinor,
 
@@ -181,9 +172,6 @@ export function buildPeriodPL(input: PeriodPLInput): PeriodPL {
 
     cashOnlyMinor: totals.cash_only,
     cashOnlyByCategory: byCategory(cashOnly),
-
-    materialsPurchasedMinor,
-    materialsReconciliationMinor: materialsPurchasedMinor - metrics.actualMaterialCostMinor,
 
     incompleteVisits: metrics.incompleteVisits,
     incompleteRevenueMinor: metrics.incompleteRevenueMinor,

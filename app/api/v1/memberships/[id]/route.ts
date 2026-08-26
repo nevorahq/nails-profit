@@ -14,12 +14,11 @@ import { getActiveMembership } from "@/lib/membership";
  *
  * What this is not: deleting their account. The row in `user` belongs to the
  * person, not to the studio that invited them — and the schema agrees, in the
- * hard way. `material_price_version.created_by` is `ON DELETE restrict`, so a
- * colleague who ever priced a material cannot be deleted at all, and every
- * `created_by`, `updated_by` and `audit_event.actor_user_id` is `set null`,
- * so a deletion that did succeed would empty the actor out of the very journal
- * kept to say who did what. Ending the relationship is the operation that
- * exists; ending the person is not one this product should offer.
+ * hard way. Every `created_by`, `updated_by` and `audit_event.actor_user_id`
+ * is `ON DELETE set null`, so deleting the account would empty the actor out of
+ * the very journal kept to say who did what. Ending the relationship is the
+ * operation that exists; ending the person is not one this product should
+ * offer.
  *
  * So three things happen, and the money is not among them:
  *

@@ -1,16 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 
-import { clients, consumptions, financialSnapshots, visitLines, visits } from "@/db/schema";
+import { clients, financialSnapshots, services, visitLines, visits } from "@/db/schema";
 import { calculateVisitProfit } from "@/domain/visit-profit";
 import { PG_ERROR } from "@/lib/db-errors";
-import { toMilliUnits } from "@/domain/units";
 import { adminDb, resetDatabase } from "../helpers/database";
 import { expectDatabaseError } from "../helpers/expect-database-error";
 import {
-  addMaterialPrice,
   createClient,
-  createMaterial,
   createOrganization,
   createService,
   createSpecialist,
@@ -20,18 +17,16 @@ import {
 
 /**
  * The promise phase 3 rests on: a closed visit keeps the numbers it was closed
- * with. Raising a supplier price or editing a recipe afterwards must leave it
- * untouched, and the financial result must be impossible to overwrite in place.
+ * with. Re-pricing a service afterwards must leave it untouched, and the
+ * financial result must be impossible to overwrite in place.
  */
 describe("visit snapshots", () => {
   let organizationId: string;
-  let userId: string;
   let specialistId: string;
 
   beforeEach(async () => {
     await resetDatabase();
     const user = await createUser();
-    userId = user.id;
     organizationId = (await createOrganization({ ownerId: user.id })).id;
     specialistId = (await createSpecialist(organizationId)).id;
   });
@@ -87,25 +82,6 @@ describe("visit snapshots", () => {
       }),
       { code: PG_ERROR.check, constraint: "visit_line_discount_within_price" },
     );
-  });
-
-  it("refuses the same material twice on one visit", async () => {
-    const material = await createMaterial(organizationId);
-    const visit = await createVisit(organizationId, { specialistId });
-    const row = {
-      organizationId,
-      visitId: visit.id,
-      materialId: material.id,
-      materialNameSnapshot: "Гель",
-      baseUnitSnapshot: "ml" as const,
-      normativeQuantityMilliUnits: 2_000,
-    };
-
-    await adminDb.insert(consumptions).values(row);
-    await expectDatabaseError(adminDb.insert(consumptions).values(row), {
-      code: PG_ERROR.unique,
-      constraint: "consumption_visit_material_idx",
-    });
   });
 
   it("refuses to update or delete a financial snapshot", async () => {
@@ -171,13 +147,8 @@ describe("visit snapshots", () => {
     expect(versions).toHaveLength(2);
   });
 
-  it("does not re-price a closed visit when the material price later changes", async () => {
+  it("does not re-price a closed visit when the service price later changes", async () => {
     // The reason snapshots exist at all.
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
     const service = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
     const client = await createClient(organizationId);
     const visit = await createVisit(organizationId, {
@@ -196,39 +167,18 @@ describe("visit snapshots", () => {
       priceMinor: 60_000,
       durationMinutes: 90,
     });
-    await adminDb.insert(consumptions).values({
-      organizationId,
-      visitId: visit.id,
-      materialId: material.id,
-      materialNameSnapshot: material.name,
-      baseUnitSnapshot: "ml",
-      normativeQuantityMilliUnits: toMilliUnits(2),
-      actualQuantityMilliUnits: toMilliUnits(2),
-      packagePriceMinorSnapshot: 10_000,
-      packageSizeMilliUnitsSnapshot: toMilliUnits(10),
-    });
 
-    // The supplier doubles the price and the catalogue is updated.
-    await addMaterialPrice(organizationId, material.id, {
-      packagePriceMinor: 20_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
+    // The studio raises its prices and the catalogue is updated.
+    await adminDb.update(services).set({ priceMinor: 90_000 }).where(eq(services.id, service.id));
 
-    const stored = await adminDb
-      .select()
-      .from(consumptions)
-      .where(eq(consumptions.visitId, visit.id));
+    const stored = await adminDb.select().from(visitLines).where(eq(visitLines.visitId, visit.id));
 
     const profit = calculateVisitProfit({
       currency: "MDL",
-      lines: [{ kind: "service", priceMinor: 60_000, discountMinor: 0 }],
-      consumptions: stored.map((row) => ({
-        materialId: row.materialId,
-        normativeQuantityMilliUnits: row.normativeQuantityMilliUnits,
-        actualQuantityMilliUnits: row.actualQuantityMilliUnits,
-        packagePriceMinor: row.packagePriceMinorSnapshot,
-        packageSizeMilliUnits: row.packageSizeMilliUnitsSnapshot,
+      lines: stored.map((line) => ({
+        kind: "service" as const,
+        priceMinor: line.priceMinor,
+        discountMinor: line.discountMinor,
       })),
       commission: { type: "percentage", basisPoints: 4_000 },
       plannedDurationMinutes: 90,
@@ -237,9 +187,9 @@ describe("visit snapshots", () => {
 
     expect(profit.status).toBe("complete");
     if (profit.status !== "complete") throw new Error("expected complete");
-    // Still 20 MDL of gel, the price on the day, not 40.
-    expect(profit.costing.materialCostMinor).toBe(2_000);
-    expect(profit.costing.contributionMarginMinor).toBe(34_000);
+    // Still 600, the price on the day, not 900.
+    expect(profit.costing.priceMinor).toBe(60_000);
+    expect(profit.costing.contributionMarginMinor).toBe(36_000);
   });
 
   it("keeps a visit readable after its service is archived", async () => {
@@ -261,25 +211,6 @@ describe("visit snapshots", () => {
 
     const [line] = await adminDb.select().from(visitLines).where(eq(visitLines.visitId, visit.id));
     expect(line.nameSnapshot).toEqual({ ru: "Старая услуга" });
-  });
-
-  it("refuses to delete a material a visit consumed", async () => {
-    const material = await createMaterial(organizationId);
-    const visit = await createVisit(organizationId, { specialistId });
-    await adminDb.insert(consumptions).values({
-      organizationId,
-      visitId: visit.id,
-      materialId: material.id,
-      materialNameSnapshot: "Гель",
-      baseUnitSnapshot: "ml",
-      normativeQuantityMilliUnits: 2_000,
-    });
-
-    const { materials } = await import("@/db/schema");
-    await expectDatabaseError(
-      adminDb.delete(materials).where(eq(materials.id, material.id)),
-      { code: PG_ERROR.foreignKey },
-    );
   });
 
   it("keeps visits out of another tenant's reach", async () => {
@@ -333,9 +264,8 @@ describe("closing and adjusting a visit", () => {
   let userId: string;
   let specialistId: string;
   let serviceId: string;
-  let materialId: string;
 
-  async function close(actualQuantity: number | null) {
+  async function close() {
     const { withTenant } = await import("@/db/tenant");
     const { buildVisitDraft, recalculateVisitProfit, writeFinancialSnapshot } = await import(
       "@/lib/visit-service"
@@ -379,20 +309,6 @@ describe("closing and adjusting a visit", () => {
         })),
       );
 
-      await tx.insert(consumptions).values(
-        draft.consumptions.map((line) => ({
-          organizationId,
-          visitId: visit.id,
-          materialId: line.materialId,
-          materialNameSnapshot: line.materialNameSnapshot,
-          baseUnitSnapshot: line.baseUnitSnapshot,
-          normativeQuantityMilliUnits: line.normativeQuantityMilliUnits,
-          actualQuantityMilliUnits: actualQuantity === null ? null : toMilliUnits(actualQuantity),
-          packagePriceMinorSnapshot: line.packagePriceMinorSnapshot,
-          packageSizeMilliUnitsSnapshot: line.packageSizeMilliUnitsSnapshot,
-        })),
-      );
-
       const profit = (await recalculateVisitProfit(tx, visit.id))!.profit;
       const snapshot = await writeFinancialSnapshot(tx, {
         organizationId,
@@ -411,85 +327,31 @@ describe("closing and adjusting a visit", () => {
     organizationId = (await createOrganization({ ownerId: user.id })).id;
     specialistId = (await createSpecialist(organizationId)).id;
 
-    const { createCommissionRule, createRecipe } = await import("../helpers/factories");
+    const { createCommissionRule } = await import("../helpers/factories");
     await createCommissionRule(organizationId, specialistId, { basisPoints: 4_000 });
 
-    // 100 MDL for 10 ml, so 10 MDL per ml.
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
-    materialId = material.id;
     const service = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
     serviceId = service.id;
-    await createRecipe(organizationId, service.id, [{ materialId: material.id, quantity: 2 }]);
   });
 
   it("snapshots the catalogue when the visit is closed", async () => {
-    const { snapshot } = await close(2);
+    const { snapshot } = await close();
 
     expect(snapshot.snapshotVersion).toBe(1);
     expect(snapshot.revenueMinor).toBe(60_000);
-    expect(snapshot.materialCostMinor).toBe(2_000);
-    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.contributionMarginMinor).toBe(36_000);
     expect(snapshot.incompleteReasons).toEqual([]);
-  });
-
-  it("uses the snapshotted standard quantity when actual usage is absent", async () => {
-    const { snapshot } = await close(null);
-
-    expect(snapshot.revenueMinor).toBe(60_000);
-    expect(snapshot.contributionMarginMinor).toBe(34_000);
-    expect(snapshot.materialCostMinor).toBe(2_000);
-    expect(snapshot.materialUsageSource).toBe("standard");
-    expect(snapshot.incompleteReasons).toEqual([]);
-    expect(snapshot.normativeMaterialCostMinor).toBe(2_000);
-  });
-
-  it("leaves a closed visit alone when the material price later changes", async () => {
-    const { visitId } = await close(2);
-
-    await addMaterialPrice(organizationId, materialId, {
-      packagePriceMinor: 20_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
-
-    const { withTenant } = await import("@/db/tenant");
-    const { recalculateVisitProfit } = await import("@/lib/visit-service");
-    const again = await withTenant(organizationId, (tx) => recalculateVisitProfit(tx, visitId));
-
-    expect(again!.profit.status).toBe("complete");
-    if (again!.profit.status !== "complete") throw new Error("expected complete");
-    expect(again!.profit.costing.materialCostMinor).toBe(2_000);
-  });
-
-  it("prices a new visit with the new price while the old one keeps the old", async () => {
-    const first = await close(2);
-
-    await addMaterialPrice(organizationId, materialId, {
-      packagePriceMinor: 20_000,
-      packageSize: 10,
-      createdBy: userId,
-    });
-    const second = await close(2);
-
-    expect(first.snapshot.contributionMarginMinor).toBe(34_000);
-    expect(second.snapshot.contributionMarginMinor).toBe(32_000);
   });
 
   it("adds a correction as a new version and keeps the first", async () => {
-    const { visitId } = await close(2);
+    const { visitId } = await close();
 
     const { withTenant } = await import("@/db/tenant");
     const { recalculateVisitProfit, writeFinancialSnapshot } = await import("@/lib/visit-service");
 
+    // A refund is the correction a closed visit can still take.
     const corrected = await withTenant(organizationId, async (tx) => {
-      await tx
-        .update(consumptions)
-        .set({ actualQuantityMilliUnits: toMilliUnits(5) })
-        .where(eq(consumptions.visitId, visitId));
+      await tx.update(visitLines).set({ refundMinor: 10_000 }).where(eq(visitLines.visitId, visitId));
       const profit = (await recalculateVisitProfit(tx, visitId))!.profit;
       return writeFinancialSnapshot(tx, {
         organizationId,
@@ -500,29 +362,15 @@ describe("closing and adjusting a visit", () => {
     });
 
     expect(corrected.snapshotVersion).toBe(2);
-    expect(corrected.contributionMarginMinor).toBe(31_000);
+    // 500 taken in, 200 of commission on it: 300 left.
+    expect(corrected.contributionMarginMinor).toBe(30_000);
 
     const history = await adminDb
       .select()
       .from(financialSnapshots)
       .where(eq(financialSnapshots.visitId, visitId));
     expect(history).toHaveLength(2);
-    expect(history.find((row) => row.snapshotVersion === 1)!.contributionMarginMinor).toBe(34_000);
+    expect(history.find((row) => row.snapshotVersion === 1)!.contributionMarginMinor).toBe(36_000);
   });
 
-  it("records the deviation between the recipe and what was used", async () => {
-    const { visitId } = await close(5);
-
-    const { withTenant } = await import("@/db/tenant");
-    const { recalculateVisitProfit } = await import("@/lib/visit-service");
-    const result = await withTenant(organizationId, (tx) => recalculateVisitProfit(tx, visitId));
-
-    // Normative 2 ml at 10 MDL, actually 5 ml: 30 MDL over, 150 percent.
-    expect(result!.profit.deviation).toMatchObject({
-      normativeCostMinor: 2_000,
-      actualCostMinor: 5_000,
-      deviationMinor: 3_000,
-      deviationBasisPoints: 15_000,
-    });
-  });
 });

@@ -1,6 +1,3 @@
-import { asc, isNull } from "drizzle-orm";
-
-import { materials } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { requireCalendarCaller } from "@/lib/booking-http";
@@ -9,11 +6,16 @@ import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { buildVisitDraft, calculateVisitDraftProfit } from "@/lib/visit-service";
 
 /**
- * Recipe preview for a booking, used to pre-fill the completion form.
+ * What an appointment would earn if it were closed now.
  *
- * Calls buildVisitDraft in read-only mode (no rows are written). The response
- * tells the calendar board which materials to show and what their normative
- * quantities are, so the master only needs to correct deviations.
+ * Calls `buildVisitDraft` in read-only mode — no rows are written — so the
+ * calendar can show the margin before the master commits to it, costed by
+ * exactly the code that will cost the visit afterwards. A second, UI-only
+ * formula here is the one thing this endpoint exists to prevent.
+ *
+ * This answered on `/recipe` until the material engine was removed, when the
+ * quantities it mostly existed to pre-fill stopped existing. The margin was
+ * always the other half of it, and is what is left.
  */
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const id = requestId(request);
@@ -30,66 +32,36 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     const lines = await bookingLinesOf(tx, booking.id);
     const service = lines.find((line) => line.kind === "service");
-    if (!service?.serviceId) {
-      return {
-        durationMinutes: 0,
-        materials: [],
-        materialOptions: [],
-        preview: {
-          status: "incomplete" as const,
-          material_cost_minor: null,
-          reasons: ["missing_standard_usage"],
-        },
-      };
-    }
+
+    // The service is gone from the catalogue, so there is no commission rule to
+    // resolve and no duration to divide by. Named rather than guessed at.
+    const unknown = {
+      durationMinutes: 0,
+      preview: { status: "incomplete" as const, reasons: ["missing_commission_rule"] },
+    };
+    if (!service?.serviceId) return unknown;
 
     const draft = await buildVisitDraft(tx, {
       serviceId: service.serviceId,
-      addOnIds: lines.filter((l) => l.addOnId).map((l) => l.addOnId!),
+      addOnIds: lines.filter((line) => line.addOnId).map((line) => line.addOnId!),
       specialistId: booking.specialistId,
       at: new Date(),
     });
-
-    if (!draft) {
-      return {
-        durationMinutes: 0,
-        materials: [],
-        materialOptions: [],
-        preview: {
-          status: "incomplete" as const,
-          material_cost_minor: null,
-          reasons: ["missing_standard_usage"],
-        },
-      };
-    }
+    if (!draft) return unknown;
 
     const profit = calculateVisitDraftProfit(draft);
-    const materialOptions = await tx
-      .select({ id: materials.id, name: materials.name, base_unit: materials.baseUnit })
-      .from(materials)
-      .where(isNull(materials.archivedAt))
-      .orderBy(asc(materials.name));
 
     return {
       durationMinutes: draft.plannedDurationMinutes,
-      materials: draft.consumptions.map((c) => ({
-        material_id: c.materialId,
-        material_name: c.materialNameSnapshot,
-        base_unit: c.baseUnitSnapshot,
-        normative_quantity_milli_units: c.normativeQuantityMilliUnits,
-      })),
-      materialOptions,
       preview:
         profit?.status === "complete"
           ? {
               status: "complete" as const,
-              material_cost_minor: profit.costing.materialCostMinor,
               commission_minor: profit.costing.commissionMinor,
               contribution_margin_minor: profit.costing.contributionMarginMinor,
             }
           : {
               status: "incomplete" as const,
-              material_cost_minor: profit?.deviation.normativeCostMinor ?? null,
               reasons: profit?.status === "incomplete" ? profit.reasons : ["missing_commission_rule"],
             },
     };

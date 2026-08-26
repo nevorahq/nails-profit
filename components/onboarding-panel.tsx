@@ -7,14 +7,12 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
 /**
  * The path to a first number, roadmap phase 4 "onboarding progress".
  *
- * Every step is linked, not just the next one — an owner who already has a
- * price list open should not be walked through a wizard to reach materials.
+ * Every step is linked, not just the next one — an owner who already knows the
+ * piece they are missing should not be walked through a wizard to reach it.
  * The list is a map of what is missing, not a gate.
  *
- * A server component: nothing here reacts to anything. It stopped being a
- * client one when the starter-materials button was removed — that button was
- * the only reason for state, a router refresh and a whole JavaScript bundle on
- * the dashboard.
+ * A server component: nothing here reacts to anything, so the dashboard pays
+ * for no JavaScript bundle to render it.
  */
 export function OnboardingPanel({
   progress,

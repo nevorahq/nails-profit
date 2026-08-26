@@ -4,8 +4,6 @@ import {
   clients,
   commissionRules,
   externalReferences,
-  materialPriceVersions,
-  materials,
   services,
   specialists,
 } from "@/db/schema";
@@ -26,7 +24,7 @@ import type { AppLocale } from "@/i18n/messages";
  *
  *  1. the external reference, which is the record of "we have imported this row
  *     before" and is the only one that survives a rename;
- *  2. the natural key among existing rows, which catches the material the owner
+ *  2. the natural key among existing rows, which catches the service the owner
  *     already typed by hand before they ever imported a price list — without
  *     it, the first import duplicates everything they had;
  *  3. otherwise create.
@@ -109,8 +107,6 @@ async function applyRow(
   const linked = await findByReference(context, entity, row.externalId);
 
   switch (entity) {
-    case "material":
-      return applyMaterial(context, row, linked);
     case "service":
       return applyService(context, row, linked);
     case "specialist":
@@ -233,113 +229,6 @@ const text = (value: CellValue): string | null =>
   typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 
 const number = (value: CellValue): number | null => (typeof value === "number" ? value : null);
-
-async function applyMaterial(
-  context: ApplyContext,
-  row: MappedRow,
-  linkedId: string | null,
-): Promise<RowResult> {
-  const name = text(row.values.name)!;
-  const baseUnit = text(row.values.base_unit) as "ml" | "g" | "piece";
-
-  let materialId = linkedId;
-  let result: RowResult = "updated";
-
-  if (materialId === null) {
-    const existing = await context.tx
-      .select({ id: materials.id })
-      .from(materials)
-      .where(and(isNull(materials.archivedAt), sql`lower(${materials.name}) = ${name.toLowerCase()}`))
-      .limit(1);
-    materialId = await acceptCandidate(context, "material", existing[0]?.id, row);
-  }
-
-  if (materialId === null) {
-    const [inserted] = await context.tx
-      .insert(materials)
-      .values({
-        organizationId: context.organizationId,
-        name,
-        baseUnit,
-        sku: text(row.values.sku),
-        category: text(row.values.category),
-        supplier: text(row.values.supplier),
-        createdBy: context.actorUserId,
-        updatedBy: context.actorUserId,
-      })
-      .returning({ id: materials.id });
-    materialId = inserted.id;
-    result = "created";
-  } else {
-    await context.tx
-      .update(materials)
-      .set({
-        name,
-        baseUnit,
-        sku: text(row.values.sku),
-        category: text(row.values.category),
-        supplier: text(row.values.supplier),
-        updatedBy: context.actorUserId,
-        updatedAt: new Date(),
-        version: sql`${materials.version} + 1`,
-      })
-      .where(eq(materials.id, materialId));
-  }
-
-  await linkReference(context, "material", row, materialId);
-
-  const packagePriceMinor = number(row.values.package_price);
-  const packageSizeMilliUnits = number(row.values.package_size);
-  if (packagePriceMinor !== null && packageSizeMilliUnits !== null && packageSizeMilliUnits > 0) {
-    await appendPriceIfChanged(context, materialId, packagePriceMinor, packageSizeMilliUnits);
-  }
-
-  return result;
-}
-
-/**
- * A price version is written only when the price actually moved.
- *
- * Without this check, re-importing an unchanged price list would append a new
- * version per material per run, and the price history — which is what makes a
- * closed visit stop being restated — would fill with duplicates that say
- * nothing happened.
- */
-async function appendPriceIfChanged(
-  context: ApplyContext,
-  materialId: string,
-  packagePriceMinor: number,
-  packageSizeMilliUnits: number,
-): Promise<void> {
-  const [current] = await context.tx
-    .select({
-      packagePriceMinor: materialPriceVersions.packagePriceMinor,
-      packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
-      currency: materialPriceVersions.currency,
-    })
-    .from(materialPriceVersions)
-    .where(eq(materialPriceVersions.materialId, materialId))
-    .orderBy(desc(materialPriceVersions.validFrom), desc(materialPriceVersions.createdAt))
-    .limit(1);
-
-  if (
-    current &&
-    current.packagePriceMinor === packagePriceMinor &&
-    current.packageSizeMilliUnits === packageSizeMilliUnits &&
-    current.currency === context.currency
-  ) {
-    return;
-  }
-
-  await context.tx.insert(materialPriceVersions).values({
-    organizationId: context.organizationId,
-    materialId,
-    packagePriceMinor,
-    packageSizeMilliUnits,
-    currency: context.currency,
-    createdBy: context.actorUserId,
-  });
-}
 
 async function applyService(
   context: ApplyContext,

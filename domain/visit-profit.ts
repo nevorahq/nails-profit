@@ -6,25 +6,14 @@ import {
   type TaxRates,
 } from "@/domain/costing";
 import type { Currency } from "@/domain/money";
-import { roundRatio } from "@/domain/money";
-import {
-  resolveEffectiveMaterialUsage,
-  type MaterialUsageSource,
-} from "@/domain/material-usage";
 
 /**
- * Profit of a completed visit, spec section 8.8.1 and CST-006/CST-007.
+ * Profit of a completed visit, spec section 8.8.1.
  *
  * Everything here is a snapshot taken when the visit was closed. That is the
- * whole point: raising a supplier price or editing a recipe tomorrow must not
- * change what a visit last month earned. The caller passes copies, never
- * references to catalogue rows.
- *
- * A material's snapshot is its package price and package size, not a rounded
- * per-unit cost. The spec calls the field `unit_cost_snapshot`; storing the
- * package pair instead keeps the arithmetic exact, because a rounded per-unit
- * price multiplied by a quantity rounds twice — the same reason
- * `materialCostMinor` exists.
+ * whole point: renaming a service or re-cutting a master's percentage tomorrow
+ * must not change what a visit last month earned. The caller passes copies,
+ * never references to catalogue rows.
  */
 
 export type VisitLineSnapshot = Readonly<{
@@ -48,26 +37,13 @@ export type VisitLineSnapshot = Readonly<{
   commissionable?: boolean;
 }>;
 
-export type ConsumptionSnapshot = Readonly<{
-  materialId: string;
-  normativeQuantityMilliUnits: number;
-  /** Null until the master records what they actually used. */
-  actualQuantityMilliUnits: number | null;
-  /** Null when the material had no purchase price when the visit was closed. */
-  packagePriceMinor: number | null;
-  packageSizeMilliUnits: number | null;
-}>;
-
 export type VisitProfitInput = Readonly<{
   currency: Currency;
   lines: readonly VisitLineSnapshot[];
-  consumptions: readonly ConsumptionSnapshot[];
   commission: Commission;
   plannedDurationMinutes: number;
   /** Null when the visit was not timed; the planned duration stands in. */
   actualDurationMinutes: number | null;
-  /** False only for a newly closed service/add-on that has no saved standard profile. */
-  standardUsageKnown?: boolean;
   /**
    * What the acquirer charged, and the rates it charged at, as snapshotted into
    * the visit. Absent means cash: no fee, and the visit costs exactly what the
@@ -84,20 +60,16 @@ export type VisitProfitInput = Readonly<{
   commissionBase?: CommissionBase;
 }>;
 
-export type VisitIncompleteReason =
-  | "missing_actual_consumption"
-  | "missing_standard_usage"
-  | "missing_material_price"
-  | "no_revenue";
-
-export type MaterialDeviation = Readonly<{
-  normativeCostMinor: number | null;
-  actualCostMinor: number | null;
-  /** Actual minus normative. Positive means more was used than the recipe says. */
-  deviationMinor: number | null;
-  /** Deviation as a share of the normative cost, in basis points. */
-  deviationBasisPoints: number | null;
-}>;
+/**
+ * The one thing that can still stop a visit being costed.
+ *
+ * The list used to be four long, and the other three were all material gaps —
+ * an unpriced material, an unrecorded actual quantity, a service closed before
+ * anyone saved what it normally uses. None of them can happen now. This one
+ * survives because it is arithmetic, not data: a visit that took no money has
+ * no margin to report a percentage of.
+ */
+export type VisitIncompleteReason = "no_revenue";
 
 export type VisitProfit = Readonly<
   | {
@@ -106,18 +78,12 @@ export type VisitProfit = Readonly<
       /** True when the planned duration stood in, so profit per hour is an estimate. */
       estimatedDuration: boolean;
       durationMinutes: number;
-      materialUsageSource: MaterialUsageSource;
-      deviation: MaterialDeviation;
-      costing: Extract<CostingResult, { incompleteCostData: false }>;
+      costing: CostingResult;
     }
   | {
       status: "incomplete";
       revenueMinor: number;
       reasons: readonly VisitIncompleteReason[];
-      materialUsageSource: MaterialUsageSource;
-      /** Materials whose actual use or price is missing, so the gap can be named. */
-      blockingMaterialIds: readonly string[];
-      deviation: MaterialDeviation;
     }
 >;
 
@@ -153,66 +119,20 @@ export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
           0,
         );
 
-  const usage = resolveEffectiveMaterialUsage(
-    input.consumptions.map((line) => ({
-      materialId: line.materialId,
-      standardQuantityMilliUnits: line.normativeQuantityMilliUnits,
-      actualQuantityMilliUnits: line.actualQuantityMilliUnits,
-      packagePriceMinor: line.packagePriceMinor,
-      packageSizeMilliUnits: line.packageSizeMilliUnits,
-    })),
-  );
-
-  const deviation: MaterialDeviation = {
-    normativeCostMinor: usage.standardTotalMinor,
-    // Kept under the established name for API/report compatibility. Under the
-    // standard-cost workflow this is the effective cost, not "actual or null".
-    actualCostMinor: usage.effectiveTotalMinor,
-    deviationMinor:
-      usage.standardTotalMinor === null || usage.effectiveTotalMinor === null
-        ? null
-        : usage.effectiveTotalMinor - usage.standardTotalMinor,
-    deviationBasisPoints:
-      usage.standardTotalMinor === null ||
-      usage.effectiveTotalMinor === null ||
-      usage.standardTotalMinor === 0
-        ? null
-        : roundRatio(
-            (usage.effectiveTotalMinor - usage.standardTotalMinor) * 10_000,
-            usage.standardTotalMinor,
-          ),
-  };
-
   const reasons: VisitIncompleteReason[] = [];
   if (revenueMinor <= 0) reasons.push("no_revenue");
 
-  // A partially known profile is still unknown. For example, a service may
-  // have a recipe while one selected add-on does not. Existing recipe rows
-  // must not make the missing part look free.
-  if (input.standardUsageKnown === false) {
-    reasons.push("missing_standard_usage");
-  }
-  if (usage.effectiveTotalMinor === null) reasons.push("missing_material_price");
-
-  if (reasons.length > 0 || usage.effectiveTotalMinor === null) {
-    return {
-      status: "incomplete",
-      revenueMinor,
-      reasons,
-      materialUsageSource: usage.source,
-      blockingMaterialIds: usage.blockingMaterialIds,
-      deviation,
-    };
+  if (reasons.length > 0) {
+    return { status: "incomplete", revenueMinor, reasons };
   }
 
-  // Section 8.8.1: with no actual duration the planned one stands in and the
-  // result is an estimate — unlike materials, where a gap blocks the margin.
+  // Section 8.8.1: with no actual duration the planned one stands in, and the
+  // profit per hour it produces is marked an estimate rather than withheld.
   const estimatedDuration = input.actualDurationMinutes === null;
   const durationMinutes = input.actualDurationMinutes ?? input.plannedDurationMinutes;
 
   const costing = calculateCosting({
     priceMinor: revenueMinor,
-    materialCostMinor: usage.effectiveTotalMinor,
     durationMinutes,
     currency: input.currency,
     commission: input.commission,
@@ -221,24 +141,11 @@ export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
     ...(input.taxes ? { taxes: input.taxes } : {}),
   });
 
-  if (costing.incompleteCostData) {
-    return {
-      status: "incomplete",
-      revenueMinor,
-      reasons: ["missing_material_price"],
-      materialUsageSource: usage.source,
-      blockingMaterialIds: usage.blockingMaterialIds,
-      deviation,
-    };
-  }
-
   return {
     status: "complete",
     revenueMinor,
     estimatedDuration,
     durationMinutes,
-    materialUsageSource: usage.source,
-    deviation,
     costing,
   };
 }

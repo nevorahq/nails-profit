@@ -12,7 +12,7 @@ import { getActiveMembership } from "@/lib/membership";
 /**
  * Add-ons, spec SRV-003. Deltas rather than absolute values, and signed in both
  * directions: "короткая длина" may take less time and cost less, while "френч"
- * adds both. The recipe of an add-on lives under /add-ons/{id}/recipe.
+ * adds both.
  */
 const addOnSchema = z.object({
   name: z

@@ -1,10 +1,9 @@
-import { and, desc, eq, lte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { consumptions, materialPriceVersions, materials, visitLines, visits } from "@/db/schema";
+import { visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
-import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -13,23 +12,14 @@ import { recalculateVisitProfit, writeFinancialSnapshot } from "@/lib/visit-serv
 /**
  * Versioned correction of a closed visit, spec section 12.2 and 8.8.1.
  *
- * Records what was actually used and how long it took, then writes a *new*
- * financial snapshot. The previous one is untouched — that is what makes a
- * correction auditable rather than a quiet rewrite, and what Gate 3 asks for.
+ * Records how long it actually took and what was given back, then writes a
+ * *new* financial snapshot. The previous one is untouched — that is what makes
+ * a correction auditable rather than a quiet rewrite, and what Gate 3 asks for.
  *
  * Prices, names and the commission are not adjustable here on purpose: changing
- * them would make the visit disagree with what the client paid. Only the two
- * facts the master observes can be corrected.
+ * them would make the visit disagree with what the client paid.
  */
 const adjustSchema = z.object({
-  consumption: z
-    .array(z.object({ material_id: z.uuid(), actual_quantity: z.number().min(0).nullable() }))
-    .max(100)
-    .default([]),
-  extra_consumption: z
-    .array(z.object({ material_id: z.uuid(), actual_quantity: z.number().positive() }))
-    .max(20)
-    .default([]),
   actual_duration_minutes: z.int().positive().nullable().optional(),
   /**
    * Money given back, per line.
@@ -86,71 +76,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const before = await recalculateVisitProfit(tx, visit.id);
-    const beforeConsumptions = await tx
-      .select({
-        materialId: consumptions.materialId,
-        actualQuantityMilliUnits: consumptions.actualQuantityMilliUnits,
-      })
-      .from(consumptions)
-      .where(eq(consumptions.visitId, visit.id));
     const beforeRefunds = await tx
       .select({ id: visitLines.id, refundMinor: visitLines.refundMinor })
       .from(visitLines)
       .where(eq(visitLines.visitId, visit.id));
-
-    for (const entry of parsed.data.consumption) {
-      await tx
-        .update(consumptions)
-        .set({
-          actualQuantityMilliUnits:
-            entry.actual_quantity === null ? null : toMilliUnits(entry.actual_quantity),
-          updatedBy: actor.userId,
-          updatedAt: new Date(),
-          version: sql`${consumptions.version} + 1`,
-        })
-        .where(and(eq(consumptions.visitId, visit.id), eq(consumptions.materialId, entry.material_id)));
-    }
-
-    for (const entry of parsed.data.extra_consumption) {
-      const [material] = await tx
-        .select({ id: materials.id, name: materials.name, baseUnit: materials.baseUnit })
-        .from(materials)
-        .where(eq(materials.id, entry.material_id))
-        .limit(1);
-      if (!material) continue;
-
-      const [price] = await tx
-        .select({
-          packagePriceMinor: materialPriceVersions.packagePriceMinor,
-          packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
-        })
-        .from(materialPriceVersions)
-        .where(
-          and(
-            eq(materialPriceVersions.materialId, material.id),
-            lte(materialPriceVersions.validFrom, visit.completedAt),
-          ),
-        )
-        .orderBy(desc(materialPriceVersions.validFrom), desc(materialPriceVersions.createdAt))
-        .limit(1);
-
-      await tx
-        .insert(consumptions)
-        .values({
-          organizationId: actor.organizationId,
-          visitId: visit.id,
-          materialId: material.id,
-          materialNameSnapshot: material.name,
-          baseUnitSnapshot: material.baseUnit,
-          normativeQuantityMilliUnits: 0,
-          actualQuantityMilliUnits: toMilliUnits(entry.actual_quantity),
-          packagePriceMinorSnapshot: price?.packagePriceMinor ?? null,
-          packageSizeMilliUnitsSnapshot: price?.packageSizeMilliUnits ?? null,
-          createdBy: actor.userId,
-          updatedBy: actor.userId,
-        })
-        .onConflictDoNothing();
-    }
 
     /*
      * A refund larger than what the line took is refused by the database rather
@@ -191,13 +120,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const after = await recalculateVisitProfit(tx, visit.id);
-    const afterConsumptions = await tx
-      .select({
-        materialId: consumptions.materialId,
-        actualQuantityMilliUnits: consumptions.actualQuantityMilliUnits,
-      })
-      .from(consumptions)
-      .where(eq(consumptions.visitId, visit.id));
     const afterRefunds = await tx
       .select({ id: visitLines.id, refundMinor: visitLines.refundMinor })
       .from(visitLines)
@@ -218,14 +140,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       before: {
         contribution_margin_minor:
           before?.profit.status === "complete" ? before.profit.costing.contributionMarginMinor : null,
-        consumption: beforeConsumptions,
         refunds: beforeRefunds,
       },
       after: {
         contribution_margin_minor: snapshot.contributionMarginMinor,
         snapshot_version: snapshot.snapshotVersion,
         reason: parsed.data.reason ?? null,
-        consumption: afterConsumptions,
         refunds: afterRefunds,
       },
       requestId: requestIdentifier,
@@ -246,8 +166,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       revenue_minor: result.snapshot.revenueMinor,
       contribution_margin_minor: result.snapshot.contributionMarginMinor,
       profit_per_hour_minor: result.snapshot.profitPerHourMinor,
-      material_cost_minor: result.snapshot.materialCostMinor,
-      material_usage_source: result.snapshot.materialUsageSource,
       incomplete_reasons: result.snapshot.incompleteReasons,
     },
     requestIdentifier,

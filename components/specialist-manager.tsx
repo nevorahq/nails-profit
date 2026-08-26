@@ -66,10 +66,7 @@ function describeRule(rule: SpecialistRow["default_rule"], currency: string, t: 
       rate,
     });
   }
-  const described =
-    rule.type === "percentage_after_materials"
-      ? t("specialists.afterMaterials", { rate })
-      : t("specialists.ofRevenue", { rate });
+  const described = t("specialists.ofRevenue", { rate });
   // Only worth saying when it is not the usual answer. Every rule written
   // before the base existed is `after_discount`, and labelling all of them
   // would be noise on every row.
@@ -377,7 +374,6 @@ export function SpecialistManager({
                     onChange={(event) => setAddRuleType(event.target.value)}
                   >
                     <option value="percentage">{t("commissionType.percentage")}</option>
-                    <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
                     <option value="fixed">{t("commissionType.fixed")}</option>
                     <option value="hybrid">{t("commissionType.hybrid")}</option>
                   </select>
@@ -790,8 +786,7 @@ export function SpecialistManager({
                       onChange={(event) => setExceptionRuleType(event.target.value)}
                     >
                       <option value="percentage">{t("commissionType.percentage")}</option>
-                      <option value="percentage_after_materials">{t("commissionType.percentage_after_materials")}</option>
-                      <option value="fixed">{t("commissionType.fixed")}</option>
+                        <option value="fixed">{t("commissionType.fixed")}</option>
                       <option value="hybrid">{t("commissionType.hybrid")}</option>
                     </select>
                   </label>

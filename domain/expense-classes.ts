@@ -4,22 +4,23 @@ import { expenseCategories, type ExpenseCategory } from "@/domain/expense-catego
  * Whether a recorded expense belongs in the month's profit, or only in its cash.
  *
  * The ledger holds two different kinds of thing under one word. Rent is a cost
- * of the month and nothing else knows about it. A crate of gel is money leaving
- * the account, but the *cost* of that gel already reaches the report through
- * the visits that used it — `consumption` priced at the visit's own snapshot.
- * Subtracting both would charge the business twice for one bottle, and the two
- * figures would not even be equal: one is what was bought, the other what was
- * used.
+ * of the month and nothing else knows about it. Wages are money leaving the
+ * account too, but what the master's work cost already reaches the report
+ * through the visit — `financial_snapshot.commission_minor` — and through
+ * `labor_cost_rule` for a salary. Subtracting both would pay the studio's
+ * masters twice on paper.
  *
  * So the ledger is split rather than summed. `overhead` is subtracted from the
  * contribution margin to give the operating profit; `cash_only` is shown, and
  * deliberately not subtracted, because the same money is counted elsewhere.
  *
- * What this costs, honestly: a consumable nobody put in a recipe — paper
- * towels, gloves — reaches no visit and so reaches no profit either. That gap
- * is the reason the monthly report carries the reconciliation line «закуплено
- * против списано» (`domain/period-pl.ts`): the difference is visible rather
- * than assumed away. See `docs/cost-engine-redesign-plan.md`, section 3.
+ * Materials used to sit on the `cash_only` side, because their cost reached the
+ * report a second time through the recipe of every visit that consumed them.
+ * With the material engine gone that second path no longer exists, and a crate
+ * of gel is now an ordinary cost of the month like any other purchase: what was
+ * bought is what is subtracted. It is a coarser number than per-visit
+ * consumption was — a crate bought in March is charged to March even if it is
+ * poured out over the summer — and that is the price of the simpler product.
  */
 export type ExpenseClass = "overhead" | "cash_only";
 
@@ -30,9 +31,8 @@ export const expenseClassOf: Readonly<Record<ExpenseCategory, ExpenseClass>> = {
   // in the ledger is the payment, not a second cost.
   payroll: "cash_only",
   tools: "overhead",
-  // Priced per unit and consumed by a recipe: the cost arrives with the visit.
-  materials: "cash_only",
-  consumables: "cash_only",
+  materials: "overhead",
+  consumables: "overhead",
   taxes: "overhead",
   subscriptions: "overhead",
   marketing: "overhead",
@@ -40,12 +40,6 @@ export const expenseClassOf: Readonly<Record<ExpenseCategory, ExpenseClass>> = {
   services: "overhead",
   other: "overhead",
 };
-
-/**
- * The categories whose purchases the materials reconciliation compares against
- * what the visits actually consumed.
- */
-export const purchasedMaterialCategories: readonly ExpenseCategory[] = ["materials", "consumables"];
 
 export function isOverhead(category: ExpenseCategory): boolean {
   return expenseClassOf[category] === "overhead";
