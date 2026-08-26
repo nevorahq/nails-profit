@@ -15,7 +15,7 @@ let initialized = false;
  * immediately, with no reload); `opt_out_capturing_by_default` keeps it silent
  * until `saveConsent(true)` — via the cookie-consent banner — flips it.
  */
-export function PostHogProvider({ config }: { config: { key: string; host: string } | null }) {
+export function PostHogProvider({ config }: { config: { key: string; host: string; uiHost: string } | null }) {
   useEffect(() => {
     if (!config) return;
 
@@ -26,6 +26,7 @@ export function PostHogProvider({ config }: { config: { key: string; host: strin
       initialized = true;
       posthog.init(config.key, {
         api_host: config.host,
+        ui_host: config.uiHost,
         defaults: "2026-05-30",
         opt_out_capturing_by_default: true,
         persistence: "localStorage+cookie",

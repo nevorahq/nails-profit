@@ -181,14 +181,21 @@ export function getLemonSqueezyCheckoutUrl() {
 
 /**
  * PostHog's project key is meant to ship in the browser bundle — same class of
- * value as `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` above, not a secret. Key and host
- * are required together so a missing host can never silently default to the
- * wrong data region (PostHog Cloud EU vs US matters for GDPR).
+ * value as `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` above, not a secret.
+ *
+ * `host` is the reverse proxy (e.g. `e.nevorahq.com`, CNAME'd to PostHog's
+ * managed proxy), not PostHog's own domain directly — that's what keeps
+ * PostHog's own subdomain off the wire for ad blockers to match against.
+ * Proxying means the SDK can no longer infer where the PostHog *app* lives
+ * (toolbar links, session-replay links) from `host` alone, so `ui_host` says
+ * that explicitly. All three are required together: a proxy host without the
+ * real app host breaks those links instead of just leaving them unconfigured.
  */
 export function getPostHogConfig() {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim();
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim();
-  return key && host ? { key, host } : null;
+  const uiHost = process.env.NEXT_PUBLIC_POSTHOG_UI_HOST?.trim();
+  return key && host && uiHost ? { key, host, uiHost } : null;
 }
 
 /**
