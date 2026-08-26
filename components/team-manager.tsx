@@ -51,6 +51,7 @@ export function TeamManager({
   canManage,
   locale,
   canPreview = false,
+  canSendEmail = true,
   currentUserId,
   currentRole,
 }: {
@@ -59,6 +60,14 @@ export function TeamManager({
   locale: AppLocale;
   /** Whether to offer "посмотреть как" beside each colleague. Owners only. */
   canPreview?: boolean;
+  /**
+   * Whether a link built on this deployment's address can be opened by the
+   * person who receives it. False on a development server, where the join link
+   * is `http://localhost:3000/…` — `POST /api/v1/invitations/send` refuses to
+   * mail one, and offering the button anyway turns a known configuration state
+   * into a red failure the owner discovers only after clicking.
+   */
+  canSendEmail?: boolean;
   /** The signed-in member, so their own row offers no removal. */
   currentUserId: string;
   currentRole: MemberRole;
@@ -418,12 +427,6 @@ export function TeamManager({
         </tbody>
       </table>
 
-      {canManage && (
-        <p className="muted" style={{ marginTop: "12rem", fontSize: "13rem" }}>
-          {t("team.removeHint")}
-        </p>
-      )}
-
       {canManage && members.some((m) => m.role === "master" && m.has_specialist_card === false) && (
         <p className="warning-banner">{t("team.noSpecialistCardHint")}</p>
       )}
@@ -539,7 +542,8 @@ export function TeamManager({
                   className="primary-button"
                   type="button"
                   onClick={send}
-                  disabled={pending}
+                  disabled={pending || !canSendEmail}
+                  title={canSendEmail ? undefined : t("team.sendUnavailable")}
                 >
                   {pending ? t("common.saving") : t("team.inviteButton")}
                 </button>
@@ -558,7 +562,7 @@ export function TeamManager({
           {step === "link-ready" && inviteLink && (
             <div style={{ marginTop: "16rem" }}>
               <p className="muted" style={{ fontSize: "13rem", marginBottom: "8rem" }}>
-                {t("team.linkHint")}
+                {canSendEmail ? t("team.linkHint") : t("team.sendUnavailable")}
               </p>
               <div
                 style={{

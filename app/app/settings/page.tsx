@@ -20,7 +20,7 @@ import {
 import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
-import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig } from "@/env";
+import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
 import { monthBounds, monthOf } from "@/lib/period";
 import { requireWorkspace } from "@/lib/workspace";
@@ -274,6 +274,14 @@ export default async function SettingsPage() {
            * server; this only keeps the control from being offered.
            */
           canPreview={membership.role === "owner" && membership.preview === null}
+          /*
+           * Read on the server because the answer belongs to the deployment,
+           * not the browser: `window.location.origin` would call a tunnel or a
+           * proxied host public while the address the email is built on —
+           * `NEXT_PUBLIC_APP_URL` — is still localhost. The send endpoint
+           * decides again with the same function.
+           */
+          canSendEmail={isPublicAppUrlReachable()}
           /*
            * Who is asking, so the row for the person themselves offers no
            * removal and a manager is not offered an owner. Both are refused by

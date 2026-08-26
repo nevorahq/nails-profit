@@ -286,6 +286,32 @@ describe("configuring a bookable studio", () => {
     expect(times).toContain("14:00");
   });
 
+  test("a master may set their own rota and nobody else's", async () => {
+    const other = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/specialists", { name: "Коллега по графику" }),
+    ).id;
+    await studio.owner.put(`/api/v1/specialists/${other}/locations`, { location_ids: [locationId] });
+
+    const own = await master.put("/api/v1/availability/rules", {
+      specialist_id: studio.specialistId,
+      location_id: locationId,
+      effective_from: "2026-09-01",
+      intervals: [{ weekday: 1, start: "10:00", end: "16:00" }],
+    });
+    expect(own.status).toBe(201);
+
+    // The rota decides which clients reach whom. Owning one's own hours is not
+    // owning a colleague's, and the endpoint is where that line is drawn —
+    // `tests/e2e/rbac-matrix.test.ts` can only say who may call it at all.
+    const someoneElse = await master.put("/api/v1/availability/rules", {
+      specialist_id: other,
+      location_id: locationId,
+      effective_from: "2026-09-01",
+      intervals: [{ weekday: 1, start: "10:00", end: "16:00" }],
+    });
+    expect(someoneElse.status).toBe(403);
+  });
+
   test("a master may block their own time and nobody else's", async () => {
     const other = dataOf<{ id: string }>(
       await studio.owner.post("/api/v1/specialists", { name: "Коллега" }),
