@@ -11,8 +11,7 @@ import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
 /**
- * Recorded purchases: rent, a lamp, an ad. Kept apart from `/materials`, which
- * catalogues something priced per unit and consumed by a recipe — see the
+ * Recorded purchases: rent, a lamp, an ad, a box of gel — see the
  * comment on the `expense` table in `db/schema.ts`.
  *
  * Owner-only, reading included, by its own `expenses` capability in

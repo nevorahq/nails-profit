@@ -11,12 +11,11 @@ import type { ResolvedExpense } from "@/domain/expense-periods";
  * Showing one number for both is how an owner ends up unable to explain either.
  *
  * The rule that keeps this honest is the same one the P&L follows, applied the
- * other way round. In the profit statement, materials count when a visit uses
- * them and the purchase is `cash_only`; here the purchase is the event and the
- * consumption is not a cash movement at all. Labour is the mirror image: the
- * ledger's `payroll` rows are left out, because the commission on each visit
- * and the monthly salaries are already the labour that leaves the account, and
- * counting both would pay the studio's masters twice on paper.
+ * other way round. A purchase is an event here whatever it was for, so the
+ * ledger comes in whole — with one exclusion, and it is the mirror of the P&L's
+ * own: the ledger's `payroll` rows are left out, because the commission on each
+ * visit and the monthly salaries are already the labour that leaves the
+ * account, and counting both would pay the studio's masters twice on paper.
  *
  * That exclusion is exactly why `owner_draw` exists as its own table. Before
  * it, an owner taking money out filed it under `payroll` — where the profit
@@ -59,9 +58,7 @@ export type CashFlow = Readonly<{
   visitLabourMinor: number;
   salariedLabourMinor: number;
   /**
-   * Every ledger row except `payroll`. Materials and consumables are in here at
-   * their purchase price — this is the statement where buying a crate counts,
-   * and using a bottle does not.
+   * Every ledger row except `payroll`, at what was actually paid.
    */
   spentFromLedgerMinor: number;
   spentByCategory: Readonly<Record<string, number>>;

@@ -27,7 +27,6 @@ const expected: Record<MemberRole, Record<Capability, string>> = {
     clients: "rw all",
     bookings: "rw all",
     services: "rw all",
-    materials: "rw all",
     expenses: "rw all",
     commissions: "rw all",
     dashboard: "r all",
@@ -40,7 +39,6 @@ const expected: Record<MemberRole, Record<Capability, string>> = {
     clients: "rw all",
     bookings: "rw all",
     services: "rw all",
-    materials: "rw all",
     expenses: "-",
     commissions: "rw all",
     dashboard: "r all",
@@ -53,7 +51,6 @@ const expected: Record<MemberRole, Record<Capability, string>> = {
     clients: "rw own",
     bookings: "rw own",
     services: "rw all create_only",
-    materials: "rw own",
     expenses: "-",
     commissions: "r own",
     dashboard: "r own",
@@ -66,7 +63,6 @@ const expected: Record<MemberRole, Record<Capability, string>> = {
     clients: "r all exclude_pii",
     bookings: "r all",
     services: "r all",
-    materials: "r all aggregates_only",
     expenses: "-",
     commissions: "r all aggregates_only",
     dashboard: "r all aggregates_only",
@@ -148,15 +144,15 @@ describe("rbac helpers", () => {
   });
 
   it("keeps a master out of the shared catalogue", () => {
-    // The matrix grants a Master materials write, but scoped to their own
-    // visits. Catalogue edits are organization-wide, so `can` alone is not
-    // enough — this is the check the write endpoints use.
-    expect(can("master", "materials", "write")).toBe(true);
-    expect(canManageCatalogue("master", "materials")).toBe(false);
+    // The matrix grants a Master a services write, but only to add their own.
+    // Catalogue edits are organization-wide, so `can` alone is not enough —
+    // this is the check the write endpoints use.
+    expect(can("master", "services", "write")).toBe(true);
+    expect(canManageCatalogue("master", "services")).toBe(false);
 
-    expect(canManageCatalogue("owner", "materials")).toBe(true);
-    expect(canManageCatalogue("manager", "materials")).toBe(true);
-    expect(canManageCatalogue("analyst", "materials")).toBe(false);
+    expect(canManageCatalogue("owner", "services")).toBe(true);
+    expect(canManageCatalogue("manager", "services")).toBe(true);
+    expect(canManageCatalogue("analyst", "services")).toBe(false);
   });
 
   it("lets a manager administer everyone except an owner", () => {

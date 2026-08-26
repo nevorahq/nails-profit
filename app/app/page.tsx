@@ -243,12 +243,12 @@ export default async function AppPage({
 
     const people = await loadSpecialistOptions(tx);
     /*
-     * «Первый расчёт» is a setup checklist, and all five of its steps are
-     * catalogue work: a specialist with a commission rule, a priced material, a
-     * service, a recipe, a first closed visit. A role that cannot write the
-     * shared catalogue cannot advance any of them, so for a master the panel is
-     * five links to pages they do not have — a permanent, unfinishable list on
-     * the one screen they open every morning.
+     * «Первый расчёт» is a setup checklist, and all three of its steps are
+     * catalogue work: a specialist with a commission rule, a priced service, a
+     * first closed visit. A role that cannot write the shared catalogue cannot
+     * advance any of them, so for a master the panel is three links to pages
+     * they do not have — a permanent, unfinishable list on the one screen they
+     * open every morning.
      *
      * Not computed rather than not rendered: the progress costs several
      * queries, and nobody should pay for them to produce something the page

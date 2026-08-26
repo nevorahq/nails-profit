@@ -8,7 +8,7 @@ const WAVES = new Set(["demo", "design_partner", "first_paid", "extended"]);
 const STATUSES = new Set(["pending", "active", "paused", "completed", "withdrawn"]);
 const INTERACTIONS = new Set(["onboarding", "interview", "profit_review", "support", "decision"]);
 const BOOKING_ACCESS_LEVELS = new Set(["off", "calendar", "public"]);
-const DECISIONS = new Set(["price", "service_composition", "material_consumption"]);
+const DECISIONS = new Set(["price", "service_composition"]);
 const ISSUE_CATEGORIES = new Set(["financial", "technical", "privacy", "support"]);
 
 function fail(message) {

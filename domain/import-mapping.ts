@@ -7,7 +7,6 @@ import {
   parseDurationMinutes,
   parseIntegerValue,
   parseLocalDate,
-  parseMilliUnits,
   parseMoneyMinor,
   parsePercentBasisPoints,
 } from "@/domain/import-values";
@@ -27,7 +26,6 @@ import { normalizePhone } from "@/domain/phone";
 export type FieldType =
   | "text"
   | "money"
-  | "quantity"
   | "integer"
   | "duration"
   | "percent"
@@ -44,26 +42,6 @@ export type ImportField = Readonly<{
   /** Header names matched automatically, normalized the same way headers are. */
   aliases: readonly string[];
   options?: readonly string[];
-  /**
-   * Spellings of an option that a price list actually uses, per canonical
-   * value: `мл`, `ml`, `ML`, `мл.` all mean `ml`.
-   *
-   * A closed list rather than fuzzy matching, deliberately. A unit is the
-   * denominator of every cost this product prints, and a guess that reads `мг`
-   * as `g` produces a number that is wrong by a thousand and looks entirely
-   * ordinary. Anything not listed is `not_an_option`, and the owner fixes one
-   * cell.
-   */
-  synonyms?: Readonly<Record<string, readonly string[]>>;
-  /**
-   * Zero is not a valid quantity even though it parses and is not negative.
-   *
-   * Without this the row reaches the database, where a check constraint refuses
-   * it as `write_failed` — a message that says the import broke rather than
-   * that one cell says `0`. And a package size of zero is the specific input
-   * the costing engine must never receive: it is the denominator.
-   */
-  positive?: boolean;
   hint?: string;
 }>;
 
@@ -86,7 +64,6 @@ export type IssueCode =
   | "not_a_phone"
   | "not_an_option"
   | "negative_not_allowed"
-  | "not_positive"
   | "too_long"
   | "duplicate_in_file"
   | "looks_like_formula"
@@ -309,13 +286,6 @@ function parseCell(field: ImportField, text: string): ParseOutcome {
       return value < 0 ? { ok: false, code: "negative_not_allowed" } : { ok: true, value };
     }
 
-    case "quantity": {
-      const value = parseMilliUnits(text);
-      if (value === null) return { ok: false, code: "not_a_number" };
-      if (value < 0) return { ok: false, code: "negative_not_allowed" };
-      return field.positive && value === 0 ? { ok: false, code: "not_positive" } : { ok: true, value };
-    }
-
     case "integer": {
       const value = parseIntegerValue(text);
       if (value === null) return { ok: false, code: "not_a_number" };
@@ -351,11 +321,7 @@ function parseCell(field: ImportField, text: string): ParseOutcome {
 
     case "enum": {
       const written = text.toLowerCase();
-      const match =
-        field.options?.find((option) => option.toLowerCase() === written) ??
-        field.options?.find((option) =>
-          field.synonyms?.[option]?.some((synonym) => synonym.toLowerCase() === written),
-        );
+      const match = field.options?.find((option) => option.toLowerCase() === written);
       return match === undefined ? { ok: false, code: "not_an_option" } : { ok: true, value: match };
     }
   }

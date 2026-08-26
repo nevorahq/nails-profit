@@ -1,22 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  commissionRules,
-  invitations,
-  materialPriceVersions,
-  memberships,
-  recipeItems,
-  recipes,
-  services,
-} from "@/db/schema";
+import { commissionRules, invitations, memberships, services } from "@/db/schema";
 import { PG_ERROR } from "@/lib/db-errors";
 import { adminDb, assertCleanupCoversEveryTable, resetDatabase } from "../helpers/database";
 import { expectDatabaseError } from "../helpers/expect-database-error";
 import {
-  createMaterial,
   createOrganization,
-  createRecipe,
   createService,
   createSpecialist,
   createUser,
@@ -36,59 +26,6 @@ describe("database constraints", () => {
   beforeEach(async () => {
     await resetDatabase();
     organizationId = (await createOrganization()).id;
-  });
-
-  it("refuses a recipe item with a non-positive quantity", async () => {
-    const material = await createMaterial(organizationId);
-    const service = await createService(organizationId);
-    const recipe = await createRecipe(organizationId, service.id, []);
-
-    await expectDatabaseError(
-      adminDb.insert(recipeItems).values({
-        organizationId,
-        recipeId: recipe.id,
-        materialId: material.id,
-        normativeQuantityMilliUnits: 0,
-      }),
-      { code: PG_ERROR.check, constraint: "recipe_item_quantity_positive" },
-    );
-  });
-
-  it("refuses the same material twice in one recipe", async () => {
-    const material = await createMaterial(organizationId);
-    const service = await createService(organizationId);
-    const recipe = await createRecipe(organizationId, service.id, [
-      { materialId: material.id, quantity: 1 },
-    ]);
-
-    await expectDatabaseError(
-      adminDb.insert(recipeItems).values({
-        organizationId,
-        recipeId: recipe.id,
-        materialId: material.id,
-        normativeQuantityMilliUnits: 2_000,
-      }),
-      { code: PG_ERROR.unique, constraint: "recipe_item_material_idx" },
-    );
-  });
-
-  it("refuses a recipe with no target and a recipe with two", async () => {
-    const service = await createService(organizationId);
-
-    await expectDatabaseError(adminDb.insert(recipes).values({ organizationId }), {
-      code: PG_ERROR.check,
-      constraint: "recipe_single_target",
-    });
-
-    const [addOn] = await adminDb
-      .insert(await import("@/db/schema").then((schema) => schema.addOns))
-      .values({ organizationId, name: { ru: "Add-on" } })
-      .returning();
-
-    await expectDatabaseError(
-      adminDb.insert(recipes).values({ organizationId, serviceId: service.id, addOnId: addOn.id }),
-      { code: PG_ERROR.check, constraint: "recipe_single_target" },
-    );
   });
 
   it("refuses a commission rule whose shape contradicts its type", async () => {
@@ -123,7 +60,6 @@ describe("database constraints", () => {
 
     for (const values of [
       { type: "percentage" as const, basisPoints: 4_000, fixedAmountMinor: null },
-      { type: "percentage_after_materials" as const, basisPoints: 3_500, fixedAmountMinor: null },
       { type: "fixed" as const, basisPoints: null, fixedAmountMinor: 12_000 },
     ]) {
       const [rule] = await adminDb
@@ -165,58 +101,6 @@ describe("database constraints", () => {
     const service = await createService(organizationId, { priceMinor: null, durationMinutes: null });
     expect(service.priceMinor).toBeNull();
     expect(service.durationMinutes).toBeNull();
-  });
-
-  it("refuses a non-positive package size on a purchase price", async () => {
-    // Spec 18.2 edge case: an unknown package size must never reach the costing.
-    const material = await createMaterial(organizationId);
-    const user = await createUser();
-
-    await expectDatabaseError(
-      adminDb.insert(materialPriceVersions).values({
-        organizationId,
-        materialId: material.id,
-        packagePriceMinor: 10_000,
-        packageSizeMilliUnits: 0,
-        currency: "MDL",
-        createdBy: user.id,
-      }),
-      { code: PG_ERROR.check, constraint: "material_package_size_positive" },
-    );
-  });
-
-  it("refuses a negative purchase price", async () => {
-    const material = await createMaterial(organizationId);
-    const user = await createUser();
-
-    await expectDatabaseError(
-      adminDb.insert(materialPriceVersions).values({
-        organizationId,
-        materialId: material.id,
-        packagePriceMinor: -1,
-        packageSizeMilliUnits: 15_000,
-        currency: "MDL",
-        createdBy: user.id,
-      }),
-      { code: PG_ERROR.check, constraint: "material_price_non_negative" },
-    );
-  });
-
-  it("requires a purchase price to record who entered it", async () => {
-    // Financial history without an actor cannot be audited.
-    const material = await createMaterial(organizationId);
-
-    await expectDatabaseError(
-      adminDb.insert(materialPriceVersions).values({
-        organizationId,
-        materialId: material.id,
-        packagePriceMinor: 10_000,
-        packageSizeMilliUnits: 15_000,
-        currency: "MDL",
-        createdBy: null as unknown as string,
-      }),
-      { code: PG_ERROR.notNull },
-    );
   });
 
   it("refuses the same user joining one organization twice", async () => {
@@ -297,7 +181,7 @@ describe("database constraints", () => {
   it("keeps financial history alive by refusing to delete an organization that has any", async () => {
     // Section 15.3: erasure anonymizes rather than deletes, and the FKs are what
     // make that the only option.
-    await createMaterial(organizationId);
+    await createService(organizationId);
     const { organizations } = await import("@/db/schema");
     const { eq } = await import("drizzle-orm");
 

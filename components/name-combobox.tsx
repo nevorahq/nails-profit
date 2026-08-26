@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 /**
  * A free-text field that suggests from a fixed catalogue.
  *
- * Used by the material form and the service form, which ask the same thing of
+ * Used by the service form and the expense form, which ask the same thing of
  * their first field: offer what the product already knows, and get out of the
  * way of a name it does not. Free text is the point — a studio's own service is
  * as valid as a catalogue entry, so a suggestion is never required and the

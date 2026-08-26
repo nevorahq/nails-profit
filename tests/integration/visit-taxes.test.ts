@@ -9,9 +9,7 @@ import { adminDb, resetDatabase } from "../helpers/database";
 import { expectDatabaseError } from "../helpers/expect-database-error";
 import {
   createCommissionRule,
-  createMaterial,
   createOrganization,
-  createRecipe,
   createService,
   createSpecialist,
   createUser,
@@ -30,7 +28,6 @@ describe("a visit under costing-v2", () => {
   let organizationId: string;
   let specialistId: string;
   let serviceId: string;
-  let materialId: string;
 
   const CATALOGUE_FROM = new Date("2025-01-01T00:00:00.000Z");
   const MARCH = new Date("2026-03-10T10:00:00.000Z");
@@ -47,7 +44,6 @@ describe("a visit under costing-v2", () => {
         completedAt: options.at ?? MARCH,
         actualDurationMinutes: 90,
         ...(options.paymentMethodId !== undefined ? { paymentMethodId: options.paymentMethodId } : {}),
-        consumption: [{ materialId, actualQuantityMilliUnits: 2_000 }],
         requestId: "test",
       });
       if (!result.ok) throw new Error(`visit refused: ${result.failure}`);
@@ -115,19 +111,8 @@ describe("a visit under costing-v2", () => {
       activeFrom: CATALOGUE_FROM,
     });
 
-    // 100 per 10 ml → 10 per ml; the recipe uses 2 ml, so 20 of materials.
-    const material = await createMaterial(organizationId, {
-      packagePriceMinor: 10_000,
-      packageSize: 10,
-      createdBy: userId,
-      priceValidFrom: CATALOGUE_FROM,
-    });
-    materialId = material.id;
     const service = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
     serviceId = service.id;
-    await createRecipe(organizationId, service.id, [{ materialId: material.id, quantity: 2 }], {
-      activeFrom: CATALOGUE_FROM,
-    });
   });
 
   /*
@@ -138,7 +123,7 @@ describe("a visit under costing-v2", () => {
   it("costs exactly as before when nothing has been entered", async () => {
     const { visit, snapshot } = await close();
 
-    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.contributionMarginMinor).toBe(36_000);
     expect(snapshot.netRevenueMinor).toBe(60_000);
     expect(snapshot.vatMinor).toBe(0);
     expect(snapshot.paymentCommissionMinor).toBe(0);
@@ -154,7 +139,7 @@ describe("a visit under costing-v2", () => {
     expect(visit.paymentMethodId).toBe(method.id);
     expect(visit.paymentCommissionBasisPointsSnapshot).toBe(220);
     expect(snapshot.paymentCommissionMinor).toBe(1_420);
-    expect(snapshot.contributionMarginMinor).toBe(34_000 - 1_420);
+    expect(snapshot.contributionMarginMinor).toBe(36_000 - 1_420);
   });
 
   it("obeys an explicit cash payment even when a default exists", async () => {
@@ -196,7 +181,7 @@ describe("a visit under costing-v2", () => {
     });
     expect(snapshot.vatMinor).toBe(10_000);
     expect(snapshot.netRevenueMinor).toBe(50_000);
-    expect(snapshot.contributionMarginMinor).toBe(24_000);
+    expect(snapshot.contributionMarginMinor).toBe(26_000);
   });
 
   /*
@@ -236,7 +221,7 @@ describe("a visit under costing-v2", () => {
     // Nothing would be subtracted, so the visit carries no snapshot at all:
     // «налогов не было» and «никто не спрашивал» stay distinguishable.
     expect(visit.taxSnapshot).toBeNull();
-    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.contributionMarginMinor).toBe(36_000);
   });
 
   describe("refunds", () => {
@@ -252,7 +237,7 @@ describe("a visit under costing-v2", () => {
       expect(snapshot.revenueMinor).toBe(50_000);
       // 40% of what the client actually kept paying for, not of the original.
       expect(snapshot.commissionMinor).toBe(20_000);
-      expect(snapshot.contributionMarginMinor).toBe(50_000 - 2_000 - 20_000);
+      expect(snapshot.contributionMarginMinor).toBe(50_000 - 20_000);
     });
 
     it("leaves the acquirer's fee on the sum that was processed", async () => {
@@ -309,7 +294,7 @@ describe("a visit under costing-v2", () => {
     const { visit, snapshot } = await close();
 
     expect(visit.taxSnapshot).toBeNull();
-    expect(snapshot.contributionMarginMinor).toBe(34_000);
+    expect(snapshot.contributionMarginMinor).toBe(36_000);
   });
 
   it("keeps the visit costed when its payment method is later retired", async () => {

@@ -1,5 +1,4 @@
 import type { Currency } from "@/domain/money";
-import { fromMilliUnits } from "@/domain/units";
 
 /** LOC-004: money, quantities and percentages go through locale-aware formatters. */
 export function formatMoneyMinor(amountMinor: number, currency: Currency | string, locale = "ru-MD") {
@@ -57,13 +56,6 @@ export function formatPercentDelta(
   return { text, direction: ratio < 0 ? "down" : "up" };
 }
 
-export function formatQuantity(milliUnits: number, unit: string, locale = "ru-MD") {
-  const value = new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(
-    fromMilliUnits(milliUnits),
-  );
-  return `${value} ${unit}`;
-}
-
 /**
  * Minutes as hours, for figures that are counted in shifts rather than in
  * appointments. One decimal: a month of capacity is a number in the hundreds,
@@ -90,6 +82,5 @@ export const costingReasonLabels: Record<string, string> = {
   missing_price: "не указана цена услуги",
   missing_duration: "не указана длительность",
   missing_commission_rule: "нет правила комиссии мастера",
-  missing_recipe: "рецептура не задана",
-  missing_material_cost: "у материала нет закупочной цены",
+  no_revenue: "визит не принёс выручки",
 };

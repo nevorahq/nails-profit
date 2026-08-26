@@ -63,10 +63,10 @@ const SERVICE_AUTHORS: readonly MemberRole[] = ["owner", "manager", "master"];
 /** A one-row file, so an import job can be created on demand. */
 function importForm() {
   const form = new FormData();
-  form.set("entity", "material");
+  form.set("entity", "service");
   form.set(
     "file",
-    new File(["Наименование;Единица;Объём упаковки;Цена закупки\r\nТоп;ml;10;120"], "one.csv", {
+    new File(["Наименование;Цена;Длительность\r\nТоп-услуга;600;90"], "one.csv", {
       type: "text/csv",
     }),
   );
@@ -256,90 +256,6 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/organizations/delete", body: { confirmation_name: "wrong" } }),
   },
   {
-    route: "/api/v1/materials",
-    method: "GET",
-    allowed: ALL_ROLES,
-    note: "materials read: all four roles",
-    request: async () => ({ path: "/api/v1/materials" }),
-  },
-  {
-    route: "/api/v1/materials",
-    method: "POST",
-    allowed: CATALOGUE_MANAGERS,
-    note: "Master's materials write is scope own — consumption, not the shared catalogue",
-    // A distinct name per call. Since migration 0034 a material's name is
-    // unique within an organization, so a fixed name would have every role
-    // after the first refused for existing rather than for its permissions —
-    // and this file is about permissions.
-    request: async () => ({
-      path: "/api/v1/materials",
-      body: { name: `Проба ${crypto.randomUUID()}`, base_unit: "ml" },
-    }),
-  },
-  {
-    route: "/api/v1/materials/[id]/prices",
-    method: "POST",
-    allowed: CATALOGUE_MANAGERS,
-    note: "A purchase price is catalogue data everyone is costed by",
-    request: async (fixture) => ({
-      path: `/api/v1/materials/${fixture.studio.materialId}/prices`,
-      body: { package_price_minor: 10_000, package_size: 10 },
-    }),
-  },
-  {
-    route: "/api/v1/materials/[id]/purchases",
-    method: "GET",
-    allowed: ALL_ROLES,
-    note: "The purchase log is part of reading a material",
-    request: async (fixture) => ({ path: `/api/v1/materials/${fixture.studio.materialId}/purchases` }),
-  },
-  {
-    route: "/api/v1/materials/[id]/purchases",
-    method: "POST",
-    allowed: CATALOGUE_MANAGERS,
-    note: "A purchase restates the cost basis every other master is costed by",
-    request: async (fixture) => ({
-      path: `/api/v1/materials/${fixture.studio.materialId}/purchases`,
-      body: { package_quantity: 1, package_size: 15, unit_package_cost_minor: 18_000 },
-    }),
-  },
-  {
-    route: "/api/v1/materials/[id]/stock-checks",
-    method: "POST",
-    allowed: CATALOGUE_MANAGERS,
-    note: "A count re-baselines the shared balance and argues about the shared norms",
-    request: async (fixture) => ({
-      path: `/api/v1/materials/${fixture.studio.materialId}/stock-checks`,
-      body: { observed_quantity: 5 },
-    }),
-  },
-  {
-    route: "/api/v1/material-templates",
-    method: "GET",
-    allowed: ALL_ROLES,
-    note: "The curated catalogue is product data; reading it needs materials read, which every role has",
-    request: async () => ({ path: "/api/v1/material-templates?core=true" }),
-  },
-  {
-    route: "/api/v1/materials/from-templates",
-    method: "POST",
-    allowed: CATALOGUE_MANAGERS,
-    note: "Fast Setup writes the shared catalogue, so it takes the catalogue scope",
-    request: async () => ({
-      path: "/api/v1/materials/from-templates",
-      body: {
-        items: [
-          {
-            template_id: "00000000-0000-4000-8000-000000000000",
-            package_price_minor: 1_000,
-            currency: "MDL",
-          },
-        ],
-      },
-      headers: { "idempotency-key": crypto.randomUUID() },
-    }),
-  },
-  {
     route: "/api/v1/expenses",
     method: "GET",
     allowed: ["owner"],
@@ -514,16 +430,6 @@ const cases: readonly Case[] = [
     }),
   },
   {
-    route: "/api/v1/services/[id]/recipe",
-    method: "PUT",
-    allowed: CATALOGUE_MANAGERS,
-    note: "A recipe is the norm every master is measured against",
-    request: async (fixture) => ({
-      path: `/api/v1/services/${fixture.studio.serviceId}/recipe`,
-      body: { items: [{ material_id: fixture.studio.materialId, quantity: 3.5 }] },
-    }),
-  },
-  {
     route: "/api/v1/services/[id]/add-ons",
     method: "PUT",
     allowed: CATALOGUE_MANAGERS,
@@ -546,16 +452,6 @@ const cases: readonly Case[] = [
     allowed: CATALOGUE_MANAGERS,
     note: "services write",
     request: async () => ({ path: "/api/v1/add-ons", body: { name: { ru: "Опция" } } }),
-  },
-  {
-    route: "/api/v1/add-ons/[id]/recipe",
-    method: "PUT",
-    allowed: CATALOGUE_MANAGERS,
-    note: "materials write, scope all",
-    request: async (fixture) => ({
-      path: `/api/v1/add-ons/${fixture.addOnId}/recipe`,
-      body: { items: [{ material_id: fixture.studio.materialId, quantity: 1 }] },
-    }),
   },
   {
     route: "/api/v1/specialists",
@@ -730,7 +626,7 @@ const cases: readonly Case[] = [
     route: "/api/v1/imports",
     method: "POST",
     allowed: CATALOGUE_MANAGERS,
-    note: "Importing materials is a catalogue write",
+    note: "Importing the catalogue is a catalogue write",
     request: async () => ({ path: "/api/v1/imports" }),
   },
   {
@@ -914,6 +810,13 @@ const cases: readonly Case[] = [
     request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}` }),
   },
   {
+    route: "/api/v1/bookings/[id]/preview",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read: what the appointment would earn, costed but not written",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/preview` }),
+  },
+  {
     route: "/api/v1/bookings/[id]",
     method: "PATCH",
     allowed: ["owner", "manager", "master"],
@@ -976,7 +879,7 @@ const cases: readonly Case[] = [
     method: "GET",
     allowed: ALL_ROLES,
     note: "An empty CSV template; no tenant data in it",
-    request: async () => ({ path: "/api/v1/imports/templates/material" }),
+    request: async () => ({ path: "/api/v1/imports/templates/service" }),
   },
 ];
 
@@ -1152,44 +1055,14 @@ describe("RBAC and tenant isolation", () => {
       },
       {
         method: "PUT",
-        label: "recipe",
-        path: (f) => `/api/v1/services/${f.studio.serviceId}/recipe`,
-        body: { items: [] },
-      },
-      {
-        method: "PUT",
         label: "service add-ons",
         path: (f) => `/api/v1/services/${f.studio.serviceId}/add-ons`,
         body: { add_on_ids: [] },
       },
       {
-        method: "POST",
-        label: "material price",
-        path: (f) => `/api/v1/materials/${f.studio.materialId}/prices`,
-        body: { package_price_minor: 1_000, package_size: 1 },
-      },
-      {
         method: "DELETE",
         label: "location",
         path: (f) => `/api/v1/locations/${f.locationId}`,
-      },
-      {
-        method: "POST",
-        label: "material purchase",
-        path: (f) => `/api/v1/materials/${f.studio.materialId}/purchases`,
-        body: { package_quantity: 1, package_size: 1, unit_package_cost_minor: 1_000 },
-      },
-      {
-        method: "POST",
-        label: "material stock check",
-        path: (f) => `/api/v1/materials/${f.studio.materialId}/stock-checks`,
-        body: { observed_quantity: 1 },
-      },
-      {
-        method: "PUT",
-        label: "add-on recipe",
-        path: (f) => `/api/v1/add-ons/${f.addOnId}/recipe`,
-        body: { items: [] },
       },
       {
         method: "PATCH",
@@ -1267,7 +1140,7 @@ describe("RBAC and tenant isolation", () => {
       expect(dataOf<unknown[]>(await other.get("/api/v1/invitations"))).toHaveLength(0);
       expect(dataOf<unknown[]>(await other.get("/api/v1/imports"))).toHaveLength(0);
 
-      // The other studio has exactly its own canonical service and material.
+      // The other studio has exactly its own canonical service.
       expect(dataOf<{ id: string }[]>(await other.get("/api/v1/services"))).toEqual([
         expect.objectContaining({ id: fixture.otherOrganization.serviceId }),
       ]);

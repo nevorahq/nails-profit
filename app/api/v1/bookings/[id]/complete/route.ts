@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { financialSnapshots, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { toMilliUnits } from "@/domain/units";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "@/lib/booking-http";
@@ -26,15 +25,11 @@ import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
  * to guarantee that is for there to be one code path.
  *
  * What still has to be supplied is what only the appointment itself knows: how
- * long it actually took and how much material was actually used.
+ * long it actually took.
  */
 const completeSchema = z.object({
   completed_at: z.iso.datetime().optional(),
   actual_duration_minutes: z.int().positive().nullable().optional(),
-  consumption: z
-    .array(z.object({ material_id: z.uuid(), actual_quantity: z.number().min(0) }))
-    .max(100)
-    .default([]),
   version: z.int().positive().optional(),
 });
 
@@ -73,8 +68,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const service = lines.find((line) => line.kind === "service");
       if (!service?.serviceId) {
         // The catalogue row is gone. The booking keeps its own name and price,
-        // but a visit needs the recipe and the commission rule behind them, and
-        // guessing which service it used to be would be worse than refusing.
+        // but a visit needs the commission rule behind them, and guessing which
+        // service it used to be would be worse than refusing.
         return { ok: false as const, failure: "service_not_found" as const };
       }
 
@@ -153,10 +148,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         bookingId: existing.id,
         completedAt,
         actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,
-        consumption: parsed.data.consumption.map((entry) => ({
-          materialId: entry.material_id,
-          actualQuantityMilliUnits: toMilliUnits(entry.actual_quantity),
-        })),
         requestId: id,
         completionKey,
         completionFingerprint,
@@ -214,8 +205,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       switch (outcome.failure) {
         case "service_not_found":
         case "missing_commission_rule":
-        case "missing_duration":
-        case "invalid_material_override": {
+        case "missing_duration": {
           const refusal = VISIT_FAILURES[outcome.failure];
           return apiError(refusal.status, refusal.code, refusal.message, id);
         }
@@ -239,8 +229,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             revenue_minor: outcome.snapshot.revenueMinor,
             contribution_margin_minor: outcome.snapshot.contributionMarginMinor,
             profit_per_hour_minor: outcome.snapshot.profitPerHourMinor,
-            material_cost_minor: outcome.snapshot.materialCostMinor,
-            material_usage_source: outcome.snapshot.materialUsageSource,
             incomplete_reasons: outcome.snapshot.incompleteReasons,
           },
         },

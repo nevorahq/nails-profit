@@ -89,10 +89,6 @@ export function parseMoneyMinor(raw: string): number | null {
   return parseScaled(raw, 2);
 }
 
-/** "0,3" ml becomes 300 milli-units. */
-export function parseMilliUnits(raw: string): number | null {
-  return parseScaled(raw, 3);
-}
 
 export function parseIntegerValue(raw: string): number | null {
   const parts = parseNumberParts(raw);

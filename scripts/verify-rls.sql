@@ -85,11 +85,11 @@ $api_roles$;
 -- use of.
 --
 -- The other half of the mistake above, and the half that was actually shipped:
--- `material_template` was created by `postgres` in migration 0034, so the
--- default privileges granted while acting as `nail_profit` never applied and
--- the application got nothing at all. The check above passed — the table was
--- exposed to `anon`, which it caught only after the fact — while every render
--- of /app/materials died with "permission denied for table material_template".
+-- a table created by `postgres` rather than by `nail_profit` never receives the
+-- default privileges granted to the application role, so the application gets
+-- nothing at all. The check above passed — the table was exposed to `anon`,
+-- which it caught only after the fact — while every render of the page that
+-- read it died with "permission denied".
 --
 -- Checked against `current_user` because this script must run as the
 -- application role, so the question it asks is exactly the question the
@@ -120,14 +120,12 @@ VALUES
   ('00000000-0000-4000-8000-000000000002', 'RLS test B', 'studio');
 
 SELECT set_config('app.current_organization_id', '00000000-0000-4000-8000-000000000001', true);
-INSERT INTO material (id, organization_id, name, base_unit)
-VALUES ('00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001', 'Visible material', 'ml');
 INSERT INTO service (id, organization_id, name)
 VALUES ('00000000-0000-4000-8000-000000000021', '00000000-0000-4000-8000-000000000001', '{"ru":"Видимая услуга"}'::jsonb);
 
 SELECT set_config('app.current_organization_id', '00000000-0000-4000-8000-000000000002', true);
-INSERT INTO material (id, organization_id, name, base_unit)
-VALUES ('00000000-0000-4000-8000-000000000012', '00000000-0000-4000-8000-000000000002', 'Hidden material', 'g');
+INSERT INTO service (id, organization_id, name)
+VALUES ('00000000-0000-4000-8000-000000000022', '00000000-0000-4000-8000-000000000002', '{"ru":"Скрытая услуга"}'::jsonb);
 
 SELECT set_config('app.current_organization_id', '00000000-0000-4000-8000-000000000001', true);
 
@@ -137,18 +135,13 @@ DECLARE
   cross_tenant_updates integer;
   leaked integer;
 BEGIN
-  SELECT count(*) INTO visible_count FROM material;
-  IF visible_count <> 1 THEN
-    RAISE EXCEPTION 'RLS failed: expected 1 visible material, got %', visible_count;
-  END IF;
-
   SELECT count(*) INTO visible_count FROM service;
   IF visible_count <> 1 THEN
     RAISE EXCEPTION 'RLS failed: expected 1 visible service, got %', visible_count;
   END IF;
 
-  UPDATE material SET name = 'must not update'
-  WHERE id = '00000000-0000-4000-8000-000000000012';
+  UPDATE service SET name = '{"ru":"не должно обновиться"}'::jsonb
+  WHERE id = '00000000-0000-4000-8000-000000000022';
   GET DIAGNOSTICS cross_tenant_updates = ROW_COUNT;
   IF cross_tenant_updates <> 0 THEN
     RAISE EXCEPTION 'RLS failed: cross-tenant update affected % rows', cross_tenant_updates;
@@ -156,8 +149,8 @@ BEGIN
 
   -- Writing another tenant's id must be refused outright, not silently dropped.
   BEGIN
-    INSERT INTO material (organization_id, name, base_unit)
-    VALUES ('00000000-0000-4000-8000-000000000002', 'Smuggled', 'ml');
+    INSERT INTO service (organization_id, name)
+    VALUES ('00000000-0000-4000-8000-000000000002', '{"ru":"Контрабанда"}'::jsonb);
     RAISE EXCEPTION 'RLS failed: insert into another organization succeeded';
   EXCEPTION
     WHEN insufficient_privilege THEN NULL;
@@ -165,7 +158,7 @@ BEGIN
 
   -- 3. Fail closed: with no tenant context set, nothing is visible at all.
   PERFORM set_config('app.current_organization_id', '', true);
-  SELECT (SELECT count(*) FROM material) + (SELECT count(*) FROM service) INTO leaked;
+  SELECT count(*) INTO leaked FROM service;
   IF leaked <> 0 THEN
     RAISE EXCEPTION 'RLS failed: % rows visible without a tenant context', leaked;
   END IF;

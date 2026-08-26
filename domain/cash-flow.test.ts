@@ -47,14 +47,15 @@ describe("buildCashFlow", () => {
     expect(result.settledMinor).toBe(98_000_00);
   });
 
-  it("counts a purchase of materials, and not their consumption", () => {
-    const result = buildCashFlow(flow({ expenses: [spent("materials", 15_000_00)] }));
+  it("counts wages paid out, without counting the work twice", () => {
+    const result = buildCashFlow(flow({ expenses: [spent("payroll", 15_000_00)] }));
 
-    // In the profit statement this row is `cash_only` and subtracts nothing.
-    // Here it is the whole point: the crate was paid for this month.
-    expect(expenseClassOf.materials).toBe("cash_only");
-    expect(result.spentFromLedgerMinor).toBe(15_000_00);
-    expect(result.netCashMinor).toBe(98_000_00 - 40_000_00 - 15_000_00);
+    // The profit statement holds this row back — the work already reached it
+    // through each visit's commission. Here the payment is the event, but it is
+    // reported on its own line rather than added to the ledger's total.
+    expect(expenseClassOf.payroll).toBe("cash_only");
+    expect(result.ledgerPayrollMinor).toBe(15_000_00);
+    expect(result.spentFromLedgerMinor).toBe(0);
   });
 
   /*

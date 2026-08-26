@@ -33,15 +33,11 @@ describe("Phase 6 product telemetry", () => {
       source: "api",
       entityType: "service",
       entityId: studio.serviceId,
-      metadata: { material_lines: 1 },
     });
     expect(JSON.stringify(events)).not.toMatch(/pilot-telemetry@|Маникюр|Мастер|База/);
   });
 
   test("deduplicates service completion and closes onboarding on a complete visit", async () => {
-    await studio.owner.put(`/api/v1/services/${studio.serviceId}/recipe`, {
-      items: [{ material_id: studio.materialId, quantity: 3.5 }],
-    });
     await studio.owner.post("/api/v1/visits", {
       service_id: studio.serviceId,
       specialist_id: studio.specialistId,

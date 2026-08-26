@@ -27,7 +27,7 @@ export const privacyContent: Record<AppLocale, LegalDocument> = {
         paragraphs: ["Мы минимизируем объём данных и используем только то, что нужно для работы пилота."],
         bullets: [
           "данные аккаунта: имя, email, роли, организация и настройки языка/валюты;",
-          "рабочие данные: мастера, услуги, материалы, цены, рецептуры, визиты и финансовые snapshots;",
+          "рабочие данные: мастера, услуги, цены, визиты и финансовые snapshots;",
           "данные клиентов студии: имя и, если студия их указала, телефон или email;",
           "технические данные: идентификаторы запросов, события безопасности и ошибки без открытых PII в логах.",
         ],
@@ -82,7 +82,7 @@ export const privacyContent: Record<AppLocale, LegalDocument> = {
         paragraphs: ["Colectăm doar datele necesare funcționării pilotului."],
         bullets: [
           "date de cont: nume, email, roluri, organizație, limbă și monedă;",
-          "date operaționale: specialiști, servicii, materiale, prețuri, rețete, vizite și snapshots financiare;",
+          "date operaționale: specialiști, servicii, prețuri, vizite și snapshots financiare;",
           "datele clienților salonului: nume și, dacă sunt furnizate, telefon sau email;",
           "date tehnice: identificatori de cerere, evenimente de securitate și erori fără PII deschise în loguri.",
         ],
@@ -137,7 +137,7 @@ export const privacyContent: Record<AppLocale, LegalDocument> = {
         paragraphs: ["We minimize data and use only what the pilot needs."],
         bullets: [
           "account data: name, email, roles, organization, language and currency settings;",
-          "operational data: specialists, services, materials, prices, recipes, visits and financial snapshots;",
+          "operational data: specialists, services, prices, visits and financial snapshots;",
           "studio client data: name and, when supplied, phone number or email;",
           "technical data: request identifiers, security events and errors without exposed PII in logs.",
         ],

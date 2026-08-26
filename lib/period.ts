@@ -1,13 +1,11 @@
-import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte } from "drizzle-orm";
 
-import { consumptions, expenses, laborCostRules, organizations, ownerDraws } from "@/db/schema";
+import { expenses, laborCostRules, organizations, ownerDraws } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { buildCapacityView, type CapacityView } from "@/domain/capacity";
 import { buildCashFlow, type CashFlow } from "@/domain/cash-flow";
 import { expensesForMonth, type PeriodExpenseRow } from "@/domain/expense-periods";
 import { selectLaborRules } from "@/domain/labor-cost";
-import { starterMaterials } from "@/domain/import-templates";
-import { resolveEffectiveMaterialUsage } from "@/domain/material-usage";
 import { buildPeriodPL, type PeriodPL } from "@/domain/period-pl";
 import type { AppLocale } from "@/i18n/messages";
 import { loadMonthRota } from "@/lib/capacity";
@@ -46,19 +44,6 @@ export type PeriodReport = Readonly<{
   /** Echoed back so the report can name the reserve it just subtracted. */
   withdrawalReserveMinor: number;
   masterBreakdown: readonly MasterPeriodBreakdown[];
-  materialBreakdown: readonly MaterialPeriodBreakdown[];
-}>;
-
-export type MaterialBreakdownCategory =
-  | "nail_materials"
-  | "disposables"
-  | "pedicure"
-  | "sanitation"
-  | "add_ons_art";
-
-export type MaterialPeriodBreakdown = Readonly<{
-  category: MaterialBreakdownCategory;
-  costMinor: number;
 }>;
 
 export type MasterPeriodBreakdown = Readonly<{
@@ -108,19 +93,6 @@ function buildMasterBreakdown(rows: Awaited<ReturnType<typeof loadDashboard>>["r
   return [...grouped.values()].sort((left, right) => right.revenueMinor - left.revenueMinor);
 }
 
-const starterCategoryByName = new Map(
-  starterMaterials.map((material) => [material.name.trim().toLowerCase(), material.category]),
-);
-
-function materialBreakdownCategory(name: string): MaterialBreakdownCategory {
-  const category = starterCategoryByName.get(name.trim().toLowerCase());
-  if (category === "Одноразовые") return "disposables";
-  if (category === "Педикюр") return "pedicure";
-  if (category === "Гигиена") return "sanitation";
-  if (category === "Дизайн") return "add_ons_art";
-  return "nail_materials";
-}
-
 /** `YYYY-MM` → the instants the month opens and closes, in UTC. */
 export function monthBounds(month: string): { from: Date; to: Date } {
   const from = new Date(`${month}-01T00:00:00.000Z`);
@@ -148,49 +120,6 @@ export async function loadPeriodPL(
 ): Promise<PeriodReport> {
   const { from, to } = monthBounds(options.month);
   const dashboard = await loadDashboard(tx, { from, to }, locale);
-  const costedVisitIds = dashboard.rows
-    .filter((row) => row.materialCostMinor !== null)
-    .map((row) => row.visitId);
-  const materialRows =
-    costedVisitIds.length === 0
-      ? []
-      : await tx
-          .select({
-            materialName: consumptions.materialNameSnapshot,
-            materialId: consumptions.materialId,
-            standardQuantity: consumptions.normativeQuantityMilliUnits,
-            actualQuantity: consumptions.actualQuantityMilliUnits,
-            packagePrice: consumptions.packagePriceMinorSnapshot,
-            packageSize: consumptions.packageSizeMilliUnitsSnapshot,
-          })
-          .from(consumptions)
-          .where(inArray(consumptions.visitId, costedVisitIds));
-  const materialTotals = new Map<MaterialBreakdownCategory, number>();
-  for (const row of materialRows) {
-    const cost = resolveEffectiveMaterialUsage([
-      {
-        materialId: row.materialId,
-        standardQuantityMilliUnits: row.standardQuantity,
-        actualQuantityMilliUnits: row.actualQuantity,
-        packagePriceMinor: row.packagePrice,
-        packageSizeMilliUnits: row.packageSize,
-      },
-    ]).effectiveTotalMinor;
-    if (cost === null) continue;
-    const category = materialBreakdownCategory(row.materialName);
-    materialTotals.set(category, (materialTotals.get(category) ?? 0) + cost);
-  }
-  const materialBreakdown: MaterialPeriodBreakdown[] = [
-    "nail_materials",
-    "disposables",
-    "pedicure",
-    "sanitation",
-    "add_ons_art",
-  ].map((category) => ({
-    category: category as MaterialBreakdownCategory,
-    costMinor: materialTotals.get(category as MaterialBreakdownCategory) ?? 0,
-  }));
-
   /*
    * The whole live ledger, not the month's rows.
    *
@@ -327,6 +256,5 @@ export async function loadPeriodPL(
     excludedRows: rows.length - inCurrency.length,
     withdrawalReserveMinor: organization?.withdrawalReserveMinor ?? 0,
     masterBreakdown: buildMasterBreakdown(dashboard.rows),
-    materialBreakdown,
   };
 }

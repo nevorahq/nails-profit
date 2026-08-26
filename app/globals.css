@@ -488,7 +488,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 
 
-/* --- Phase 2: catalogue, recipe editor and the financial insight panel --- */
+/* --- Phase 2: catalogue and the financial insight panel --- */
 
 .tab-nav { display: flex; gap: 18rem; align-items: center; max-width: 100%; overflow-x: auto; padding: 4rem 4rem 20rem; scrollbar-width: thin; }
 .tab-nav a { color: var(--muted); font-size: 14rem; text-decoration: none; font-weight: 600; padding: 8rem 0; transition: transform var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
@@ -507,15 +507,15 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .btn-icon { display: inline-flex; align-items: center; }
 .btn-label { display: none; }
 
-/* Add-material form toggle: button shown only on mobile, hidden on desktop. */
+/* Add-form toggle: button shown only on mobile, hidden on desktop. */
 .add-form-toggle { display: none; margin-top: 40rem; margin-bottom: 18rem; }
 
 .panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; padding: 28rem 26rem; margin: 26rem 0; box-shadow: var(--shadow); }
 .panel h2 { font-size: 26rem; margin: 0 0 22rem; }
 
 /*
- * The «Добавить …» compose panels on /clients, /services, /materials,
- * /specialists and /add-ons. One header control opens each — the round
+ * The «Добавить …» compose panels on /clients, /services, /specialists
+ * and /add-ons. One header control opens each — the round
  * phone button or the desktop pill — and that is the only place the action
  * is offered: unlike `.add-form-toggle`'s mobile-only forms, these have
  * nothing else on the page to open them, so there is nothing to keep in
@@ -559,15 +559,6 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .data-table tfoot strong { color: var(--ink); font-size: 16rem; letter-spacing: normal; }
 .data-table input { width: 110rem; padding: 8rem 10rem; border-radius: 10rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
 .data-table a { color: var(--accent); font-size: 14rem; font-weight: 600; }
-
-.materials-table .material-actions { min-width: 270rem; white-space: normal; }
-.materials-table .material-actions .inline-action:first-child { margin-left: 0; }
-.material-editor-row td { background: var(--leaf-100); }
-.material-editor-row .inline-form { margin: 0; }
-.material-editor-row .muted { margin: 8rem 0 0; }
-.material-history-row td { padding-top: 4rem; color: var(--muted); }
-.material-history-row summary { width: fit-content; cursor: pointer; color: var(--accent); font-weight: 600; }
-.material-price-history { margin: 10rem 0 4rem; }
 
 .inline-form label.name-combobox {
   position: relative;
@@ -1137,7 +1128,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .app-frame .empty-state { box-shadow: var(--neu-raised); }
 
-/* A table that is not inside a panel — the material, service and client lists
+/* A table that is not inside a panel — the service and client lists
    are laid out that way — needs a surface of its own. On a flat design its own
    row rules were enough to hold it together; extruded surfaces around it leave
    it looking like it fell out of one. */
@@ -1368,7 +1359,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .public-booking-summary div { display: grid; gap: 2rem; }
   .booking-manage-facts div { grid-template-columns: 1fr; gap: 4rem; }
 
-  /* Mobile add-material toggle */
+  /* Mobile add-form toggle */
   .add-form-toggle { display: block; }
   .add-form-wrap {
     display: grid;
@@ -2402,8 +2393,6 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .app-shell:has(#add-client:not(.is-closed)) .header-action .icon-minus { display: block; }
   .app-shell:has(#add-service:not(.is-closed)) .header-action .icon-plus { display: none; }
   .app-shell:has(#add-service:not(.is-closed)) .header-action .icon-minus { display: block; }
-  .app-shell:has(#add-material:not(.is-closed)) .header-action .icon-plus { display: none; }
-  .app-shell:has(#add-material:not(.is-closed)) .header-action .icon-minus { display: block; }
   .app-shell:has(#add-specialist:not(.is-closed)) .header-action .icon-plus { display: none; }
   .app-shell:has(#add-specialist:not(.is-closed)) .header-action .icon-minus { display: block; }
   .app-shell:has(#add-addon:not(.is-closed)) .header-action .icon-plus { display: none; }

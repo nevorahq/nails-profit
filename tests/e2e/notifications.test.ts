@@ -137,7 +137,6 @@ describe("transactional notifications", () => {
     const created = await book();
     const completed = await owner.post(`/api/v1/bookings/${created.id}/complete`, {
       version: created.version,
-      consumption: [],
     });
     expect(completed.status).toBe(201);
 
@@ -146,7 +145,7 @@ describe("transactional notifications", () => {
 
   test("a retried booking completion replays one visit and one snapshot", async () => {
     const created = await book();
-    const payload = { version: created.version, consumption: [] };
+    const payload = { version: created.version };
     const headers = { "idempotency-key": `complete-${created.id}` };
 
     const first = await owner.post(`/api/v1/bookings/${created.id}/complete`, payload, headers);

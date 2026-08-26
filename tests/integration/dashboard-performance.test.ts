@@ -79,12 +79,10 @@ describe("dashboard performance at pilot volume", () => {
         formulaVersion: "1.0.0",
         currency: "MDL" as const,
         revenueMinor: 60_000,
-        materialCostMinor: 3_500,
-        normativeMaterialCostMinor: 3_500,
         commissionMinor: 24_000,
-        contributionMarginMinor: 32_500,
-        marginBasisPoints: 5_417,
-        profitPerHourMinor: 21_667,
+        contributionMarginMinor: 36_000,
+        marginBasisPoints: 6_000,
+        profitPerHourMinor: 24_000,
         durationMinutes: 90,
       };
 
@@ -116,7 +114,7 @@ describe("dashboard performance at pilot volume", () => {
     expect(metrics.visits).toBe(VISITS);
     // Only the newest version counts: 200 corrected visits at 325.00 plus 1 800
     // uncorrected at the same figure — the older 300.00 versions must not show.
-    expect(metrics.contributionMarginMinor).toBe(VISITS * 32_500);
+    expect(metrics.contributionMarginMinor).toBe(VISITS * 36_000);
 
     console.log(`dashboard over ${VISITS} visits: ${elapsed.toFixed(0)} ms`);
     expect(elapsed).toBeLessThan(BUDGET_MS);

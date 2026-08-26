@@ -21,8 +21,6 @@
     "db:migrate:down": "node scripts/migrate-down.mjs",
     "db:migrate:test": "drizzle-kit migrate --config drizzle.test.config.ts",
     "db:migrate:down:test": "node scripts/migrate-down.mjs --test",
-    "db:seed:templates": "node scripts/seed-material-templates.mjs",
-    "db:seed:templates:test": "node scripts/seed-material-templates.mjs --test",
     "icon": "node scripts/make-icon.mjs",
     "db:verify-rls": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/verify-rls.sql",
     "db:studio": "drizzle-kit studio",

@@ -4,18 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-import type { MaterialRow } from "@/lib/materials";
-import { MaterialPresetPicker } from "@/components/material-preset-picker";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { roundRatio } from "@/domain/money";
-import {
-  formatBasisPoints,
-  formatDuration,
-  formatMoneyMinor,
-  formatQuantity,
-} from "@/lib/format";
+import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 
 export type ServiceDetailData = {
   id: string;
@@ -23,13 +16,6 @@ export type ServiceDetailData = {
   price_minor: number | null;
   duration_minutes: number | null;
   currency: string | null;
-  recipe: {
-    material_id: string;
-    material_name: string;
-    base_unit: string;
-    quantity_milli_units: number;
-    cost_minor: number | null;
-  }[];
   costing:
     | {
         status: "complete";
@@ -38,13 +24,12 @@ export type ServiceDetailData = {
         price_minor: number;
         /** With the previewed add-ons, so the formula shown matches the figures. */
         duration_minutes: number;
-        material_cost_minor: number;
         commission_minor: number;
         contribution_margin_minor: number;
         margin_basis_points: number | null;
         profit_per_hour_minor: number;
       }
-    | { status: "incomplete"; reasons: string[]; unpriced_material_ids: string[] };
+    | { status: "incomplete"; reasons: string[] };
 };
 
 /**
@@ -70,7 +55,6 @@ export type ServiceAddOn = {
 
 export function ServiceDetail({
   service,
-  materials,
   displayName,
   addOns,
   linkedAddOnIds,
@@ -79,7 +63,6 @@ export function ServiceDetail({
   locale,
 }: {
   service: ServiceDetailData;
-  materials: MaterialRow[];
   displayName: string;
   addOns: ServiceAddOn[];
   linkedAddOnIds: string[];
@@ -172,27 +155,6 @@ export function ServiceDetail({
     router.push(`/app/services/${service.id}${query}`);
   }
 
-  async function saveRecipe(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    const data = new FormData(event.currentTarget);
-
-    const items = materials
-      .map((material) => ({
-        material_id: material.id,
-        quantity: Number(String(data.get(`qty-${material.id}`) ?? "").trim()),
-      }))
-      .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
-
-    const response = await fetch(`/api/v1/services/${service.id}/recipe`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items }),
-    });
-    await finish(response);
-  }
-
   async function finish(response: Response) {
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
@@ -203,8 +165,6 @@ export function ServiceDetail({
     setPending(false);
     router.refresh();
   }
-
-  const quantities = new Map(service.recipe.map((line) => [line.material_id, line.quantity_milli_units]));
 
   return (
     <main className="app-shell">
@@ -246,78 +206,6 @@ export function ServiceDetail({
             {t("common.save")}
           </button>
         </form>
-      </section>
-
-      <section className="panel">
-        <h2>{t("services.recipe")}</h2>
-        {materials.length === 0 ? (
-          <p className="muted">
-            {t("services.materialsFirst", { catalogue: t("services.catalogue") })}
-          </p>
-        ) : (
-          <form onSubmit={saveRecipe}>
-            <MaterialPresetPicker target="service" materials={materials} locale={locale} />
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{t("common.material")}</th>
-                  <th>{t("services.norm")}</th>
-                  <th>{t("services.cost")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {materials.map((material) => {
-                  const line = service.recipe.find((item) => item.material_id === material.id);
-                  const pricedPerService =
-                    material.current_price !== null &&
-                    material.current_price.costing_mode !== "quantity";
-                  return (
-                    <tr key={material.id}>
-                      <td>
-                        {material.name}
-                        {material.current_price === null && (
-                          <span className="badge-warning">{t("common.noPrice")}</span>
-                        )}
-                      </td>
-                      <td>
-                        <input
-                          // The visible label is the row: a screen reader reads cells
-                          // in isolation, so the name travels on the control.
-                          aria-label={`${t("services.norm")} — ${material.name}`}
-                          name={`qty-${material.id}`}
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          defaultValue={
-                            quantities.has(material.id)
-                              ? quantities.get(material.id)! / 1000
-                              : pricedPerService
-                                ? 1
-                                : ""
-                          }
-                        />
-                        <span className="unit-hint">
-                          {pricedPerService ? t("materials.service") : material.base_unit}
-                        </span>
-                      </td>
-                      <td>
-                        {line?.cost_minor != null
-                          ? formatMoneyMinor(line.cost_minor, service.currency ?? "MDL")
-                          : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("services.saveRecipe")}
-            </button>
-            <p className="muted">
-              {t("services.recipeVersionNote")}
-            </p>
-          </form>
-        )}
       </section>
 
       {addOns.length > 0 && (
@@ -372,14 +260,6 @@ export function ServiceDetail({
                 <li key={reason}>{t(`reason.${reason}` as MessageKey)}</li>
               ))}
             </ul>
-            {service.costing.unpriced_material_ids.length > 0 && (
-              <p>
-                {t("services.withoutPrice")}{" "}
-                {service.costing.unpriced_material_ids
-                  .map((id) => materials.find((m) => m.id === id)?.name ?? id)
-                  .join(", ")}
-              </p>
-            )}
           </div>
         ) : (
           <>
@@ -414,7 +294,6 @@ export function ServiceDetail({
             )}
             <div className="metric-grid">
               <Metric label={t("services.servicePrice")} value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
-              <Metric label={t("services.materials")} value={`− ${formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)}`} />
               <Metric label={t("services.commission")} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
               {fixedShareMinor !== null && (
                 <Metric
@@ -465,7 +344,6 @@ export function ServiceDetail({
               <summary>{t("services.howCounted")}</summary>
               <p>
                 {formatMoneyMinor(service.costing.price_minor, service.costing.currency)} −{" "}
-                {formatMoneyMinor(service.costing.material_cost_minor, service.costing.currency)} ({t("services.materialsWord")}) −{" "}
                 {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t("services.commissionWord")}) ={" "}
                 {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
               </p>
@@ -487,16 +365,6 @@ export function ServiceDetail({
                     duration would not divide the figure printed beside it. */}
                 {formatDuration(service.costing.duration_minutes)} × 60 {t("common.minutes")}
               </p>
-              <ul>
-                {service.recipe.map((line) => (
-                  <li key={line.material_id}>
-                    {line.material_name}: {formatQuantity(line.quantity_milli_units, line.base_unit)} ={" "}
-                    {line.cost_minor === null
-                      ? t("services.priceUnknown")
-                      : formatMoneyMinor(line.cost_minor, service.costing.status === "complete" ? service.costing.currency : "MDL")}
-                  </li>
-                ))}
-              </ul>
               <p className="muted">
                 {t("services.formulaVersion", { version: service.costing.formula_version })}
               </p>

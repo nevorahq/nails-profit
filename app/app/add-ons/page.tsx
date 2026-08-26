@@ -1,12 +1,11 @@
-import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
+import { asc, isNull } from "drizzle-orm";
 
 import { ToolIcon } from "@/components/icons";
-import { addOns, materials, recipeItems, recipes } from "@/db/schema";
+import { addOns } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { AddOnCatalogue, type AddOnRow } from "@/components/add-on-catalogue";
 import { resolveLocalizedText } from "@/i18n/localized-text";
-import { loadMaterials } from "@/lib/materials";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -29,46 +28,14 @@ export default async function AddOnsPage() {
       .where(isNull(addOns.archivedAt))
       .orderBy(asc(addOns.createdAt));
 
-    return Promise.all(
-      catalogue.map(async (addOn) => {
-        const [recipe] = await tx
-          .select({ id: recipes.id })
-          .from(recipes)
-          .where(and(eq(recipes.addOnId, addOn.id), lte(recipes.activeFrom, new Date())))
-          .orderBy(desc(recipes.activeFrom), desc(recipes.recipeVersion))
-          .limit(1);
-
-        const lines = recipe
-          ? await tx
-              .select({
-                materialId: recipeItems.materialId,
-                quantity: recipeItems.normativeQuantityMilliUnits,
-                materialName: materials.name,
-                baseUnit: materials.baseUnit,
-              })
-              .from(recipeItems)
-              .innerJoin(materials, eq(recipeItems.materialId, materials.id))
-              .where(eq(recipeItems.recipeId, recipe.id))
-              .orderBy(materials.name)
-          : [];
-
-        return {
-          id: addOn.id,
-          displayName: resolveLocalizedText(addOn.name, locale, locale) ?? t("common.unnamed"),
-          price_delta_minor: addOn.priceDeltaMinor,
-          duration_delta_minutes: addOn.durationDeltaMinutes,
-          recipe: lines.map((line) => ({
-            material_id: line.materialId,
-            material_name: line.materialName,
-            base_unit: line.baseUnit,
-            quantity_milli_units: line.quantity,
-          })),
-        };
-      }),
-    );
+    return catalogue.map((addOn) => ({
+      id: addOn.id,
+      displayName: resolveLocalizedText(addOn.name, locale, locale) ?? t("common.unnamed"),
+      price_delta_minor: addOn.priceDeltaMinor,
+      duration_delta_minutes: addOn.durationDeltaMinutes,
+    }));
   });
 
-  const materialRows = await loadMaterials(membership.organizationId);
   const canManage = canManageCatalogue(membership.role, "services");
 
   return (
@@ -104,7 +71,6 @@ export default async function AddOnsPage() {
       </header>
       <AddOnCatalogue
         addOns={rows}
-        materials={materialRows}
         currency={currency}
         locale={locale}
         canManage={canManage}

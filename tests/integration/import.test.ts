@@ -1,22 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq, isNull } from "drizzle-orm";
 
-import {
-  clients,
-  commissionRules,
-  externalReferences,
-  materialPriceVersions,
-  materials,
-  services,
-  specialists,
-} from "@/db/schema";
+import { clients, commissionRules, externalReferences, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { parseCsv } from "@/domain/csv";
 import { buildPreview, suggestMapping } from "@/domain/import-mapping";
 import { importTemplates, type ImportableEntity } from "@/domain/import-templates";
 import { applyImport } from "@/lib/import-service";
 import { resetDatabase } from "../helpers/database";
-import { createMaterial, createOrganization, createUser } from "../helpers/factories";
+import { createOrganization, createService, createUser } from "../helpers/factories";
 
 /**
  * Gate 4: "повторный импорт не создаёт дубли". Checked against real rows,
@@ -49,95 +41,56 @@ describe("CSV import", () => {
     });
   }
 
-  const MATERIALS = [
-    "Название;Единица;Объём;Цена упаковки",
-    "Гель-лак;ml;10;240",
-    "Топ;ml;15;300",
+  const SERVICES = [
+    "Название;Цена;Длительность",
+    "Маникюр;600;90",
+    "Педикюр;700;120",
   ].join("\n");
 
-  describe("materials", () => {
-    it("creates the catalogue and its prices", async () => {
-      const { outcome } = await importCsv("material", MATERIALS);
+  describe("identity", () => {
+    it("creates the catalogue", async () => {
+      const { outcome } = await importCsv("service", SERVICES);
 
       expect(outcome).toMatchObject({ created: 2, updated: 0, failed: 0 });
 
       const rows = await withTenant(organizationId, (tx) =>
-        tx.select().from(materials).where(isNull(materials.archivedAt)),
+        tx.select().from(services).where(isNull(services.archivedAt)),
       );
       expect(rows).toHaveLength(2);
-
-      const prices = await withTenant(organizationId, (tx) =>
-        tx.select().from(materialPriceVersions),
-      );
-      expect(prices).toHaveLength(2);
-      // 240 MDL for 10 ml, held as the package pair rather than a rounded
-      // per-unit price.
-      expect(prices.map((price) => price.packagePriceMinor).sort()).toEqual([24_000, 30_000]);
+      expect(rows.map((row) => row.priceMinor).sort()).toEqual([60_000, 70_000]);
     });
 
     it("does not duplicate anything on a second import of the same file", async () => {
-      await importCsv("material", MATERIALS);
-      const second = await importCsv("material", MATERIALS);
+      await importCsv("service", SERVICES);
+      const second = await importCsv("service", SERVICES);
 
       expect(second.outcome).toMatchObject({ created: 0, updated: 2 });
 
-      const rows = await withTenant(organizationId, (tx) => tx.select().from(materials));
+      const rows = await withTenant(organizationId, (tx) => tx.select().from(services));
       expect(rows).toHaveLength(2);
     });
 
-    it("does not append a price version when the price has not moved", async () => {
-      // Otherwise a weekly re-import fills the price history with versions that
-      // say nothing changed, and the history is what stops a closed visit from
-      // being restated.
-      await importCsv("material", MATERIALS);
-      await importCsv("material", MATERIALS);
-
-      const prices = await withTenant(organizationId, (tx) =>
-        tx.select().from(materialPriceVersions),
-      );
-      expect(prices).toHaveLength(2);
-    });
-
-    it("appends exactly one price version when the price does move", async () => {
-      await importCsv("material", MATERIALS);
-      await importCsv(
-        "material",
-        "Название;Единица;Объём;Цена упаковки\nГель-лак;ml;10;280\nТоп;ml;15;300\n",
-      );
-
-      const prices = await withTenant(organizationId, (tx) =>
-        tx.select().from(materialPriceVersions),
-      );
-      expect(prices).toHaveLength(3);
-    });
-
-    it("links to a material the owner had already typed by hand", async () => {
+    it("links to a service the owner had already typed by hand", async () => {
       // The first import of a price list must not duplicate the catalogue the
       // owner built before they discovered import existed.
-      await createMaterial(organizationId, { name: "Гель-лак", createdBy: userId });
+      await createService(organizationId, { name: "Маникюр" });
 
-      const { outcome } = await importCsv("material", MATERIALS);
+      const { outcome } = await importCsv("service", SERVICES);
 
       expect(outcome).toMatchObject({ created: 1, updated: 1 });
-      const rows = await withTenant(organizationId, (tx) => tx.select().from(materials));
+      const rows = await withTenant(organizationId, (tx) => tx.select().from(services));
       expect(rows).toHaveLength(2);
     });
 
-    it("matches a hand-created material whatever its capitalization", async () => {
-      await createMaterial(organizationId, { name: "ГЕЛЬ-ЛАК", createdBy: userId });
-      const { outcome } = await importCsv(
-        "material",
-        "Название;Единица;Объём;Цена упаковки\nгель-лак;ml;10;240\n",
-      );
+    it("matches a hand-created service whatever its capitalization", async () => {
+      await createService(organizationId, { name: "МАНИКЮР" });
+      const { outcome } = await importCsv("service", "Название;Цена\nманикюр;600\n");
 
       expect(outcome).toMatchObject({ created: 0, updated: 1 });
     });
 
     it("records how each row was identified", async () => {
-      await importCsv(
-        "material",
-        "ID;Название;Единица;Объём;Цена упаковки\nSKU-1;Гель;ml;10;240\n;Топ;ml;15;300\n",
-      );
+      await importCsv("service", "ID;Название;Цена\nSRV-1;Маникюр;600\n;Педикюр;700\n");
 
       const references = await withTenant(organizationId, (tx) =>
         tx.select().from(externalReferences),
@@ -151,35 +104,30 @@ describe("CSV import", () => {
     });
 
     it("follows the external id when the name changes", async () => {
-      // A renamed material is the case only the external id survives — the
+      // A renamed row is the case only the external id survives — the
       // fingerprint is derived from the name and would create a second row.
-      await importCsv("material", "ID;Название;Единица;Объём;Цена упаковки\nSKU-1;Гель;ml;10;240\n");
-      const { outcome } = await importCsv(
-        "material",
-        "ID;Название;Единица;Объём;Цена упаковки\nSKU-1;Гель-лак премиум;ml;10;240\n",
-      );
+      await importCsv("service", "ID;Название;Цена\nSRV-1;Маникюр;600\n");
+      const { outcome } = await importCsv("service", "ID;Название;Цена\nSRV-1;Маникюр премиум;600\n");
 
       expect(outcome).toMatchObject({ created: 0, updated: 1 });
-      const rows = await withTenant(organizationId, (tx) => tx.select().from(materials));
+      const rows = await withTenant(organizationId, (tx) => tx.select().from(services));
       expect(rows).toHaveLength(1);
-      expect(rows[0].name).toBe("Гель-лак премиум");
+      expect(rows[0].name).toEqual({ ru: "Маникюр премиум" });
     });
 
     it("writes the good rows and reports the broken one", async () => {
       const { preview, outcome } = await importCsv(
-        "material",
-        [
-          "Название;Единица;Объём;Цена упаковки",
-          "Гель;ml;10;240",
-          "Топ;литр;10;по запросу",
-          "База;ml;10;200",
-        ].join("\n"),
+        "service",
+        ["Название;Цена", "Маникюр;600", "Педикюр;по запросу", "Наращивание;900"].join("\n"),
       );
 
       expect(outcome.created).toBe(2);
       expect(preview.failed).toHaveLength(1);
-      const rows = await withTenant(organizationId, (tx) => tx.select().from(materials));
-      expect(rows.map((row) => row.name).sort()).toEqual(["База", "Гель"]);
+      const rows = await withTenant(organizationId, (tx) => tx.select().from(services));
+      expect(rows.map((row) => (row.name as { ru: string }).ru).sort()).toEqual([
+        "Маникюр",
+        "Наращивание",
+      ]);
     });
   });
 
@@ -312,14 +260,14 @@ describe("CSV import", () => {
 
   it("never reaches another organization's rows", async () => {
     const other = await createOrganization({ name: "Other" });
-    await createMaterial(other.id, { name: "Гель-лак" });
+    await createService(other.id, { name: "Маникюр" });
 
-    const { outcome } = await importCsv("material", MATERIALS);
+    const { outcome } = await importCsv("service", SERVICES);
 
-    // The other organization's material must not be found and updated.
+    // The other organization's service must not be found and updated.
     expect(outcome.created).toBe(2);
 
-    const theirs = await withTenant(other.id, (tx) => tx.select().from(materials));
+    const theirs = await withTenant(other.id, (tx) => tx.select().from(services));
     expect(theirs).toHaveLength(1);
 
     const references = await withTenant(other.id, (tx) =>

@@ -16,23 +16,23 @@ const VALID_ROWS = 1_000;
 const INVALID_ROWS = 20;
 
 function buildCsv() {
-  const lines = ["Наименование;Единица;Объём упаковки;Цена закупки"];
+  const lines = ["Наименование;Цена;Длительность"];
 
   for (let index = 1; index <= VALID_ROWS; index += 1) {
-    lines.push(`Материал ${index};ml;10;240,55`);
+    lines.push(`Услуга ${index};240,55;90`);
   }
 
-  // Broken the way a real file is broken: a unit nobody's importer knows.
+  // Broken the way a real file is broken: a price nobody's importer can read.
   for (let index = 1; index <= INVALID_ROWS; index += 1) {
-    lines.push(`Битый ${index};литр;10;240,55`);
+    lines.push(`Битая ${index};по запросу;90`);
   }
 
   return lines.join("\r\n");
 }
 
-function upload(csv: string, fileName = "materials.csv") {
+function upload(csv: string, fileName = "services.csv") {
   const form = new FormData();
-  form.set("entity", "material");
+  form.set("entity", "service");
   form.set("file", new File([csv], fileName, { type: "text/csv" }));
   return form;
 }
@@ -67,7 +67,7 @@ describe("scenario D: import", () => {
 
     // Every required column was recognised from its Russian header, so the
     // owner confirms without touching the mapping.
-    expect(job.mapping).toMatchObject({ name: 0, base_unit: 1, package_size: 2, package_price: 3 });
+    expect(job.mapping).toMatchObject({ name: 0, price: 1, duration: 2 });
 
     const confirmed = dataOf<ConfirmResponse>(await owner.post(`/api/v1/imports/${job.id}/confirm`));
 
@@ -79,9 +79,9 @@ describe("scenario D: import", () => {
 
     expect(confirmed.issues).toHaveLength(INVALID_ROWS);
     for (const issue of confirmed.issues) {
-      expect(issue.field).toBe("base_unit");
+      expect(issue.field).toBe("price");
       expect(issue.code).toBeTruthy();
-      expect(issue.value).toBe("литр");
+      expect(issue.value).toBe("по запросу");
     }
 
     // Line numbers point into the file as Excel shows it: the header is line 1,
@@ -90,12 +90,12 @@ describe("scenario D: import", () => {
     expect(lines[0]).toBe(VALID_ROWS + 2);
     expect(lines.at(-1)).toBe(VALID_ROWS + INVALID_ROWS + 1);
 
-    const materials = dataOf<{ id: string; current_price: { package_price_minor: number } | null }[]>(
-      await owner.get("/api/v1/materials"),
+    const services = dataOf<{ id: string; price_minor: number | null }[]>(
+      await owner.get("/api/v1/services"),
     );
-    expect(materials).toHaveLength(VALID_ROWS);
+    expect(services).toHaveLength(VALID_ROWS);
     // "240,55" is a comma-decimal price read through strings, not parseFloat.
-    expect(materials[0].current_price?.package_price_minor).toBe(24_055);
+    expect(services[0].price_minor).toBe(24_055);
   });
 
   test("the same file again updates rather than duplicates", async () => {
@@ -104,8 +104,8 @@ describe("scenario D: import", () => {
 
     expect(confirmed.result).toMatchObject({ created: 0, updated: VALID_ROWS, failed: INVALID_ROWS });
 
-    const materials = dataOf<unknown[]>(await owner.get("/api/v1/materials"));
-    expect(materials).toHaveLength(VALID_ROWS);
+    const services = dataOf<unknown[]>(await owner.get("/api/v1/services"));
+    expect(services).toHaveLength(VALID_ROWS);
   });
 
   test("a confirmed job cannot be applied twice", async () => {
@@ -116,7 +116,7 @@ describe("scenario D: import", () => {
     const again = await owner.post(`/api/v1/imports/${job.id}/confirm`);
     expect(again.status).toBe(409);
 
-    const materials = dataOf<unknown[]>(await owner.get("/api/v1/materials"));
-    expect(materials).toHaveLength(VALID_ROWS);
+    const services = dataOf<unknown[]>(await owner.get("/api/v1/services"));
+    expect(services).toHaveLength(VALID_ROWS);
   });
 });

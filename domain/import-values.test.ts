@@ -5,7 +5,6 @@ import {
   parseDurationMinutes,
   parseIntegerValue,
   parseLocalDate,
-  parseMilliUnits,
   parseMoneyMinor,
   parseNumberParts,
   parsePercentBasisPoints,
@@ -60,14 +59,6 @@ describe("parseNumberParts", () => {
 
   it("reads a value written with no integer part", () => {
     expect(parseNumberParts(",5")).toEqual({ negative: false, integer: "0", fraction: "5" });
-  });
-});
-
-describe("parseMilliUnits", () => {
-  it("keeps three decimal places", () => {
-    expect(parseMilliUnits("0,3")).toBe(300);
-    expect(parseMilliUnits("2")).toBe(2_000);
-    expect(parseMilliUnits("0,0005")).toBe(1);
   });
 });
 

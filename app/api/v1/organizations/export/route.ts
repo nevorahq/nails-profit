@@ -7,15 +7,12 @@ import {
   clients,
   commissionRuleServices,
   commissionRules,
-  consumptions,
   expenses,
   externalReferences,
   financialSnapshots,
   importJobs,
   invitations,
   laborCostRules,
-  materialPriceVersions,
-  materials,
   memberships,
   organizations,
   ownerDraws,
@@ -24,8 +21,6 @@ import {
   pilotInteractions,
   pilotIssues,
   pilotProductEvents,
-  recipeItems,
-  recipes,
   serviceAddOns,
   serviceCategories,
   services,
@@ -43,13 +38,18 @@ import { apiError, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
 /**
+ * 4: materials, their price versions, recipes, recipe items and consumptions
+ * left the payload with the material engine itself. The first bump that takes
+ * something away rather than adding it, so a consumer written for 3 will find
+ * five keys missing — which is exactly what the version is for.
+ *
  * 3: the labour rules joined the payload.
  *
  * 2: the expense ledger joined the payload. A consumer written for version 1
  * still reads every field it knew, so the bump is a signal that more arrived,
  * not that anything moved.
  */
-export const EXPORT_FORMAT_VERSION = 3;
+export const EXPORT_FORMAT_VERSION = 4;
 
 /**
  * Owner-requested export of everything the organization owns, spec section 4.3.
@@ -103,11 +103,6 @@ export async function GET(request: Request) {
       .from(invitations)
       .orderBy(asc(invitations.createdAt));
 
-    const materialRows = await tx.select().from(materials).orderBy(asc(materials.createdAt));
-    const priceRows = await tx
-      .select()
-      .from(materialPriceVersions)
-      .orderBy(asc(materialPriceVersions.validFrom));
     const serviceRows = await tx.select().from(services).orderBy(asc(services.createdAt));
     const serviceCategoryRows = await tx
       .select()
@@ -127,12 +122,9 @@ export async function GET(request: Request) {
       .select()
       .from(commissionRuleServices)
       .orderBy(asc(commissionRuleServices.createdAt));
-    const recipeRows = await tx.select().from(recipes).orderBy(asc(recipes.createdAt));
-    const recipeItemRows = await tx.select().from(recipeItems).orderBy(asc(recipeItems.createdAt));
     const clientRows = await tx.select().from(clients).orderBy(asc(clients.createdAt));
     const visitRows = await tx.select().from(visits).orderBy(asc(visits.createdAt));
     const visitLineRows = await tx.select().from(visitLines).orderBy(asc(visitLines.createdAt));
-    const consumptionRows = await tx.select().from(consumptions).orderBy(asc(consumptions.createdAt));
     const financialSnapshotRows = await tx
       .select()
       .from(financialSnapshots)
@@ -176,7 +168,6 @@ export async function GET(request: Request) {
       entityId: actor.organizationId,
       after: {
         members: members.length,
-        materials: materialRows.length,
         services: serviceRows.length,
         clients: clientRows.length,
         visits: visitRows.length,
@@ -195,8 +186,6 @@ export async function GET(request: Request) {
         ...row,
         status: effectiveInvitationStatus(row.status, row.expiresAt),
       })),
-      materials: materialRows,
-      material_price_versions: priceRows,
       service_categories: serviceCategoryRows,
       services: serviceRows,
       add_ons: addOnRows,
@@ -204,12 +193,9 @@ export async function GET(request: Request) {
       specialists: specialistRows,
       commission_rules: commissionRuleRows,
       commission_rule_services: commissionRuleServiceRows,
-      recipes: recipeRows,
-      recipe_items: recipeItemRows,
       clients: clientRows,
       visits: visitRows,
       visit_lines: visitLineRows,
-      consumptions: consumptionRows,
       financial_snapshots: financialSnapshotRows,
       expenses: expenseRows,
       labor_cost_rules: laborCostRows,

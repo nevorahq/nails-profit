@@ -1,12 +1,8 @@
-import { and, count, eq, exists, gt, isNotNull, isNull, lte, max, notExists, or, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, isNotNull, isNull, lte, notExists, or, sql } from "drizzle-orm";
 
 import {
   commissionRuleServices,
   commissionRules,
-  materialPriceVersions,
-  materials,
-  recipeItems,
-  recipes,
   services,
   specialists,
   visits,
@@ -18,15 +14,22 @@ import type { TenantTransaction } from "@/db/tenant";
  *
  * Each step is the thing that has to be true before the next one can produce a
  * number, which is why the order is fixed and why a step is measured rather
- * than ticked off: a specialist without a commission rule, or a material
- * without a price, leaves the costing engine unable to answer — and the owner
- * staring at "не хватает данных" with no idea which piece is missing.
+ * than ticked off: a specialist without a commission rule leaves the costing
+ * engine unable to answer — and the owner staring at "не хватает данных" with
+ * no idea which piece is missing.
  *
- * The steps therefore check for the *usable* thing, not the row. A material
- * with no price version does not count as a material here.
+ * The steps therefore check for the *usable* thing, not the row. A service with
+ * no price does not count as a service here.
+ *
+ * Three steps, not five. Materials with a purchase price and a recipe per
+ * service used to sit at positions two and four, and between them they were
+ * most of the work before a studio saw its first number — a catalogue to type
+ * in before the product would answer anything. They were removed with the
+ * material engine: the entry cost was buying more than the per-visit precision
+ * was worth.
  */
 export type OnboardingStep = Readonly<{
-  key: "specialist" | "materials" | "service" | "recipe" | "visit";
+  key: "specialist" | "service" | "visit";
   done: boolean;
   href: string;
 }>;
@@ -111,12 +114,6 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
     )
     .where(isNull(specialists.archivedAt));
 
-  const [pricedMaterials] = await tx
-    .select({ value: count() })
-    .from(materials)
-    .innerJoin(materialPriceVersions, eq(materialPriceVersions.materialId, materials.id))
-    .where(isNull(materials.archivedAt));
-
   const [usableServices] = await tx
     .select({ value: count() })
     .from(services)
@@ -127,48 +124,6 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
         isNotNull(services.durationMinutes),
       ),
     );
-
-  /*
-   * The recipe step asks whether a live service can be costed today — not
-   * whether a recipe was ever written.
-   *
-   * Two things separate the two. Deleting a service archives it: `recipe`
-   * cascades from `service`, but the cascade never fires, so an owner who
-   * cleared the catalogue kept a ✓ against recipes nothing points at any more.
-   * And clearing a recipe writes a new, empty version instead of removing the
-   * old one (the PUT in app/api/v1/services/[id]/recipe keeps finished visits
-   * costed the way they were costed), so only the newest version of each
-   * service may be asked whether it still has materials in it.
-   *
-   * `service_id is not null` keeps an add-on's recipe out: it is a recipe, but
-   * it is not the one this step names.
-   */
-  const latestRecipes = tx
-    .select({
-      serviceId: recipes.serviceId,
-      // Aliased away from the column it aggregates: drizzle emits a subquery's
-      // field unqualified, and `recipe_version` on both sides of the join is
-      // ambiguous to PostgreSQL.
-      recipeVersion: max(recipes.recipeVersion).as("latest_recipe_version"),
-    })
-    .from(recipes)
-    .where(isNotNull(recipes.serviceId))
-    .groupBy(recipes.serviceId)
-    .as("latest_recipe");
-
-  const [usableRecipes] = await tx
-    .select({ value: count() })
-    .from(recipes)
-    .innerJoin(
-      latestRecipes,
-      and(
-        eq(recipes.serviceId, latestRecipes.serviceId),
-        eq(recipes.recipeVersion, latestRecipes.recipeVersion),
-      ),
-    )
-    .innerJoin(services, eq(services.id, recipes.serviceId))
-    .innerJoin(recipeItems, eq(recipeItems.recipeId, recipes.id))
-    .where(isNull(services.archivedAt));
 
   /*
    * The one step that is a fact of history rather than a state of the data.
@@ -183,14 +138,7 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
 
   const steps: OnboardingStep[] = [
     { key: "specialist", done: withRule.value > 0, href: "/app/settings" },
-    // The catalogue, with the add form already open — the step asks for one
-    // material with a purchase price, and importing a file is the answer to a
-    // different question. An owner who has a price list can still reach
-    // /app/import from the navigation; an owner who has one bottle in front of
-    // them was being sent to build a CSV.
-    { key: "materials", done: pricedMaterials.value > 0, href: "/app/materials#add-material" },
     { key: "service", done: usableServices.value > 0, href: "/app/services" },
-    { key: "recipe", done: usableRecipes.value > 0, href: "/app/services" },
     { key: "visit", done: closedVisits.value > 0, href: "/app/visits/new" },
   ];
 

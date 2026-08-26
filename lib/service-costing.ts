@@ -1,18 +1,9 @@
-import { and, desc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
-import {
-  addOns,
-  commissionRules,
-  materialPriceVersions,
-  materials,
-  recipeItems,
-  recipes,
-  services,
-} from "@/db/schema";
+import { addOns, commissionRules, services } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { selectCommissionRule, toCommission } from "@/domain/commission";
 import { calculateCosting, type CostingResult } from "@/domain/costing";
-import { calculateRecipeCost, mergeRecipeLines, type RecipeLine } from "@/domain/recipe-cost";
 import type { Currency } from "@/domain/money";
 
 /**
@@ -28,109 +19,23 @@ export type ServiceCostingReason =
   | "missing_price"
   | "missing_duration"
   | "missing_commission_rule"
-  | "missing_recipe"
-  | "missing_material_cost"
   // SRV-003 lets an add-on shift price and duration in either direction, so a
   // badly configured set can push either below zero. That is a configuration
   // error, not a number to hand back.
   | "negative_price_with_add_ons"
   | "invalid_duration_with_add_ons";
 
-export type RecipeLineView = Readonly<{
-  materialId: string;
-  materialName: string;
-  baseUnit: string;
-  quantityMilliUnits: number;
-  costMinor: number | null;
-}>;
-
 export type ServiceCosting = Readonly<
   | {
       status: "complete";
       currency: Currency;
-      costing: Extract<CostingResult, { incompleteCostData: false }>;
-      lines: readonly RecipeLineView[];
+      costing: CostingResult;
     }
   | {
       status: "incomplete";
       reasons: readonly ServiceCostingReason[];
-      unpricedMaterialIds: readonly string[];
-      lines: readonly RecipeLineView[];
     }
 >;
-
-/** The recipe in force for a service: the newest version effective by `at`. */
-export async function loadActiveRecipe(tx: TenantTransaction, serviceId: string, at: Date = new Date()) {
-  const [recipe] = await tx
-    .select({ id: recipes.id, recipeVersion: recipes.recipeVersion })
-    .from(recipes)
-    // A version dated in the future is not in force yet. Without this filter a
-    // scheduled recipe change would take effect the moment it was saved.
-    .where(and(eq(recipes.serviceId, serviceId), lte(recipes.activeFrom, at)))
-    .orderBy(desc(recipes.activeFrom), desc(recipes.recipeVersion))
-    .limit(1);
-  return recipe ?? null;
-}
-
-export async function loadRecipeLines(
-  tx: TenantTransaction,
-  recipeId: string,
-): Promise<{ lines: RecipeLine[]; views: RecipeLineView[] }> {
-  const rows = await tx
-    .select({
-      materialId: recipeItems.materialId,
-      quantityMilliUnits: recipeItems.normativeQuantityMilliUnits,
-      materialName: materials.name,
-      baseUnit: materials.baseUnit,
-    })
-    .from(recipeItems)
-    .innerJoin(materials, eq(recipeItems.materialId, materials.id))
-    .where(eq(recipeItems.recipeId, recipeId))
-    .orderBy(materials.name);
-
-  const lines: RecipeLine[] = [];
-  const views: RecipeLineView[] = [];
-
-  for (const row of rows) {
-    // The newest purchase price. CST-004 keeps every version, so this reads the
-    // current one without touching history.
-    const [price] = await tx
-      .select({
-        packagePriceMinor: materialPriceVersions.packagePriceMinor,
-        packageSizeMilliUnits: materialPriceVersions.packageSizeMilliUnits,
-      })
-      .from(materialPriceVersions)
-      .where(eq(materialPriceVersions.materialId, row.materialId))
-      .orderBy(desc(materialPriceVersions.validFrom), desc(materialPriceVersions.createdAt))
-      .limit(1);
-
-    lines.push({
-      materialId: row.materialId,
-      quantityMilliUnits: row.quantityMilliUnits,
-      price: price ?? null,
-    });
-    views.push({
-      materialId: row.materialId,
-      materialName: row.materialName,
-      baseUnit: row.baseUnit,
-      quantityMilliUnits: row.quantityMilliUnits,
-      costMinor: null,
-    });
-  }
-
-  return { lines, views };
-}
-
-/** The recipe in force for an add-on, mirroring `loadActiveRecipe` for services. */
-async function loadActiveAddOnRecipe(tx: TenantTransaction, addOnId: string, at: Date) {
-  const [recipe] = await tx
-    .select({ id: recipes.id })
-    .from(recipes)
-    .where(and(eq(recipes.addOnId, addOnId), lte(recipes.activeFrom, at)))
-    .orderBy(desc(recipes.activeFrom), desc(recipes.recipeVersion))
-    .limit(1);
-  return recipe ?? null;
-}
 
 export async function loadServiceCosting(
   tx: TenantTransaction,
@@ -140,31 +45,12 @@ export async function loadServiceCosting(
   const at = options.at ?? new Date();
   const reasons: ServiceCostingReason[] = [];
 
-  const recipe = await loadActiveRecipe(tx, service.id, at);
-  const base = recipe ? await loadRecipeLines(tx, recipe.id) : { lines: [], views: [] };
-
-  // SRV-003: an add-on shifts price, duration and recipe. RLS keeps the lookup
+  // SRV-003: an add-on shifts price and duration. RLS keeps the lookup
   // tenant-scoped, so an id from another organization simply finds nothing.
   const selectedAddOns =
     options.addOnIds && options.addOnIds.length > 0
       ? await tx.select().from(addOns).where(inArray(addOns.id, [...options.addOnIds]))
       : [];
-
-  const addOnRecipes: RecipeLine[][] = [];
-  const addOnViews: RecipeLineView[] = [];
-  for (const addOn of selectedAddOns) {
-    const addOnRecipe = await loadActiveAddOnRecipe(tx, addOn.id, at);
-    if (!addOnRecipe) continue;
-    const loaded = await loadRecipeLines(tx, addOnRecipe.id);
-    addOnRecipes.push(loaded.lines);
-    addOnViews.push(...loaded.views);
-  }
-
-  // Quantities are merged per material before costing: the same bottle poured
-  // twice must be costed once, or the rounding happens twice.
-  const lines = mergeRecipeLines(base.lines, ...addOnRecipes);
-  const views = mergeViews(base.views, addOnViews);
-  const recipeCost = calculateRecipeCost(lines);
 
   const priceDelta = selectedAddOns.reduce((total, addOn) => total + addOn.priceDeltaMinor, 0);
   const durationDelta = selectedAddOns.reduce((total, addOn) => total + addOn.durationDeltaMinutes, 0);
@@ -176,13 +62,6 @@ export async function loadServiceCosting(
   else if (priceMinor! < 0) reasons.push("negative_price_with_add_ons");
   if (service.durationMinutes === null) reasons.push("missing_duration");
   else if (durationMinutes! <= 0) reasons.push("invalid_duration_with_add_ons");
-  // SRV-007. A service that has never had a recipe is not a service that costs
-  // no materials — reporting it complete would hand back a margin computed as if
-  // the materials were free, which is the exact failure this codebase refuses
-  // everywhere else. A saved recipe with no items is a deliberate statement and
-  // stays complete.
-  if (!recipe) reasons.push("missing_recipe");
-  if (!recipeCost.complete) reasons.push("missing_material_cost");
 
   let commission = null;
   if (options.specialistId) {
@@ -207,63 +86,19 @@ export async function loadServiceCosting(
   }
   if (!commission) reasons.push("missing_commission_rule");
 
-  const pricedByMaterial = new Map(
-    recipeCost.complete ? recipeCost.lines.map((line) => [line.materialId, line.costMinor]) : [],
-  );
-  const detailedViews = views.map((view) => ({
-    ...view,
-    costMinor: pricedByMaterial.get(view.materialId) ?? null,
-  }));
-
-  // The last two conditions are implied by `reasons`, but spelling them out is
-  // what lets TypeScript narrow `recipeCost` and `commission` below.
-  if (reasons.length > 0 || !recipeCost.complete || !commission) {
-    return {
-      status: "incomplete",
-      reasons,
-      unpricedMaterialIds: recipeCost.complete ? [] : recipeCost.unpricedMaterialIds,
-      lines: detailedViews,
-    };
+  // The commission check is implied by `reasons`, but spelling it out is what
+  // lets TypeScript narrow it below.
+  if (reasons.length > 0 || !commission) {
+    return { status: "incomplete", reasons };
   }
 
   const currency = (service.currency ?? "MDL") as Currency;
   const costing = calculateCosting({
     priceMinor: priceMinor!,
-    materialCostMinor: recipeCost.materialCostMinor,
     durationMinutes: durationMinutes!,
     currency,
     commission: toCommission(commission),
   });
 
-  if (costing.incompleteCostData) {
-    return {
-      status: "incomplete",
-      reasons: ["missing_material_cost"],
-      unpricedMaterialIds: [],
-      lines: detailedViews,
-    };
-  }
-
-  return { status: "complete", currency, costing, lines: detailedViews };
-}
-
-/**
- * The display counterpart of `mergeRecipeLines`: one row per material, so a
- * breakdown never shows the same bottle twice.
- */
-function mergeViews(
-  base: readonly RecipeLineView[],
-  fromAddOns: readonly RecipeLineView[],
-): RecipeLineView[] {
-  const merged = new Map<string, RecipeLineView>();
-  for (const view of [...base, ...fromAddOns]) {
-    const existing = merged.get(view.materialId);
-    merged.set(
-      view.materialId,
-      existing
-        ? { ...existing, quantityMilliUnits: existing.quantityMilliUnits + view.quantityMilliUnits }
-        : { ...view },
-    );
-  }
-  return [...merged.values()];
+  return { status: "complete", currency, costing };
 }

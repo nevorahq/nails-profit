@@ -4,7 +4,6 @@ import { z } from "zod";
 import { financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
-import { toMilliUnits } from "@/domain/units";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { fingerprintOf } from "@/lib/idempotency";
 import { getActiveMembership } from "@/lib/membership";
@@ -13,8 +12,8 @@ import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 /**
  * Manually recorded completed visits, roadmap phase 3.
  *
- * Creating one snapshots the catalogue: prices, names, the recipe and the
- * commission rule are copied in, and the visit never reads the catalogue again.
+ * Creating one snapshots the catalogue: prices, names and the commission rule
+ * are copied in, and the visit never reads the catalogue again.
  */
 const createVisitSchema = z.object({
   service_id: z.uuid(),
@@ -30,11 +29,6 @@ const createVisitSchema = z.object({
    * recordable without a fee the bank never charged.
    */
   payment_method_id: z.uuid().nullable().optional(),
-  /** Actual use per material; anything omitted stays unrecorded, never zero. */
-  consumption: z
-    .array(z.object({ material_id: z.uuid(), actual_quantity: z.number().min(0) }))
-    .max(100)
-    .default([]),
 });
 
 export async function GET(request: Request) {
@@ -112,8 +106,6 @@ export async function GET(request: Request) {
         ? {
             version: snapshot.snapshotVersion,
             revenue_minor: snapshot.revenueMinor,
-            material_cost_minor: snapshot.materialCostMinor,
-            material_usage_source: snapshot.materialUsageSource,
             commission_minor: snapshot.commissionMinor,
             // Null on anything written under `costing-v1`, and null rather than
             // zero on purpose: nobody was asked about VAT then.
@@ -184,10 +176,6 @@ export async function POST(request: Request) {
       // Passed straight through, undefined included: the service tells the two
       // apart, and collapsing them here would lose the difference.
       paymentMethodId: parsed.data.payment_method_id,
-      consumption: parsed.data.consumption.map((entry) => ({
-        materialId: entry.material_id,
-        actualQuantityMilliUnits: toMilliUnits(entry.actual_quantity),
-      })),
       requestId: id,
       completionKey,
       completionFingerprint: completionKey ? fingerprintOf(parsed.data) : undefined,
@@ -211,8 +199,6 @@ export async function POST(request: Request) {
         revenue_minor: result.snapshot.revenueMinor,
         contribution_margin_minor: result.snapshot.contributionMarginMinor,
         profit_per_hour_minor: result.snapshot.profitPerHourMinor,
-        material_cost_minor: result.snapshot.materialCostMinor,
-        material_usage_source: result.snapshot.materialUsageSource,
         incomplete_reasons: result.snapshot.incompleteReasons,
       },
     },

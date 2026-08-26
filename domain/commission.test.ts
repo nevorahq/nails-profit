@@ -102,9 +102,6 @@ describe("toCommission", () => {
       ),
     ).toEqual({ type: "fixed", amountMinor: 12_000 });
     expect(
-      toCommission(rule({ id: "a", type: "percentage_after_materials", basisPoints: 3_500 })),
-    ).toEqual({ type: "percentage_after_materials", basisPoints: 3_500 });
-    expect(
       toCommission(rule({ id: "h", type: "hybrid", basisPoints: 2_000, fixedAmountMinor: 10_000 })),
     ).toEqual({ type: "hybrid", basisPoints: 2_000, amountMinor: 10_000 });
   });

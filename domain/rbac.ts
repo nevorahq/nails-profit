@@ -24,7 +24,6 @@ export const capabilities = [
   "clients",
   "bookings",
   "services",
-  "materials",
   /**
    * Recorded purchases — rent, payroll, tools. Not a row of the section 6.1
    * table: the table predates the expense ledger, and the product decision is
@@ -94,7 +93,6 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     clients: permission(READ_WRITE, "all", "Да"),
     bookings: permission(READ_WRITE, "all", "Да"),
     services: permission(READ_WRITE, "all", "Да"),
-    materials: permission(READ_WRITE, "all", "Да"),
     expenses: permission(READ_WRITE, "all", "Затраты видит и вносит только владелец"),
     commissions: permission(READ_WRITE, "all", "Да"),
     dashboard: permission(READ_ONLY, "all", "Все данные"),
@@ -107,7 +105,6 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     clients: permission(READ_WRITE, "all", "Да"),
     bookings: permission(READ_WRITE, "all", "Да"),
     services: permission(READ_WRITE, "all", "Да"),
-    materials: permission(READ_WRITE, "all", "Да"),
     expenses: DENIED,
     commissions: permission(READ_WRITE, "all", "Да"),
     dashboard: permission(READ_ONLY, "all", "Все данные"),
@@ -122,10 +119,6 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     services: permission(READ_WRITE, "all", "Чтение; добавлять услуги можно, править чужие — нет", [
       "create_only",
     ]),
-    // Open question for Phase 2: the spec grants the write (recording actual
-    // consumption) but never says whether a master may browse the material
-    // catalogue needed to pick from. Encoded at the narrower reading.
-    materials: permission(READ_WRITE, "own", "Фактическое списание по своим визитам"),
     expenses: DENIED,
     commissions: permission(READ_ONLY, "own", "Только собственный результат"),
     dashboard: permission(READ_ONLY, "own", "Только собственные"),
@@ -138,7 +131,6 @@ export const roleCapabilities: Readonly<Record<MemberRole, Readonly<Record<Capab
     clients: permission(READ_ONLY, "all", "Чтение без телефонов и email", ["exclude_pii"]),
     bookings: permission(READ_ONLY, "all", "Чтение"),
     services: permission(READ_ONLY, "all", "Чтение"),
-    materials: permission(READ_ONLY, "all", "Чтение агрегатов", ["aggregates_only"]),
     expenses: DENIED,
     commissions: permission(READ_ONLY, "all", "Агрегаты", ["aggregates_only"]),
     dashboard: permission(READ_ONLY, "all", "Все агрегаты", ["aggregates_only"]),
@@ -174,10 +166,10 @@ export function hasConstraint(
 
 /**
  * True when the role may write across the whole organization, not merely its own
- * rows. Catalogue changes need this: section 6.1 grants a Master `materials`
- * write, but scoped to "фактическое списание по своим визитам" — recording what
- * they used on their own visit, not editing the shared catalogue every other
- * master calculates against. Checking `can` alone would let a Master rewrite it.
+ * rows. Catalogue changes need this: section 6.1 grants a Master a `services`
+ * write, but scoped to adding their own — not editing the shared catalogue
+ * every other master sells from. Checking `can` alone would let a Master
+ * rewrite it.
  */
 export function canManageCatalogue(role: MemberRole, capability: Capability): boolean {
   return (
