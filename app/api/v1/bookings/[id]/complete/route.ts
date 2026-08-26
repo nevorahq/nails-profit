@@ -89,12 +89,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         return snapshot ? { visit, snapshot } : null;
       };
 
-      // A successful response that was lost on the network is still the same
-      // completion. Return the already persisted visit/snapshot instead of
-      // attempting another state transition or writing another snapshot.
+      /*
+       * A successful response that was lost on the network is still the same
+       * completion — but only for the caller who can produce the key the first
+       * attempt claimed. Return the persisted visit/snapshot to them instead of
+       * attempting another state transition or writing another snapshot.
+       *
+       * The key is what separates the two cases, and it has to be: an equal
+       * payload does not. The calendar drops its key the moment a close
+       * succeeds (`components/calendar-board.tsx`), so a second press produces
+       * an identical body under a new key — a second decision to close an
+       * appointment that is already closed. Answering that with 200 and the
+       * existing visit tells the owner it happened again, which is the one
+       * thing that did not.
+       */
       if (existing.status === "completed") {
         const recorded = await loadRecordedVisit();
         if (!recorded) return { ok: false as const, failure: "idempotency_conflict" as const };
+        if (!completionKey || recorded.visit.completionKey !== completionKey) {
+          return { ok: false as const, failure: "already_completed" as const };
+        }
         if (
           recorded.visit.completionFingerprint !== null &&
           recorded.visit.completionFingerprint !== completionFingerprint
@@ -120,10 +134,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (!moved.ok) {
         // Under READ COMMITTED a racing completion may have committed while
         // the optimistic update waited. Re-read once and turn that race into
-        // an idempotent replay when the same payload won.
-        const recorded = await loadRecordedVisit();
+        // an idempotent replay when the retry of the same request won — same
+        // key, same payload. Without a key this is somebody closing an
+        // appointment a colleague has just closed, and that is a conflict to
+        // report rather than a duplicate to absorb.
+        const recorded = completionKey ? await loadRecordedVisit() : null;
         if (
           recorded &&
+          recorded.visit.completionKey === completionKey &&
           (recorded.visit.completionFingerprint === null ||
             recorded.visit.completionFingerprint === completionFingerprint)
         ) {
@@ -213,6 +231,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           const refusal = VISIT_FAILURES[outcome.failure];
           return apiError(refusal.status, refusal.code, refusal.message, id);
         }
+        // The same refusal the partial unique index produces below, so that one
+        // situation has one code however it was detected.
+        case "already_completed":
+          return apiError(409, "BOOKING_ALREADY_COMPLETED", "This booking already has a visit", id);
         default:
           return mutationFailureResponse(outcome, id);
       }
