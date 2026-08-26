@@ -599,13 +599,6 @@ export function SpecialistManager({
         </tbody>
       </table>
 
-      {/*
-        Explained once, under the table where the mark is set, rather than in a
-        tooltip: it changes what the monthly report subtracts, and a control
-        that moves money should say so in full sentences.
-      */}
-      {canManage && specialists.length > 0 && <p className="muted">{t("specialists.principalHint")}</p>}
-
       {canManage && serviceEditor && (
         <section className="panel specialist-services-panel">
           <h2>

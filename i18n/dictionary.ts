@@ -116,6 +116,8 @@ const ru = {
   "team.inviteLink": "Ссылка для приглашения",
   "team.inviteHint": "Письмо со ссылкой отправлено. Ссылка действительна 7 дней и привязана к этому адресу.",
   "team.linkHint": "Скопируйте ссылку и передайте вручную, или нажмите «Отправить приглашение», чтобы отправить email.",
+  "team.sendUnavailable":
+    "Письмо отправить нельзя: адрес приложения — локальный сервер, ссылка у получателя не откроется. Скопируйте её и передайте вручную.",
   "team.copyLink": "Скопировать",
   "team.copied": "Скопировано",
   "team.inviteFailed": "Не удалось создать приглашение",
@@ -143,8 +145,6 @@ const ru = {
   "team.remove": "Удалить",
   "team.removeConfirm": "Точно удалить?",
   "team.removeFailed": "Не удалось удалить участника",
-  "team.removeHint":
-    "Удаление отключает человека от студии: он теряет доступ и выходит из аккаунта, а его карточка мастера уходит в архив. Личный аккаунт остаётся — участника можно пригласить снова. Визиты, комиссии и отчёты не меняются.",
   "team.previewFailed": "Не удалось открыть режим просмотра",
   "preview.viewingAs": "Вы просматриваете приложение как {name}",
   "preview.signedInAs": "вход выполнен как {email}",
@@ -555,8 +555,6 @@ const ru = {
   "specialists.principalSet": "Отметить владельцем",
   "specialists.principalUnset": "Снять отметку",
   "specialists.imputedLabour": "вменённая стоимость вашего труда",
-  "specialists.principalHint":
-    "Отметьте владельцем того, кто получает прибыль бизнеса, а не вознаграждение за визит: себя, если принимаете клиентов сами. Комиссия ему всё равно начисляется — по рыночной ставке, столько же, сколько платили бы наёмному мастеру, — но в месячном отчёте она возвращается обратно, потому что эти деньги из бизнеса не ушли.",
   "specialists.withoutRuleBanner": {
     one: "У {count} мастера нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
     few: "У {count} мастеров нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
@@ -1219,6 +1217,8 @@ const ro: Record<MessageKey, Message> = {
   "team.inviteLink": "Link de invitație",
   "team.inviteHint": "Email-ul cu linkul a fost trimis. Linkul este valabil 7 zile și este legat de această adresă.",
   "team.linkHint": "Copiați linkul și trimiteți-l manual, sau apăsați «Trimite invitația» pentru a trimite email.",
+  "team.sendUnavailable":
+    "E-mailul nu poate fi trimis: adresa aplicației este un server local, iar linkul nu s-ar deschide la destinatar. Copiați-l și trimiteți-l manual.",
   "team.copyLink": "Copiați",
   "team.copied": "Copiat",
   "team.inviteFailed": "Nu s-a putut crea invitația",
@@ -1246,8 +1246,6 @@ const ro: Record<MessageKey, Message> = {
   "team.remove": "Ștergeți",
   "team.removeConfirm": "Sigur ștergeți?",
   "team.removeFailed": "Nu s-a putut șterge membrul",
-  "team.removeHint":
-    "Ștergerea deconectează persoana de la studio: pierde accesul și este deconectată din cont, iar fișa de maestru trece în arhivă. Contul personal rămâne — membrul poate fi invitat din nou. Vizitele, comisioanele și rapoartele nu se modifică.",
   "team.previewFailed": "Nu s-a putut deschide modul de vizualizare",
   "preview.viewingAs": "Vizualizați aplicația ca {name}",
   "preview.signedInAs": "autentificat ca {email}",
@@ -1659,8 +1657,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.principalSet": "Marchează ca proprietar",
   "specialists.principalUnset": "Scoate marcajul",
   "specialists.imputedLabour": "costul imputat al muncii dvs.",
-  "specialists.principalHint":
-    "Marcați ca proprietar persoana care primește profitul afacerii, nu o remunerație pe vizită: pe dvs., dacă lucrați cu clienții. Comisionul i se calculează la fel — la tariful pieței, cât ați plăti unui maestru angajat — dar în raportul lunar se adaugă înapoi, pentru că acești bani nu au ieșit din afacere.",
   "specialists.withoutRuleBanner": {
     one: "{count} maestru nu are regulă de comision. Serviciile nu pot fi calculate: comisionul nu se consideră zero până nu este definită regula.",
     few: "{count} maeștri nu au regulă de comision. Serviciile nu pot fi calculate: comisionul nu se consideră zero până nu este definită regula.",
@@ -2322,6 +2318,8 @@ const en: Record<MessageKey, Message> = {
   "team.inviteLink": "Invitation link",
   "team.inviteHint": "The email with the link has been sent. The link is valid for 7 days and is tied to this address.",
   "team.linkHint": "Copy the link and share it manually, or click «Send invitation» to send by email.",
+  "team.sendUnavailable":
+    "The email cannot be sent: the application address is a local server, so the link would not open for the recipient. Copy it and share it manually.",
   "team.copyLink": "Copy",
   "team.copied": "Copied",
   "team.inviteFailed": "Could not create invitation",
@@ -2349,8 +2347,6 @@ const en: Record<MessageKey, Message> = {
   "team.remove": "Remove",
   "team.removeConfirm": "Remove for sure?",
   "team.removeFailed": "Could not remove the member",
-  "team.removeHint":
-    "Removing ends the person's part in the studio: they lose access and are signed out, and their specialist card is archived. Their personal account remains — they can be invited again. Visits, commissions and reports are unchanged.",
   "team.previewFailed": "Could not open preview mode",
   "preview.viewingAs": "You are viewing the app as {name}",
   "preview.signedInAs": "signed in as {email}",
@@ -2755,8 +2751,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.principalSet": "Mark as owner",
   "specialists.principalUnset": "Remove the mark",
   "specialists.imputedLabour": "imputed cost of your own work",
-  "specialists.principalHint":
-    "Mark as owner whoever takes the profit of the business rather than a fee per visit — yourself, if you see clients too. Their commission is still calculated, at the market rate you would pay a hired master, but the monthly report adds it back, because that money never left the business.",
   "specialists.withoutRuleBanner": {
     one: "{count} specialist has no commission rule. Services cannot be costed: commission is not treated as zero until a rule is set.",
     other:
