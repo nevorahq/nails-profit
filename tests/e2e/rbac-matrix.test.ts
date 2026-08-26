@@ -189,6 +189,22 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/webhooks/resend", body: {} }),
   },
   {
+    route: "/api/v1/webhooks/paddle",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Billing callback authenticated by a Paddle signature, not a user session; 404 without its secret",
+    request: async () => ({ path: "/api/v1/webhooks/paddle", body: {} }),
+  },
+  {
+    route: "/api/v1/webhooks/lemon-squeezy",
+    method: "POST",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "Billing callback authenticated by an X-Signature digest, not a user session; 404 without its secret",
+    request: async () => ({ path: "/api/v1/webhooks/lemon-squeezy", body: {} }),
+  },
+  {
     route: "/api/v1/webhooks/messaggio/[token]",
     method: "POST",
     allowed: ALL_ROLES,
@@ -430,6 +446,15 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/services/[id]",
+    method: "DELETE",
+    allowed: CATALOGUE_MANAGERS,
+    note: "services write; archiving a service is managing the catalogue, not authoring one",
+    // Not the studio's own service: every later case in this suite is priced
+    // against it.
+    request: async () => ({ path: `/api/v1/services/${crypto.randomUUID()}` }),
+  },
+  {
     route: "/api/v1/services/[id]/add-ons",
     method: "PUT",
     allowed: CATALOGUE_MANAGERS,
@@ -544,6 +569,18 @@ const cases: readonly Case[] = [
   },
   {
     route: "/api/v1/clients/[id]",
+    method: "PATCH",
+    allowed: ["owner", "manager", "master"],
+    note: "clients write; an Analyst reads only",
+    // A missing UUID for the same reason as the erasure row below: the
+    // authorization check runs before the lookup, so nothing shared is touched.
+    request: async () => ({
+      path: `/api/v1/clients/${crypto.randomUUID()}`,
+      body: { name: `Клиент ${crypto.randomUUID()}` },
+    }),
+  },
+  {
+    route: "/api/v1/clients/[id]",
     method: "DELETE",
     allowed: ["owner", "manager"],
     note: "privacy erasure requires organization-wide client scope; a Master's scope is own",
@@ -567,6 +604,15 @@ const cases: readonly Case[] = [
       path: "/api/v1/invitations",
       body: { email: `new-${crypto.randomUUID()}@studio.example`, role: "master" },
     }),
+  },
+  {
+    route: "/api/v1/invitations/send",
+    method: "POST",
+    allowed: CATALOGUE_MANAGERS,
+    note: "user_management write; sending the letter is the same act as creating the invitation",
+    // A malformed token is 400 for whoever may send at all, which is what this
+    // row asks about — the address the letter would go to is decided later.
+    request: async () => ({ path: "/api/v1/invitations/send", body: { token: "not-a-token" } }),
   },
   {
     route: "/api/v1/invitations/[id]",
@@ -710,8 +756,17 @@ const cases: readonly Case[] = [
   {
     route: "/api/v1/availability/rules",
     method: "PUT",
-    allowed: CATALOGUE_MANAGERS,
-    note: "A rota decides which clients reach whom, so it takes the organization-wide scope",
+    allowed: ["owner", "manager", "master"],
+    /*
+     * Written when the rota belonged to the managers alone. A Master owns their
+     * own working hours now — the booking screen offers them that form and
+     * nothing else (`components/booking-setup.tsx`, `canSaveRota`) — and the
+     * scope is what this row cannot express: `allowed` asks who may call the
+     * endpoint, not whose rota they may write. The half this drops is covered
+     * by name in `tests/e2e/booking-schedule.test.ts`, "a master may set their
+     * own rota and nobody else's".
+     */
+    note: "bookings write, own schedule for a Master; a colleague's rota is 403 there",
     request: async (fixture) => ({
       path: "/api/v1/availability/rules",
       body: {
