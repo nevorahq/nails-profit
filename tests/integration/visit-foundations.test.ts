@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { financialSnapshots, specialists, visits } from "@/db/schema";
+import type { Currency } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { CURRENT_FORMULA_VERSION } from "@/domain/costing";
 import {
@@ -32,7 +33,7 @@ import {
 describe("visit foundations", () => {
   let userId: string;
 
-  async function studio(options: { currency?: "MDL" | "EUR"; isPrincipal?: boolean } = {}) {
+  async function studio(options: { currency?: Currency; isPrincipal?: boolean } = {}) {
     const organizationId = (await createOrganization({ ownerId: userId, currency: options.currency })).id;
     const specialistId = (await createSpecialist(organizationId, { isPrincipal: options.isPrincipal })).id;
     await createCommissionRule(organizationId, specialistId, { basisPoints: 4_000 });
@@ -109,6 +110,24 @@ describe("visit foundations", () => {
       expect(visit.currency).toBe("MDL");
       expect(snapshot.currency).toBe("MDL");
       // The canonical scenario: 600 − 240 commission.
+      expect(snapshot.contributionMarginMinor).toBe(36_000);
+    });
+
+    /*
+     * The third currency, which is the one a database can refuse.
+     *
+     * `currency` is a `pgEnum`, so a value the application accepts and the type
+     * has never heard of is a runtime error at the moment a visit closes —
+     * after the studio has been set up and priced. This is the test that says
+     * migration 0042 was applied wherever these run.
+     */
+    it("closes a visit for a studio keeping its books in roubles", async () => {
+      const scene = await studio({ currency: "RUB" });
+      const { visit, snapshot } = await close(scene);
+
+      expect(visit.currency).toBe("RUB");
+      expect(snapshot.currency).toBe("RUB");
+      // The same arithmetic as every other currency: nothing here converts.
       expect(snapshot.contributionMarginMinor).toBe(36_000);
     });
   });

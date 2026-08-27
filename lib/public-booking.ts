@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
+import type { Currency } from "@/domain/money";
 import { db } from "@/db";
 import {
   addOns,
@@ -23,7 +24,7 @@ export type PublicOrganization = Readonly<{
   slug: string;
   name: string;
   locale: AppLocale;
-  currency: "MDL" | "EUR";
+  currency: Currency;
 }>;
 
 export async function findPublicOrganization(slug: string): Promise<PublicOrganization | null> {

@@ -86,6 +86,7 @@ const ru = {
   "settings.language": "Язык интерфейса",
   "settings.languageHint": "Меняется у всех сотрудников, не только у вас.",
   "settings.currency": "Валюта",
+  "currency.rub": "рубль",
   "settings.currencyHint":
     "Только для новых цен и расчётов. Сохранённые суммы по курсу не пересчитываются.",
   "settings.saved": "Сохранено",
@@ -1237,6 +1238,7 @@ const ro: Record<MessageKey, Message> = {
   "settings.language": "Limba interfeței",
   "settings.languageHint": "Se schimbă pentru toți angajații, nu doar pentru dvs.",
   "settings.currency": "Moneda",
+  "currency.rub": "rublă",
   "settings.currencyHint":
     "Doar pentru prețurile și calculele noi. Sumele salvate nu se convertesc la curs.",
   "settings.saved": "Salvat",
@@ -2388,6 +2390,7 @@ const en: Record<MessageKey, Message> = {
   "settings.language": "Interface language",
   "settings.languageHint": "Changes for everyone in the organization, not only for you.",
   "settings.currency": "Currency",
+  "currency.rub": "rouble",
   "settings.currencyHint":
     "New prices and calculations only. Amounts already saved are not converted at a rate.",
   "settings.saved": "Saved",

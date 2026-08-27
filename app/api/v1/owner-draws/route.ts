@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
 import { ownerDraws } from "@/db/schema";
+import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
@@ -20,7 +21,7 @@ import { getActiveMembership } from "@/lib/membership";
  */
 const drawShape = z.object({
   amount_minor: z.int().min(0),
-  currency: z.enum(["MDL", "EUR"]),
+  currency: z.enum(currencies),
   /** The day the money left. `YYYY-MM-DD`, like an expense's `spent_on`. */
   occurred_on: z
     .string()

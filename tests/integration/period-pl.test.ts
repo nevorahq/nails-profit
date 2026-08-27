@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { expenses, laborCostRules, organizations, ownerDraws, scheduleRules, specialists } from "@/db/schema";
+import type { Currency } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import type { ExpenseCategory } from "@/domain/expense-categories";
 import { loadPeriodPL } from "@/lib/period";
@@ -58,7 +59,7 @@ describe("the monthly P&L", () => {
     isRecurring?: boolean;
     recurringFrom?: string;
     recurringTo?: string | null;
-    currency?: "MDL" | "EUR";
+    currency?: Currency;
   }) {
     await adminDb.insert(expenses).values({
       organizationId,
@@ -539,7 +540,7 @@ describe("the monthly P&L", () => {
    * ledger row has to land in exactly one of them.
    */
   describe("cash flow", () => {
-    async function draw(amountMinor: number, occurredOn: string, currency: "MDL" | "EUR" = "MDL") {
+    async function draw(amountMinor: number, occurredOn: string, currency: Currency = "MDL") {
       await adminDb.insert(ownerDraws).values({ organizationId, amountMinor, currency, occurredOn });
     }
 

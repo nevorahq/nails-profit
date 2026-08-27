@@ -18,6 +18,7 @@ import {
 
 import { commissionBases, commissionTypes, type TaxRates } from "@/domain/costing";
 import { expenseCategories } from "@/domain/expense-categories";
+import { currencies } from "@/domain/money";
 import { memberRoles } from "@/domain/rbac";
 import type { LocalizedText } from "@/i18n/localized-text";
 
@@ -25,7 +26,11 @@ export const organizationType = pgEnum("organization_type", ["solo", "studio"]);
 // Derived from the section 6.1 capability matrix so the database enum and the
 // permission table can never list different roles.
 export const memberRole = pgEnum("member_role", memberRoles);
-export const currency = pgEnum("currency", ["MDL", "EUR"]);
+// The list lives in `domain/money.ts`; this is the column that has to agree
+// with it. Adding to it is an `ALTER TYPE ... ADD VALUE` migration, and a value
+// already in it cannot be taken back out without rebuilding the type under
+// every column that uses it.
+export const currency = pgEnum("currency", currencies);
 export const locale = pgEnum("locale", ["ru", "ro", "en"]);
 // Generated from the domain list so a category can never exist in one and not
 // the other.

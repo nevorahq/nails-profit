@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { organizations } from "@/db/schema";
+import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { checkSlug } from "@/domain/slug";
@@ -15,7 +16,7 @@ import { getActiveMembership } from "@/lib/membership";
 const settingsSchema = z
   .object({
     locale: z.enum(supportedLocales).optional(),
-    currency: z.enum(["MDL", "EUR"]).optional(),
+    currency: z.enum(currencies).optional(),
     /**
      * Studio or working alone. Wording only — it reaches no figure, recomputes
      * no history, and changes no rule about what may be recorded. See
