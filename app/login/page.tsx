@@ -2,7 +2,8 @@ import { headers } from "next/headers";
 
 import { LoginForm } from "@/components/login-form";
 import { auth } from "@/lib/auth";
-import { invitationTokenFromNext, previewInvitation } from "@/lib/invitation-preview";
+import { invitationTokenFromNext } from "@/domain/invitation-link";
+import { previewInvitation } from "@/lib/invitation-preview";
 import { resolveLocale } from "@/lib/locale";
 
 export default async function LoginPage({

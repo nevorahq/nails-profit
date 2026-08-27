@@ -69,7 +69,29 @@ export default async function JoinPage({
 
   const session = await auth.api.getSession({ headers: await headers() });
 
-  if (invitation.status === "accepted") {
+  /*
+   * What this account already belongs to, read before the invitation's own
+   * status is acted on. The order matters for one person: the one who accepted
+   * this very link. Deciding "accepted" first showed them the notice written
+   * for a stranger holding a used link — "войдите в аккаунт, который её
+   * принял" — while they were sitting in it.
+   */
+  const [membership] = session
+    ? await db
+        .select({ organizationId: memberships.organizationId, organizationName: organizations.name })
+        .from(memberships)
+        .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
+        .where(eq(memberships.userId, session.user.id))
+        .limit(1)
+    : [];
+
+  const acceptedByThisAccount =
+    invitation.status === "accepted" &&
+    session !== null &&
+    normalizeInvitationEmail(session.user.email) === invitation.email &&
+    membership !== undefined;
+
+  if (invitation.status === "accepted" && !acceptedByThisAccount) {
     return (
       <Card title={t("join.acceptedTitle")}>
         <Summary invitation={invitation} t={t} />
@@ -113,13 +135,6 @@ export default async function JoinPage({
       </Card>
     );
   }
-
-  const [membership] = await db
-    .select({ organizationId: memberships.organizationId, organizationName: organizations.name })
-    .from(memberships)
-    .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-    .where(eq(memberships.userId, session.user.id))
-    .limit(1);
 
   if (membership) {
     const sameOrganization = membership.organizationId === invitation.organizationId;
