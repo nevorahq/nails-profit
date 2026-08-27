@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { MetricIcon, ToolIcon } from "@/components/icons";
-import { OnboardingPanel } from "@/components/onboarding-panel";
+import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
 import { ProfitBars } from "@/components/profit-bars";
 import { ProfitTrendChart } from "@/components/profit-trend-chart";
@@ -25,7 +25,8 @@ import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
-import { loadOnboarding } from "@/lib/onboarding";
+import { monthOf } from "@/lib/period";
+import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 
 /**
  * A period card for the reports page's top row. The formula still exists —
@@ -258,10 +259,28 @@ export default async function AppPage({
       ? await loadOnboarding(tx)
       : null;
 
+    /*
+     * The second checklist, and the two conditions it waits for.
+     *
+     * It waits for the first one to finish, because a studio with no closed
+     * visit has no month to correct — showing both at once would turn a path of
+     * three steps into a chore of five, which is the shape «Первый расчёт» was
+     * cut down from.
+     *
+     * And it is the owner's alone: «Затраты» is owner-only by the `expenses`
+     * capability, so for a manager both steps would be a list of doors that do
+     * not open.
+     */
+    const monthSetup =
+      onboarding?.complete && membership.role === "owner"
+        ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency })
+        : null;
+
     return {
       ...dashboard,
       previousMetrics,
       onboarding,
+      monthSetup,
       people,
       canFilterBySpecialist: scopeFor(membership.role, "dashboard") === "all",
       expenseTotal,
@@ -375,6 +394,10 @@ export default async function AppPage({
 
       {data.onboarding && !data.onboarding.complete && (
         <OnboardingPanel progress={data.onboarding} locale={locale} />
+      )}
+
+      {data.monthSetup && !data.monthSetup.complete && (
+        <MonthSetupPanel progress={data.monthSetup} locale={locale} />
       )}
 
       {metrics.incompleteVisits > 0 && (

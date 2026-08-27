@@ -567,6 +567,14 @@ const ru = {
   "closeVisit.modifyDuration": "Уточнить длительность",
   "closeVisit.client": "Клиент",
   "closeVisit.dueLine": "К оплате {amount}, плановое время {duration} мин.",
+  "closeVisit.noRuleOption": "нет правила комиссии",
+  "closeVisit.noRule":
+    "У выбранного мастера нет действующего правила комиссии для этой услуги — визит не закроется. Задайте правило:",
+  "closeVisit.hiddenServices": {
+    one: "{count} услуга не показана: у неё нет цены или длительности.",
+    few: "{count} услуги не показаны: у них нет цены или длительности.",
+    other: "{count} услуг не показаны: у них нет цены или длительности.",
+  },
 
   "common.unnamed": "Без названия",
   "common.add": "Добавить",
@@ -581,7 +589,23 @@ const ru = {
   "onboarding.specialist": "Мастер с правилом комиссии",
   "onboarding.service": "Услуга с ценой и длительностью",
   "onboarding.visit": "Первый закрытый визит",
-  "onboarding.go": "Перейти",
+  "monthSetup.title": "Расчёт месяца",
+  "monthSetup.progress": "Шаг {done} из {total}",
+  "monthSetup.overhead": "Постоянные затраты месяца",
+  "monthSetup.rota": "Рабочие часы в графике",
+  "setupGuide.title": "Шаг выполнен",
+  "setupGuide.body": {
+    one: "До первого расчёта остался {count} шаг. Вернитесь к списку и закончите настройку.",
+    few: "До первого расчёта осталось {count} шага. Вернитесь к списку и закончите настройку.",
+    other: "До первого расчёта осталось {count} шагов. Вернитесь к списку и закончите настройку.",
+  },
+  "setupGuide.back": "Вернуться к шагам",
+  "setupGuide.stay": "Остаться здесь",
+  "setupGuide.toVisits": "К списку визитов",
+  "setupGuide.doneTitle": "Первый расчёт готов",
+  "setupGuide.doneBody":
+    "Визит закрыт и посчитан: маржа, прибыль в час и остальные цифры теперь есть в отчёте.",
+  "setupGuide.doneAction": "Открыть отчёт",
 
 
 
@@ -671,6 +695,8 @@ const ru = {
   "specialists.notSet": "не задана",
   "specialists.serviceException": "Исключение по услуге",
   "specialists.valueRequired": "Укажите значение комиссии",
+  "specialists.zeroRuleHint":
+    "Для аренды и оклада укажите 0: с визита не удерживается ничего. Правило нужно всё равно — без него визит не закроется.",
   "specialists.account": "Аккаунт",
   "specialists.linkAccount": "Связать мастера с аккаунтом",
   "specialists.linkHint":
@@ -1693,6 +1719,14 @@ const ro: Record<MessageKey, Message> = {
   "closeVisit.modifyDuration": "Precizează durata",
   "closeVisit.client": "Client",
   "closeVisit.dueLine": "De plată {amount}, timp planificat {duration} min.",
+  "closeVisit.noRuleOption": "fără regulă de comision",
+  "closeVisit.noRule":
+    "Maestrul ales nu are o regulă de comision în vigoare pentru acest serviciu — vizita nu poate fi finalizată. Stabiliți regula:",
+  "closeVisit.hiddenServices": {
+    one: "{count} serviciu nu este afișat: nu are preț sau durată.",
+    few: "{count} servicii nu sunt afișate: nu au preț sau durată.",
+    other: "{count} de servicii nu sunt afișate: nu au preț sau durată.",
+  },
 
   "common.unnamed": "Fără denumire",
   "common.add": "Adaugă",
@@ -1707,7 +1741,23 @@ const ro: Record<MessageKey, Message> = {
   "onboarding.specialist": "Maestru cu regulă de comision",
   "onboarding.service": "Serviciu cu preț și durată",
   "onboarding.visit": "Prima vizită finalizată",
-  "onboarding.go": "Mergi",
+  "monthSetup.title": "Calculul lunii",
+  "monthSetup.progress": "Pasul {done} din {total}",
+  "monthSetup.overhead": "Cheltuielile fixe ale lunii",
+  "monthSetup.rota": "Ore de lucru în program",
+  "setupGuide.title": "Pas finalizat",
+  "setupGuide.body": {
+    one: "Până la primul calcul a mai rămas {count} pas. Reveniți la listă și încheiați configurarea.",
+    few: "Până la primul calcul au mai rămas {count} pași. Reveniți la listă și încheiați configurarea.",
+    other: "Până la primul calcul au mai rămas {count} de pași. Reveniți la listă și încheiați configurarea.",
+  },
+  "setupGuide.back": "Înapoi la pași",
+  "setupGuide.stay": "Rămân aici",
+  "setupGuide.toVisits": "La lista vizitelor",
+  "setupGuide.doneTitle": "Primul calcul este gata",
+  "setupGuide.doneBody":
+    "Vizita este finalizată și calculată: marja, profitul pe oră și restul cifrelor sunt acum în raport.",
+  "setupGuide.doneAction": "Deschide raportul",
 
 
 
@@ -1797,6 +1847,8 @@ const ro: Record<MessageKey, Message> = {
   "specialists.notSet": "nedefinit",
   "specialists.serviceException": "Excepție pe serviciu",
   "specialists.valueRequired": "Indicați valoarea comisionului",
+  "specialists.zeroRuleHint":
+    "Pentru chirie și salariu indicați 0: din vizită nu se reține nimic. Regula este oricum necesară — fără ea vizita nu poate fi finalizată.",
   "specialists.account": "Cont",
   "specialists.linkAccount": "Leagă maestrul de un cont",
   "specialists.linkHint":
@@ -2810,6 +2862,13 @@ const en: Record<MessageKey, Message> = {
   "closeVisit.modifyDuration": "Adjust the duration",
   "closeVisit.client": "Client",
   "closeVisit.dueLine": "Due {amount}, planned time {duration} min.",
+  "closeVisit.noRuleOption": "no commission rule",
+  "closeVisit.noRule":
+    "The chosen specialist has no commission rule in force for this service — the visit will not close. Write the rule:",
+  "closeVisit.hiddenServices": {
+    one: "{count} service is not listed: it has no price or no duration.",
+    other: "{count} services are not listed: they have no price or no duration.",
+  },
 
   "common.unnamed": "Untitled",
   "common.add": "Add",
@@ -2824,7 +2883,22 @@ const en: Record<MessageKey, Message> = {
   "onboarding.specialist": "A specialist with a commission rule",
   "onboarding.service": "A service with a price and a duration",
   "onboarding.visit": "The first closed visit",
-  "onboarding.go": "Go",
+  "monthSetup.title": "The month's calculation",
+  "monthSetup.progress": "Step {done} of {total}",
+  "monthSetup.overhead": "The month's fixed costs",
+  "monthSetup.rota": "Working hours in the rota",
+  "setupGuide.title": "Step done",
+  "setupGuide.body": {
+    one: "{count} step to go before the first calculation. Go back to the list and finish the setup.",
+    other: "{count} steps to go before the first calculation. Go back to the list and finish the setup.",
+  },
+  "setupGuide.back": "Back to the steps",
+  "setupGuide.stay": "Stay here",
+  "setupGuide.toVisits": "To the visits",
+  "setupGuide.doneTitle": "The first calculation is ready",
+  "setupGuide.doneBody":
+    "The visit is closed and costed: the margin, the profit per hour and the rest are in the report now.",
+  "setupGuide.doneAction": "Open the report",
 
 
 
@@ -2914,6 +2988,8 @@ const en: Record<MessageKey, Message> = {
   "specialists.notSet": "not set",
   "specialists.serviceException": "Per-service exception",
   "specialists.valueRequired": "Enter the commission value",
+  "specialists.zeroRuleHint":
+    "For a rented chair or a salary, enter 0: nothing is taken from the visit. The rule is still needed — without one the visit cannot be closed.",
   "specialists.account": "Account",
   "specialists.linkAccount": "Link a specialist to an account",
   "specialists.linkHint":

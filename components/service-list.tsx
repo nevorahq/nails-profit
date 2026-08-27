@@ -6,6 +6,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { NameCombobox } from "@/components/name-combobox";
 import {
+  SetupGuideDialog,
+  useSetupGuide,
+  type SetupGuideBaseline,
+} from "@/components/setup-guide";
+import {
   serviceCatalogue,
   serviceSuggestions,
   type ServiceCatalogueEntry,
@@ -105,9 +110,15 @@ export function ServiceList({
   locale,
   canCreate = true,
   canEdit = true,
+  setupGuide = null,
 }: {
   services: ServiceRow[];
   locale: AppLocale;
+  /**
+   * Where «Первый расчёт» stood when this page was drawn, or null once the
+   * studio has closed a visit and the guided run is over.
+   */
+  setupGuide?: SetupGuideBaseline;
   /**
    * Adding to the catalogue. A Master may — a new service is a row nobody is
    * costed against yet.
@@ -123,6 +134,7 @@ export function ServiceList({
 }) {
   const t = getTranslator(locale);
   const router = useRouter();
+  const guide = useSetupGuide(setupGuide);
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -215,6 +227,9 @@ export function ServiceList({
     setPending(false);
     setAddOpen(false);
     router.refresh();
+    // Did that finish the step? Only the checklist knows: the studio's second
+    // service changes nothing, and the first one only counts with both numbers.
+    await guide.check();
   }
 
   function startEdit(service: ServiceRow) {
@@ -261,6 +276,10 @@ export function ServiceList({
     setEdit(null);
     setEditPending(false);
     router.refresh();
+    // Filling in the price of a service that had none finishes the step just as
+    // creating one does, and it is how a studio that typed its catalogue in
+    // before this guide existed gets through it.
+    await guide.check();
   }
 
   async function deleteService(id: string) {
@@ -285,6 +304,8 @@ export function ServiceList({
 
   return (
     <>
+      <SetupGuideDialog guide={guide} locale={locale} />
+
       {incomplete.length > 0 && (
         <div className="warning-banner">
           {t("services.incompleteBanner", { count: incomplete.length })}
@@ -329,13 +350,25 @@ export function ServiceList({
                   setPickedKind(entry);
                 }}
               />
+              {/*
+                Both required, and that is a change of mind.
+
+                They were optional so a name could be jotted down and priced
+                later, and the cost of that was a catalogue of rows the product
+                cannot answer for: «Услуга с ценой и длительностью» stays ○ on
+                the dashboard, the row shows «не хватает данных», and closing a
+                visit on it is refused with MISSING_DURATION after the form has
+                been filled in. A price and a duration are the whole of what a
+                service is here — everything the studio came for is computed
+                from those two numbers — so they are asked for once, up front.
+              */}
               <label>
                 {t("common.price")}
-                <input name="price" type="number" step="0.01" min="0" placeholder="600" />
+                <input name="price" type="number" step="0.01" min="0" placeholder="600" required />
               </label>
               <label>
                 {t("services.durationMinutes")}
-                <input name="duration" type="number" step="1" min="1" placeholder="90" />
+                <input name="duration" type="number" step="1" min="1" placeholder="90" required />
               </label>
               <button className="primary-button" type="submit" disabled={pending}>
                 {pending ? t("services.creating") : t("services.add")}

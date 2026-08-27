@@ -9,6 +9,7 @@ import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { SpecialistManager, type SpecialistRow } from "@/components/specialist-manager";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
+import { loadSetupGuide } from "@/lib/onboarding";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
@@ -147,6 +148,15 @@ export default async function SpecialistsPage() {
 
   const canManage = canManageCatalogue(membership.role, "commissions");
 
+  /*
+   * Whether this page is a stop on a guided first run, and what the checklist
+   * stood at when it was drawn. Null — one count — for everybody who has closed
+   * a visit, which is every studio past its first day.
+   */
+  const setupGuide = canManageCatalogue(membership.role, "services")
+    ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
+    : null;
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -185,6 +195,7 @@ export default async function SpecialistsPage() {
         currency={currency}
         locale={locale}
         canManage={canManage}
+        setupGuide={setupGuide}
       />
     </main>
   );

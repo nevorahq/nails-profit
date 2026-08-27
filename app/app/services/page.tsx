@@ -7,6 +7,7 @@ import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceList, type ServiceRow } from "@/components/service-list";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadServiceCosting } from "@/lib/service-costing";
+import { loadSetupGuide } from "@/lib/onboarding";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -21,6 +22,19 @@ export default async function ServicesPage() {
       </main>
     );
   }
+
+  /*
+   * Whether this page is a stop on a guided first run, and what the checklist
+   * stood at when it was drawn. Null — one count — for everybody who has closed
+   * a visit, which is every studio past its first day.
+   *
+   * Only for a role that could finish a step: a master may add a service, but
+   * «Первый расчёт» is the owner's list and the window would send them to a
+   * dashboard panel they are not shown.
+   */
+  const setupGuide = canManageCatalogue(membership.role, "services")
+    ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
+    : null;
 
   const rows: ServiceRow[] = await withTenant(membership.organizationId, async (tx) => {
     const [specialist] = await tx
@@ -96,7 +110,13 @@ export default async function ServicesPage() {
           </a>
         )}
       </header>
-      <ServiceList services={rows} locale={locale} canCreate={canCreate} canEdit={canEdit} />
+      <ServiceList
+        services={rows}
+        locale={locale}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        setupGuide={setupGuide}
+      />
     </main>
   );
 }
