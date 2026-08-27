@@ -306,13 +306,18 @@ export async function alternativeSlots(
   tx: TenantTransaction,
   query: SlotQuery,
   context: SlotContext,
-  options: { limit?: number } = {},
+  options: { limit?: number; horizonDays?: number } = {},
 ): Promise<{ date: string; slots: Slot[] }[]> {
   const search = await loadSlotSearch(tx, query, context);
   const { date, ...rest } = search;
   void date;
 
-  return findNextAvailableDates(rest, query.date, { limit: options.limit ?? 3 });
+  return findNextAvailableDates(rest, query.date, {
+    limit: options.limit ?? 3,
+    // Undefined keeps `findNextAvailableDates`'s own default; a conflict asks
+    // for the next few days, the setup screen for the next fortnight.
+    horizonDays: options.horizonDays,
+  });
 }
 
 /** Whether a specialist may be booked at this location for this service. */

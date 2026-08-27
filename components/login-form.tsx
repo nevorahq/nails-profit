@@ -7,6 +7,7 @@ import { FormEvent, useState } from "react";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
+import { invitationTokenFromNext } from "@/domain/invitation-link";
 
 export function LoginForm({
   initialMode = "signin",
@@ -61,6 +62,38 @@ export function LoginForm({
       setPending(false);
       return;
     }
+
+    /*
+     * An invitation the account was just made for is accepted here rather than
+     * on the screen it came from.
+     *
+     * That screen would offer one button, "принять приглашение", to a person
+     * who has already pressed «Создать аккаунт» under a card naming the studio
+     * and the role — consent given twice, the second time to something that can
+     * only go one way. The address makes it safe to skip: `presetEmail` is the
+     * invitation's own, fixed and unchangeable in this form, so an account
+     * created from this link always matches the invitation it came from.
+     *
+     * A POST, not a page visit. Joining a studio is a mutation, and `/join` is
+     * a GET that a prefetch or a mail scanner can make on its own.
+     */
+    const token = invitationTokenFromNext(next);
+    if (token) {
+      const joined = await fetch("/api/v1/invitations/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+
+      // Anything else — a revoked link, a race with another tab, an address
+      // that does not match after all — is left to `/join`, which resolves the
+      // invitation on the server and says which of those it was. Landing on
+      // `/app` with no organization would explain nothing.
+      router.push(joined.ok ? "/app" : redirectTo);
+      router.refresh();
+      return;
+    }
+
     router.push(redirectTo);
     router.refresh();
   }

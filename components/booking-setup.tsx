@@ -3,9 +3,11 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
 import type { MemberRole } from "@/domain/rbac";
 
 export type LocationRow = {
@@ -75,6 +77,32 @@ const SLOT_STEPS = [5, 10, 15, 20, 30, 60] as const;
  * "Chisinau" is refused by the API, and one typed as "Europe/Kiev" is accepted
  * and quietly wrong by an hour twice a year.
  */
+/**
+ * The week the guided setup offers with one press.
+ *
+ * Five days rather than seven and 09:00–18:00 rather than anything cleverer:
+ * the point is not to guess a studio's hours but to spare the first-time owner
+ * fourteen inputs before they have seen a single slot. Every day of it is
+ * editable in the rota below, and the second address never sees this button at
+ * all.
+ */
+const DEFAULT_WORKWEEK = { weekdays: [1, 2, 3, 4, 5] as const, start: "09:00", end: "18:00" };
+
+/** The order of the first address's steps, and the order they are drawn in. */
+const SETUP_STEPS = ["location", "rota", "publish"] as const;
+
+/**
+ * The zone the owner is sitting in, which for a studio setting up its own
+ * address is the zone that address is in. Falls back to the one this product
+ * was built for rather than to UTC — a Moldovan salon offered "UTC" reads it as
+ * a bug, and an hour of wrong slots is worse than a list nobody opened.
+ */
+function localTimezone(supported: string[]): string {
+  const guess = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (guess && supported.includes(guess)) return guess;
+  return supported.includes("Europe/Chisinau") ? "Europe/Chisinau" : (supported[0] ?? "UTC");
+}
+
 function knownTimezones(): string[] {
   const supported = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
   const all = supported ? supported("timeZone") : [];
@@ -103,6 +131,8 @@ export function BookingSetup({
   canManage,
   canPublish,
   canSaveRota,
+  slotsChecked = false,
+  nearestSlotDate = null,
   role,
   ownSpecialistId,
   locale,
@@ -117,6 +147,19 @@ export function BookingSetup({
   canManage: boolean;
   canPublish: boolean;
   canSaveRota?: boolean;
+  /**
+   * Whether the availability engine was asked at all. False before there is a
+   * published address and a rota to ask about — the blockers already say what
+   * is missing then, and the answer would only repeat them.
+   */
+  slotsChecked?: boolean;
+  /**
+   * The first day in the next fortnight a client could book, `null` when there
+   * is none. A date rather than a flag: "ближайшее — понедельник" is the answer
+   * the owner is actually after, and an empty two weeks is the same answer with
+   * nothing in it.
+   */
+  nearestSlotDate?: string | null;
   role?: MemberRole;
   ownSpecialistId?: string | null;
   locale: AppLocale;
@@ -150,6 +193,10 @@ export function BookingSetup({
   /** Which address is one click from being removed. Null while nothing is. */
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [publicSlug, setPublicSlug] = useState(organizationSlug ?? "");
+  /** Whether the owner asked for every panel while the guided setup is showing. */
+  const [manualSetup, setManualSetup] = useState(false);
+  /** Whose week the guided step writes. Empty means the only master there is. */
+  const [setupSpecialist, setSetupSpecialist] = useState("");
   const publicPageHref = organizationSlug === null ? null : `/book/${organizationSlug}`;
 
   const timezones = useMemo(() => knownTimezones(), []);
@@ -175,9 +222,60 @@ export function BookingSetup({
     "";
 
   /**
+   * The address that is actually working, and the one fact this page asks
+   * before it decides how to look: published, somebody assigned to it, and
+   * hours for that somebody. A studio with none of those is setting up for the
+   * first time and gets walked through it; a studio with one is running, and
+   * gets the panels it already knows.
+   */
+  const workingPlace = locations.find(
+    (place) =>
+      place.status === "active" &&
+      place.public_status === "published" &&
+      assignments.some((row) => row.location_id === place.id) &&
+      rota.some((rule) => rule.location_id === place.id),
+  );
+
+  const firstPlace = locations.find((place) => place.status === "active");
+
+  /*
+   * The three steps of a first address, in the order the work is actually done.
+   *
+   * Assignment is not one of them: choosing whose hours to write at an address
+   * is what puts them there, and asking twice for one fact is how a checklist
+   * grows the step nobody understands. The parameters are not steps either —
+   * slot length, buffers, lead time, confirmation all have defaults that work,
+   * and somebody who has not yet seen a booking has no opinion about a cleaning
+   * buffer.
+   */
+  const setupStep: (typeof SETUP_STEPS)[number] | null =
+    !canPublish || workingPlace
+      ? null
+      : !firstPlace
+        ? "location"
+        : !(
+              assignments.some((row) => row.location_id === firstPlace.id) &&
+              rota.some((rule) => rule.location_id === firstPlace.id)
+            )
+          ? "rota"
+          : "publish";
+
+  /**
    * What is still missing before a client could book anything. Every studio
    * hits this list in the same order, and finding out which step was skipped
    * from an empty public page is the part that wastes an afternoon.
+   */
+  /*
+   * Two things that are not blockers, and are not each other.
+   *
+   * The operator's switch was in the list above, between steps the owner
+   * finishes themselves — so it read as one more chore, and there is no click
+   * on this screen that closes it. It is stated on its own now, as somebody
+   * else's step.
+   *
+   * An empty fortnight is the opposite kind of line: everything is set up, and
+   * the page is still a dead end for a client. It replaces "всё готово" rather
+   * than sitting under it, because both cannot be true at once.
    */
   const active = locations.filter((place) => place.status === "active");
   const published = active.filter((place) => place.public_status === "published");
@@ -196,7 +294,6 @@ export function BookingSetup({
     )
       ? "bookingSetup.blockerRota"
       : null,
-    bookingAccess !== "public" ? "bookingSetup.blockerAccess" : null,
   ].filter((key): key is MessageKey => key !== null);
 
   /**
@@ -248,6 +345,72 @@ export function BookingSetup({
       },
       form,
     );
+  }
+
+  /**
+   * The first address, from the two facts a person can answer without thinking.
+   *
+   * The slug is derived from the name and the timezone from the browser: both
+   * are required by the endpoint, neither is a decision the owner has an
+   * opinion about on their first minute, and both stay editable in the address
+   * row afterwards. `slugify` is the same function the studio's own public
+   * address is suggested with, so a Cyrillic name produces a link that works.
+   */
+  async function createFirstLocation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get("name") ?? "").trim();
+    const suggested = slugify(name);
+    await send(
+      "/api/v1/locations",
+      "POST",
+      {
+        name,
+        // Short names transliterate to something the endpoint refuses; the
+        // address still needs one, and a studio never sees this field again.
+        slug: suggested.length >= SLUG_MIN_LENGTH ? suggested : `${suggested}-1`,
+        address: String(data.get("address") ?? "").trim() || undefined,
+        timezone: localTimezone(timezones),
+      },
+      form,
+    );
+  }
+
+  /**
+   * Whose hours these are, and the week they work — one submit for both.
+   *
+   * The assignment goes first and the rota second because the rota endpoint
+   * refuses a specialist who does not work at the address. Two requests, one
+   * button: they are one decision, and the screen that made them two is the one
+   * being replaced.
+   */
+  async function scheduleFirstWeek(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!firstPlace) return;
+    const specialistId = setupSpecialist || specialists[0]?.id;
+    if (!specialistId) return;
+
+    const assigned = await send(`/api/v1/specialists/${specialistId}/locations`, "PUT", {
+      location_ids: [
+        ...new Set([
+          ...assignments.filter((row) => row.specialist_id === specialistId).map((row) => row.location_id),
+          firstPlace.id,
+        ]),
+      ],
+    });
+    if (!assigned) return;
+
+    await send("/api/v1/availability/rules", "PUT", {
+      specialist_id: specialistId,
+      location_id: firstPlace.id,
+      effective_from: new Date().toISOString().slice(0, 10),
+      intervals: DEFAULT_WORKWEEK.weekdays.map((weekday) => ({
+        weekday,
+        start: DEFAULT_WORKWEEK.start,
+        end: DEFAULT_WORKWEEK.end,
+      })),
+    });
   }
 
   async function updateLocation(event: FormEvent<HTMLFormElement>, id: string) {
@@ -364,6 +527,17 @@ export function BookingSetup({
     });
   }
 
+  /*
+   * Guided while there is nothing working yet, and never again after that.
+   *
+   * Not a wizard over the page: the panels stay one link away, because the
+   * person changing Tuesday's hours next spring is not the person setting up,
+   * and `components/onboarding-panel.tsx` already says why a map beats a
+   * corridor — "an owner who already knows the piece they are missing should
+   * not be walked through a wizard to reach it".
+   */
+  const guided = setupStep !== null && !manualSetup;
+
   const currentRota = rota.filter(
     (rule) => rule.specialist_id === currentSpecialistId && rule.location_id === currentLocationId,
   );
@@ -378,12 +552,106 @@ export function BookingSetup({
         </p>
       )}
 
-      {!isMaster && (
+      {guided && (
+        <section className="panel booking-panel">
+          <h2>{t("bookingSetup.setupTitle")}</h2>
+          <p className="muted">{t("bookingSetup.setupHint")}</p>
+
+          {/* Where we are, in the order the work is done: what is behind, what
+              is now, and what is left. The current one is the only line that is
+              not muted — a list where everything shouts says nothing. */}
+          <ol className="compact-list">
+            {SETUP_STEPS.map((step, index) => {
+              const done = SETUP_STEPS.indexOf(setupStep!) > index;
+              return (
+                <li key={step} className={step === setupStep ? undefined : "muted"}>
+                  <span aria-hidden="true">{done ? "✓" : step === setupStep ? "→" : "○"}</span>{" "}
+                  {t(`bookingSetup.setupStep.${step}` as MessageKey)}
+                </li>
+              );
+            })}
+          </ol>
+
+          {setupStep === "location" && (
+            <form className="inline-form" onSubmit={createFirstLocation}>
+              <label>
+                {t("bookingSetup.name")}
+                <input name="name" required minLength={2} maxLength={120} placeholder="Studio" />
+              </label>
+              <label>
+                {t("bookingSetup.address")}
+                <input name="address" maxLength={300} />
+              </label>
+              {/* The link and the timezone are derived and shown, not asked:
+                  both are editable in the address row the moment this is done. */}
+              <p className="muted">{t("bookingSetup.setupDerived", { zone: localTimezone(timezones) })}</p>
+              <button type="submit" className="primary-button" disabled={pending}>
+                {pending ? t("common.saving") : t("bookingSetup.setupNext")}
+              </button>
+            </form>
+          )}
+
+          {setupStep === "rota" && (
+            <form className="inline-form" onSubmit={scheduleFirstWeek}>
+              {specialists.length === 0 ? (
+                <p className="warning-banner">{t("bookingSetup.blockerSpecialist")}</p>
+              ) : (
+                <>
+                  {specialists.length > 1 && (
+                    <label>
+                      {t("bookingSetup.specialist")}
+                      <select
+                        value={setupSpecialist || specialists[0].id}
+                        onChange={(event) => setSetupSpecialist(event.target.value)}
+                      >
+                        {specialists.map((person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <p className="muted">
+                    {t("bookingSetup.setupWorkweek", {
+                      from: DEFAULT_WORKWEEK.start,
+                      to: DEFAULT_WORKWEEK.end,
+                    })}
+                  </p>
+                  <button type="submit" className="primary-button" disabled={pending}>
+                    {pending ? t("common.saving") : t("bookingSetup.setupWorkweekAction")}
+                  </button>
+                </>
+              )}
+            </form>
+          )}
+
+          {setupStep === "publish" && firstPlace && (
+            <div className="inline-actions">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={pending}
+                onClick={() => setPublicStatus(firstPlace.id, "published")}
+              >
+                {pending ? t("common.saving") : t("bookingSetup.publish")}
+              </button>
+              <span className="muted">{t("bookingSetup.operatorPending")}</span>
+            </div>
+          )}
+
+          <p className="muted" style={{ marginTop: "16rem" }}>
+            <button type="button" className="inline-action" onClick={() => setManualSetup(true)}>
+              {t("bookingSetup.setupManual")}
+            </button>
+          </p>
+        </section>
+      )}
+
+      {!isMaster && !guided && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.checklistTitle")}</h2>
-          {blockers.length === 0 ? (
-            <p className="muted">{t("bookingSetup.checklistDone")}</p>
-          ) : (
+          {blockers.length > 0 && (
             <div className="warning-banner">
               <ul>
                 {blockers.map((key) => (
@@ -392,10 +660,35 @@ export function BookingSetup({
               </ul>
             </div>
           )}
+
+          {blockers.length === 0 && slotsChecked && nearestSlotDate === null && (
+            <div className="warning-banner">{t("bookingSetup.noUpcomingSlots")}</div>
+          )}
+
+          {blockers.length === 0 && nearestSlotDate !== null && bookingAccess === "public" && (
+            <>
+              <p className="muted">{t("bookingSetup.checklistDone")}</p>
+              <p className="muted">
+                {t("bookingSetup.nearestSlot", {
+                  date: new Date(`${nearestSlotDate}T00:00:00`).toLocaleDateString(localeTag(locale), {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  }),
+                })}
+              </p>
+            </>
+          )}
+
+          {bookingAccess !== "public" && (
+            <p className="muted" style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
+              {t("bookingSetup.operatorPending")}
+            </p>
+          )}
         </section>
       )}
 
-      {!isMaster && <section className="panel booking-panel">
+      {!isMaster && !guided && <section className="panel booking-panel">
         <h2>{t("bookingSetup.locationsTitle")}</h2>
         <p className="muted">{t("bookingSetup.locationsHint")}</p>
 
@@ -587,7 +880,7 @@ export function BookingSetup({
         )}
       </section>}
 
-      {!isMaster && settingsLocation && (
+      {!isMaster && !guided && settingsLocation && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.settingsTitle")}</h2>
           <p className="muted">{t("bookingSetup.settingsHint")}</p>
@@ -733,7 +1026,7 @@ export function BookingSetup({
         </section>
       )}
 
-      {!isMaster && (
+      {!isMaster && !guided && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.assignmentTitle")}</h2>
           <p className="muted">{t("bookingSetup.assignmentHint")}</p>
@@ -770,7 +1063,7 @@ export function BookingSetup({
         </section>
       )}
 
-      {specialists.length > 0 && active.length > 0 && (
+      {specialists.length > 0 && active.length > 0 && !guided && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.rotaTitle")}</h2>
           <p className="muted">{t("bookingSetup.rotaHint")}</p>

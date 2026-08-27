@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { db } from "@/db";
 import { invitations, memberships, users } from "@/db/schema";
-import { invitationTokenFromNext, previewInvitation } from "@/lib/invitation-preview";
+import { invitationTokenFromNext } from "@/domain/invitation-link";
+import { previewInvitation } from "@/lib/invitation-preview";
 import { setNotificationProvider } from "@/lib/notification-provider";
 import { dataOf, errorCodeOf, signIn, signUp } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";

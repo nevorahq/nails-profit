@@ -20,7 +20,6 @@ export function JoinAccept({ token, locale }: { token: string; locale: AppLocale
   const t = getTranslator(locale);
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function accept() {
@@ -34,10 +33,22 @@ export function JoinAccept({ token, locale }: { token: string; locale: AppLocale
     });
 
     if (response.ok) {
-      setDone(true);
-      setPending(false);
-      // The shell reads the membership on the server, and until it is refreshed
-      // the navigation still belongs to someone with no organization.
+      /*
+       * Straight in, rather than a success card with a button to press.
+       *
+       * `router.refresh()` on this page used to be the last step, and it landed
+       * the person who had just accepted on the screen for somebody else's used
+       * link — "эта ссылка больше не действует, войдите в аккаунт, который её
+       * принял", in the account that had. The server page re-renders on that
+       * refresh, sees the invitation is accepted now, and has no reason left to
+       * draw this component at all.
+       *
+       * `replace` rather than `push`: the invitation link behind us is spent,
+       * and Back should not offer it again. The refresh still happens — the
+       * shell reads the membership on the server, and until it is re-read the
+       * navigation belongs to someone with no organization.
+       */
+      router.replace("/app");
       router.refresh();
       return;
     }
@@ -58,25 +69,6 @@ export function JoinAccept({ token, locale }: { token: string; locale: AppLocale
       return;
     }
     setError(getErrorMessage(code ?? "", body?.error?.message ?? t("join.failed"), locale));
-  }
-
-  if (done) {
-    return (
-      <>
-        <p style={{ fontWeight: 700, marginBottom: "16rem" }}>{t("join.success")}</p>
-        <button
-          className="primary-button"
-          type="button"
-          style={{ width: "100%" }}
-          onClick={() => {
-            router.push("/app");
-            router.refresh();
-          }}
-        >
-          {t("join.goToApp")}
-        </button>
-      </>
-    );
   }
 
   return (

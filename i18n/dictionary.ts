@@ -157,7 +157,6 @@ const ru = {
   "join.invitedEmail": "Приглашение выдано на {email}",
   "join.accept": "Принять приглашение",
   "join.accepting": "Присоединяемся…",
-  "join.success": "Вы успешно присоединились к организации",
   "join.goToApp": "Перейти в приложение",
   "join.failed": "Не удалось принять приглашение",
   "join.loginButton": "Войти",
@@ -1037,6 +1036,18 @@ const ru = {
   "weekday.sunday": "Воскресенье",
 
   "bookingSetup.title": "Настройка записи",
+  "bookingSetup.setupTitle": "Настройка адреса",
+  "bookingSetup.setupHint":
+    "Три шага до страницы, на которой клиент сможет записаться. Остальные параметры уже заданы разумно — их можно не трогать.",
+  "bookingSetup.setupStep.location": "Адрес студии",
+  "bookingSetup.setupStep.rota": "Кто работает и когда",
+  "bookingSetup.setupStep.publish": "Публикация",
+  "bookingSetup.setupDerived":
+    "Ссылку для адреса подберём из названия, часовой пояс — {zone}. И то, и другое можно изменить позже.",
+  "bookingSetup.setupNext": "Дальше",
+  "bookingSetup.setupWorkweek": "Поставим рабочую неделю: понедельник–пятница, {from}–{to}. Дни и часы правятся дальше в графике.",
+  "bookingSetup.setupWorkweekAction": "Задать рабочую неделю",
+  "bookingSetup.setupManual": "Настроить вручную",
   "bookingSetup.noAccess": "У вашей роли нет доступа к настройке записи.",
   "bookingSetup.checklistTitle": "Что осталось сделать",
   "bookingSetup.checklistDone": "Всё готово: клиент может открыть страницу и записаться.",
@@ -1046,7 +1057,11 @@ const ru = {
   "bookingSetup.blockerSpecialist": "Заведите мастера в разделе «Мастера».",
   "bookingSetup.blockerAssign": "Отметьте, кто из мастеров работает на опубликованном адресе.",
   "bookingSetup.blockerRota": "Задайте график работы — без часов свободных слотов не будет.",
-  "bookingSetup.blockerAccess": "Публичную страницу включает оператор после проверок безопасности.",
+  "bookingSetup.noUpcomingSlots":
+    "График задан, но записаться в ближайшие две недели не на что. Проверьте, те ли дни недели отмечены и с какой даты график действует.",
+  "bookingSetup.nearestSlot": "Ближайшее свободное время — {date}.",
+  "bookingSetup.operatorPending":
+    "Публичную страницу включает оператор после проверок безопасности — этот шаг не ваш. Остальную настройку можно закончить, не дожидаясь его.",
 
   "bookingSetup.locationsTitle": "Адреса",
   "bookingSetup.locationsHint":
@@ -1267,7 +1282,6 @@ const ro: Record<MessageKey, Message> = {
   "join.invitedEmail": "Invitația a fost emisă pentru {email}",
   "join.accept": "Acceptați invitația",
   "join.accepting": "Ne alăturăm…",
-  "join.success": "V-ați alăturat cu succes organizației",
   "join.goToApp": "Mergeți la aplicație",
   "join.failed": "Invitația nu a putut fi acceptată",
   "join.loginButton": "Conectați-vă",
@@ -2148,6 +2162,18 @@ const ro: Record<MessageKey, Message> = {
   "weekday.sunday": "Duminică",
 
   "bookingSetup.title": "Configurarea programărilor",
+  "bookingSetup.setupTitle": "Configurarea adresei",
+  "bookingSetup.setupHint":
+    "Trei pași până la pagina pe care clientul se poate programa. Restul parametrilor au deja valori rezonabile — nu trebuie atinși.",
+  "bookingSetup.setupStep.location": "Adresa studioului",
+  "bookingSetup.setupStep.rota": "Cine lucrează și când",
+  "bookingSetup.setupStep.publish": "Publicare",
+  "bookingSetup.setupDerived":
+    "Linkul adresei îl compunem din denumire, fusul orar — {zone}. Ambele pot fi schimbate mai târziu.",
+  "bookingSetup.setupNext": "Mai departe",
+  "bookingSetup.setupWorkweek": "Setăm săptămâna de lucru: luni–vineri, {from}–{to}. Zilele și orele se ajustează mai jos, în program.",
+  "bookingSetup.setupWorkweekAction": "Setați săptămâna de lucru",
+  "bookingSetup.setupManual": "Configurați manual",
   "bookingSetup.noAccess": "Rolul dumneavoastră nu are acces la configurarea programărilor.",
   "bookingSetup.checklistTitle": "Ce a mai rămas de făcut",
   "bookingSetup.checklistDone": "Totul este gata: clientul poate deschide pagina și se poate programa.",
@@ -2157,7 +2183,11 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.blockerSpecialist": "Adăugați un maestru în secțiunea „Maeștri”.",
   "bookingSetup.blockerAssign": "Marcați care maeștri lucrează la adresa publicată.",
   "bookingSetup.blockerRota": "Setați programul de lucru — fără ore nu vor exista intervale libere.",
-  "bookingSetup.blockerAccess": "Pagina publică este activată de operator după verificările de securitate.",
+  "bookingSetup.noUpcomingSlots":
+    "Programul este setat, dar în următoarele două săptămâni nu există niciun interval liber. Verificați ce zile ale săptămânii sunt bifate și de la ce dată se aplică programul.",
+  "bookingSetup.nearestSlot": "Cel mai apropiat interval liber — {date}.",
+  "bookingSetup.operatorPending":
+    "Pagina publică este activată de operator după verificările de securitate — acest pas nu vă aparține. Restul configurării poate fi finalizat fără să îl așteptați.",
 
   "bookingSetup.locationsTitle": "Adrese",
   "bookingSetup.locationsHint":
@@ -2377,7 +2407,6 @@ const en: Record<MessageKey, Message> = {
   "join.invitedEmail": "The invitation was issued for {email}",
   "join.accept": "Accept invitation",
   "join.accepting": "Joining…",
-  "join.success": "You have successfully joined the organization",
   "join.goToApp": "Go to app",
   "join.failed": "The invitation could not be accepted",
   "join.loginButton": "Sign in",
@@ -3246,6 +3275,18 @@ const en: Record<MessageKey, Message> = {
   "weekday.sunday": "Sunday",
 
   "bookingSetup.title": "Booking setup",
+  "bookingSetup.setupTitle": "Setting up the address",
+  "bookingSetup.setupHint":
+    "Three steps to a page a client can book on. Everything else already has a sensible value and can be left alone.",
+  "bookingSetup.setupStep.location": "The studio's address",
+  "bookingSetup.setupStep.rota": "Who works, and when",
+  "bookingSetup.setupStep.publish": "Publishing",
+  "bookingSetup.setupDerived":
+    "The address link is taken from the name, the timezone is {zone}. Both stay editable afterwards.",
+  "bookingSetup.setupNext": "Next",
+  "bookingSetup.setupWorkweek": "We will set a working week: Monday–Friday, {from}–{to}. Days and hours are adjusted in the rota below.",
+  "bookingSetup.setupWorkweekAction": "Set the working week",
+  "bookingSetup.setupManual": "Set it up manually",
   "bookingSetup.noAccess": "Your role cannot configure booking.",
   "bookingSetup.checklistTitle": "What is still missing",
   "bookingSetup.checklistDone": "Everything is ready: a client can open the page and book.",
@@ -3255,7 +3296,11 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.blockerSpecialist": "Add a specialist under “Specialists”.",
   "bookingSetup.blockerAssign": "Mark which specialists work at the published address.",
   "bookingSetup.blockerRota": "Set the working hours — without them there are no free slots.",
-  "bookingSetup.blockerAccess": "The public page is switched on by an operator after the security checks.",
+  "bookingSetup.noUpcomingSlots":
+    "The rota is set, but there is nothing to book in the next two weeks. Check which weekdays are marked and the date the rota starts from.",
+  "bookingSetup.nearestSlot": "The soonest free time is {date}.",
+  "bookingSetup.operatorPending":
+    "The public page is switched on by the operator after the security checks — that step is not yours. The rest of the setup can be finished without waiting for it.",
 
   "bookingSetup.locationsTitle": "Addresses",
   "bookingSetup.locationsHint":
