@@ -3,11 +3,70 @@ import { and, count, eq, exists, gt, isNotNull, isNull, lte, notExists, or, sql 
 import {
   commissionRuleServices,
   commissionRules,
+  expenses,
   services,
   specialists,
   visits,
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
+import { expensesForMonth } from "@/domain/expense-periods";
+import { loadMonthRota } from "@/lib/capacity";
+
+/**
+ * The two checklists a studio is walked through, and the shape they share.
+ *
+ * A step is measured rather than ticked off, and it measures the *usable*
+ * thing, not the row: a service with no price does not count as a service, and
+ * a rule that ended is not a rule. Nothing here is stored, so nothing can claim
+ * a studio is set up after the data that set it up was archived.
+ */
+export type ChecklistStep<Key extends string> = Readonly<{
+  key: Key;
+  done: boolean;
+  href: string;
+}>;
+
+export type ChecklistProgress<Key extends string> = Readonly<{
+  steps: readonly ChecklistStep<Key>[];
+  done: number;
+  total: number;
+  complete: boolean;
+  /** The first unfinished step — what the interface should point at. */
+  next: ChecklistStep<Key> | null;
+}>;
+
+export type OnboardingStep = ChecklistStep<"specialist" | "service" | "visit">;
+export type OnboardingProgress = ChecklistProgress<"specialist" | "service" | "visit">;
+
+/**
+ * The second checklist, and the reason there are two.
+ *
+ * Everything above answers «сколько я заработал на визите», and it is answered
+ * by the visit alone. The month is a different question — «сколько осталось
+ * после аренды» — and it needs two facts the visit never carries: what the
+ * studio pays whether or not anyone comes, and how many hours were open. A
+ * studio with neither still gets a report, and every figure in it reads better
+ * than the truth: operating profit equal to contribution margin, and no
+ * break-even to compare it with.
+ *
+ * Kept out of `loadOnboarding` rather than added to it as steps four and five,
+ * because a checklist that goes on growing after the first number arrives stops
+ * being a path and becomes a chore. This one only appears once the first one is
+ * finished.
+ */
+export type MonthSetupStep = ChecklistStep<"overhead" | "rota">;
+export type MonthSetupProgress = ChecklistProgress<"overhead" | "rota">;
+
+function summarize<Key extends string>(steps: readonly ChecklistStep<Key>[]): ChecklistProgress<Key> {
+  const done = steps.filter((step) => step.done).length;
+  return {
+    steps,
+    done,
+    total: steps.length,
+    complete: done === steps.length,
+    next: steps.find((step) => !step.done) ?? null,
+  };
+}
 
 /**
  * Onboarding progress.
@@ -28,21 +87,6 @@ import type { TenantTransaction } from "@/db/tenant";
  * material engine: the entry cost was buying more than the per-visit precision
  * was worth.
  */
-export type OnboardingStep = Readonly<{
-  key: "specialist" | "service" | "visit";
-  done: boolean;
-  href: string;
-}>;
-
-export type OnboardingProgress = Readonly<{
-  steps: readonly OnboardingStep[];
-  done: number;
-  total: number;
-  complete: boolean;
-  /** The first unfinished step — what the interface should point at. */
-  next: OnboardingStep | null;
-}>;
-
 export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingProgress> {
   const now = new Date();
 
@@ -136,19 +180,100 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
    */
   const [closedVisits] = await tx.select({ value: count() }).from(visits);
 
+  /*
+   * `#add-specialist` rather than the bare page, and not `/app/settings`, which
+   * is where this pointed for as long as the panel existed. The commission rule
+   * is written in the add-specialist form on `/app/specialists`; Настройки hold
+   * the organization, the subscription and the team, and offer no way to finish
+   * this step at all. A solo owner — the studio this panel is for — found
+   * nothing there but their own name in «Команда», because the bridge to the
+   * specialist card is only drawn for an invited master.
+   */
   const steps: OnboardingStep[] = [
-    { key: "specialist", done: withRule.value > 0, href: "/app/settings" },
-    { key: "service", done: usableServices.value > 0, href: "/app/services" },
+    { key: "specialist", done: withRule.value > 0, href: "/app/specialists#add-specialist" },
+    { key: "service", done: usableServices.value > 0, href: "/app/services#add-service" },
     { key: "visit", done: closedVisits.value > 0, href: "/app/visits/new" },
   ];
 
-  const done = steps.filter((step) => step.done).length;
+  return summarize(steps);
+}
 
-  return {
-    steps,
-    done,
-    total: steps.length,
-    complete: done === steps.length,
-    next: steps.find((step) => !step.done) ?? null,
-  };
+/**
+ * Whether a screen should be running the guided setup, and from what standing.
+ *
+ * The guide ends at the first closed visit, which is the answer to «пока не
+ * будет закрыт первый визит» and also the cheapest question in this file: one
+ * count, paid by every studio that has long finished setting up. Only a studio
+ * that has never closed a visit pays for the checklist itself.
+ *
+ * The count it returns is the baseline the window compares against. Without one
+ * the first write of a session has nothing to be «a step further» than, and the
+ * window would either never open or open on the wrong action.
+ *
+ * Deliberately not `!complete`: a rule that ended or a service archived years
+ * later puts a ○ back on the dashboard panel, and that is the panel's business.
+ * It must not put a studio that has been trading for a year back into a guided
+ * first run.
+ */
+export async function loadSetupGuide(
+  tx: TenantTransaction,
+): Promise<{ done: number; total: number } | null> {
+  const [closedVisits] = await tx.select({ value: count() }).from(visits);
+  if (closedVisits.value > 0) return null;
+
+  const progress = await loadOnboarding(tx);
+  return { done: progress.done, total: progress.total };
+}
+
+/**
+ * What the month's report is still missing, measured the same way.
+ *
+ * Both steps are read for the month being reported rather than for all time: a
+ * studio that entered its rent in January and stopped is not set up for March,
+ * and a checklist that remembered January would say it was.
+ */
+export async function loadMonthSetup(
+  tx: TenantTransaction,
+  options: { month: string; currency: string },
+): Promise<MonthSetupProgress> {
+  /*
+   * The live ledger, not the month's rows — a recurring row is stored once with
+   * an interval, and the row that pays March's rent may carry a January
+   * `spent_on`. `expensesForMonth` is what decides what belongs, exactly as
+   * `loadPeriodPL` does; filtering by date in SQL would drop the rows the month
+   * is built on.
+   *
+   * Narrowed to overhead, because those are the only ones the profit line
+   * subtracts: a payroll row is money leaving the account, but the master's
+   * work already reached the report through the visit's snapshot.
+   */
+  const ledger = await tx
+    .select({
+      id: expenses.id,
+      name: expenses.name,
+      category: expenses.category,
+      amountMinor: expenses.amountMinor,
+      currency: expenses.currency,
+      spentOn: expenses.spentOn,
+      isRecurring: expenses.isRecurring,
+      recurringFrom: expenses.recurringFrom,
+      recurringTo: expenses.recurringTo,
+    })
+    .from(expenses)
+    .where(isNull(expenses.archivedAt));
+
+  const thisMonth = expensesForMonth(
+    ledger.filter((row) => row.currency === options.currency),
+    options.month,
+  );
+  const hasOverhead = thisMonth.some((row) => row.class === "overhead");
+
+  // The same rota the capacity block reads, so the step cannot claim hours the
+  // report does not see.
+  const { scheduledMinutes } = await loadMonthRota(tx, options.month);
+
+  return summarize<"overhead" | "rota">([
+    { key: "overhead", done: hasOverhead, href: "/app/expenses" },
+    { key: "rota", done: scheduledMinutes > 0, href: "/app/booking" },
+  ]);
 }

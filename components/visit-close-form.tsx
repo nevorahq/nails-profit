@@ -4,15 +4,37 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 
+import {
+  SetupGuideDialog,
+  useSetupGuide,
+  type SetupGuideBaseline,
+} from "@/components/setup-guide";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { formatMoneyMinor } from "@/lib/format";
 
+/**
+ * A service this form is allowed to offer, which is a narrower thing than a row
+ * in the catalogue: both numbers are required here, because a visit cannot be
+ * closed without them. `app/app/visits/new/page.tsx` is what filters them out.
+ */
 export type CloseFormService = {
   id: string;
   displayName: string;
-  price_minor: number | null;
-  duration_minutes: number | null;
+  price_minor: number;
+  duration_minutes: number;
+};
+
+export type CloseFormSpecialist = {
+  id: string;
+  name: string;
+  /**
+   * Which services a rule in force pays this person for. `null` is the usual
+   * answer — a rule with no service named covers all of them. An empty list is
+   * the state this screen exists to catch: no rule at all, and every close
+   * refused with MISSING_COMMISSION_RULE.
+   */
+  covered_service_ids: string[] | null;
 };
 
 export type CloseFormAddOn = {
@@ -32,25 +54,42 @@ export type CloseFormAddOn = {
  */
 export function VisitCloseForm({
   services,
+  unusableServices,
   addOns,
   specialists,
   clients,
   paymentMethods,
   currency,
   locale,
+  setupGuide = null,
 }: {
   services: CloseFormService[];
+  /** Catalogue rows left out above, so their absence can be explained. */
+  unusableServices: number;
   addOns: CloseFormAddOn[];
-  specialists: { id: string; name: string }[];
+  specialists: CloseFormSpecialist[];
   clients: { id: string; name: string }[];
   /** Empty when the studio has entered none; the field is then not shown. */
   paymentMethods: { id: string; name: string; is_default: boolean }[];
   currency: string;
   locale: AppLocale;
+  /**
+   * Where «Первый расчёт» stood when this page was drawn, or null once the
+   * studio has closed a visit — which, on this screen, is the state one
+   * successful save away.
+   */
+  setupGuide?: SetupGuideBaseline;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
+  const guide = useSetupGuide(setupGuide);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  /*
+   * Controlled, unlike the client and the payment method, because the pair
+   * (service, specialist) is what decides whether this visit can be closed at
+   * all — and the answer has to be on screen while it is being chosen.
+   */
+  const [specialistId, setSpecialistId] = useState(specialists[0]?.id ?? "");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -63,6 +102,20 @@ export function VisitCloseForm({
   const price = (service?.price_minor ?? 0) + chosen.reduce((total, a) => total + a.price_delta_minor, 0);
   const duration =
     (service?.duration_minutes ?? 0) + chosen.reduce((total, a) => total + a.duration_delta_minutes, 0);
+
+  /** Whether a rule in force pays this person for this service. */
+  function covers(person: CloseFormSpecialist, chosenServiceId: string) {
+    return (
+      person.covered_service_ids === null || person.covered_service_ids.includes(chosenServiceId)
+    );
+  }
+
+  const specialist = specialists.find((person) => person.id === specialistId) ?? null;
+  const payable = specialist !== null && covers(specialist, serviceId);
+  /** Nobody has a rule at all: this is setup, not a wrong pick. */
+  const anyonePayable = specialists.some(
+    (person) => person.covered_service_ids === null || person.covered_service_ids.length > 0,
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,7 +140,7 @@ export function VisitCloseForm({
       },
       body: JSON.stringify({
         service_id: serviceId,
-        specialist_id: data.get("specialist_id"),
+        specialist_id: specialistId,
         client_id: clientId === "" ? null : clientId,
         add_on_ids: selectedAddOns,
         ...(actualDuration ? { actual_duration_minutes: Number(actualDuration) } : {}),
@@ -105,11 +158,24 @@ export function VisitCloseForm({
     }
 
     setPending(false);
+
+    /*
+     * The end of the guided run, and the one place the window replaces a
+     * redirect rather than sitting on top of one. This visit is the third step:
+     * closing it completes the checklist, so what opens says «готово» and
+     * offers the report. Everybody else — every studio that has closed a visit
+     * before — goes straight to the list, exactly as before.
+     */
+    if (await guide.check()) {
+      router.refresh();
+      return;
+    }
+
     router.push("/app/visits");
     router.refresh();
   }
 
-  if (services.length === 0 || specialists.length === 0) {
+  if (services.length === 0 || specialists.length === 0 || !anyonePayable) {
     return (
       <div className="warning-banner">
         {t("closeVisit.needsSetup", {
@@ -130,6 +196,18 @@ export function VisitCloseForm({
 
   return (
     <form onSubmit={submit}>
+      <SetupGuideDialog
+        guide={guide}
+        locale={locale}
+        stayKey="setupGuide.toVisits"
+        onStay={() => {
+          // «Остаться здесь» would be a lie on this screen: the visit is
+          // written and the form behind the window is a spent one.
+          router.push("/app/visits");
+          router.refresh();
+        }}
+      />
+
       <section className="panel">
         <div className="inline-form">
           <label>
@@ -151,10 +229,21 @@ export function VisitCloseForm({
           </label>
           <label>
             {t("specialists.specialist")}
-            <select name="specialist_id">
+            <select
+              name="specialist_id"
+              value={specialistId}
+              onChange={(event) => setSpecialistId(event.target.value)}
+            >
+              {/*
+                Named rather than hidden. Somebody whose rule does not cover
+                this service is usually the person who did the work, and a list
+                they had disappeared from would read as a bug; what they need is
+                the reason, and the rule is one page away.
+              */}
               {specialists.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
+                  {covers(item, serviceId) ? "" : ` — ${t("closeVisit.noRuleOption")}`}
                 </option>
               ))}
             </select>
@@ -223,11 +312,35 @@ export function VisitCloseForm({
         <p className="muted">
           {t("closeVisit.dueLine", { amount: formatMoneyMinor(price, currency), duration })}
         </p>
+
+        {unusableServices > 0 && (
+          <p className="muted">
+            {t("closeVisit.hiddenServices", { count: unusableServices })}{" "}
+            <Link className="text-link" href="/app/services">
+              {t("services.title")}
+            </Link>
+          </p>
+        )}
       </section>
+
+      {/*
+        The refusal, before the request rather than after it. The server says
+        the same thing — this is not a substitute for it — but it says it once
+        the visit has been described in full, which on a phone between two
+        clients is a minute for nothing.
+      */}
+      {!payable && (
+        <div className="warning-banner">
+          {t("closeVisit.noRule")}{" "}
+          <Link className="text-link" href="/app/specialists">
+            {t("specialists.title")}
+          </Link>
+        </div>
+      )}
 
       {error && <div className="form-error" role="alert">{error}</div>}
 
-      <button className="primary-button" type="submit" disabled={pending}>
+      <button className="primary-button" type="submit" disabled={pending || !payable}>
         {pending ? t("common.saving") : t("closeVisit.title")}
       </button>
     </form>

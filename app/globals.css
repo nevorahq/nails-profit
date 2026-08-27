@@ -24,7 +24,7 @@
   --warning: #6f5018;
   --warning-border: #d4bd83;
   --warning-soft: #f8f0dc;
-  --shadow: 0 24rem 80rem rgba(15, 42, 29, 0.14);
+  --shadow: 0 2rem 8rem rgba(15, 42, 29, 0.4);
 
   /*
    * Soft UI. Both shadows are the palette restated, not new colour: the light
@@ -527,7 +527,7 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .add-form-toggle { display: none; margin-top: 40rem; margin-bottom: 18rem; }
 
 .panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; padding: 28rem 26rem; margin: 26rem 0; box-shadow: var(--shadow); }
-.panel h2 { font-size: 26rem; margin: 0 0 22rem; }
+.panel h2 { font-size: 26rem; margin: 0; }
 
 /*
  * The «Добавить …» compose panels on /clients, /services, /specialists
@@ -794,6 +794,32 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .muted { color: var(--muted); font-size: 14rem; }
 .compact-list { margin: 0; padding-left: 18rem; font-size: 14rem; }
 .compact-list li { line-height: 1.5; }
+
+/*
+ * The step a checklist is pointing at, marked by the only thing on the panel
+ * that moves — «Первый расчёт» has to read as a single next action rather than
+ * as three equal ones, and the list was a map with no «вы здесь».
+ *
+ * An ambient loop, deliberately outside the standard motion system like the
+ * landing page's floating card — see the note by --ease-standard. The global
+ * prefers-reduced-motion rule at the end of this file stops it.
+ */
+.checklist-arrow { display: inline-block; color: var(--accent); animation: checklist-point 1.6s ease-in-out infinite; }
+@keyframes checklist-point { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4rem); } }
+
+/*
+ * The guided-setup window: what was just finished, and the way back to the list
+ * of what is not.
+ *
+ * Two ways out, so it is a signpost rather than a gate — the backdrop and Esc
+ * both mean «остаться здесь», and the component wires them to the same handler
+ * as the second button. Sized by `min()` rather than by a fixed width, because
+ * 360 px is the screen this flow is checked at.
+ */
+.modal-backdrop { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; padding: 20rem; background: rgba(15, 42, 29, 0.45); }
+.modal-card { width: min(440rem, 100%); max-height: 90vh; overflow-y: auto; padding: 28rem 26rem; border-radius: 24rem; border: 1rem solid var(--line); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
+.modal-card h2 { margin: 0 0 12rem; font-size: 24rem; }
+.modal-card p { margin: 0 0 22rem; color: var(--muted); font-size: 15rem; line-height: 1.6; }
 .checkbox-set { border: 1rem solid var(--line); border-radius: 14rem; padding: 12rem 16rem; margin: 0; }
 .checkbox-set legend { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 6rem; }
 /*

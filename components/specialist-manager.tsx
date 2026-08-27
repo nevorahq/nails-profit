@@ -7,6 +7,11 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import { NameCombobox } from "@/components/name-combobox";
+import {
+  SetupGuideDialog,
+  useSetupGuide,
+  type SetupGuideBaseline,
+} from "@/components/setup-guide";
 
 export type OrganizationMember = {
   user_id: string;
@@ -80,6 +85,7 @@ export function SpecialistManager({
   currency,
   locale,
   canManage,
+  setupGuide = null,
 }: {
   specialists: SpecialistRow[];
   services: ServiceOption[];
@@ -87,9 +93,15 @@ export function SpecialistManager({
   currency: string;
   locale: AppLocale;
   canManage: boolean;
+  /**
+   * Where «Первый расчёт» stood when this page was drawn, or null once the
+   * studio has closed a visit and the guided run is over.
+   */
+  setupGuide?: SetupGuideBaseline;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
+  const guide = useSetupGuide(setupGuide);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   /** Which master is one click from being removed. Null while nobody is. */
@@ -104,6 +116,13 @@ export function SpecialistManager({
    */
   const [addName, setAddName] = useState("");
   const [addRuleType, setAddRuleType] = useState("percentage");
+  /*
+   * Read only to explain the field below it. A master on a salary or renting a
+   * chair still needs a rule — the engine asks for one whoever they are — and
+   * for them the honest answer is 0, which is a different thing from an empty
+   * box. Saying so beside the field beats a validation message after the fact.
+   */
+  const [addCooperation, setAddCooperation] = useState("commission");
   const [exceptionRuleType, setExceptionRuleType] = useState("percentage");
   const [coveredServiceIds, setCoveredServiceIds] = useState<string[]>([]);
 
@@ -164,6 +183,14 @@ export function SpecialistManager({
     form?.reset();
     setPending(false);
     router.refresh();
+    /*
+     * Asked after every write here, not only after adding a master: the step is
+     * «мастер с действующим правилом», and a rule written for an existing
+     * master finishes it just as a new card does. `check` opens the window only
+     * when the count actually moved, so the rest cost one request and nothing
+     * on screen.
+     */
+    await guide.check();
     return true;
   }
 
@@ -173,15 +200,26 @@ export function SpecialistManager({
    */
   function ruleFromForm(data: FormData) {
     const type = String(data.get("rule_type"));
-    const value = Number(String(data.get("rule_value") ?? "").trim());
-    if (!Number.isFinite(value)) return null;
+    /*
+     * An empty field is not a zero.
+     *
+     * `Number("")` is 0 and passes `Number.isFinite`, so leaving the box blank
+     * used to write a real 0% rule: the master appeared to work for nothing,
+     * every margin on the dashboard read too high, and nothing on screen said
+     * so — a rule was there, so no banner and no refusal. A blank field means
+     * the question was not answered, and the form says so instead.
+     */
+    const typed = String(data.get("rule_value") ?? "").trim();
+    const value = Number(typed);
+    if (typed === "" || !Number.isFinite(value)) return null;
 
     const base = String(data.get("rule_base") ?? "after_discount");
     if (type === "fixed") return { type, fixed_amount_minor: Math.round(value * 100) };
 
-    const guaranteed = Number(String(data.get("rule_guaranteed") ?? "").trim());
+    const typedGuarantee = String(data.get("rule_guaranteed") ?? "").trim();
+    const guaranteed = Number(typedGuarantee);
     if (type === "hybrid") {
-      if (!Number.isFinite(guaranteed)) return null;
+      if (typedGuarantee === "" || !Number.isFinite(guaranteed)) return null;
       return {
         type,
         basis_points: Math.round(value * 100),
@@ -197,6 +235,17 @@ export function SpecialistManager({
     const form = event.currentTarget;
     const data = new FormData(form);
     const rule = ruleFromForm(data);
+    /*
+     * No rule, no specialist. The API takes the rule as optional so a row can
+     * be created first, but a master reaches this studio through one door and
+     * behind it the rule is not optional at all: `recordCompletedVisit` refuses
+     * with MISSING_COMMISSION_RULE, and the refusal arrives at the end of a
+     * visit rather than here.
+     */
+    if (!rule) {
+      setError(t("specialists.valueRequired"));
+      return;
+    }
     const ok = await send(
       "/api/v1/specialists",
       {
@@ -216,6 +265,7 @@ export function SpecialistManager({
     if (ok) {
       setAddOpen(false);
       setAddName("");
+      setAddCooperation("commission");
     }
   }
 
@@ -309,9 +359,20 @@ export function SpecialistManager({
     if (ok) setServiceEditor(null);
   }
 
-  const withoutRule = specialists.filter(
-    (person) => person.cooperation_type === "commission" && person.default_rule === null,
-  );
+  /*
+   * Anybody without a rule, whatever they are paid by.
+   *
+   * This used to ask for `cooperation_type === "commission"` as well, on the
+   * reading that a master on a salary or renting a chair has no commission to
+   * describe. The costing engine does not read it that way: it asks for a rule
+   * for whoever worked the visit, and refuses the close without one. So a
+   * `staff` or `rent` master imported from a file with no percentage column sat
+   * here unremarked and could not be closed on — the one state this banner
+   * exists to name. A rent or salary arrangement is written as a 0% rule, which
+   * is a statement that nothing is taken per visit rather than an unanswered
+   * question.
+   */
+  const withoutRule = specialists.filter((person) => person.default_rule === null);
 
   // One account belongs to one specialist, so an account already linked is not
   // offered again — the database refuses it anyway, and a dropdown that lists
@@ -321,6 +382,8 @@ export function SpecialistManager({
 
   return (
     <>
+      <SetupGuideDialog guide={guide} locale={locale} />
+
       {withoutRule.length > 0 && (
         <div className="warning-banner">
 {t("specialists.withoutRuleBanner", { count: withoutRule.length })}
@@ -360,7 +423,11 @@ export function SpecialistManager({
                 />
                 <label>
                   {t("specialists.cooperation")}
-                  <select name="cooperation_type" defaultValue="commission">
+                  <select
+                    name="cooperation_type"
+                    value={addCooperation}
+                    onChange={(event) => setAddCooperation(event.target.value)}
+                  >
                     <option value="commission">{t("cooperation.commission")}</option>
                     <option value="rent">{t("cooperation.rent")}</option>
                     <option value="staff">{t("cooperation.staff")}</option>
@@ -381,12 +448,15 @@ export function SpecialistManager({
                 {addRuleType === "hybrid" && (
                   <label>
                     {t("specialists.guaranteed", { currency })}
-                    <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" />
+                    <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
                   </label>
                 )}
                 <label>
                   {t("specialists.value")}
-                  <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" />
+                  <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
+                  {addCooperation !== "commission" && (
+                    <span className="muted">{t("specialists.zeroRuleHint")}</span>
+                  )}
                 </label>
                 {addRuleType !== "fixed" && (
                   <label>

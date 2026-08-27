@@ -415,6 +415,13 @@ const cases: readonly Case[] = [
     request: async () => ({ path: `/api/v1/tax-rules/${crypto.randomUUID()}` }),
   },
   {
+    route: "/api/v1/onboarding",
+    method: "GET",
+    allowed: CATALOGUE_MANAGERS,
+    note: "onboarding read: чеклист первичной настройки — работа с каталогом, не отчёт",
+    request: async () => ({ path: "/api/v1/onboarding" }),
+  },
+  {
     route: "/api/v1/services",
     method: "GET",
     allowed: ALL_ROLES,
