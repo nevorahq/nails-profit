@@ -388,8 +388,24 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 .visit-card.is-incomplete { border-left-color: var(--warning-border); }
 
-.visit-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; }
+/*
+ * The date is the handle: closed, a visit is one line to scan a month by, and
+ * every figure under it is opened deliberately. `display: flex` on a summary
+ * takes the disclosure triangle away, so the caret goes back by hand for the
+ * same reason it does on `.calendar-subform` above — without it the row reads
+ * as a bold date nobody thinks to press.
+ */
+.visit-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10rem; min-height: 44rem; cursor: pointer; }
+.visit-card-head::after { content: "▸"; margin-left: auto; color: var(--muted); }
+.visit-card-details[open] .visit-card-head::after { content: "▾"; }
 .visit-card-date { font-weight: 700; font-size: 15rem; font-variant-numeric: tabular-nums; }
+
+/* The delete control sits under the correction it is the alternative to, with a
+   rule between them: one changes a visit's figures, the other takes them out of
+   the month. */
+.visit-card-delete { display: flex; align-items: center; flex-wrap: wrap; gap: 12rem; margin-top: 14rem; padding-top: 12rem; border-top: 1rem solid var(--line); }
+.visit-card-delete .inline-action { margin-left: 0; }
+.visit-card-delete .muted { font-size: 13rem; }
 
 .visit-card-service { margin: 8rem 0 2rem; font-size: 15rem; }
 .visit-card-client { margin: 0 0 10rem; }

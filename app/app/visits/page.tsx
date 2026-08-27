@@ -4,9 +4,10 @@ import Link from "next/link";
 import { ToolIcon } from "@/components/icons";
 import { PeriodFilter } from "@/components/period-filter";
 import { type AdjustLine, VisitAdjustForm } from "@/components/visit-adjust-form";
+import { VisitDeleteButton } from "@/components/visit-delete-button";
 import { clients, financialSnapshots, specialists, users, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, scopeFor } from "@/domain/rbac";
+import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -95,6 +96,13 @@ export default async function VisitsPage({
   const totalCommission = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.commissionMinor ?? 0), 0);
 
   const canAddVisit = can(membership.role, "bookings", "write");
+  /*
+   * Deleting takes a figure out of the studio's month, so it asks for the
+   * organization-wide scope a Master does not have — the same line the endpoint
+   * draws. A visit that closed an appointment is not offered it at all: the
+   * appointment's `completed` is terminal, and the endpoint refuses.
+   */
+  const canDeleteVisit = canManageCatalogue(membership.role, "bookings");
 
   // Grouped by master when the viewer can see more than their own (section
   // 6.1: a Master's list is already just their own, and a one-item group
@@ -195,14 +203,23 @@ export default async function VisitsPage({
                 }));
                 return (
                   <li key={visit.id} className={`visit-card${incomplete ? " is-incomplete" : ""}`}>
-                    <div className="visit-card-head">
+                    {/*
+                      Closed until asked for. A month of visits is a list to scan
+                      by date first — the figures under each one are what the
+                      owner opens deliberately, one at a time. `details` rather
+                      than state in a client component: the whole page is
+                      rendered on the server, and the browser has known how to
+                      open and close this element without help for years.
+                    */}
+                    <details className="visit-card-details">
+                    <summary className="visit-card-head">
                       <span className="visit-card-date">
                         {visit.completedAt.toLocaleDateString(localeTag(locale))}
                       </span>
                       {visit.status === "adjusted" && (
                         <span className="badge-warning">{t("visits.adjusted")}</span>
                       )}
-                    </div>
+                    </summary>
                     <p className="visit-card-service">
                       {serviceLine
                         ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
@@ -278,6 +295,20 @@ export default async function VisitsPage({
                         locale={locale}
                       />
                     )}
+                    {/*
+                      Last inside the open card, after the correction it is the
+                      alternative to: adjusting is the usual answer to a wrong
+                      visit, and deleting is the one for a visit that never
+                      happened.
+                    */}
+                    {canDeleteVisit && (
+                      <VisitDeleteButton
+                        visitId={visit.id}
+                        fromBooking={visit.bookingId !== null}
+                        locale={locale}
+                      />
+                    )}
+                    </details>
                   </li>
                 );
               })}

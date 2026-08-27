@@ -74,6 +74,41 @@ describe("visit lifecycle", () => {
     expect(metrics.contributionMarginMinor).toBe(30_000);
   });
 
+  test("deleting a hand-recorded visit takes its money out of the month with it", async () => {
+    const doomed = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/visits", {
+        service_id: studio.serviceId,
+        specialist_id: studio.specialistId,
+        actual_duration_minutes: CANONICAL.serviceDurationMinutes,
+      }),
+    ).id;
+
+    const before = await withTenant(studio.organizationId, (tx) => loadDashboard(tx, {}, "ru"));
+
+    const response = await studio.owner.delete(`/api/v1/visits/${doomed}`);
+    expect(response.status).toBe(200);
+
+    // The row, its lines and its snapshot: `visit_line` and `financial_snapshot`
+    // are `ON DELETE cascade`, and this is what proves the cascade ran rather
+    // than leaving orphans behind a deleted parent.
+    expect(
+      await withTenant(studio.organizationId, (tx) =>
+        tx.select({ id: visitLines.id }).from(visitLines).where(eq(visitLines.visitId, doomed)),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await withTenant(studio.organizationId, (tx) =>
+        tx
+          .select({ id: financialSnapshots.id })
+          .from(financialSnapshots)
+          .where(eq(financialSnapshots.visitId, doomed)),
+      ),
+    ).toHaveLength(0);
+
+    const after = await withTenant(studio.organizationId, (tx) => loadDashboard(tx, {}, "ru"));
+    expect(after.metrics.revenueMinor).toBe(before.metrics.revenueMinor - CANONICAL.servicePriceMinor);
+  });
+
   test("a later price change does not re-price a closed visit", async () => {
     await studio.owner.patch(`/api/v1/services/${studio.serviceId}`, {
       price_minor: CANONICAL.servicePriceMinor * 2,

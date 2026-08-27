@@ -342,6 +342,21 @@ describe("booking lifecycle", () => {
     expect(visible.map((visit) => visit.id)).toContain(completed.visit.id);
   });
 
+  test("the visit an appointment became cannot be deleted", async () => {
+    const created = await book();
+    const closed = dataOf<{ visit: { id: string } }>(
+      await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {}),
+    );
+
+    // `completed` is terminal, so the appointment cannot go back to be closed
+    // again — deleting the visit under it would leave the booking marked
+    // completed with nothing behind it. Wrong figures are corrected with
+    // `adjust`; only a hand-recorded visit is deletable.
+    const refused = await studio.owner.delete(`/api/v1/visits/${closed.visit.id}`);
+    expect(refused.status).toBe(409);
+    expect(errorCodeOf(refused)).toBe("VISIT_FROM_BOOKING");
+  });
+
   test("an appointment cannot be closed twice", async () => {
     const created = await book();
     await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {});
