@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { memberships, organizations } from "@/db/schema";
+import { currencies } from "@/domain/money";
 import { auth } from "@/lib/auth";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
@@ -11,7 +12,7 @@ import { recordPilotProductEvent } from "@/lib/pilot-events";
 const createOrganizationSchema = z.object({
   name: z.string().trim().min(2).max(100),
   type: z.enum(["solo", "studio"]),
-  currency: z.enum(["MDL", "EUR"]).default("MDL"),
+  currency: z.enum(currencies).default("MDL"),
   locale: z.enum(["ru", "ro", "en"]).default("ru"),
 });
 

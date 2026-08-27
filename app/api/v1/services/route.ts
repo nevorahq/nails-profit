@@ -2,6 +2,7 @@ import { asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { services, specialists } from "@/db/schema";
+import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { supportedLocales } from "@/i18n/messages";
@@ -23,7 +24,7 @@ const createServiceSchema = z.object({
   name: localizedName,
   price_minor: z.int().min(0).nullable().optional(),
   duration_minutes: z.int().positive().nullable().optional(),
-  currency: z.enum(["MDL", "EUR"]).default("MDL"),
+  currency: z.enum(currencies).default("MDL"),
 });
 
 /** The first specialist, used to resolve a commission when none was requested. */

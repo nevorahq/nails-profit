@@ -1,4 +1,21 @@
-export type Currency = "MDL" | "EUR";
+/**
+ * The currencies a studio can keep its books in, in the order the pickers offer
+ * them, and the one place the list is written.
+ *
+ * Everything that has to agree with it derives from it: the `currency` enum in
+ * `db/schema.ts`, the `z.enum` of every endpoint that accepts one, and both
+ * screens that let an owner choose. They used to repeat the pair by hand in a
+ * dozen files, which is how a third one gets accepted by an endpoint and
+ * refused by the column behind it.
+ *
+ * `RUB`, not `RUR`: the code ISO withdrew in 1998 still formats — as «р.» —
+ * and would quietly mean the pre-denomination rouble, a thousand of which is
+ * one of these. A `pgEnum` value cannot be dropped without rebuilding the type
+ * under seven columns, so this is the kind of thing to get right once.
+ */
+export const currencies = ["MDL", "EUR", "RUB"] as const;
+
+export type Currency = (typeof currencies)[number];
 
 export type Money = Readonly<{
   amountMinor: number;

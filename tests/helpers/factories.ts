@@ -9,6 +9,7 @@ import {
   users,
 } from "@/db/schema";
 import type { CommissionBase, CommissionType } from "@/domain/costing";
+import type { Currency } from "@/domain/money";
 import type { MemberRole } from "@/domain/rbac";
 import { adminDb } from "./database";
 
@@ -26,7 +27,7 @@ export async function createUser(email = `${randomUUID()}@example.com`) {
 }
 
 export async function createOrganization(
-  options: { name?: string; ownerId?: string; role?: MemberRole; currency?: "MDL" | "EUR" } = {},
+  options: { name?: string; ownerId?: string; role?: MemberRole; currency?: Currency } = {},
 ) {
   const [organization] = await adminDb
     .insert(organizations)
@@ -76,7 +77,7 @@ export async function createService(
     name?: string;
     priceMinor?: number | null;
     durationMinutes?: number | null;
-    currency?: "MDL" | "EUR";
+    currency?: Currency;
   } = {},
 ) {
   const [service] = await adminDb

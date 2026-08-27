@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import type { Currency } from "@/domain/money";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { AppLocale } from "@/i18n/messages";
@@ -51,7 +52,7 @@ type Profile = {
   slug: string;
   name: string;
   locale: AppLocale;
-  currency: "MDL" | "EUR";
+  currency: Currency;
   notification_channel: "email" | "sms";
   locations: Location[];
 };

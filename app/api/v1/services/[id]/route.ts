@@ -2,6 +2,7 @@ import { asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { services, specialists } from "@/db/schema";
+import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { supportedLocales } from "@/i18n/messages";
@@ -16,7 +17,7 @@ const patchServiceSchema = z.object({
   name: z.partialRecord(z.enum(supportedLocales), z.string().trim().min(1).max(200)).optional(),
   price_minor: z.int().min(0).nullable().optional(),
   duration_minutes: z.int().positive().nullable().optional(),
-  currency: z.enum(["MDL", "EUR"]).optional(),
+  currency: z.enum(currencies).optional(),
 });
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {

@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 
+import type { Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -12,7 +13,7 @@ type BookingView = {
   organization_name: string;
   organization_slug: string;
   locale: AppLocale;
-  currency: "MDL" | "EUR";
+  currency: Currency;
   location: { id: string; name: string; address: string | null; timezone: string };
   specialist: { id: string; name: string };
   starts_at: string;

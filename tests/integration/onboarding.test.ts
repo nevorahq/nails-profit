@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { commissionRules, expenses, scheduleRules, services, specialists } from "@/db/schema";
+import type { Currency } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { loadMonthSetup, loadOnboarding, type MonthSetupStep, type OnboardingStep } from "@/lib/onboarding";
 import { adminDb, resetDatabase } from "../helpers/database";
@@ -161,7 +162,7 @@ describe("month setup progress over real data", () => {
     options: {
       category?: "rent" | "payroll";
       spentOn?: string;
-      currency?: "MDL" | "EUR";
+      currency?: Currency;
       isRecurring?: boolean;
       recurringFrom?: string;
       recurringTo?: string | null;

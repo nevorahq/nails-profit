@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { currencies } from "@/domain/money";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 
@@ -59,7 +60,20 @@ export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLoca
           </fieldset>
           <label>
             {t("workspace.currency")}
-            <select name="currency" defaultValue="MDL"><option value="MDL">MDL</option><option value="EUR">EUR</option></select>
+            {/*
+              Codes only, and every code the books can be kept in — the list is
+              `domain/money.ts`, so a currency added there is offered here
+              without this screen being edited. Their names are spelled out in
+              Настройки, where there is room for a line of prose; this is the
+              first minute of an account and the picker is one of four fields.
+            */}
+            <select name="currency" defaultValue="MDL">
+              {currencies.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
           </label>
           {error && <div className="form-error" role="alert">{error}</div>}
           <button className="primary-button" disabled={pending}>{pending ? t("workspace.creating") : t("workspace.continue")}</button>

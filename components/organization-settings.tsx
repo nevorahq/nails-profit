@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { currencies, type Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 
 /**
@@ -25,13 +26,22 @@ const localeNames: Record<AppLocale, string> = {
   en: "English",
 };
 
-const currencies = ["MDL", "EUR"] as const;
-
 /**
  * Currency names come from `Intl`, so they arrive in the reader's language
- * without a third row in the dictionary to keep in step.
+ * without a row in the dictionary to keep in step — with one exception.
+ *
+ * `Intl` spells RUB «российский рубль» in every style it offers (long, short
+ * and narrow are the same string), and a studio keeping its books in roubles
+ * calls it рубль. The override is a dictionary key rather than a literal here,
+ * so the shorter name is shorter in all three interface languages instead of
+ * turning the Romanian picker Russian.
  */
-function currencyName(code: string, locale: AppLocale): string {
+const SHORT_NAMES: Partial<Record<Currency, MessageKey>> = { RUB: "currency.rub" };
+
+function currencyName(code: Currency, locale: AppLocale, t: Translate): string {
+  const key = SHORT_NAMES[code];
+  if (key) return `${code} — ${t(key)}`;
+
   const names = new Intl.DisplayNames([localeTag(locale)], { type: "currency" });
   return `${code} — ${names.of(code) ?? code}`;
 }
@@ -125,7 +135,7 @@ export function OrganizationSettings({
           >
             {currencies.map((option) => (
               <option key={option} value={option}>
-                {currencyName(option, locale)}
+                {currencyName(option, locale, t)}
               </option>
             ))}
           </select>
