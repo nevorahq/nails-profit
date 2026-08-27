@@ -84,9 +84,18 @@ describe("visit snapshots", () => {
     );
   });
 
-  it("refuses to update or delete a financial snapshot", async () => {
-    // Append-only is enforced by a trigger, not by convention: an UPDATE here
-    // would silently rewrite a past month's profit.
+  it("refuses to update a financial snapshot, and lets a deleted visit take it", async () => {
+    /*
+     * Append-only is enforced by a trigger, not by convention: an UPDATE here
+     * would silently rewrite a past month's profit and nothing downstream would
+     * notice. That is the half the trigger still guards.
+     *
+     * DELETE was let through by migration 0041, because it arrives by a
+     * different road: only through `visit`, whose own endpoint refuses any
+     * visit that closed an appointment, asks for the organization-wide scope
+     * and writes the amounts into `audit_event` before the row goes. The
+     * month's total changes because somebody said so, on the record.
+     */
     const visit = await createVisit(organizationId, { specialistId });
     const [snapshot] = await adminDb
       .insert(financialSnapshots)
@@ -109,16 +118,16 @@ describe("visit snapshots", () => {
       { code: "23001" },
     );
 
-    await expectDatabaseError(
-      adminDb.delete(financialSnapshots).where(eq(financialSnapshots.id, snapshot.id)),
-      { code: "23001" },
-    );
-
     const [after] = await adminDb
       .select()
       .from(financialSnapshots)
       .where(eq(financialSnapshots.id, snapshot.id));
     expect(after.contributionMarginMinor).toBe(34_000);
+
+    await adminDb.delete(financialSnapshots).where(eq(financialSnapshots.id, snapshot.id));
+    expect(
+      await adminDb.select().from(financialSnapshots).where(eq(financialSnapshots.id, snapshot.id)),
+    ).toHaveLength(0);
   });
 
   it("allows a correction to be added as a new version", async () => {

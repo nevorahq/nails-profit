@@ -544,6 +544,15 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/visits/[id]",
+    method: "DELETE",
+    allowed: CATALOGUE_MANAGERS,
+    note: "Deleting takes revenue out of the studio's month, so it asks for the organization-wide scope a Master does not have",
+    // A missing UUID: the authorization question is asked before the lookup,
+    // and the studio's own visit is what later cases read.
+    request: async () => ({ path: `/api/v1/visits/${crypto.randomUUID()}` }),
+  },
+  {
     route: "/api/v1/visits/[id]/adjust",
     method: "POST",
     allowed: ["owner", "manager", "master"],

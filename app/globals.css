@@ -388,8 +388,24 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 .visit-card.is-incomplete { border-left-color: var(--warning-border); }
 
-.visit-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; }
+/*
+ * The date is the handle: closed, a visit is one line to scan a month by, and
+ * every figure under it is opened deliberately. `display: flex` on a summary
+ * takes the disclosure triangle away, so the caret goes back by hand for the
+ * same reason it does on `.calendar-subform` above — without it the row reads
+ * as a bold date nobody thinks to press.
+ */
+.visit-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10rem; min-height: 44rem; cursor: pointer; }
+.visit-card-head::after { content: "▸"; margin-left: auto; color: var(--muted); }
+.visit-card-details[open] .visit-card-head::after { content: "▾"; }
 .visit-card-date { font-weight: 700; font-size: 15rem; font-variant-numeric: tabular-nums; }
+
+/* The delete control sits under the correction it is the alternative to, with a
+   rule between them: one changes a visit's figures, the other takes them out of
+   the month. */
+.visit-card-delete { display: flex; align-items: center; flex-wrap: wrap; gap: 12rem; margin-top: 14rem; padding-top: 12rem; border-top: 1rem solid var(--line); }
+.visit-card-delete .inline-action { margin-left: 0; }
+.visit-card-delete .muted { font-size: 13rem; }
 
 .visit-card-service { margin: 8rem 0 2rem; font-size: 15rem; }
 .visit-card-client { margin: 0 0 10rem; }
@@ -1508,15 +1524,27 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .cookie-consent-accept { border: 0; background: var(--accent); color: var(--on-accent); }
 .cookie-consent-accept:hover { background: var(--accent-dark); }
 
+/*
+ * A round icon at phone widths, the labelled pill from the desktop breakpoint
+ * up — the same `.btn-icon` / `.btn-label` swap the tables use, so there is one
+ * rule in this file about when a control speaks and when it draws.
+ *
+ * Circular rather than a shrunken pill: the button floats over the page with
+ * nothing to align to, and 44rem is section 7.8's touch target, which a
+ * 36rem-tall pill with a 16-unit glyph in it would not be.
+ */
 .cookie-consent-reopen {
   position: fixed;
   z-index: 200;
+  display: grid;
+  place-items: center;
   right: 16rem;
   bottom: 16rem;
-  min-height: 36rem;
+  width: 44rem;
+  height: 44rem;
+  padding: 0;
   border: 1rem solid var(--line);
   border-radius: 999rem;
-  padding: 8rem 16rem;
   background: var(--surface-strong);
   color: var(--muted);
   font-size: 12rem;
@@ -1526,6 +1554,23 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   transition: background var(--duration-fast) var(--ease-standard);
 }
 .cookie-consent-reopen:hover { background: var(--surface); color: var(--ink); }
+
+/*
+ * The glyph fills the button. `100%` of the content box rather than a copy of
+ * the 44rem above minus its border: the two then cannot drift apart when one
+ * of them is changed. The drawing carries its own margin — the biscuit spans
+ * 1.5–14.5 of a 16 viewBox — so filling the box leaves the ring clear without
+ * padding here.
+ */
+.cookie-consent-reopen .btn-icon { width: 100%; height: 100%; }
+
+/* Back to a pill once the label is the thing inside it. Stated here rather
+   than beside the `.btn-icon` swap above: this file's cascade is source order
+   at equal specificity, and the circle is declared further down than that
+   block, so an override up there would silently lose. */
+@media (min-width: 681px) {
+  .cookie-consent-reopen { width: auto; height: auto; min-height: 36rem; padding: 8rem 16rem; }
+}
 
 @keyframes cookie-consent-enter {
   from { opacity: 0; transform: translateY(16rem); }
@@ -1813,6 +1858,29 @@ h1 { font-size: clamp(42rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 @media (max-width: 680px) {
   /* The bar is fixed, so the page has to end above it rather than behind it. */
   .app-main > .app-shell { padding-bottom: calc(96rem + env(safe-area-inset-bottom)); }
+
+  /*
+   * The floating cookie button clears the same bar, and moves to the opposite
+   * corner while it is there: pinned bottom-right it lands on the navigation —
+   * it outranks the bar in z-order, so it covers a tab rather than hiding
+   * behind it — and the right-hand tab is «Ещё», the one a thumb reaches for.
+   *
+   * 81rem is the bar plus the 16rem gap the button already keeps from every
+   * other edge. The bar measures 65: its `min-height: 56rem` is not what
+   * decides it — icon, pill padding, gap and label add up past that — so the
+   * number here comes from measuring the rendered bar, not from adding its
+   * declarations up. Stated as a number for the reason the sidebar's
+   * `top: 64rem` is: nothing in CSS can read a fixed sibling's height.
+   *
+   * Scoped by `:has()` to pages that actually carry the bar. Marketing and
+   * auth pages have no navigation to clear, and lifting the button over
+   * nothing there would read as a mistake.
+   */
+  body:has(.bottom-nav) .cookie-consent-reopen {
+    right: auto;
+    left: 16rem;
+    bottom: calc(81rem + env(safe-area-inset-bottom));
+  }
 }
 
 .more-nav { display: grid; gap: 26rem; margin-top: 22rem; }

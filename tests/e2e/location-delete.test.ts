@@ -132,6 +132,28 @@ describe("deleting a location", () => {
     expect(await adminDb.select().from(locations).where(eq(locations.id, locationId))).toHaveLength(1);
   });
 
+  test("refuses an address that is published, and takes it once it is not", async () => {
+    const locationId = await newLocation("published-hall");
+    await studio.owner.put(`/api/v1/locations/${locationId}/booking-settings`, {
+      public_status: "published",
+    });
+
+    const refused = await studio.owner.delete(`/api/v1/locations/${locationId}`);
+    expect(refused.status).toBe(409);
+    expect(errorCodeOf(refused)).toBe("LOCATION_PUBLISHED");
+    expect(await adminDb.select().from(locations).where(eq(locations.id, locationId))).toHaveLength(1);
+
+    // Taking the page down is the separate decision, and the only thing between
+    // the two: nobody was ever booked here, so the address is a typo again.
+    await studio.owner.put(`/api/v1/locations/${locationId}/booking-settings`, {
+      public_status: "paused",
+    });
+
+    const removed = await studio.owner.delete(`/api/v1/locations/${locationId}`);
+    expect(removed.status).toBe(200);
+    expect(await adminDb.select().from(locations).where(eq(locations.id, locationId))).toHaveLength(0);
+  });
+
   test("answers 404 for an address that does not exist", async () => {
     const response = await studio.owner.delete(
       "/api/v1/locations/00000000-0000-4000-8000-000000000000",

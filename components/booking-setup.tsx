@@ -26,6 +26,12 @@ export type LocationRow = {
   verification_mode: "off" | "code" | null;
   verification_ttl_minutes: number | null;
   reminder_lead_minutes: number | null;
+  /**
+   * Whether a client has ever been booked here. The address is then a record of
+   * where money was earned, and the endpoint refuses to delete it — so the
+   * screen stops offering the control rather than letting it fail.
+   */
+  has_bookings?: boolean;
 };
 
 export type RotaRule = {
@@ -36,6 +42,20 @@ export type RotaRule = {
   end_minute: number;
   effective_from: string;
 };
+
+/**
+ * Why this address cannot be deleted, or null when it can.
+ *
+ * Two refusals, and the endpoint states both again — a screen deciding what to
+ * offer is not access control. The order is the order they stop mattering in:
+ * a booked address is never deletable, a published one becomes deletable the
+ * moment its page comes down.
+ */
+function deleteBlockerOf(place: LocationRow): MessageKey | null {
+  if (place.has_bookings) return "bookingSetup.deleteHasBookings";
+  if (place.public_status === "published") return "bookingSetup.deleteWhilePublished";
+  return null;
+}
 
 const WEEKDAY_KEYS: Record<Weekday, MessageKey> = {
   1: "weekday.monday",
@@ -273,6 +293,7 @@ export function BookingSetup({
   async function deleteLocation(id: string) {
     const removed = await send(`/api/v1/locations/${id}`, "DELETE", undefined, undefined, {
       LOCATION_HAS_BOOKINGS: "bookingSetup.deleteHasBookings",
+      LOCATION_PUBLISHED: "bookingSetup.deleteWhilePublished",
     });
     setConfirmDelete(null);
     // The address that was showing settings may be the one just removed; the
@@ -413,7 +434,9 @@ export function BookingSetup({
 
         {locations.length === 0 && <p className="muted">{t("bookingSetup.noLocations")}</p>}
 
-        {locations.map((place) => (
+        {locations.map((place) => {
+          const deleteBlocker = deleteBlockerOf(place);
+          return (
           <details key={place.id} className="calendar-entry">
             <summary>
               {place.name} — {describeStatus(place, t)}
@@ -502,7 +525,8 @@ export function BookingSetup({
                     <button
                       className="inline-action danger"
                       type="button"
-                      disabled={pending}
+                      disabled={pending || deleteBlocker !== null}
+                      title={deleteBlocker ? t(deleteBlocker) : undefined}
                       onClick={() => {
                         setError(null);
                         setConfirmDelete(place.id);
@@ -510,13 +534,19 @@ export function BookingSetup({
                     >
                       {t("bookingSetup.deleteLocation")}
                     </button>
+                    {/* Beside the disabled control rather than inside a tooltip:
+                        the answer to "почему кнопка серая" is the whole reason
+                        this line exists, and a title attribute has no answer for
+                        a finger. */}
+                    {deleteBlocker && <span className="muted">{t(deleteBlocker)}</span>}
                   </>
                 )}
               </div>
             )}
             </div>
           </details>
-        ))}
+          );
+        })}
 
         {canPublish && (
           <>
