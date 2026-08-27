@@ -5,13 +5,16 @@ import {
   bookings,
   bookingSettings,
   locations,
+  services,
   scheduleRules,
   specialistLocations,
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
+import { zonedToday } from "@/domain/availability";
 import { getTranslator } from "@/i18n/t";
+import { alternativeSlots, loadSlotContext } from "@/lib/availability-service";
 import { requireWorkspace } from "@/lib/workspace";
 import type { MemberRole } from "@/domain/rbac";
 
@@ -31,6 +34,14 @@ import type { MemberRole } from "@/domain/rbac";
  * order of the sections is the order the work is actually done in, and each one
  * says what is still missing before a client could book.
  */
+/**
+ * How far ahead the setup screen looks for a bookable slot. Two weeks: long
+ * enough that a studio working two days a week still reads as ready, short
+ * enough that "нет свободного времени" means a client would give up rather
+ * than scroll.
+ */
+const SLOT_HORIZON_DAYS = 14;
+
 export default async function BookingSetupPage() {
   const { membership, bookingAccess, locale, organizationSlug } = await requireWorkspace();
   const t = getTranslator(locale);
@@ -126,11 +137,74 @@ export default async function BookingSetupPage() {
       )
       .orderBy(asc(scheduleRules.weekday), asc(scheduleRules.startMinute));
 
+    /*
+     * Whether a client could book anything at all in the next two weeks.
+     *
+     * The checklist above asks whether a rota *exists*; this asks whether it
+     * *offers* something, which is the state that reads as "всё настроено, а
+     * записаться нельзя". A pattern of two weekdays starting next month, or a
+     * lead time longer than the horizon, leaves the page open and empty, and
+     * nothing on this screen said so.
+     *
+     * The shortest service on purpose: if the quickest thing the studio sells
+     * does not fit anywhere in a fortnight, nothing does. Computed only when
+     * there is a published address and a rota to ask about — before that the
+     * blockers already say what is missing, and this would be several queries
+     * spent to repeat them.
+     */
+    const shortest = Math.min(
+      ...(await tx
+        .select({ minutes: services.durationMinutes })
+        .from(services)
+        .where(isNull(services.archivedAt))
+      )
+        .map((row) => row.minutes)
+        .filter((minutes): minutes is number => minutes !== null && minutes > 0),
+    );
+
+    const publishedPlaces = places.filter(
+      (place) => place.status === "active" && place.public_status === "published",
+    );
+    const askable = Number.isFinite(shortest) && publishedPlaces.length > 0 && rota.length > 0;
+
+    let nearestSlotDate: string | null = null;
+    if (askable) {
+      const now = new Date();
+      outer: for (const place of publishedPlaces) {
+        const context = await loadSlotContext(tx, place.id);
+        if (!context) continue;
+        const today = zonedToday(now, context.timezone);
+        for (const person of people) {
+          if (!assignments.some((row) => row.location_id === place.id && row.specialist_id === person.id)) {
+            continue;
+          }
+          const nearest = await alternativeSlots(
+            tx,
+            {
+              locationId: place.id,
+              specialistId: person.id,
+              durationMinutes: shortest,
+              date: today,
+              now,
+            },
+            context,
+            { limit: 1, horizonDays: SLOT_HORIZON_DAYS },
+          );
+          if (nearest.length > 0) {
+            nearestSlotDate = nearest[0].date;
+            break outer;
+          }
+        }
+      }
+    }
+
     return {
       places: places.map((place) => ({ ...place, has_bookings: booked.has(place.id) })),
       people,
       assignments,
       rota,
+      slotsChecked: askable,
+      nearestSlotDate,
     };
   });
 
@@ -146,6 +220,8 @@ export default async function BookingSetupPage() {
         canManage={canManageCatalogue(membership.role, "bookings")}
         canPublish={can(membership.role, "organization_settings", "write")}
         canSaveRota={can(membership.role, "bookings", "write")}
+        slotsChecked={data.slotsChecked}
+        nearestSlotDate={data.nearestSlotDate}
         role={membership.role as MemberRole}
         ownSpecialistId={ownSpecialistId}
         locale={locale}
