@@ -191,6 +191,22 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       .where(eq(bookings.locationId, id));
     if (bookingCount > 0) return { blocked: bookingCount } as const;
 
+    /*
+     * A published address is one clients are being sent to right now, and this
+     * is the only irreversible control on that screen. Taking the page down is
+     * a separate decision from discarding the address, so it is made
+     * separately: unpublish, then delete. One click of "снять с публикации"
+     * stands between the two, and it is the click that makes the second one
+     * survivable — the studio sees the page go before the rota, the
+     * assignments and the settings go with it.
+     */
+    const [settings] = await tx
+      .select({ publicStatus: bookingSettings.publicStatus })
+      .from(bookingSettings)
+      .where(eq(bookingSettings.locationId, id))
+      .limit(1);
+    if (settings?.publicStatus === "published") return { published: true } as const;
+
     // Order matters: holds and exceptions point at the rota's address, and every
     // reference is `restrict`, so the leaves go before the address itself.
     await tx.delete(bookingHolds).where(eq(bookingHolds.locationId, id));
@@ -228,6 +244,14 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
 
   if (!outcome) {
     return apiError(404, "LOCATION_NOT_FOUND", "No location with this ID", requestIdentifier);
+  }
+  if ("published" in outcome) {
+    return apiError(
+      409,
+      "LOCATION_PUBLISHED",
+      "The address is published and has to be taken off the public page first",
+      requestIdentifier,
+    );
   }
   if ("blocked" in outcome) {
     return apiError(

@@ -2,6 +2,7 @@ import { asc, eq, isNull, or, sql } from "drizzle-orm";
 
 import { BookingSetup, type LocationRow, type RotaRule } from "@/components/booking-setup";
 import {
+  bookings,
   bookingSettings,
   locations,
   scheduleRules,
@@ -81,6 +82,20 @@ export default async function BookingSetupPage() {
       .leftJoin(bookingSettings, eq(bookingSettings.locationId, locations.id))
       .orderBy(asc(locations.sortOrder), asc(locations.createdAt));
 
+    /*
+     * Which addresses a client has already been booked at. The delete endpoint
+     * asks the same question before it refuses; asking it here too is what
+     * lets the screen stop offering a control that cannot succeed, instead of
+     * letting the owner find out by pressing it.
+     */
+    const booked = new Set(
+      (
+        await tx
+          .selectDistinct({ locationId: bookings.locationId })
+          .from(bookings)
+      ).map((row) => row.locationId),
+    );
+
     const people = await tx
       .select({ id: specialists.id, name: specialists.name })
       .from(specialists)
@@ -111,7 +126,12 @@ export default async function BookingSetupPage() {
       )
       .orderBy(asc(scheduleRules.weekday), asc(scheduleRules.startMinute));
 
-    return { places, people, assignments, rota };
+    return {
+      places: places.map((place) => ({ ...place, has_bookings: booked.has(place.id) })),
+      people,
+      assignments,
+      rota,
+    };
   });
 
   return (
