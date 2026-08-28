@@ -17,7 +17,6 @@ const ru = {
   "nav.calendar": "Календарь",
   "nav.booking": "Онлайн-запись",
   "nav.services": "Услуги",
-  "nav.addOns": "Опции",
   "nav.expenses": "Затраты",
   "nav.specialists": "Мастера",
   "nav.import": "Импорт",
@@ -90,9 +89,6 @@ const ru = {
   "settings.currencyHint":
     "Только для новых цен и расчётов. Сохранённые суммы по курсу не пересчитываются.",
   "settings.saved": "Сохранено",
-  "bookingSetup.publicAddress": "Адрес online-записи",
-  "bookingSetup.publicAddressHint": "Публичная страница откроется по этому адресу после публикации хотя бы одной локации.",
-  "bookingSetup.publicAddressSave": "Сохранить адрес",
   "settings.practicalCapacity": "Практическая мощность, %",
   "settings.practicalCapacityHint":
     "Какую долю часов расписания реально удаётся продать; обычно 70–80%. От неё считаются стоимость часа и загрузка.",
@@ -106,6 +102,15 @@ const ru = {
   "settings.confirmName": "Название организации",
   "settings.deleteAction": "Удалить организацию",
   "settings.deleteFailed": "Не удалось удалить организацию",
+  "settings.deleteKeepsAccount":
+    "Аккаунт при этом остаётся: этим же адресом можно войти и создать новую студию. Чтобы уйти совсем, удалите аккаунт — это отдельное действие ниже.",
+  "settings.accountTitle": "Удаление аккаунта",
+  "settings.accountHint":
+    "Удаляет вход, сессии и сам аккаунт. Адрес освобождается — им можно зарегистрироваться заново. Данные студии удаляются отдельно и раньше: владелец не может уйти, оставив студию без владельца.",
+  "settings.confirmEmail": "Ваш адрес почты",
+  "settings.accountAction": "Удалить аккаунт",
+  "settings.accountFailed": "Не удалось удалить аккаунт",
+  "settings.accountMismatch": "Адрес не совпадает — введите его точно",
   "team.title": "Команда",
   "team.membersTitle": "Участники",
   "team.inviteTitle": "Пригласить мастера",
@@ -293,7 +298,6 @@ const ru = {
   "auth.repeatPassword": "Повторите пароль",
   "auth.requestNewLink": "Запросить новую ссылку",
   "auth.rememberedIt": "Вспомнили пароль? Войти",
-  "workspace.welcome": "Добро пожаловать, {name}",
   "workspace.name": "Название",
   "workspace.currency": "Валюта",
   "common.back": "←",
@@ -333,7 +337,6 @@ const ru = {
   "addOns.timeDelta": "Изменение времени, мин",
   "addOns.negativeHint":
     "Значения могут быть отрицательными: короткая длина может и стоить меньше, и занимать меньше времени.",
-  "addOns.none": "Опций пока нет.",
 
   "specialists.name": "Имя",
   "specialists.commissionType": "Тип комиссии",
@@ -588,24 +591,64 @@ const ru = {
   "onboarding.title": "Первый расчёт",
   "onboarding.progress": "Шаг {done} из {total}",
   "onboarding.specialist": "Мастер с правилом комиссии",
+  "onboarding.specialistHint":
+    "Правило комиссии — то, из чего считается себестоимость визита. Без него визит не закрыть.",
   "onboarding.service": "Услуга с ценой и длительностью",
+  "onboarding.serviceHint":
+    "Из цены и длительности считаются маржа и прибыль в час. Услуга без одной из них в расчёт не попадёт.",
   "onboarding.visit": "Первый закрытый визит",
+  "onboarding.visitHint":
+    "Закрытый визит — единственный источник фактических цифр. Первый же покажет, сколько вы на нём заработали.",
   "monthSetup.title": "Расчёт месяца",
-  "monthSetup.progress": "Шаг {done} из {total}",
+  "monthSetup.progress": "Готово {done} из {total}",
   "monthSetup.overhead": "Постоянные затраты месяца",
+  "monthSetup.overheadHint":
+    "Аренда, подписки, связь. Пока их нет, прибыль месяца равна марже — то есть выше настоящей.",
   "monthSetup.rota": "Рабочие часы в графике",
+  "monthSetup.rotaHint":
+    "Из часов считается точка безубыточности: сколько нужно заработать, чтобы месяц вышел в ноль.",
+  "firstRun.title": "С чего начать",
+  "step.back": "Назад: {step}",
+  "step.remaining": {
+    one: "Остался {count} шаг",
+    few: "Осталось {count} шага",
+    other: "Осталось {count} шагов",
+  },
+  "step.goal.specialist": "Добавьте мастера и правило комиссии",
+  "step.goal.service": "Добавьте услугу с ценой и длительностью",
+  "step.goal.visit": "Закройте первый визит",
+  "step.goal.overhead": "Внесите постоянные затраты месяца",
+  "step.goal.rota": "Заполните рабочие часы в графике",
+  "step.action.specialist": "Добавить мастера",
+  "step.action.service": "Добавить услугу",
+  "step.action.visit": "Закрыть визит",
+  "step.action.overhead": "Внести затраты",
+  "step.action.rota": "Заполнить график",
+  "monthSetup.lead":
+    "Ещё два числа — и отчёт месяца станет честным: прибыль после постоянных затрат и точка безубыточности.",
+  "monthGuide.title": "Шаг выполнен",
+  "monthGuide.body": {
+    one: "До расчёта месяца остался {count} шаг.",
+    few: "До расчёта месяца осталось {count} шага.",
+    other: "До расчёта месяца осталось {count} шагов.",
+  },
+  "monthGuide.back": "Вернуться к отчёту",
+  "monthGuide.stay": "Остаться здесь",
+  "monthGuide.doneTitle": "Расчёт месяца готов",
+  "monthGuide.doneBody":
+    "Теперь в отчёте есть прибыль после постоянных затрат и точка безубыточности — до этого он показывал больше, чем есть.",
+  "monthGuide.doneAction": "Открыть отчёт месяца",
   "setupGuide.title": "Шаг выполнен",
   "setupGuide.body": {
-    one: "До первого расчёта остался {count} шаг. Вернитесь к списку и закончите настройку.",
-    few: "До первого расчёта осталось {count} шага. Вернитесь к списку и закончите настройку.",
-    other: "До первого расчёта осталось {count} шагов. Вернитесь к списку и закончите настройку.",
+    one: "До первого расчёта остался {count} шаг.",
+    few: "До первого расчёта осталось {count} шага.",
+    other: "До первого расчёта осталось {count} шагов.",
   },
   "setupGuide.back": "Вернуться к шагам",
   "setupGuide.stay": "Остаться здесь",
   "setupGuide.toVisits": "К списку визитов",
   "setupGuide.doneTitle": "Первый расчёт готов",
-  "setupGuide.doneBody":
-    "Визит закрыт и посчитан: маржа, прибыль в час и остальные цифры теперь есть в отчёте.",
+  "setupGuide.doneBody": "Визит закрыт и посчитан — вот сколько он принёс.",
   "setupGuide.doneAction": "Открыть отчёт",
 
 
@@ -673,12 +716,7 @@ const ru = {
   "services.commission": "Комиссия мастера",
   "services.howCounted": "Как это посчитано",
 
-  "addOns.title": "Опции к услугам",
-  "addOns.add": "Добавить опцию",
-  "addOns.hideAddTitle": "Скрыть форму добавления",
   "addOns.namePlaceholder": "Френч",
-  "addOns.addOn": "Опция",
-  "addOns.time": "Время",
 
   "specialists.title": "Мастера и комиссии",
   "specialists.noAccess": "У вашей роли нет доступа к комиссиям.",
@@ -759,6 +797,11 @@ const ru = {
   "auth.noAccount": "Нет аккаунта? Создать",
   "auth.forgot": "Забыли пароль?",
   "auth.signInFailed": "Не удалось выполнить вход",
+  "auth.signInNoMatch": "Аккаунт не найден — нужна регистрация.",
+  "auth.verifyPending": "Адрес почты не подтверждён — без него не восстановить пароль.",
+  "auth.verifyResend": "Отправить письмо ещё раз",
+  "auth.verifyRetry": "Не отправилось — попробовать снова",
+  "auth.verifySent": "Письмо отправлено",
   "auth.activeSession":
     "Сейчас выполнен вход: {email}. Вход в другой аккаунт завершит этот сеанс в текущем браузере. Чтобы работать в двух аккаунтах одновременно, откройте второй в отдельном окне или в приватном режиме.",
   "auth.invitedEmailHint": "Приглашение в «{org}» выдано на этот адрес — аккаунт должен быть на нём.",
@@ -781,6 +824,7 @@ const ru = {
 
   "workspace.title": "Создайте рабочее пространство",
   "workspace.namePlaceholder": "Например, Studio Belle",
+  "workspace.nameLatin": "Только латиница: A–Z, цифры, пробел и дефис.",
   "workspace.format": "Формат",
   "workspace.solo": "Solo-мастер",
   "workspace.studio": "Студия",
@@ -1091,8 +1135,6 @@ const ru = {
     "Публичную страницу включает оператор после проверок безопасности — этот шаг не ваш. Остальную настройку можно закончить, не дожидаясь его.",
 
   "bookingSetup.locationsTitle": "Адреса",
-  "bookingSetup.locationsHint":
-    "Адрес задаёт часовой пояс, в котором клиент видит время. Менять его после первых записей не стоит.",
   "bookingSetup.noLocations": "Адресов пока нет.",
   "bookingSetup.editLocation": "Изменить адрес",
   "bookingSetup.publish": "Опубликовать",
@@ -1169,7 +1211,6 @@ const ro: Record<MessageKey, Message> = {
   "nav.calendar": "Calendar",
   "nav.booking": "Programare online",
   "nav.services": "Servicii",
-  "nav.addOns": "Opțiuni",
   "nav.expenses": "Cheltuieli",
   "nav.specialists": "Maeștri",
   "nav.import": "Import",
@@ -1242,9 +1283,6 @@ const ro: Record<MessageKey, Message> = {
   "settings.currencyHint":
     "Doar pentru prețurile și calculele noi. Sumele salvate nu se convertesc la curs.",
   "settings.saved": "Salvat",
-  "bookingSetup.publicAddress": "Adresa programării online",
-  "bookingSetup.publicAddressHint": "Pagina publică se deschide la această adresă după publicarea cel puțin unei locații.",
-  "bookingSetup.publicAddressSave": "Salvează adresa",
   "settings.practicalCapacity": "Capacitate practică, %",
   "settings.practicalCapacityHint":
     "Ce parte din orele programului chiar poate fi vândută; de obicei 70–80%. De la ea se calculează costul orei și gradul de ocupare.",
@@ -1258,6 +1296,15 @@ const ro: Record<MessageKey, Message> = {
   "settings.confirmName": "Numele organizației",
   "settings.deleteAction": "Șterge organizația",
   "settings.deleteFailed": "Organizația nu a putut fi ștearsă",
+  "settings.deleteKeepsAccount":
+    "Contul rămâne: cu aceeași adresă vă puteți autentifica și crea un studio nou. Pentru a pleca definitiv, ștergeți contul — este acțiunea separată de mai jos.",
+  "settings.accountTitle": "Ștergerea contului",
+  "settings.accountHint":
+    "Șterge autentificarea, sesiunile și contul însuși. Adresa se eliberează — cu ea vă puteți înregistra din nou. Datele studioului se șterg separat și înainte: proprietarul nu poate pleca lăsând studioul fără proprietar.",
+  "settings.confirmEmail": "Adresa dumneavoastră de e-mail",
+  "settings.accountAction": "Șterge contul",
+  "settings.accountFailed": "Contul nu a putut fi șters",
+  "settings.accountMismatch": "Adresa nu coincide — introduceți-o exact",
   "team.title": "Echipă",
   "team.membersTitle": "Membri",
   "team.inviteTitle": "Invitați un maestru",
@@ -1449,7 +1496,6 @@ const ro: Record<MessageKey, Message> = {
   "auth.repeatPassword": "Repetați parola",
   "auth.requestNewLink": "Cereți un link nou",
   "auth.rememberedIt": "V-ați amintit parola? Autentificați-vă",
-  "workspace.welcome": "Bine ați venit, {name}",
   "workspace.name": "Denumire",
   "workspace.currency": "Moneda",
   "common.back": "←",
@@ -1486,7 +1532,6 @@ const ro: Record<MessageKey, Message> = {
   "addOns.timeDelta": "Modificarea timpului, min",
   "addOns.negativeHint":
     "Valorile pot fi negative: o lungime mai scurtă poate costa mai puțin și dura mai puțin.",
-  "addOns.none": "Încă nu există opțiuni.",
 
   "specialists.name": "Nume",
   "specialists.commissionType": "Tipul comisionului",
@@ -1741,24 +1786,64 @@ const ro: Record<MessageKey, Message> = {
   "onboarding.title": "Primul calcul",
   "onboarding.progress": "Pasul {done} din {total}",
   "onboarding.specialist": "Maestru cu regulă de comision",
+  "onboarding.specialistHint":
+    "Regula de comision este baza costului unei vizite. Fără ea vizita nu poate fi închisă.",
   "onboarding.service": "Serviciu cu preț și durată",
+  "onboarding.serviceHint":
+    "Din preț și durată se calculează marja și profitul pe oră. Un serviciu fără una dintre ele nu intră în calcul.",
   "onboarding.visit": "Prima vizită finalizată",
+  "onboarding.visitHint":
+    "Vizita închisă este singura sursă de cifre reale. Chiar prima arată cât ați câștigat pe ea.",
   "monthSetup.title": "Calculul lunii",
-  "monthSetup.progress": "Pasul {done} din {total}",
+  "monthSetup.progress": "Gata {done} din {total}",
   "monthSetup.overhead": "Cheltuielile fixe ale lunii",
+  "monthSetup.overheadHint":
+    "Chiria, abonamentele, comunicațiile. Cât timp lipsesc, profitul lunii este egal cu marja — adică mai mare decât cel real.",
   "monthSetup.rota": "Ore de lucru în program",
+  "monthSetup.rotaHint":
+    "Din ore se calculează pragul de rentabilitate: cât trebuie câștigat pentru ca luna să iasă pe zero.",
+  "firstRun.title": "De unde începem",
+  "step.back": "Înapoi: {step}",
+  "step.remaining": {
+    one: "A mai rămas {count} pas",
+    few: "Au mai rămas {count} pași",
+    other: "Au mai rămas {count} de pași",
+  },
+  "step.goal.specialist": "Adăugați un maestru și regula lui de comision",
+  "step.goal.service": "Adăugați un serviciu cu preț și durată",
+  "step.goal.visit": "Închideți prima vizită",
+  "step.goal.overhead": "Introduceți cheltuielile fixe ale lunii",
+  "step.goal.rota": "Completați orele de lucru în program",
+  "step.action.specialist": "Adaugă maestru",
+  "step.action.service": "Adaugă serviciu",
+  "step.action.visit": "Închide vizita",
+  "step.action.overhead": "Adaugă cheltuieli",
+  "step.action.rota": "Completează programul",
+  "monthSetup.lead":
+    "Încă două cifre — și raportul lunii devine corect: profitul după cheltuielile fixe și pragul de rentabilitate.",
+  "monthGuide.title": "Pas finalizat",
+  "monthGuide.body": {
+    one: "Până la calculul lunii a mai rămas {count} pas.",
+    few: "Până la calculul lunii au mai rămas {count} pași.",
+    other: "Până la calculul lunii au mai rămas {count} de pași.",
+  },
+  "monthGuide.back": "Înapoi la raport",
+  "monthGuide.stay": "Rămân aici",
+  "monthGuide.doneTitle": "Calculul lunii este gata",
+  "monthGuide.doneBody":
+    "Acum raportul are profitul după cheltuielile fixe și pragul de rentabilitate — până acum arăta mai mult decât este.",
+  "monthGuide.doneAction": "Deschide raportul lunii",
   "setupGuide.title": "Pas finalizat",
   "setupGuide.body": {
-    one: "Până la primul calcul a mai rămas {count} pas. Reveniți la listă și încheiați configurarea.",
-    few: "Până la primul calcul au mai rămas {count} pași. Reveniți la listă și încheiați configurarea.",
-    other: "Până la primul calcul au mai rămas {count} de pași. Reveniți la listă și încheiați configurarea.",
+    one: "Până la primul calcul a mai rămas {count} pas.",
+    few: "Până la primul calcul au mai rămas {count} pași.",
+    other: "Până la primul calcul au mai rămas {count} de pași.",
   },
   "setupGuide.back": "Înapoi la pași",
   "setupGuide.stay": "Rămân aici",
   "setupGuide.toVisits": "La lista vizitelor",
   "setupGuide.doneTitle": "Primul calcul este gata",
-  "setupGuide.doneBody":
-    "Vizita este finalizată și calculată: marja, profitul pe oră și restul cifrelor sunt acum în raport.",
+  "setupGuide.doneBody": "Vizita este finalizată și calculată — iată cât a adus.",
   "setupGuide.doneAction": "Deschide raportul",
 
 
@@ -1826,12 +1911,7 @@ const ro: Record<MessageKey, Message> = {
   "services.commission": "Comisionul maestrului",
   "services.howCounted": "Cum este calculat",
 
-  "addOns.title": "Opțiuni la servicii",
-  "addOns.add": "Adaugă opțiune",
-  "addOns.hideAddTitle": "Ascundeți formularul de adăugare",
   "addOns.namePlaceholder": "French",
-  "addOns.addOn": "Opțiune",
-  "addOns.time": "Timp",
 
   "specialists.title": "Maeștri și comisioane",
   "specialists.noAccess": "Rolul dvs. nu are acces la comisioane.",
@@ -1912,6 +1992,11 @@ const ro: Record<MessageKey, Message> = {
   "auth.noAccount": "Nu aveți cont? Creați unul",
   "auth.forgot": "Ați uitat parola?",
   "auth.signInFailed": "Autentificarea nu a reușit",
+  "auth.signInNoMatch": "Cont inexistent — înregistrați-vă.",
+  "auth.verifyPending": "Adresa nu este confirmată — fără ea parola nu poate fi recuperată.",
+  "auth.verifyResend": "Trimite din nou mesajul",
+  "auth.verifyRetry": "Nu s-a trimis — încercați din nou",
+  "auth.verifySent": "Mesajul a fost trimis",
   "auth.activeSession":
     "Sunteți autentificat ca {email}. Autentificarea într-un alt cont va încheia sesiunea curentă în acest browser. Pentru a lucra în două conturi simultan, deschideți-l pe al doilea într-o fereastră separată sau în mod privat.",
   "auth.invitedEmailHint": "Invitația în „{org}” a fost emisă pentru această adresă — contul trebuie să fie pe ea.",
@@ -1934,6 +2019,7 @@ const ro: Record<MessageKey, Message> = {
 
   "workspace.title": "Creați spațiul de lucru",
   "workspace.namePlaceholder": "De exemplu, Studio Belle",
+  "workspace.nameLatin": "Doar litere latine: A–Z, cifre, spațiu și cratimă.",
   "workspace.format": "Format",
   "workspace.solo": "Maestru solo",
   "workspace.studio": "Salon",
@@ -2244,8 +2330,6 @@ const ro: Record<MessageKey, Message> = {
     "Pagina publică este activată de operator după verificările de securitate — acest pas nu vă aparține. Restul configurării poate fi finalizat fără să îl așteptați.",
 
   "bookingSetup.locationsTitle": "Adrese",
-  "bookingSetup.locationsHint":
-    "Adresa stabilește fusul orar în care clientul vede ora. Nu este bine să îl schimbați după primele programări.",
   "bookingSetup.noLocations": "Încă nu există adrese.",
   "bookingSetup.editLocation": "Modifică adresa",
   "bookingSetup.publish": "Publică",
@@ -2321,7 +2405,6 @@ const en: Record<MessageKey, Message> = {
   "nav.calendar": "Calendar",
   "nav.booking": "Online booking",
   "nav.services": "Services",
-  "nav.addOns": "Add-ons",
   "nav.expenses": "Expenses",
   "nav.specialists": "Specialists",
   "nav.import": "Import",
@@ -2394,9 +2477,6 @@ const en: Record<MessageKey, Message> = {
   "settings.currencyHint":
     "New prices and calculations only. Amounts already saved are not converted at a rate.",
   "settings.saved": "Saved",
-  "bookingSetup.publicAddress": "Online booking address",
-  "bookingSetup.publicAddressHint": "The public page opens at this address after at least one location is published.",
-  "bookingSetup.publicAddressSave": "Save address",
   "settings.practicalCapacity": "Practical capacity, %",
   "settings.practicalCapacityHint":
     "How much of the rostered hours can realistically be sold; usually 70–80%. The cost of an hour and the utilization figure are computed from it.",
@@ -2410,6 +2490,15 @@ const en: Record<MessageKey, Message> = {
   "settings.confirmName": "Organization name",
   "settings.deleteAction": "Delete organization",
   "settings.deleteFailed": "The organization could not be deleted",
+  "settings.deleteKeepsAccount":
+    "The account stays: the same address can sign in and create another studio. To leave for good, delete the account — the separate action below.",
+  "settings.accountTitle": "Delete account",
+  "settings.accountHint":
+    "Deletes the sign-in, the sessions and the account itself. The address is freed and can register again. A studio's data is deleted separately and first: an owner cannot leave a studio with no owner.",
+  "settings.confirmEmail": "Your email address",
+  "settings.accountAction": "Delete account",
+  "settings.accountFailed": "The account could not be deleted",
+  "settings.accountMismatch": "The address does not match — type it exactly",
   "team.title": "Team",
   "team.membersTitle": "Members",
   "team.inviteTitle": "Invite a master",
@@ -2597,7 +2686,6 @@ const en: Record<MessageKey, Message> = {
   "auth.repeatPassword": "Repeat the password",
   "auth.requestNewLink": "Request a new link",
   "auth.rememberedIt": "Remembered it? Sign in",
-  "workspace.welcome": "Welcome, {name}",
   "workspace.name": "Name",
   "workspace.currency": "Currency",
   "common.back": "←",
@@ -2633,7 +2721,6 @@ const en: Record<MessageKey, Message> = {
   "addOns.timeDelta": "Time change, min",
   "addOns.negativeHint":
     "Values may be negative: a shorter length can cost less and take less time.",
-  "addOns.none": "No add-ons yet.",
 
   "specialists.name": "Name",
   "specialists.commissionType": "Commission type",
@@ -2884,23 +2971,61 @@ const en: Record<MessageKey, Message> = {
   "onboarding.title": "The first calculation",
   "onboarding.progress": "Step {done} of {total}",
   "onboarding.specialist": "A specialist with a commission rule",
+  "onboarding.specialistHint":
+    "The commission rule is what a visit's cost is worked out from. Without one the visit cannot be closed.",
   "onboarding.service": "A service with a price and a duration",
+  "onboarding.serviceHint":
+    "The price and the duration are what the margin and the profit per hour come from. A service missing either stays out of the costing.",
   "onboarding.visit": "The first closed visit",
+  "onboarding.visitHint":
+    "A closed visit is the only source of real figures. The first one already shows what you earned on it.",
   "monthSetup.title": "The month's calculation",
-  "monthSetup.progress": "Step {done} of {total}",
+  "monthSetup.progress": "{done} of {total} done",
   "monthSetup.overhead": "The month's fixed costs",
+  "monthSetup.overheadHint":
+    "Rent, subscriptions, phone. Until they are in, the month's profit equals the margin — that is, higher than the truth.",
   "monthSetup.rota": "Working hours in the rota",
+  "monthSetup.rotaHint":
+    "The hours are what break-even is worked out from: how much has to be earned for the month to come out level.",
+  "firstRun.title": "Where to start",
+  "step.back": "Back: {step}",
+  "step.remaining": {
+    one: "{count} step left",
+    other: "{count} steps left",
+  },
+  "step.goal.specialist": "Add a specialist and their commission rule",
+  "step.goal.service": "Add a service with a price and a duration",
+  "step.goal.visit": "Close the first visit",
+  "step.goal.overhead": "Enter the month's fixed costs",
+  "step.goal.rota": "Fill in the working hours",
+  "step.action.specialist": "Add a specialist",
+  "step.action.service": "Add a service",
+  "step.action.visit": "Close a visit",
+  "step.action.overhead": "Add a cost",
+  "step.action.rota": "Fill in the rota",
+  "monthSetup.lead":
+    "Two more figures, and the month's report tells the truth: profit after fixed costs, and break-even.",
+  "monthGuide.title": "Step done",
+  "monthGuide.body": {
+    one: "{count} step to go before the month adds up.",
+    other: "{count} steps to go before the month adds up.",
+  },
+  "monthGuide.back": "Back to the report",
+  "monthGuide.stay": "Stay here",
+  "monthGuide.doneTitle": "The month adds up",
+  "monthGuide.doneBody":
+    "The report now has profit after fixed costs and a break-even to compare it with — until now it read higher than the truth.",
+  "monthGuide.doneAction": "Open the month's report",
   "setupGuide.title": "Step done",
   "setupGuide.body": {
-    one: "{count} step to go before the first calculation. Go back to the list and finish the setup.",
-    other: "{count} steps to go before the first calculation. Go back to the list and finish the setup.",
+    one: "{count} step to go before the first calculation.",
+    other: "{count} steps to go before the first calculation.",
   },
   "setupGuide.back": "Back to the steps",
   "setupGuide.stay": "Stay here",
   "setupGuide.toVisits": "To the visits",
   "setupGuide.doneTitle": "The first calculation is ready",
-  "setupGuide.doneBody":
-    "The visit is closed and costed: the margin, the profit per hour and the rest are in the report now.",
+  "setupGuide.doneBody": "The visit is closed and costed — here is what it brought in.",
   "setupGuide.doneAction": "Open the report",
 
 
@@ -2968,12 +3093,7 @@ const en: Record<MessageKey, Message> = {
   "services.commission": "Specialist commission",
   "services.howCounted": "How this was calculated",
 
-  "addOns.title": "Service add-ons",
-  "addOns.add": "Add an add-on",
-  "addOns.hideAddTitle": "Hide the add-on form",
   "addOns.namePlaceholder": "French",
-  "addOns.addOn": "Add-on",
-  "addOns.time": "Time",
 
   "specialists.title": "Specialists and commissions",
   "specialists.noAccess": "Your role has no access to commissions.",
@@ -3054,6 +3174,11 @@ const en: Record<MessageKey, Message> = {
   "auth.noAccount": "No account? Create one",
   "auth.forgot": "Forgot your password?",
   "auth.signInFailed": "Could not sign in",
+  "auth.signInNoMatch": "No account found — please register.",
+  "auth.verifyPending": "Your address is unconfirmed — the password cannot be reset without it.",
+  "auth.verifyResend": "Send the email again",
+  "auth.verifyRetry": "It did not send — try again",
+  "auth.verifySent": "Email sent",
   "auth.activeSession":
     "You are signed in as {email}. Signing in to another account ends the current session in this browser. To use two accounts at once, open the second one in a separate window or in a private window.",
   "auth.invitedEmailHint": "The invitation to “{org}” was issued for this address — the account has to use it.",
@@ -3075,6 +3200,7 @@ const en: Record<MessageKey, Message> = {
 
   "workspace.title": "Create your workspace",
   "workspace.namePlaceholder": "For example, Studio Belle",
+  "workspace.nameLatin": "Latin letters only: A–Z, digits, space and hyphen.",
   "workspace.format": "Format",
   "workspace.solo": "Solo technician",
   "workspace.studio": "Studio",
@@ -3382,8 +3508,6 @@ const en: Record<MessageKey, Message> = {
     "The public page is switched on by the operator after the security checks — that step is not yours. The rest of the setup can be finished without waiting for it.",
 
   "bookingSetup.locationsTitle": "Addresses",
-  "bookingSetup.locationsHint":
-    "The address sets the timezone a client reads times in. Changing it after the first bookings is a bad idea.",
   "bookingSetup.noLocations": "No addresses yet.",
   "bookingSetup.editLocation": "Edit the address",
   "bookingSetup.publish": "Publish",

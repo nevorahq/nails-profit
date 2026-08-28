@@ -31,6 +31,9 @@ export const errorMessages = {
     EMAIL_FAILED: "Почтовый провайдер не принял письмо — скопируйте ссылку и передайте её вручную",
     ROLE_NOT_ASSIGNABLE: "Вы не можете выдать эту роль",
     ORGANIZATION_DELETED: "Организация уже удалена",
+    ORGANIZATION_PRESENT:
+      "Сначала удалите данные студии — иначе она останется без владельца",
+    ACCOUNT_DELETE_FAILED: "Не удалось удалить аккаунт — попробуйте ещё раз",
     CONFIRMATION_MISMATCH: "Название не совпадает — введите его точно",
     SLOT_UNAVAILABLE: "Это время уже занято",
     VERSION_CONFLICT: "Запись изменили, пока вы её открывали — обновите страницу",
@@ -70,6 +73,9 @@ export const errorMessages = {
     EMAIL_FAILED: "Furnizorul de e-mail nu a acceptat mesajul — copiați linkul și transmiteți-l manual",
     ROLE_NOT_ASSIGNABLE: "Nu puteți acorda acest rol",
     ORGANIZATION_DELETED: "Organizația este deja ștearsă",
+    ORGANIZATION_PRESENT:
+      "Ștergeți mai întâi datele studioului — altfel rămâne fără proprietar",
+    ACCOUNT_DELETE_FAILED: "Contul nu a putut fi șters — încercați din nou",
     CONFIRMATION_MISMATCH: "Denumirea nu coincide — introduceți-o exact",
     SLOT_UNAVAILABLE: "Acest interval este deja ocupat",
     VERSION_CONFLICT: "Programarea a fost modificată între timp — reîncărcați pagina",
@@ -109,6 +115,9 @@ export const errorMessages = {
     EMAIL_FAILED: "The email provider rejected the message — copy the link and pass it on by hand",
     ROLE_NOT_ASSIGNABLE: "You cannot grant this role",
     ORGANIZATION_DELETED: "The organization is already deleted",
+    ORGANIZATION_PRESENT:
+      "Delete the studio's data first — otherwise it is left with no owner",
+    ACCOUNT_DELETE_FAILED: "The account could not be deleted — try again",
     CONFIRMATION_MISMATCH: "The name does not match — type it exactly",
     SLOT_UNAVAILABLE: "This slot is no longer free",
     VERSION_CONFLICT: "The appointment changed while you had it open — reload the page",

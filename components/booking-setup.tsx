@@ -3,6 +3,11 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import {
+  SetupGuideDialog,
+  useSetupGuide,
+  type SetupGuideBaseline,
+} from "@/components/setup-guide";
 import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import type { AppLocale } from "@/i18n/messages";
@@ -122,6 +127,7 @@ function describeStatus(location: LocationRow, t: Translate) {
 }
 
 export function BookingSetup({
+  monthGuide = null,
   locations,
   specialists,
   assignments,
@@ -137,6 +143,12 @@ export function BookingSetup({
   ownSpecialistId,
   locale,
 }: {
+  /**
+   * Where «Расчёт месяца» stood when this page was drawn, or null when there is
+   * nothing to guide: no closed visit yet, both steps already done, or a role
+   * that cannot see the other half of the list.
+   */
+  monthGuide?: SetupGuideBaseline;
   locations: LocationRow[];
   specialists: { id: string; name: string }[];
   assignments: { specialist_id: string; location_id: string }[];
@@ -166,6 +178,7 @@ export function BookingSetup({
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
+  const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -192,7 +205,6 @@ export function BookingSetup({
 
   /** Which address is one click from being removed. Null while nothing is. */
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [publicSlug, setPublicSlug] = useState(organizationSlug ?? "");
   /** Whether the owner asked for every panel while the guided setup is showing. */
   const [manualSetup, setManualSetup] = useState(false);
   /** Whose week the guided step writes. Empty means the only master there is. */
@@ -442,17 +454,6 @@ export function BookingSetup({
     await send(`/api/v1/locations/${id}/booking-settings`, "PUT", { public_status: status });
   }
 
-  /**
-   * The organization's slug, saved through the organization endpoint rather
-   * than the location one — it names the whole public page, not any single
-   * address on it. It is edited here because this is the screen that page is
-   * assembled on; every physical address below is a row that page will list.
-   */
-  async function saveSlug(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await send("/api/v1/organizations/settings", "PATCH", { slug: publicSlug.trim() || null });
-  }
-
   async function deleteLocation(id: string) {
     const removed = await send(`/api/v1/locations/${id}`, "DELETE", undefined, undefined, {
       LOCATION_HAS_BOOKINGS: "bookingSetup.deleteHasBookings",
@@ -519,12 +520,19 @@ export function BookingSetup({
       intervals.push({ weekday, start, end });
     }
 
-    await send("/api/v1/availability/rules", "PUT", {
+    const saved = await send("/api/v1/availability/rules", "PUT", {
       specialist_id: currentSpecialistId,
       location_id: currentLocationId,
       effective_from: String(data.get("effective_from") ?? ""),
       intervals,
     });
+    /*
+     * Hours are what break-even is worked out from, so saving them can finish
+     * the month's checklist. Asked of the server rather than assumed here: a
+     * rota starting next month, or one saved with every day unticked, moves
+     * nothing, and `loadMonthSetup` is the only thing that knows.
+     */
+    if (saved) await guide.check();
   }
 
   /*
@@ -546,6 +554,12 @@ export function BookingSetup({
 
   return (
     <>
+      <SetupGuideDialog
+        guide={guide}
+        locale={locale}
+        strings="monthGuide"
+        doneHref="/app/reports/month"
+      />
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -690,25 +704,17 @@ export function BookingSetup({
 
       {!isMaster && !guided && <section className="panel booking-panel">
         <h2>{t("bookingSetup.locationsTitle")}</h2>
-        <p className="muted">{t("bookingSetup.locationsHint")}</p>
 
-        {canPublish && (
-          <form className="inline-form booking-public-address" onSubmit={saveSlug}>
-            <label>
-              {t("bookingSetup.publicAddress")}
-              <input
-                value={publicSlug}
-                disabled={pending}
-                placeholder="studio-name"
-                autoComplete="off"
-                onChange={(event) => setPublicSlug(event.target.value.toLowerCase())}
-              />
-            </label>
-            <button className="secondary-button" type="submit" disabled={pending}>
-              {t("bookingSetup.publicAddressSave")}
-            </button>
-          </form>
-        )}
+        {/*
+          The address of the public page, and no longer a field.
+          
+          It used to be typed here, on a screen a new studio had no reason to
+          open, and until it was the published booking page existed at no
+          address at all. It is now derived from the studio's name when the
+          organization is created — see `slugCandidatesFor` — so what is left to
+          show is where the page is, which is the one thing the owner came here
+          to find out.
+        */}
         {publicPageHref && (
           <p className="muted">
             {/* The label is built as an expression rather than written as JSX
@@ -723,8 +729,6 @@ export function BookingSetup({
             </a>
           </p>
         )}
-        <p className="muted">{t("bookingSetup.publicAddressHint")}</p>
-
         {locations.length === 0 && <p className="muted">{t("bookingSetup.noLocations")}</p>}
 
         {locations.map((place) => {

@@ -11,6 +11,11 @@ import { supportedLocales } from "@/i18n/messages";
  * `lib/onboarding.ts` would reach a pilot's screen as the literal
  * `onboarding.visitHint` instead of a sentence.
  *
+ * Two more screens build their keys from the same step names: the first-run
+ * screen (`step.goal.` and `step.action.`) and the guided window, which
+ * borrows both to name the button that carries somebody onward. A step renamed
+ * without them would put `step.action.visit` on a button.
+ *
  * The step keys are repeated below rather than imported: importing them from
  * the module under test would let a rename pass unnoticed, which is the whole
  * of what this checks.
@@ -32,10 +37,29 @@ describe("checklist strings", () => {
     "setupGuide.doneTitle",
     "setupGuide.doneBody",
     "setupGuide.doneAction",
+    // The month's window, which is the same journey run a second time.
+    "monthGuide.title",
+    "monthGuide.body",
+    "monthGuide.back",
+    "monthGuide.stay",
+    "monthGuide.doneTitle",
+    "monthGuide.doneBody",
+    "monthGuide.doneAction",
+    // The goal panels: the first run, and the month's setup under the report.
+    "firstRun.title",
+    "monthSetup.lead",
+    "step.remaining",
+    "step.back",
+    // Every step of both checklists is named twice more — as a goal and as the
+    // button that goes and does it.
+    ...Object.values(STEPS)
+      .flat()
+      .flatMap((step) => [`step.goal.${step}`, `step.action.${step}`]),
     ...Object.entries(STEPS).flatMap(([prefix, steps]) => [
       `${prefix}.title`,
       `${prefix}.progress`,
       ...steps.map((step) => `${prefix}.${step}`),
+      ...steps.map((step) => `${prefix}.${step}Hint`),
     ]),
   ];
 

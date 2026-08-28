@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { organizations } from "@/db/schema";
 import { currencies } from "@/domain/money";
+import {
+  isLatinOrganizationName,
+  ORGANIZATION_NAME_MESSAGE,
+} from "@/domain/organization-name";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { checkSlug } from "@/domain/slug";
@@ -31,7 +35,15 @@ const settingsSchema = z
      * than the rota is a claim this figure does not make.
      */
     practical_capacity_basis_points: z.int().min(1).max(10_000).optional(),
-    name: z.string().trim().min(2).max(100).optional(),
+    // Renaming goes through the same rule as naming: a studio must not be able
+    // to arrive in Cyrillic by the back door of its own settings.
+    name: z
+      .string()
+      .trim()
+      .min(2)
+      .max(100)
+      .refine(isLatinOrganizationName, { message: ORGANIZATION_NAME_MESSAGE })
+      .optional(),
     slug: z.string().trim().toLowerCase().min(3).max(40).nullable().optional(),
     /**
      * Section 7.11's rollout switch. An owner may step it down — closing their

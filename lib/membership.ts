@@ -36,6 +36,12 @@ export type ActiveMembership = Readonly<{
   /** The member whose rows this request may see — the previewed one, in preview. */
   userId: string;
   userEmail: string;
+  /**
+   * Whether that address has been confirmed. Read from the session rather than
+   * stored anywhere else: the strip that asks for confirmation must disappear
+   * the moment the link is clicked, and a copy would lag behind it.
+   */
+  userEmailVerified: boolean;
   organizationId: string;
   /** The role this request is evaluated against — the previewed one, in preview. */
   role: MemberRole;
@@ -141,6 +147,7 @@ async function loadAuthenticatedMembership(): Promise<CallerResult> {
       ? {
           userId: session.user.id,
           userEmail: session.user.email,
+          userEmailVerified: session.user.emailVerified,
           organizationId: row.organizationId,
           role: row.role,
           preview: null,
@@ -203,6 +210,10 @@ async function loadActiveMembership(): Promise<CallerResult> {
     membership: {
       userId: selection.targetUserId,
       userEmail: target.email,
+      // The actor's own standing, not the previewed colleague's: an owner
+      // looking through somebody else's interface is still the person whose
+      // address does or does not need confirming.
+      userEmailVerified: actor.userEmailVerified,
       organizationId: actor.organizationId,
       role: target.role,
       preview: {

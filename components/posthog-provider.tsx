@@ -28,6 +28,7 @@ export function PostHogProvider({ config }: { config: { key: string; host: strin
         api_host: config.host,
         ui_host: config.uiHost,
         defaults: "2026-05-30",
+        capture_performance: { web_vitals: true },
         opt_out_capturing_by_default: true,
         persistence: "localStorage+cookie",
       });

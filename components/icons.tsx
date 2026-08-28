@@ -71,14 +71,6 @@ const PATHS: Readonly<Record<IconName, React.ReactNode>> = {
       <path d="M12 6h9M12 14h9M12 21h9" />
     </>
   ),
-  // Опции — sliders.
-  addOns: (
-    <>
-      <path d="M3 7h5M13 7h8M3 17h9M17 17h4" />
-      <circle cx="10.5" cy="7" r="2.5" />
-      <circle cx="14.5" cy="17" r="2.5" />
-    </>
-  ),
   // Затраты — a wallet with its clasp pocket.
   expenses: (
     <>

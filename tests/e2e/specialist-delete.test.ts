@@ -20,7 +20,7 @@ describe("deleting a specialist", () => {
 
   beforeAll(async () => {
     await resetDatabase();
-    studio = await createCanonicalStudio("owner@specialist.example", "Студия");
+    studio = await createCanonicalStudio("owner@specialist.example", "Specialist Studio");
   });
 
   afterAll(async () => {

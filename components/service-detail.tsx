@@ -53,6 +53,11 @@ export type ServiceAddOn = {
   duration_delta_minutes: number;
 };
 
+/** Signed deltas read better with an explicit sign than as a bare number. */
+function signed(value: string, isNegative: boolean) {
+  return isNegative ? value : `+${value}`;
+}
+
 export function ServiceDetail({
   service,
   displayName,
@@ -60,6 +65,8 @@ export function ServiceDetail({
   linkedAddOnIds,
   selectedAddOnIds,
   fullyLoaded,
+  currency,
+  canManage,
   locale,
 }: {
   service: ServiceDetailData;
@@ -68,10 +75,34 @@ export function ServiceDetail({
   linkedAddOnIds: string[];
   selectedAddOnIds: string[];
   fullyLoaded: FullyLoadedView | null;
+  /** The organization's own, which the price delta is entered in. */
+  currency: string;
+  /** Writing to the shared catalogue, which a master may not do. */
+  canManage: boolean;
   locale: AppLocale;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
+
+  /** What an option does to this service's price and time, beside its name. */
+  function deltaLabel(addOn: ServiceAddOn) {
+    const parts: string[] = [];
+    if (addOn.price_delta_minor !== 0) {
+      parts.push(
+        signed(formatMoneyMinor(addOn.price_delta_minor, currency), addOn.price_delta_minor < 0),
+      );
+    }
+    if (addOn.duration_delta_minutes !== 0) {
+      parts.push(
+        signed(
+          formatDuration(Math.abs(addOn.duration_delta_minutes)),
+          addOn.duration_delta_minutes < 0,
+        ),
+      );
+    }
+    return parts.join(" · ");
+  }
+
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   /*
@@ -127,6 +158,62 @@ export function ServiceDetail({
       }),
     });
     await finish(response);
+  }
+
+  /**
+   * A new option, created from the service it is an option *of*.
+   *
+   * This used to be a section of its own — `/app/add-ons`, a second catalogue
+   * with its own navigation entry, whose whole content was this form and a
+   * table. Nobody thinks «я хочу завести опцию»; they think «за снятие я беру
+   * ещё сотню», and that thought happens while looking at маникюр. So the form
+   * moved here and the section went.
+   *
+   * Two requests, in this order, because the API models them separately: the
+   * option is created for the organization, then attached to this service. It
+   * is attached without asking — an option created from a service is an option
+   * of that service, and leaving it unticked would mean the owner filled in a
+   * form and nothing happened.
+   */
+  async function createAddOn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const price = String(data.get("price") ?? "").trim();
+    const duration = String(data.get("duration") ?? "").trim();
+
+    const created = await fetch("/api/v1/add-ons", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: { [locale]: data.get("name") },
+        price_delta_minor: price === "" ? 0 : Math.round(Number(price) * 100),
+        duration_delta_minutes: duration === "" ? 0 : Number(duration),
+      }),
+    });
+
+    if (!created.ok) {
+      await finish(created);
+      return;
+    }
+
+    const body = await created.json().catch(() => null);
+    const addOnId = body?.data?.id as string | undefined;
+    if (!addOnId) {
+      await finish(created);
+      return;
+    }
+
+    const linked = await fetch(`/api/v1/services/${service.id}/add-ons`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ add_on_ids: [...linkedAddOnIds, addOnId] }),
+    });
+
+    if (linked.ok) form.reset();
+    await finish(linked);
   }
 
   async function saveLinkedAddOns(event: FormEvent<HTMLFormElement>) {
@@ -208,28 +295,58 @@ export function ServiceDetail({
         </form>
       </section>
 
-      {addOns.length > 0 && (
+      {(canManage || addOns.length > 0) && (
         <section className="panel">
           <h2>{t("services.addOns")}</h2>
-          <form className="inline-form" onSubmit={saveLinkedAddOns}>
-            <fieldset className="checkbox-set">
-              <legend>{t("services.offeredWith")}</legend>
-              {addOns.map((addOn) => (
-                <label key={addOn.id} className="radio-row">
-                  <input
-                    type="checkbox"
-                    name="linked"
-                    value={addOn.id}
-                    defaultChecked={linkedAddOnIds.includes(addOn.id)}
-                  />{" "}
-                  {addOn.displayName}
-                </label>
-              ))}
-            </fieldset>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {t("services.saveList")}
-            </button>
-          </form>
+
+          {canManage && (
+            <form className="inline-form" onSubmit={createAddOn}>
+              <label>
+                {t("addOns.name")}
+                <input name="name" required maxLength={200} placeholder={t("addOns.namePlaceholder")} />
+              </label>
+              <label>
+                {t("addOns.priceDelta", { currency })}
+                <input name="price" type="number" step="0.01" placeholder="100" />
+              </label>
+              <label>
+                {t("addOns.timeDelta")}
+                <input name="duration" type="number" step="1" placeholder="20" />
+              </label>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("common.saving") : t("common.add")}
+              </button>
+            </form>
+          )}
+          {canManage && <p className="muted">{t("addOns.negativeHint")}</p>}
+
+          {/*
+            Everything the studio has, ticked where it is offered with this
+            service — the list the deleted section used to print as a table, so
+            the deltas travel with the names rather than being a number the
+            owner has to remember from another screen.
+          */}
+          {addOns.length > 0 && (
+            <form className="inline-form" onSubmit={saveLinkedAddOns}>
+              <fieldset className="checkbox-set">
+                <legend>{t("services.offeredWith")}</legend>
+                {addOns.map((addOn) => (
+                  <label key={addOn.id} className="radio-row">
+                    <input
+                      type="checkbox"
+                      name="linked"
+                      value={addOn.id}
+                      defaultChecked={linkedAddOnIds.includes(addOn.id)}
+                    />{" "}
+                    {addOn.displayName} <span className="muted">{deltaLabel(addOn)}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {t("services.saveList")}
+              </button>
+            </form>
+          )}
         </section>
       )}
 

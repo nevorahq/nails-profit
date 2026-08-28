@@ -33,7 +33,6 @@ export type IconName =
   | "visits"
   | "clients"
   | "services"
-  | "addOns"
   | "expenses"
   | "specialists"
   | "import"
@@ -50,7 +49,6 @@ export const navItems: readonly NavItem[] = [
   { href: "/app/clients", key: "nav.clients", group: "work", icon: "clients" },
 
   { href: "/app/services", key: "nav.services", group: "catalogue", icon: "services" },
-  { href: "/app/add-ons", key: "nav.addOns", group: "catalogue", icon: "addOns" },
   { href: "/app/expenses", key: "nav.expenses", group: "catalogue", icon: "expenses" },
 
   { href: "/app/specialists", key: "nav.specialists", group: "team", icon: "specialists" },
@@ -86,7 +84,6 @@ export const navGroups: readonly { group: NavGroup; key: MessageKey | null }[] =
 const MASTER_HIDDEN: ReadonlySet<string> = new Set([
   "/app/import",
   "/app/specialists",
-  "/app/add-ons",
   "/app/visits",
   "/app/clients",
 ]);

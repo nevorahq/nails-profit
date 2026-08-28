@@ -26,7 +26,7 @@ describe("deleting a location", () => {
 
   beforeAll(async () => {
     await resetDatabase();
-    studio = await createCanonicalStudio("owner@delete.example", "Студия");
+    studio = await createCanonicalStudio("owner@delete.example", "Delete Studio");
   });
 
   afterAll(async () => {

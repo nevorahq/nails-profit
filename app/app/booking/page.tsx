@@ -15,6 +15,8 @@ import { can, canManageCatalogue } from "@/domain/rbac";
 import { zonedToday } from "@/domain/availability";
 import { getTranslator } from "@/i18n/t";
 import { alternativeSlots, loadSlotContext } from "@/lib/availability-service";
+import { loadMonthGuide } from "@/lib/onboarding";
+import { monthOf } from "@/lib/period";
 import { requireWorkspace } from "@/lib/workspace";
 import type { MemberRole } from "@/domain/rbac";
 
@@ -43,8 +45,21 @@ import type { MemberRole } from "@/domain/rbac";
 const SLOT_HORIZON_DAYS = 14;
 
 export default async function BookingSetupPage() {
-  const { membership, bookingAccess, locale, organizationSlug } = await requireWorkspace();
+  const { membership, bookingAccess, locale, organizationSlug, currency } = await requireWorkspace();
   const t = getTranslator(locale);
+
+  /*
+   * The rota is step two of «Расчёт месяца», and this is where it is filled in.
+   *
+   * Owner alone, like the panel and the ledger: the other step is the expense
+   * register, which no other role may even read, so for a manager saving hours
+   * the window would announce progress towards a list they cannot finish.
+   */
+  const monthGuide = can(membership.role, "expenses", "read")
+    ? await withTenant(membership.organizationId, (tx) =>
+        loadMonthGuide(tx, { month: monthOf(new Date()), currency }),
+      )
+    : null;
 
   // Reading the setup is the `bookings` read scope; changing it is the
   // organization-wide manage scope, the same split the endpoints enforce.
@@ -211,6 +226,7 @@ export default async function BookingSetupPage() {
   return (
     <main className="app-shell">
       <BookingSetup
+        monthGuide={monthGuide}
         locations={data.places as LocationRow[]}
         specialists={data.people}
         assignments={data.assignments}

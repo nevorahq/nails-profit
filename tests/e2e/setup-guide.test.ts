@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { dataOf, signUp, type Actor } from "../helpers/api";
+import { dataOf, errorCodeOf, signUp, type Actor } from "../helpers/api";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
 import { inviteMember } from "../helpers/studio";
 
@@ -22,9 +22,15 @@ type Progress = {
 };
 
 let owner: Actor;
+/** Written by the first test, read by the month's rota below. */
+let specialistId: string;
 
 async function progress() {
   return dataOf<Progress>(await owner.get("/api/v1/onboarding"));
+}
+
+async function monthProgress() {
+  return dataOf<Progress>(await owner.get("/api/v1/onboarding/month"));
 }
 
 beforeAll(async () => {
@@ -50,7 +56,7 @@ describe("the guided setup", () => {
     // wrong for as long as it pointed at «Настройки».
     expect(empty.steps[0].href).toBe("/app/specialists#add-specialist");
 
-    const specialistId = dataOf<{ id: string }>(
+    specialistId = dataOf<{ id: string }>(
       await owner.post("/api/v1/specialists", {
         name: "Мастер",
         default_rule: { type: "percentage", basis_points: 4_000 },
@@ -77,6 +83,23 @@ describe("the guided setup", () => {
     expect(await progress()).toMatchObject({ done: 3, total: 3, complete: true, next: null });
   });
 
+  test("refuses a studio name that is not in Latin script", async () => {
+    /*
+     * The rule the workspace form states under its own field, enforced where it
+     * cannot be walked around: this endpoint creates studios, and the settings
+     * endpoint renames them, without ever meeting that form.
+     */
+    const refused = await owner.post("/api/v1/organizations", {
+      name: "Студия Белль",
+      type: "solo",
+      currency: "MDL",
+      locale: "ru",
+    });
+
+    expect(refused.status).toBe(422);
+    expect(errorCodeOf(refused)).toBe("VALIDATION_ERROR");
+  });
+
   test("does not move on a second service, having already counted the first", async () => {
     const before = await progress();
 
@@ -92,6 +115,48 @@ describe("the guided setup", () => {
     expect((await progress()).done).toBe(before.done);
   });
 
+  test("hands the month its own two steps once the first run is over", async () => {
+    /*
+     * The second checklist, and the reason it is a separate list rather than
+     * steps four and five: it is measured for one month, and both figures are
+     * ones the report is wrong without. Until they are in, operating profit
+     * equals the contribution margin and there is no break-even beside it.
+     */
+    const month = new Date().toISOString().slice(0, 7);
+    expect(await monthProgress()).toMatchObject({
+      done: 0,
+      total: 2,
+      complete: false,
+      next: "overhead",
+    });
+
+    await owner.post("/api/v1/expenses", {
+      name: "Аренда",
+      category: "rent",
+      amount_minor: 500_000,
+      spent_on: `${month}-05`,
+    });
+
+    // Overhead alone, and only this month's: `loadMonthSetup` reads the ledger
+    // the way the report does rather than counting rows.
+    expect(await monthProgress()).toMatchObject({ done: 1, complete: false, next: "rota" });
+
+    const locationId = dataOf<{ id: string }>(
+      await owner.post("/api/v1/locations", { name: "Центр", slug: "guide-centru" }),
+    ).id;
+    await owner.put(`/api/v1/specialists/${specialistId}/locations`, {
+      location_ids: [locationId],
+    });
+    await owner.put("/api/v1/availability/rules", {
+      specialist_id: specialistId,
+      location_id: locationId,
+      effective_from: `${month}-01`,
+      intervals: [{ weekday: 1, start: "09:00", end: "18:00" }],
+    });
+
+    expect(await monthProgress()).toMatchObject({ done: 2, total: 2, complete: true, next: null });
+  });
+
   test("is not the master's list", async () => {
     // A master may add a service, and still cannot advance «Первый расчёт»:
     // it is the owner's setup, and the panel it sends people back to is not
@@ -99,5 +164,8 @@ describe("the guided setup", () => {
     const master = await inviteMember(owner, "guide-master@studio.example", "master");
 
     expect((await master.get("/api/v1/onboarding")).status).toBe(403);
+    // The month's list is narrower still: its first step is the expense
+    // register, which no role but the owner may even read.
+    expect((await master.get("/api/v1/onboarding/month")).status).toBe(403);
   });
 });

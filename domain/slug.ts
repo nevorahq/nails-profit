@@ -74,3 +74,44 @@ export function checkSlug(value: string): SlugProblem | null {
 export function isValidSlug(value: string) {
   return checkSlug(value) === null;
 }
+
+/**
+ * The base a generated address falls back to when the studio's name yields
+ * nothing usable — «💅», «АБ», or a name made entirely of punctuation.
+ *
+ * A latin word rather than a random string: it is a URL a receptionist reads
+ * over the phone, and `studio-2` can be dictated where `x7f2q` cannot.
+ */
+const GENERIC_BASE = "studio";
+
+/**
+ * The addresses a studio could be given for its name, in the order to try them.
+ *
+ * The studio is not asked for its address any more — it types a name once, on
+ * the way in, and this is what that name becomes. So every candidate here has
+ * to be usable without anybody reviewing it: `isValidSlug` is applied to each,
+ * which is what silently drops «booking» (reserved) at the first attempt and
+ * offers «booking-2» at the second.
+ *
+ * The suffix exists for collisions, and collisions are ordinary: two studios
+ * called «Ногти» are two studios called «Ногти». Whoever registers second gets
+ * `nogti-2` rather than an error about a name they cannot see.
+ *
+ * Pure, so the whole of it is testable — which address a studio ends up with is
+ * decided by the caller, against the addresses already taken.
+ */
+export function slugCandidatesFor(name: string, howMany = 25): string[] {
+  const transliterated = slugify(name);
+  const base = transliterated.length >= SLUG_MIN_LENGTH ? transliterated : GENERIC_BASE;
+
+  const candidates: string[] = [];
+  for (let attempt = 1; candidates.length < howMany; attempt++) {
+    const suffix = attempt === 1 ? "" : `-${attempt}`;
+    // Room for the suffix, and never a trailing hyphen where the cut landed.
+    const trimmed = base.slice(0, SLUG_MAX_LENGTH - suffix.length).replace(/-+$/, "");
+    const candidate = `${trimmed}${suffix}`;
+    if (isValidSlug(candidate)) candidates.push(candidate);
+  }
+
+  return candidates;
+}
