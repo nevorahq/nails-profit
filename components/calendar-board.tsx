@@ -139,7 +139,6 @@ export function CalendarBoard({
   ownSpecialistId,
   exceptions,
   canWrite,
-  showFilters,
   canFilterBySpecialist,
   currency,
   localeTag,
@@ -159,7 +158,6 @@ export function CalendarBoard({
   ownSpecialistId: string | null;
   exceptions: readonly CalendarException[];
   canWrite: boolean;
-  showFilters: boolean;
   canFilterBySpecialist: boolean;
   currency: string;
   localeTag: string;
@@ -648,65 +646,71 @@ export function CalendarBoard({
             ))}
           </div>
 
-          {showFilters && (
-            /*
-             * The three selects were open on the page at all times, which on a
-             * phone pushed the day itself below the fold. `details` folds them
-             * behind the button the direction shows without any state to keep:
-             * the disclosure, the keyboard behaviour and the escape are the
-             * browser's, and the form inside is byte-for-byte the one that was
-             * already here.
-             */
-            <details className="calendar-filters">
-              <summary>
-                <ToolIcon name="filter" />
-                {t("filters.title")}
-              </summary>
-              <form className="inline-form" method="get">
-                <input type="hidden" name="view" value={view} />
-                <input type="hidden" name="date" value={days[0]} />
-          <label>
-            {t("calendar.location")}
-            <select name="location" defaultValue={filters.location}>
-              <option value="">{t("calendar.allLocations")}</option>
-              {locations.map((place) => (
-                <option key={place.id} value={place.id}>
-                  {place.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {canFilterBySpecialist && (
-            <label>
-              {t("calendar.specialist")}
-              <select name="specialist" defaultValue={filters.specialist}>
-                <option value="">{t("calendar.allSpecialists")}</option>
-                {specialists.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label>
-            {t("calendar.status")}
-            <select name="status" defaultValue={filters.status}>
-              <option value="">{t("calendar.allStatuses")}</option>
-              <option value="pending_confirmation,confirmed">{t("calendar.statusLive")}</option>
-              <option value="pending_confirmation">{t("bookingStatus.pending_confirmation")}</option>
-              <option value="confirmed">{t("bookingStatus.confirmed")}</option>
-              <option value="cancelled">{t("bookingStatus.cancelled")}</option>
-              <option value="completed">{t("bookingStatus.completed")}</option>
-              <option value="no_show">{t("bookingStatus.no_show")}</option>
-            </select>
-          </label>
-          <button className="secondary-button" type="submit">
-            {t("calendar.apply")}
-          </button>
-              </form>
-            </details>
-          )}
+          {/*
+            The three selects were open on the page at all times, which on a
+            phone pushed the day itself below the fold. `details` folds them
+            behind the button the direction shows without any state to keep:
+            the disclosure, the keyboard behaviour and the escape are the
+            browser's, and the form inside is byte-for-byte the one that was
+            already here.
+
+            A Master gets them too. Their calendar is narrowed to their own
+            column either way, so the specialist select is still withheld — but
+            the status filter is one they can arrive already carrying, because
+            the notification link points at a day and a status. A filter nobody
+            can see is a filter nobody can undo: confirming the appointment
+            moves it out of `pending_confirmation` and off a screen that never
+            said it was filtered, which reads as the booking being deleted.
+          */}
+          <details className="calendar-filters">
+            <summary>
+              <ToolIcon name="filter" />
+              {t("filters.title")}
+            </summary>
+            <form className="inline-form" method="get">
+              <input type="hidden" name="view" value={view} />
+              <input type="hidden" name="date" value={days[0]} />
+              <label>
+                {t("calendar.location")}
+                <select name="location" defaultValue={filters.location}>
+                  <option value="">{t("calendar.allLocations")}</option>
+                  {locations.map((place) => (
+                    <option key={place.id} value={place.id}>
+                      {place.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {canFilterBySpecialist && (
+                <label>
+                  {t("calendar.specialist")}
+                  <select name="specialist" defaultValue={filters.specialist}>
+                    <option value="">{t("calendar.allSpecialists")}</option>
+                    {specialists.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label>
+                {t("calendar.status")}
+                <select name="status" defaultValue={filters.status}>
+                  <option value="">{t("calendar.allStatuses")}</option>
+                  <option value="pending_confirmation,confirmed">{t("calendar.statusLive")}</option>
+                  <option value="pending_confirmation">{t("bookingStatus.pending_confirmation")}</option>
+                  <option value="confirmed">{t("bookingStatus.confirmed")}</option>
+                  <option value="cancelled">{t("bookingStatus.cancelled")}</option>
+                  <option value="completed">{t("bookingStatus.completed")}</option>
+                  <option value="no_show">{t("bookingStatus.no_show")}</option>
+                </select>
+              </label>
+              <button className="secondary-button" type="submit">
+                {t("calendar.apply")}
+              </button>
+            </form>
+          </details>
 
           {/*
             An anchor to the form that already exists further down the page,
