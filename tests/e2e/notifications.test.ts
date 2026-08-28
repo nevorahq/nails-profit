@@ -133,14 +133,28 @@ describe("transactional notifications", () => {
     expect(await templatesFor(created.id)).toEqual(["booking.confirmed"]);
   });
 
-  test("a completed appointment stops being reminded about", async () => {
+  test("a completed appointment stops being reminded about, and is thanked for", async () => {
     const created = await book();
     const completed = await owner.post(`/api/v1/bookings/${created.id}/complete`, {
       version: created.version,
     });
     expect(completed.status).toBe(201);
 
-    expect(await templatesFor(created.id)).toEqual(["booking.confirmed"]);
+    /*
+     * The reminder is gone — there is nothing left to remind anyone of — and
+     * the follow-up takes its place.
+     *
+     * That second message used to be absent here, and for a reason that has
+     * stopped being true: `notifyVisitCompleted` sends it only to a studio with
+     * a public booking page, because it invites the client back to one, and a
+     * studio created through the API had no address until somebody typed one.
+     * Every studio is given an address when it is created now, so the ordinary
+     * case is a studio that has one.
+     */
+    expect(await templatesFor(created.id)).toEqual([
+      "booking.confirmed",
+      "booking.visit_completed",
+    ]);
   });
 
   test("a retried booking completion replays one visit and one snapshot", async () => {

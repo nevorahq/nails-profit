@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { addOns, serviceAddOns, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { allocatedFixedCostMinor } from "@/domain/capacity";
-import { can } from "@/domain/rbac";
+import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceDetail, type ServiceDetailData } from "@/components/service-detail";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadPeriodPL, monthOf } from "@/lib/period";
@@ -149,6 +149,8 @@ export default async function ServicePage({
       linkedAddOnIds={loaded.linked}
       selectedAddOnIds={selectedAddOnIds}
       fullyLoaded={loaded.fullyLoaded}
+      currency={currency}
+      canManage={canManageCatalogue(membership.role, "services")}
       locale={locale}
     />
   );

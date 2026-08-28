@@ -11,6 +11,7 @@ import {
 } from "@/components/setup-guide";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 
 /**
@@ -93,7 +94,23 @@ export function VisitCloseForm({
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /*
+   * What the close just cost out, kept for the final window.
+   *
+   * `POST /api/v1/visits` answers with the snapshot it wrote — the margin and
+   * the profit per hour of this very visit — and until now this form read the
+   * body only when the request had failed. So «Первый расчёт» ended on a
+   * promise that the figures were in a report elsewhere, which is a strange way
+   * to finish a calculation while holding the result.
+   *
+   * Null when the costing came back incomplete (no commission rule in force,
+   * no duration): there is no number to show, and the visits list is where
+   * those are explained and fixed.
+   */
+  const [costed, setCosted] = useState<{ keepsMinor: number; hourlyMinor: number } | null>(null);
   const completionKey = useRef<string | null>(null);
+
+  const money = (amountMinor: number) => formatMoneyMinor(amountMinor, currency, localeTag(locale));
 
   const service = services.find((item) => item.id === serviceId) ?? null;
   const availableAddOns = addOns.filter((addOn) => addOn.serviceIds.includes(serviceId));
@@ -157,6 +174,18 @@ export function VisitCloseForm({
       return;
     }
 
+    const closed = await response.json().catch(() => null);
+    const snapshot = closed?.data?.snapshot ?? null;
+    setCosted(
+      typeof snapshot?.contribution_margin_minor === "number" &&
+        typeof snapshot?.profit_per_hour_minor === "number"
+        ? {
+            keepsMinor: snapshot.contribution_margin_minor,
+            hourlyMinor: snapshot.profit_per_hour_minor,
+          }
+        : null,
+    );
+
     setPending(false);
 
     /*
@@ -199,7 +228,24 @@ export function VisitCloseForm({
       <SetupGuideDialog
         guide={guide}
         locale={locale}
-        stayKey="setupGuide.toVisits"
+        doneSummary={
+          costed && (
+            <div className="visit-card-metrics">
+              <div>
+                <span>{t("visits.keeps")}</span>
+                <strong className={costed.keepsMinor < 0 ? "metric-negative" : undefined}>
+                  {money(costed.keepsMinor)}
+                </strong>
+              </div>
+              <div>
+                <span>{t("visits.hourly")}</span>
+                <strong className={costed.hourlyMinor < 0 ? "metric-negative" : undefined}>
+                  {money(costed.hourlyMinor)}
+                </strong>
+              </div>
+            </div>
+          )
+        }
         onStay={() => {
           // «Остаться здесь» would be a lie on this screen: the visit is
           // written and the form behind the window is a spent one.
@@ -310,7 +356,7 @@ export function VisitCloseForm({
         )}
 
         <p className="muted">
-          {t("closeVisit.dueLine", { amount: formatMoneyMinor(price, currency), duration })}
+          {t("closeVisit.dueLine", { amount: money(price), duration })}
         </p>
 
         {unusableServices > 0 && (

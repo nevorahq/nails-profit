@@ -3,6 +3,11 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import {
+  SetupGuideDialog,
+  useSetupGuide,
+  type SetupGuideBaseline,
+} from "@/components/setup-guide";
 import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import type { AppLocale } from "@/i18n/messages";
@@ -78,15 +83,17 @@ const SLOT_STEPS = [5, 10, 15, 20, 30, 60] as const;
  * and quietly wrong by an hour twice a year.
  */
 /**
- * The week the guided setup offers with one press.
+ * The week the guided setup offers with one press, and the one the rota form
+ * arrives pre-filled with.
  *
- * Five days rather than seven and 09:00–18:00 rather than anything cleverer:
+ * Five days rather than seven and 08:00–18:00 rather than anything cleverer:
  * the point is not to guess a studio's hours but to spare the first-time owner
- * fourteen inputs before they have seen a single slot. Every day of it is
- * editable in the rota below, and the second address never sees this button at
- * all.
+ * fourteen inputs before they have seen a single slot. Offered, never saved
+ * behind their back — these are the hours break-even is computed from and the
+ * hours clients are shown free slots in. Every day of it is editable in the
+ * rota below, and a rota that already exists is always answered with itself.
  */
-const DEFAULT_WORKWEEK = { weekdays: [1, 2, 3, 4, 5] as const, start: "09:00", end: "18:00" };
+const DEFAULT_WORKWEEK = { weekdays: [1, 2, 3, 4, 5] as const, start: "08:00", end: "18:00" };
 
 /** The order of the first address's steps, and the order they are drawn in. */
 const SETUP_STEPS = ["location", "rota", "publish"] as const;
@@ -122,6 +129,8 @@ function describeStatus(location: LocationRow, t: Translate) {
 }
 
 export function BookingSetup({
+  monthGuide = null,
+  organizationName,
   locations,
   specialists,
   assignments,
@@ -137,6 +146,22 @@ export function BookingSetup({
   ownSpecialistId,
   locale,
 }: {
+  /**
+   * Where «Расчёт месяца» stood when this page was drawn, or null when there is
+   * nothing to guide: no closed visit yet, both steps already done, or a role
+   * that cannot see the other half of the list.
+   */
+  monthGuide?: SetupGuideBaseline;
+  /**
+   * The studio's own name, offered as the first address's name.
+   *
+   * For a solo master the two are the same word, and for a studio with one
+   * salon they are as well — the second address is where they start to differ,
+   * and by then this field is being filled in deliberately. So the first one
+   * arrives already answered rather than asking somebody to retype what they
+   * typed when they created the workspace.
+   */
+  organizationName: string;
   locations: LocationRow[];
   specialists: { id: string; name: string }[];
   assignments: { specialist_id: string; location_id: string }[];
@@ -166,6 +191,7 @@ export function BookingSetup({
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
+  const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -192,7 +218,6 @@ export function BookingSetup({
 
   /** Which address is one click from being removed. Null while nothing is. */
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [publicSlug, setPublicSlug] = useState(organizationSlug ?? "");
   /** Whether the owner asked for every panel while the guided setup is showing. */
   const [manualSetup, setManualSetup] = useState(false);
   /** Whose week the guided step writes. Empty means the only master there is. */
@@ -413,6 +438,25 @@ export function BookingSetup({
     });
   }
 
+  /**
+   * Opening the studio itself, which is a different switch from publishing an
+   * address and used to be reachable from nowhere.
+   *
+   * Publishing an address raises this too — see the booking-settings endpoint —
+   * but only at the moment it is published. A studio whose address was already
+   * published before that behaviour existed sat in a dead end: `booking_access`
+   * stayed `calendar`, `/book/<slug>` answered 404, and the only screen that
+   * could explain it said «ждём оператора» and offered no control at all.
+   */
+  async function openPublicBooking() {
+    const opened = await send("/api/v1/organizations/settings", "PATCH", {
+      booking_access: "public",
+    });
+    // Straight to the thing that was just opened: the owner pressed this to see
+    // a page exist, and reading about it on the setup screen is not that.
+    if (opened && publicPageHref) router.push(publicPageHref);
+  }
+
   async function updateLocation(event: FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -440,17 +484,6 @@ export function BookingSetup({
    */
   async function setPublicStatus(id: string, status: "published" | "paused") {
     await send(`/api/v1/locations/${id}/booking-settings`, "PUT", { public_status: status });
-  }
-
-  /**
-   * The organization's slug, saved through the organization endpoint rather
-   * than the location one — it names the whole public page, not any single
-   * address on it. It is edited here because this is the screen that page is
-   * assembled on; every physical address below is a row that page will list.
-   */
-  async function saveSlug(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await send("/api/v1/organizations/settings", "PATCH", { slug: publicSlug.trim() || null });
   }
 
   async function deleteLocation(id: string) {
@@ -519,12 +552,19 @@ export function BookingSetup({
       intervals.push({ weekday, start, end });
     }
 
-    await send("/api/v1/availability/rules", "PUT", {
+    const saved = await send("/api/v1/availability/rules", "PUT", {
       specialist_id: currentSpecialistId,
       location_id: currentLocationId,
       effective_from: String(data.get("effective_from") ?? ""),
       intervals,
     });
+    /*
+     * Hours are what break-even is worked out from, so saving them can finish
+     * the month's checklist. Asked of the server rather than assumed here: a
+     * rota starting next month, or one saved with every day unticked, moves
+     * nothing, and `loadMonthSetup` is the only thing that knows.
+     */
+    if (saved) await guide.check();
   }
 
   /*
@@ -546,6 +586,12 @@ export function BookingSetup({
 
   return (
     <>
+      <SetupGuideDialog
+        guide={guide}
+        locale={locale}
+        strings="monthGuide"
+        doneHref="/app/reports/month"
+      />
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -576,7 +622,14 @@ export function BookingSetup({
             <form className="inline-form" onSubmit={createFirstLocation}>
               <label>
                 {t("bookingSetup.name")}
-                <input name="name" required minLength={2} maxLength={120} placeholder="Studio" />
+                <input
+                  name="name"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  defaultValue={organizationName}
+                  placeholder="Studio"
+                />
               </label>
               <label>
                 {t("bookingSetup.address")}
@@ -648,7 +701,13 @@ export function BookingSetup({
         </section>
       )}
 
-      {!isMaster && !guided && (
+      {/*
+        «Что осталось сделать» is shown while something is. A studio that is
+        open, published and taking bookings does not need a panel to tell it so
+        every time it opens this screen — the address rows above already carry
+        the state, and the link to the live page is right there.
+      */}
+      {!isMaster && !guided && !(blockers.length === 0 && bookingAccess === "public") && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.checklistTitle")}</h2>
           {blockers.length > 0 && (
@@ -680,35 +739,40 @@ export function BookingSetup({
             </>
           )}
 
-          {bookingAccess !== "public" && (
-            <p className="muted" style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
-              {t("bookingSetup.operatorPending")}
-            </p>
-          )}
+          {bookingAccess !== "public" &&
+            (canPublish && published.length > 0 ? (
+              <div style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
+                <p className="muted">{t("bookingSetup.openPublicHint")}</p>
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={pending}
+                  onClick={openPublicBooking}
+                >
+                  {t("bookingSetup.openPublic")}
+                </button>
+              </div>
+            ) : (
+              <p className="muted" style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
+                {t("bookingSetup.operatorPending")}
+              </p>
+            ))}
         </section>
       )}
 
       {!isMaster && !guided && <section className="panel booking-panel">
         <h2>{t("bookingSetup.locationsTitle")}</h2>
-        <p className="muted">{t("bookingSetup.locationsHint")}</p>
 
-        {canPublish && (
-          <form className="inline-form booking-public-address" onSubmit={saveSlug}>
-            <label>
-              {t("bookingSetup.publicAddress")}
-              <input
-                value={publicSlug}
-                disabled={pending}
-                placeholder="studio-name"
-                autoComplete="off"
-                onChange={(event) => setPublicSlug(event.target.value.toLowerCase())}
-              />
-            </label>
-            <button className="secondary-button" type="submit" disabled={pending}>
-              {t("bookingSetup.publicAddressSave")}
-            </button>
-          </form>
-        )}
+        {/*
+          The address of the public page, and no longer a field.
+          
+          It used to be typed here, on a screen a new studio had no reason to
+          open, and until it was the published booking page existed at no
+          address at all. It is now derived from the studio's name when the
+          organization is created — see `slugCandidatesFor` — so what is left to
+          show is where the page is, which is the one thing the owner came here
+          to find out.
+        */}
         {publicPageHref && (
           <p className="muted">
             {/* The label is built as an expression rather than written as JSX
@@ -718,13 +782,12 @@ export function BookingSetup({
                 exist in three languages. A URL is the exception the rule cannot
                 see — «/book/» is a path, not a sentence, and translating it
                 would break the link. */}
+            {t("bookingSetup.publicPageLabel")}{" "}
             <a className="text-link" href={publicPageHref} target="_blank" rel="noreferrer">
               {publicPageHref}
             </a>
           </p>
         )}
-        <p className="muted">{t("bookingSetup.publicAddressHint")}</p>
-
         {locations.length === 0 && <p className="muted">{t("bookingSetup.noLocations")}</p>}
 
         {locations.map((place) => {
@@ -847,7 +910,15 @@ export function BookingSetup({
           <form onSubmit={createLocation} className="inline-form">
             <label>
               {t("bookingSetup.name")}
-              <input name="name" required minLength={2} maxLength={120} />
+              {/* Only while there is nothing to compare it against: a second
+                  address is a different place and needs its own name. */}
+              <input
+                name="name"
+                required
+                minLength={2}
+                maxLength={120}
+                defaultValue={locations.length === 0 ? organizationName : undefined}
+              />
             </label>
             <label>
               {t("bookingSetup.slug")}
@@ -1104,10 +1175,20 @@ export function BookingSetup({
           >
             {weekdays.map((weekday) => {
               const rule = rotaFor(weekday);
+              // Only where there is nothing yet: an existing rota is answered
+              // with itself, and a week somebody deliberately emptied must not
+              // refill on the next visit.
+              const suggested =
+                currentRota.length === 0 &&
+                (DEFAULT_WORKWEEK.weekdays as readonly Weekday[]).includes(weekday);
               return (
                 <div key={weekday} className="inline-form">
                   <label>
-                    <input type="checkbox" name={`day_${weekday}`} defaultChecked={rule !== null} />
+                    <input
+                      type="checkbox"
+                      name={`day_${weekday}`}
+                      defaultChecked={rule !== null || suggested}
+                    />
                     {t(WEEKDAY_KEYS[weekday])}
                   </label>
                   <label>
@@ -1115,7 +1196,7 @@ export function BookingSetup({
                     <input
                       type="time"
                       name={`start_${weekday}`}
-                      defaultValue={rule ? timeValue(rule.start_minute) : "09:00"}
+                      defaultValue={rule ? timeValue(rule.start_minute) : DEFAULT_WORKWEEK.start}
                     />
                   </label>
                   <label>
@@ -1123,7 +1204,7 @@ export function BookingSetup({
                     <input
                       type="time"
                       name={`end_${weekday}`}
-                      defaultValue={rule ? timeValue(rule.end_minute) : "18:00"}
+                      defaultValue={rule ? timeValue(rule.end_minute) : DEFAULT_WORKWEEK.end}
                     />
                   </label>
                 </div>

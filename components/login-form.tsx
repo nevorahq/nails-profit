@@ -37,6 +37,12 @@ export function LoginForm({
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /*
+   * The address a failed sign-in was tried with, kept so switching to
+   * registration — «Нет аккаунта? Создать», at the bottom — arrives with the
+   * address already filled in rather than empty.
+   */
+  const [refusedEmail, setRefusedEmail] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,7 +64,17 @@ export function LoginForm({
         : await authClient.signIn.email({ email, password, callbackURL: redirectTo });
 
     if (result.error) {
-      setError(result.error.message ?? t("auth.signInFailed"));
+      /*
+       * A refused sign-in is answered in the interface's own language and with
+       * somewhere to go. Better Auth replies «Invalid email or password» — an
+       * English sentence, and a dead end for the one person who most needs a
+       * next step: somebody with no account at all, who cannot tell that from a
+       * mistyped password. What is deliberately not said is which of the two
+       * was wrong; that answer would let anybody discover, address by address,
+       * who has an account here.
+       */
+      setError(mode === "signin" ? t("auth.signInNoMatch") : (result.error.message ?? t("auth.signInFailed")));
+      setRefusedEmail(mode === "signin" ? email : null);
       setPending(false);
       return;
     }
@@ -128,7 +144,8 @@ export function LoginForm({
             type="email"
             autoComplete="email"
             required
-            defaultValue={presetEmail ?? undefined}
+            key={refusedEmail ?? "email"}
+            defaultValue={presetEmail ?? refusedEmail ?? undefined}
             readOnly={presetEmail !== null}
           />
         </label>
@@ -148,7 +165,11 @@ export function LoginForm({
             </label>
           </div>
         )}
-        {error && <div className="form-error" role="alert">{error}</div>}
+        {error && (
+          <div className="form-error" role="alert">
+            {error}
+          </div>
+        )}
         <button className="primary-button" type="submit" disabled={pending}>
           {pending ? t("auth.wait") : mode === "signup" ? t("auth.signUp") : t("auth.signIn")}
         </button>

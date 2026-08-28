@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { GoalPanel } from "@/components/goal-panel";
 import type { ChecklistProgress } from "@/lib/onboarding";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -12,9 +13,13 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
  * list is a map of what is missing, not a gate.
  *
  * What the map was missing is where to put a foot next. The first unfinished
- * step is singled out by a moving arrow and nothing else: every step keeps the
- * same one link, so there is never a second control to the same page and never
- * a paragraph of advice between two lines of a list.
+ * step is singled out by a moving arrow and one line saying what it will make
+ * the report able to state — the step alone names a thing to enter, not a
+ * reason to enter it, and «Постоянные затраты месяца» reads as bookkeeping
+ * until you know the month's profit is overstated without them.
+ *
+ * Only that step carries its line. A hint under every row would turn a list
+ * that can be read at a glance into a page of advice.
  *
  * A server component: nothing here reacts to anything, so the dashboard pays
  * for no JavaScript bundle to render it.
@@ -59,6 +64,7 @@ function ChecklistPanel<Key extends string>({
                   {label(step.key)}
                 </Link>
               )}
+              {isNext && <span className="checklist-hint">{label(`${step.key}Hint`)}</span>}
             </li>
           );
         })}
@@ -78,10 +84,18 @@ export function OnboardingPanel({
 }
 
 /**
- * The month's own checklist, shown only once the first one is finished.
+ * The month's own setup, shown only once the first run is finished.
  *
- * Same panel deliberately: it is the same promise — every ○ is a figure the
- * report cannot state yet — and a second design for it would suggest otherwise.
+ * Built as one goal rather than as a list, exactly like the first run — the
+ * same promise made in a different place. Two ○ under a heading called «Расчёт
+ * месяца» read as a second helping of homework arriving the moment the first
+ * one was cleared; one goal with the reason under it reads as the next move,
+ * and the reason is the part that was missing: «Постоянные затраты месяца» is
+ * bookkeeping until somebody says the profit above is overstated without them.
+ *
+ * Null when there is nothing left to point at. The dashboard already declines
+ * to render a finished checklist, so this is a guard rather than a state
+ * anybody reaches.
  */
 export function MonthSetupPanel({
   progress,
@@ -90,5 +104,28 @@ export function MonthSetupPanel({
   progress: ChecklistProgress<"overhead" | "rota">;
   locale: AppLocale;
 }) {
-  return <ChecklistPanel progress={progress} locale={locale} prefix="monthSetup" />;
+  const t = getTranslator(locale);
+  const next = progress.next;
+  if (!next) return null;
+
+  const index = progress.steps.findIndex((step) => step.key === next.key);
+  const previous = index > 0 ? progress.steps[index - 1] : null;
+
+  return (
+    <GoalPanel
+      eyebrow={t("monthSetup.title")}
+      lead={t("monthSetup.lead")}
+      goal={t(`step.goal.${next.key}` as MessageKey)}
+      hint={t(`monthSetup.${next.key}Hint` as MessageKey)}
+      action={t(`step.action.${next.key}` as MessageKey)}
+      href={next.href}
+      remaining={t("step.remaining", { count: progress.total - progress.done })}
+      back={
+        previous && {
+          label: t("step.back", { step: t(`monthSetup.${previous.key}` as MessageKey) }),
+          href: previous.href,
+        }
+      }
+    />
+  );
 }

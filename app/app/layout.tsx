@@ -44,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       role={caller.membership.role}
       organizationName={organization?.name ?? ""}
       userEmail={caller.membership.userEmail}
+      emailVerified={caller.membership.userEmailVerified}
       preview={
         preview && {
           targetName: preview.targetName,

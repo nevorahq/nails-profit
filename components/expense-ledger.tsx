@@ -12,6 +12,11 @@ import { expenseClassOf } from "@/domain/expense-classes";
 import type { ExpenseRow } from "@/lib/expenses";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import {
+  SetupGuideDialog,
+  useSetupGuide,
+  type SetupGuideBaseline,
+} from "@/components/setup-guide";
 import { localeTag } from "@/i18n/translate";
 import { formatDay, formatMoneyMinor } from "@/lib/format";
 
@@ -23,7 +28,21 @@ import { formatDay, formatMoneyMinor } from "@/lib/format";
  * together and owns the panel.
  */
 
-export function ExpenseLedger({ expenses, locale }: { expenses: ExpenseRow[]; locale: AppLocale }) {
+export function ExpenseLedger({
+  expenses,
+  locale,
+  monthGuide = null,
+}: {
+  expenses: ExpenseRow[];
+  locale: AppLocale;
+  /**
+   * Where «Расчёт месяца» stood when this page was drawn, or null once the
+   * month is set up — the ledger is used every week, and an owner recording
+   * March's electricity is not owed a congratulation window for it.
+   */
+  monthGuide?: SetupGuideBaseline;
+}) {
+  const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
   /*
    * The panel: nothing on the page until the header opens it — the anchors
    * `app/app/expenses/page.tsx` renders are the *only* control (`.header-action`
@@ -63,9 +82,23 @@ export function ExpenseLedger({ expenses, locale }: { expenses: ExpenseRow[]; lo
 
   return (
     <>
+      <SetupGuideDialog
+        guide={guide}
+        locale={locale}
+        strings="monthGuide"
+        doneHref="/app/reports/month"
+      />
       <div className={`compose-wrap${open ? "" : " is-closed"}`} id="add-expense" ref={panel}>
         <div className="compose-inner">
-          <ExpenseForm locale={locale} onAdded={() => setOpen(false)} />
+          <ExpenseForm
+            locale={locale}
+            onAdded={() => {
+              setOpen(false);
+              // Asked of the server, not assumed: an expense in another
+              // currency, or one the month does not contain, finishes no step.
+              void guide.check();
+            }}
+          />
         </div>
       </div>
       <ExpenseTable expenses={expenses} locale={locale} />

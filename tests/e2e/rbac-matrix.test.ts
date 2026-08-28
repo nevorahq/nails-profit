@@ -422,6 +422,13 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/onboarding" }),
   },
   {
+    route: "/api/v1/onboarding/month",
+    method: "GET",
+    allowed: ["owner"],
+    note: "чеклист месяца читает реестр затрат — owner-only, как сами затраты",
+    request: async () => ({ path: "/api/v1/onboarding/month" }),
+  },
+  {
     route: "/api/v1/services",
     method: "GET",
     allowed: ALL_ROLES,
@@ -669,6 +676,16 @@ const cases: readonly Case[] = [
     allowed: ALL_ROLES,
     note: "Leaving preview is never refused: a mode nobody can exit is worse than one nobody entered",
     request: async () => ({ path: "/api/v1/preview" }),
+  },
+  {
+    route: "/api/v1/account/delete",
+    method: "POST",
+    allowed: ALL_ROLES,
+    note: "уйти может каждый за себя; адрес нарочно неверный — 422, а не удалённая фикстура",
+    request: async () => ({
+      path: "/api/v1/account/delete",
+      body: { confirmation_email: "wrong@example.test" },
+    }),
   },
   {
     route: "/api/v1/me/permissions",

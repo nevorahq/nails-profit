@@ -302,6 +302,13 @@
       "when": 1787853540750,
       "tag": "0042_currency_add_rub",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787928105387,
+      "tag": "0043_snapshot_allows_author_erasure",
+      "breakpoints": true
     }
   ]
 }

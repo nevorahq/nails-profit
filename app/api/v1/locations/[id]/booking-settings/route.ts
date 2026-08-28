@@ -1,7 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { bookingSettings, locations } from "@/db/schema";
+import { bookingSettings, locations, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
@@ -124,6 +124,37 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       })
       .where(eq(bookingSettings.locationId, locationId))
       .returning();
+
+    /*
+     * Publishing an address is what opens the studio's public page, so it is
+     * also what raises the organization's own level.
+     *
+     * These were two switches with one meaning, and only one of them was
+     * reachable: `public_status` from the address row, `booking_access` from
+     * nowhere at all — the settings endpoint refused to raise it (section
+     * 7.11's rollout gate) and no screen offered it. The result was a studio
+     * that did everything the checklist asked, pressed «Опубликовать», and
+     * still got a 404 at `/book/<slug>`, with nothing on any screen to explain
+     * why. `PUBLIC_BOOKING_ENABLED` remains the operator's switch above all of
+     * this, and lowering the level stays the owner's own decision — pausing one
+     * address of several must not close the rest, so nothing is lowered here.
+     */
+    if (parsed.data.public_status === "published") {
+      await tx
+        .update(organizations)
+        .set({
+          bookingAccess: "public",
+          updatedBy: actor.userId,
+          updatedAt: new Date(),
+          version: sql`${organizations.version} + 1`,
+        })
+        .where(
+          and(
+            eq(organizations.id, actor.organizationId),
+            ne(organizations.bookingAccess, "public"),
+          ),
+        );
+    }
 
     // Publishing or pausing a public booking page is exactly the kind of change
     // that has to be explicable afterwards.

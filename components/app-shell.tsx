@@ -6,6 +6,7 @@ import { bottomNavFor, navFor, navGroups, type NavItem } from "@/components/nav-
 import { NavLink } from "@/components/nav-link";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { PreviewBanner, type PreviewBannerContext } from "@/components/preview-banner";
+import { VerifyEmailNotice } from "@/components/verify-email-notice";
 import { TopbarTitle } from "@/components/topbar-title";
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
@@ -35,6 +36,7 @@ export function AppShell({
   role,
   organizationName,
   userEmail,
+  emailVerified = true,
   preview = null,
   stalePreview = false,
 }: {
@@ -43,6 +45,11 @@ export function AppShell({
   role: MemberRole;
   organizationName: string;
   userEmail: string;
+  /**
+   * Whether that address has been confirmed. Defaults to true so a caller that
+   * does not know cannot accidentally nag somebody who already has.
+   */
+  emailVerified?: boolean;
   /**
    * Set while an owner is looking at a colleague's interface. Everything else
    * on this screen — `role`, `userEmail`, the figures below — is already the
@@ -63,6 +70,7 @@ export function AppShell({
   return (
     <div className={`app-shell-root${preview ? " app-shell-previewing" : ""}`}>
       <PreviewBanner preview={preview} stale={stalePreview} locale={locale} />
+      {!emailVerified && <VerifyEmailNotice locale={locale} email={userEmail} />}
 
       <header className="app-topbar">
         {/*

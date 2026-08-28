@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { organizations } from "@/db/schema";
 import { currencies } from "@/domain/money";
+import {
+  isLatinOrganizationName,
+  ORGANIZATION_NAME_MESSAGE,
+} from "@/domain/organization-name";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { checkSlug } from "@/domain/slug";
@@ -31,15 +35,28 @@ const settingsSchema = z
      * than the rota is a claim this figure does not make.
      */
     practical_capacity_basis_points: z.int().min(1).max(10_000).optional(),
-    name: z.string().trim().min(2).max(100).optional(),
+    // Renaming goes through the same rule as naming: a studio must not be able
+    // to arrive in Cyrillic by the back door of its own settings.
+    name: z
+      .string()
+      .trim()
+      .min(2)
+      .max(100)
+      .refine(isLatinOrganizationName, { message: ORGANIZATION_NAME_MESSAGE })
+      .optional(),
     slug: z.string().trim().toLowerCase().min(3).max(40).nullable().optional(),
     /**
-     * Section 7.11's rollout switch. An owner may step it down — closing their
-     * own public page or the whole module is their decision to make at any
-     * hour — but stepping *up* to `public` is what the operator does after the
-     * security and concurrency gates, so it is refused here.
+     * Section 7.11's rollout switch, now settable in both directions.
+     *
+     * Refusing to raise it here made sense while the operator was the only one
+     * who could open a public page. It stopped making sense the moment
+     * publishing an address became the act that opens it — see
+     * `app/api/v1/locations/[id]/booking-settings/route.ts` — because then an
+     * owner could open the page but never reopen it after closing it, and no
+     * screen anywhere said which switch had shut them out. `PUBLIC_BOOKING_ENABLED`
+     * is still above all of this: with the flag off, `public` reaches nobody.
      */
-    booking_access: z.enum(["off", "calendar"]).optional(),
+    booking_access: z.enum(["off", "calendar", "public"]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to change" });
 

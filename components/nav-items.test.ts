@@ -21,7 +21,6 @@ describe("navigation", () => {
       "/app/visits",
       "/app/clients",
       "/app/services",
-      "/app/add-ons",
       "/app/expenses",
       "/app/specialists",
       "/app/import",
@@ -112,9 +111,9 @@ describe("active section", () => {
   });
 
   it("does not match a route that merely starts with the same letters", () => {
-    // `/app/add-ons` is not inside `/app/add`, and `/app/services` is not
-    // inside `/app/service`.
-    expect(isActiveSection("/app/add-ons", "/app/add")).toBe(false);
+    // `/app/expenses` is not inside `/app/expense`, and `/app/specialists` is
+    // not inside `/app/special`.
+    expect(isActiveSection("/app/expenses", "/app/expense")).toBe(false);
     expect(isActiveSection("/app/specialists", "/app/special")).toBe(false);
   });
 

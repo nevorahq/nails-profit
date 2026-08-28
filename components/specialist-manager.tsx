@@ -85,6 +85,7 @@ export function SpecialistManager({
   currency,
   locale,
   canManage,
+  hasOwnCard = false,
   setupGuide = null,
 }: {
   specialists: SpecialistRow[];
@@ -93,6 +94,14 @@ export function SpecialistManager({
   currency: string;
   locale: AppLocale;
   canManage: boolean;
+  /**
+   * Whether the person on this screen is already catalogued as a master.
+   *
+   * When they are not — the usual state of a solo studio on its first day —
+   * «Это я» is offered pre-ticked, because in a studio of one the first master
+   * added is the owner more often than not.
+   */
+  hasOwnCard?: boolean;
   /**
    * Where «Первый расчёт» stood when this page was drawn, or null once the
    * studio has closed a visit and the guided run is over.
@@ -108,6 +117,22 @@ export function SpecialistManager({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [exceptionOpen, setExceptionOpen] = useState(false);
+  /*
+   * Whose rule the panel is open for, and for which service.
+   *
+   * A master with no rule at all had nowhere to go from their own row: the cell
+   * said «не задана» in a badge that did nothing, while the thing that would
+   * fix it was a panel below, asking again which master was meant. Both are now
+   * the same form, opened already pointing at the row somebody pressed.
+   */
+  const [ruleSpecialist, setRuleSpecialist] = useState("");
+  const [ruleService, setRuleService] = useState("");
+  /*
+   * The panel is at the bottom of a long table, so opening it from a cell near
+   * the top used to look like nothing happening at all: the state flipped, the
+   * form appeared, and it was two screens below the button that summoned it.
+   */
+  const ruleRef = useRef<HTMLDivElement>(null);
   const [serviceEditor, setServiceEditor] = useState<ServiceEditor | null>(null);
   /*
    * The rule builder needs two pieces of state, and they are per form: showing
@@ -251,6 +276,9 @@ export function SpecialistManager({
       {
         name: data.get("name"),
         cooperation_type: data.get("cooperation_type"),
+        // Two facts in one tick: this card is the account signed in now, and
+        // the commission booked to it is the owner's own — see the endpoint.
+        ...(data.get("is_me") ? { is_me: true } : {}),
         ...(rule
           ? {
               default_rule:
@@ -269,6 +297,24 @@ export function SpecialistManager({
     }
   }
 
+  /**
+   * A card for somebody who is already in the studio.
+   *
+   * The sequence it repairs: invite a master, they accept, and they appear in
+   * «Команда» and nowhere else — no row in «Мастера» to book them into, and
+   * «Связать мастера с аккаунтом» offering an empty list, because the thing it
+   * links to did not exist yet. One press writes the card and the link
+   * together; the commission rule stays the owner's decision, and the banner
+   * above already names everyone missing one.
+   */
+  async function cardForMember(member: OrganizationMember) {
+    await send("/api/v1/specialists", {
+      name: member.name?.trim() || member.email.split("@")[0],
+      cooperation_type: "commission",
+      user_id: member.user_id,
+    });
+  }
+
   async function addException(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -278,11 +324,15 @@ export function SpecialistManager({
       setError(t("specialists.valueRequired"));
       return;
     }
-    await send(
+    const service = String(data.get("service_id") ?? "");
+    const ok = await send(
       `/api/v1/specialists/${data.get("specialist_id")}/commission-rules`,
-      { ...rule, service_id: data.get("service_id") },
+      // Empty means «все услуги», which is what a default rule is: the endpoint
+      // reads an absent service_id as exactly that.
+      { ...rule, ...(service ? { service_id: service } : {}) },
       form,
     );
+    if (ok) setExceptionOpen(false);
   }
 
   async function linkAccount(event: FormEvent<HTMLFormElement>) {
@@ -380,9 +430,53 @@ export function SpecialistManager({
   const linked = new Set(specialists.map((person) => person.user_id).filter(Boolean));
   const unlinkedMembers = members.filter((member) => !linked.has(member.user_id));
 
+  /*
+   * Members who can do the work and have nowhere to do it from. A manager or an
+   * analyst is not one of them — they are not booked and have no calendar — so
+   * only masters are named, and only while nothing is linked to their account.
+   */
+  const waitingForCard = unlinkedMembers.filter((member) => member.role === "master");
+
+  /*
+   * A studio has one owner who works, or none.
+   *
+   * The mark decides how the month's report reads: a principal's commission is
+   * added back below the margin because it never left the business (see
+   * `domain/period-pl.ts`). Two of them would add back two people's pay and
+   * report a profit the studio does not have — so while one is marked, the
+   * button is gone from everybody else's row rather than offered and refused.
+   * Removing the mark brings it back for all of them.
+   */
+  const principal = specialists.find((person) => person.is_principal) ?? null;
+
   return (
     <>
       <SetupGuideDialog guide={guide} locale={locale} />
+
+      {canManage && waitingForCard.length > 0 && (
+        <section className="panel">
+          <h2>{t("specialists.waitingTitle")}</h2>
+          <p className="muted">{t("specialists.waitingHint")}</p>
+          <ul className="compact-list">
+            {waitingForCard.map((member) => (
+              <li key={member.user_id} className="waiting-member">
+                <span>
+                  {member.name?.trim() || member.email.split("@")[0]}
+                  <span className="unit-hint">{member.email}</span>
+                </span>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => cardForMember(member)}
+                >
+                  {t("specialists.waitingAction")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {withoutRule.length > 0 && (
         <div className="warning-banner">
@@ -421,6 +515,13 @@ export function SpecialistManager({
                   onChange={setAddName}
                   onSelect={(option) => setAddName(option.label)}
                 />
+                {!hasOwnCard && (
+                  <label className="checkbox-row">
+                    <input type="checkbox" name="is_me" defaultChecked />
+                    {t("specialists.isMe")}
+                    <span className="field-hint">{t("specialists.isMeHint")}</span>
+                  </label>
+                )}
                 <label>
                   {t("specialists.cooperation")}
                   <select
@@ -543,7 +644,7 @@ export function SpecialistManager({
               <td>
                 {t(`cooperation.${person.cooperation_type}` as MessageKey)}
                 {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
-                {canManage && (
+                {canManage && (principal === null || principal.id === person.id) && (
                   <button
                     className="inline-action"
                     type="button"
@@ -567,6 +668,23 @@ export function SpecialistManager({
                       <span className="unit-hint">{t("specialists.imputedLabour")}</span>
                     )}
                   </>
+                ) : canManage ? (
+                  // The badge used to state the gap and do nothing about it.
+                  <button
+                    className="badge-warning badge-button"
+                    type="button"
+                    onClick={() => {
+                      setRuleSpecialist(person.id);
+                      setRuleService("");
+                      setExceptionOpen(true);
+                      // After the panel has been told to open, not before.
+                      requestAnimationFrame(() =>
+                        ruleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                      );
+                    }}
+                  >
+                    {t("specialists.notSet")}
+                  </button>
                 ) : (
                   <span className="badge-warning">{t("specialists.notSet")}</span>
                 )}
@@ -800,7 +918,14 @@ export function SpecialistManager({
         </>
       )}
 
-      {canManage && specialists.length > 0 && services.length > 0 && (
+      {/*
+        Services are not a precondition. They are needed to write an exception
+        *for* a service, and not at all for the rule that pays on everything —
+        which is the one a studio is missing when the table says «не задана».
+        Requiring them hid the only control that could fix it from exactly the
+        studio that had not got that far yet.
+      */}
+      {canManage && specialists.length > 0 && (
         <>
           <div className="add-form-toggle">
             {exceptionOpen ? (
@@ -813,7 +938,10 @@ export function SpecialistManager({
               </button>
             )}
           </div>
-          <div className={`add-form-wrap${exceptionOpen ? "" : " add-form-closed"}`}>
+          <div
+            className={`add-form-wrap${exceptionOpen ? "" : " add-form-closed"}`}
+            ref={ruleRef}
+          >
             <div className="add-form-inner">
               <section className="panel">
                 <h2>{t("specialists.serviceException")}</h2>
@@ -823,7 +951,11 @@ export function SpecialistManager({
                 <form className="inline-form" onSubmit={addException}>
                   <label>
                     {t("specialists.specialist")}
-                    <select name="specialist_id">
+                    <select
+                      name="specialist_id"
+                      value={ruleSpecialist || specialists[0]?.id || ""}
+                      onChange={(event) => setRuleSpecialist(event.target.value)}
+                    >
                       {specialists.map((person) => (
                         <option key={person.id} value={person.id}>
                           {person.name}
@@ -833,7 +965,14 @@ export function SpecialistManager({
                   </label>
                   <label>
                     {t("services.service")}
-                    <select name="service_id">
+                    <select
+                      name="service_id"
+                      value={ruleService}
+                      onChange={(event) => setRuleService(event.target.value)}
+                    >
+                      {/* The default rule, which is «все услуги» rather than a
+                          service left unchosen. */}
+                      <option value="">{t("specialists.defaultRuleOption")}</option>
                       {services.map((service) => (
                         <option key={service.id} value={service.id}>
                           {service.name}

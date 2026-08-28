@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -13,7 +13,20 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
  */
 export type SetupGuideBaseline = Readonly<{ done: number; total: number }> | null;
 
-type Reached = Readonly<{ done: number; total: number; complete: boolean }>;
+/** A step as `GET /api/v1/onboarding` reports it. */
+type GuideStep = Readonly<{ key: string; done: boolean; href: string }>;
+
+type Reached = Readonly<{
+  done: number;
+  total: number;
+  complete: boolean;
+  /**
+   * What is left, in the checklist's own order. This is what lets the window
+   * send somebody onward to the next thing instead of back to a list — an
+   * optional field so an older payload cannot crash the dialog.
+   */
+  steps?: readonly GuideStep[];
+}>;
 
 export type SetupGuide = Readonly<{
   /** Whether this page is part of a guided run at all. */
@@ -44,7 +57,16 @@ export type SetupGuide = Readonly<{
  * exactly as it was: this is a courtesy on top of a working screen, and it must
  * never be the reason a studio cannot get on with its work.
  */
-export function useSetupGuide(baseline: SetupGuideBaseline): SetupGuide {
+export function useSetupGuide(
+  baseline: SetupGuideBaseline,
+  /**
+   * Which checklist this screen is a step of. The month's screens — the expense
+   * ledger and the rota — ask the same question of a different list, and the
+   * two must not share an answer: closing a visit is not progress on March's
+   * rent.
+   */
+  endpoint: "/api/v1/onboarding" | "/api/v1/onboarding/month" = "/api/v1/onboarding",
+): SetupGuide {
   /*
    * What the checklist stood at last time we looked — seeded from the server's
    * own count so the first write has something to be compared against.
@@ -60,7 +82,7 @@ export function useSetupGuide(baseline: SetupGuideBaseline): SetupGuide {
   const check = useCallback(async () => {
     if (!baseline) return false;
 
-    const response = await fetch("/api/v1/onboarding").catch(() => null);
+    const response = await fetch(endpoint).catch(() => null);
     if (!response?.ok) return false;
     const body = await response.json().catch(() => null);
     const progress = body?.data as Reached | undefined;
@@ -72,7 +94,7 @@ export function useSetupGuide(baseline: SetupGuideBaseline): SetupGuide {
 
     setReached(progress);
     return true;
-  }, [baseline]);
+  }, [baseline, endpoint]);
 
   return {
     active: baseline !== null,
@@ -83,8 +105,12 @@ export function useSetupGuide(baseline: SetupGuideBaseline): SetupGuide {
 }
 
 /**
- * The window itself: what was just finished, what is left, and the way back to
- * the list.
+ * The window itself: what was just finished, and the way to the next thing.
+ *
+ * It names the goal ahead rather than reporting on the list behind, and its
+ * main button is that goal's own action — «Добавить услугу», not «Вернуться к
+ * шагам». On the last step there is nothing ahead, so it shows what the visit
+ * earned and opens the report.
  *
  * Two ways out on purpose. The owner who has just added their first master may
  * well want to add the second one before going anywhere, and a window with a
@@ -94,20 +120,36 @@ export function useSetupGuide(baseline: SetupGuideBaseline): SetupGuide {
 export function SetupGuideDialog({
   guide,
   locale,
-  stayKey = "setupGuide.stay",
+  strings = "setupGuide",
+  doneHref = "/app",
   onStay,
+  doneSummary,
 }: {
   guide: SetupGuide;
   locale: AppLocale;
-  /** What the second button says, when «остаться здесь» is not the honest word. */
-  stayKey?: MessageKey;
-  /** What it does, when leaving the window is not the whole of it. */
+  /**
+   * Which checklist's wording to use. The two journeys end in different places
+   * and say different things when they do — «Первый расчёт готов» against
+   * «Расчёт месяца готов» — and one set of strings serving both would have to
+   * be vague enough to fit neither.
+   */
+  strings?: "setupGuide" | "monthGuide";
+  /** Where the last window leads. The month's report is not the dashboard. */
+  doneHref?: string;
+  /** What closing the window does, when dismissing it is not the whole of it. */
   onStay?: () => void;
+  /**
+   * What the last step produced, shown on the final window. The visit form
+   * passes the figures the close just returned: «Первый расчёт» that ends by
+   * promising a number somewhere else is not a first calculation.
+   */
+  doneSummary?: ReactNode;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
   const { reached, dismiss } = guide;
   const primary = useRef<HTMLButtonElement>(null);
+  const say = (name: string) => t(`${strings}.${name}` as MessageKey);
 
   const stay = useCallback(() => {
     dismiss();
@@ -132,17 +174,23 @@ export function SetupGuideDialog({
 
   if (!reached) return null;
 
-  const remaining = reached.total - reached.done;
+  const next = reached.steps?.find((step) => !step.done) ?? null;
 
   /*
-   * Back to the panel, and refreshed rather than merely navigated to. The
-   * dashboard is a server component whose checklist was rendered before this
-   * step existed; pushing alone can answer from the router cache and show the
-   * owner the very ○ they have just filled in.
+   * Forward, not back. This button used to read «Вернуться к шагам» and send
+   * the owner to the dashboard checklist — praise for the step just done,
+   * followed by a return to the list of what is still undone. It now goes
+   * straight to the next thing to do, and only falls back to the dashboard
+   * when there is nothing left, where the dashboard is the report they earned.
+   *
+   * Refreshed rather than merely navigated to: the destination is a server
+   * component rendered before this step existed, and pushing alone can answer
+   * from the router cache — showing the owner the very ○ they have just
+   * filled in.
    */
-  function toDashboard() {
+  function onward() {
     dismiss();
-    router.push("/app");
+    router.push(next?.href ?? doneHref);
     router.refresh();
   }
 
@@ -155,20 +203,33 @@ export function SetupGuideDialog({
         aria-labelledby="setup-guide-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="setup-guide-title">
-          {t(reached.complete ? "setupGuide.doneTitle" : "setupGuide.title")}
-        </h2>
-        <p>
-          {reached.complete
-            ? t("setupGuide.doneBody")
-            : t("setupGuide.body", { count: remaining, done: reached.done, total: reached.total })}
-        </p>
+        <h2 id="setup-guide-title">{say(reached.complete ? "doneTitle" : "title")}</h2>
+        {reached.complete && <p>{say("doneBody")}</p>}
+        {/*
+          The goal alone, without a count of what is left in front of it. «До
+          первого расчёта осталось 2 шага» measured the distance still to walk
+          at the moment somebody had just walked one — the next thing to do says
+          everything that line did, and says it as an instruction.
+        */}
+        {reached.complete
+          ? doneSummary
+          : next && <p className="modal-goal">{t(`step.goal.${next.key}` as MessageKey)}</p>}
         <div className="button-row">
-          <button className="primary-button" type="button" ref={primary} onClick={toDashboard}>
-            {t(reached.complete ? "setupGuide.doneAction" : "setupGuide.back")}
+          <button className="primary-button" type="button" ref={primary} onClick={onward}>
+            {reached.complete
+              ? say("doneAction")
+              : next
+                ? t(`step.action.${next.key}` as MessageKey)
+                : t("common.return")}
           </button>
+          {/*
+            «Вернуться», one word, on every window of both runs. It used to be
+            «Остаться здесь» — true of the specialist and service screens and a
+            lie on the visit form, which is spent the moment it saves, so that
+            screen had to pass its own label. One name for one door.
+          */}
           <button className="secondary-button" type="button" onClick={stay}>
-            {t(stayKey)}
+            {t("common.return")}
           </button>
         </div>
       </div>

@@ -7,6 +7,8 @@ import { expenseCategories, isExpenseCategory } from "@/domain/expense-categorie
 import { can } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
 import { loadExpenses } from "@/lib/expenses";
+import { loadMonthGuide } from "@/lib/onboarding";
+import { monthOf } from "@/lib/period";
 import { ownerDraws } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { requireWorkspace } from "@/lib/workspace";
@@ -74,6 +76,18 @@ export default async function ExpensesPage({
       .where(bounds.length > 0 ? and(...bounds) : undefined)
       .orderBy(desc(ownerDraws.occurredOn));
   });
+
+  /*
+   * Where «Расчёт месяца» stands, so the first expense of a month that has none
+   * can say what it just made possible.
+   *
+   * Null for a studio still working towards its first visit — it has no month
+   * to correct yet — and null again once both steps are done, which is most of
+   * this page's life: the ledger is a weekly habit, not a setup screen.
+   */
+  const monthGuide = await withTenant(membership.organizationId, (tx) =>
+    loadMonthGuide(tx, { month: monthOf(new Date()), currency }),
+  );
 
   return (
     <main className="app-shell">
@@ -143,7 +157,7 @@ export default async function ExpensesPage({
         </details>
       </nav>
 
-      <ExpenseLedger expenses={rows} locale={locale} />
+      <ExpenseLedger expenses={rows} locale={locale} monthGuide={monthGuide} />
       <OwnerDrawLedger
         draws={draws}
         currency={currency}

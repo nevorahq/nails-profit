@@ -66,6 +66,14 @@ export function DataManagement({
           <p id="delete-organization-hint" className="muted">
             {t("settings.deleteHint", { name: organizationName })}
           </p>
+          {/*
+            What this action does not do, said before it is taken rather than
+            discovered afterwards: the account survives, the address stays
+            registered to it, and the next sign-in lands on «создайте студию».
+            Somebody who meant to leave the product entirely wants the action
+            below this one instead.
+          */}
+          <p className="muted">{t("settings.deleteKeepsAccount")}</p>
           <label>
             {t("settings.confirmName")}
             <input

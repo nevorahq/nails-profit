@@ -23,6 +23,7 @@ import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
 import { monthBounds, monthOf } from "@/lib/period";
+import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 
 /**
@@ -300,6 +301,14 @@ export default async function SettingsPage() {
           canDelete={can(membership.role, "data_export", "write")}
         />
       )}
+
+      {/*
+        Leaving, which is a different act from deleting the studio and belongs
+        to everybody rather than to the owner. An owner is refused by the
+        endpoint until the studio itself is gone — and that refusal names the
+        order of the two, which is the part nobody could work out from here.
+      */}
+      <AccountDeletion locale={locale} email={membership.userEmail} />
     </main>
   );
 }

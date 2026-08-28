@@ -12,7 +12,7 @@ import {
   specialists,
   visits,
 } from "@/db/schema";
-import { dataOf } from "../helpers/api";
+import { dataOf, signIn } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, type Studio } from "../helpers/studio";
 
@@ -157,5 +157,22 @@ describe("Owner data export and erasure", () => {
     const auditJson = JSON.stringify(eventRows);
     expect(auditJson).not.toMatch(/Private Client|private-client@|invited-person@|Мастер/);
     expect(eventRows.at(-1)?.eventType).toBe("organization.deleted");
+  });
+
+  test("a deleted studio stays unreachable when the same account signs in again", async () => {
+    /*
+     * The account outlives the studio, and that is the part the interface has
+     * to be honest about rather than the part that is unsafe. Erasure removes
+     * every membership, so the login still works and lands on «создайте
+     * студию» — what it must never do is hand the old data back.
+     *
+     * Checked with a genuinely fresh session, not the cookie held before the
+     * deletion: a stale session failing proves nothing about the next login.
+     */
+    const returning = await signIn("privacy-owner@example.test");
+
+    expect((await returning.get("/api/v1/services")).status).toBe(404);
+    expect((await returning.get("/api/v1/visits")).status).toBe(404);
+    expect((await returning.get("/api/v1/onboarding")).status).toBe(404);
   });
 });

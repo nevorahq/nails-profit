@@ -4,10 +4,29 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { currencies } from "@/domain/money";
+import { slugify } from "@/domain/slug";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { AccountDeletion } from "@/components/account-deletion";
 import { getTranslator } from "@/i18n/t";
 
-export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLocale }) {
+/**
+ * Naming the studio: station two of the setup, and nothing else.
+ *
+ * No greeting by name and no notice about a studio that was deleted. Both were
+ * tried and both were wrong here: «Добро пожаловать, N» reads as the end of
+ * something on a screen that is the middle of it, and an explanation of what
+ * happened to the previous studio is news to nobody — the person reading it is
+ * the person who deleted it, one screen ago. What the screen owes them is the
+ * path, the form, and a way out.
+ */
+export function WorkspaceSetup({
+  email,
+  locale,
+}: {
+  /** The account's own address, for the deletion form's confirmation. */
+  email: string;
+  locale: AppLocale;
+}) {
   const router = useRouter();
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
@@ -18,11 +37,12 @@ export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLoca
     setPending(true);
     setError(null);
     const data = new FormData(event.currentTarget);
+    const name = String(data.get("name") ?? "").trim();
     const response = await fetch("/api/v1/organizations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: data.get("name"),
+        name,
         type: data.get("type"),
         currency: data.get("currency"),
         locale,
@@ -40,18 +60,77 @@ export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLoca
       setPending(false);
       return;
     }
+
+    /*
+     * The studio's first address, created with the studio rather than found
+     * missing later.
+     *
+     * Without one the rota cannot be written at all — a schedule belongs to a
+     * specialist *at an address* — so «Рабочие часы в графике», the last step
+     * of the month's checklist, used to send an owner to a screen that first
+     * demanded something nobody had told them about. The one fact only they
+     * know is asked here; the rest is derived: the address is named after the
+     * studio, its link is the transliteration of that name, and the timezone is
+     * the browser's own.
+     *
+     * A failure here is not fatal and does not hold the workspace hostage: the
+     * organization exists, and `/app/booking` can still add an address by hand.
+     * Blocking would leave somebody stuck on a form whose resubmission is
+     * refused as MEMBERSHIP_EXISTS.
+     */
+    await fetch("/api/v1/locations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        slug: slugify(name),
+        address: String(data.get("address") ?? "").trim(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    }).catch(() => undefined);
+
     router.refresh();
   }
 
   return (
     <main className="auth-shell">
       <section className="auth-card workspace-card">
-        <span className="eyebrow">{t("workspace.welcome", { name })}</span>
         <h1>{t("workspace.title")}</h1>
+        {/*
+          Station two of five. This screen used to arrive with no sense of where
+          it sat: an account had just been created, and here was another form,
+          equally unexplained. The path says the account is behind them and what
+          the studio is for.
+        */}
         <form onSubmit={submit}>
           <label>
             {t("workspace.name")}
-            <input name="name" required minLength={2} placeholder={t("workspace.namePlaceholder")} />
+            {/*
+              Latin only, refused by the field rather than by the server.
+              Transliteration would cope — `domain/slug.ts` turns «Студия» into a
+              usable `/book/studiya` — so this is a naming decision, not a
+              technical limit, and the rule is stated under the field instead of
+              appearing as a mysterious refusal on submit.
+            */}
+            <input
+              name="name"
+              required
+              minLength={2}
+              pattern="[A-Za-zĂÂÎȘȚăâîșț0-9 &'’.-]{2,}"
+              title={t("workspace.nameLatin")}
+              placeholder={t("workspace.namePlaceholder")}
+            />
+            <span className="field-hint">{t("workspace.nameLatin")}</span>
+          </label>
+          <label>
+            {t("workspace.address")}
+            <input
+              name="address"
+              required
+              maxLength={300}
+              placeholder={t("workspace.addressPlaceholder")}
+            />
+            <span className="field-hint">{t("workspace.addressHint")}</span>
           </label>
           <fieldset>
             <legend>{t("workspace.format")}</legend>
@@ -79,6 +158,15 @@ export function WorkspaceSetup({ name, locale }: { name: string; locale: AppLoca
           <button className="primary-button" disabled={pending}>{pending ? t("workspace.creating") : t("workspace.continue")}</button>
         </form>
       </section>
+      {/*
+        The only way out of this screen that is not «create a studio». An
+        account with no organization has no Настройки to reach — the whole
+        settings page requires a workspace — so without this, somebody who has
+        just erased their studio cannot delete their account, and cannot
+        register again either: the address is still taken by the account they
+        are locked inside.
+      */}
+      <AccountDeletion locale={locale} email={email} variant="link" />
     </main>
   );
 }

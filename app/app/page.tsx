@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FirstRun } from "@/components/first-run";
 import { MetricIcon, ToolIcon } from "@/components/icons";
 import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
@@ -26,7 +27,7 @@ import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
 import { monthOf } from "@/lib/period";
-import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
+import { loadFirstRun, loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 
 /**
  * A period card for the reports page's top row. The formula still exists —
@@ -105,7 +106,7 @@ export default async function AppPage({
   if (!membership) {
     // No organization yet, so its language does not exist to ask: the browser's
     // preference is the only signal, and it becomes the new workspace's locale.
-    return <WorkspaceSetup name={session.user.name} locale={await resolveLocale()} />;
+    return <WorkspaceSetup email={session.user.email} locale={await resolveLocale()} />;
   }
 
   const locale = membership.organization.locale as AppLocale;
@@ -145,6 +146,28 @@ export default async function AppPage({
   }
 
   const filters = await searchParams;
+
+  /*
+   * The first run, which replaces this page rather than being drawn on top of
+   * it: a studio with no closed visit has no revenue, no margin and no profit
+   * per hour, and every card below would be a zero with a checklist pinned
+   * above it.
+   *
+   * Placed before `loadDashboard` on purpose. Those queries would compute a
+   * screenful of zeroes at full price; `loadFirstRun` is one `count` for a
+   * studio that has long since started, and answers null for it.
+   *
+   * Only for a role that can advance a step — all three are catalogue work, so
+   * for a master this would be a door they cannot open, and they get the
+   * dashboard as before.
+   */
+  if (canManageCatalogue(membership.role, "services")) {
+    const firstRun = await withTenant(membership.organization.id, (tx) => loadFirstRun(tx));
+    if (firstRun?.next) {
+      return <FirstRun progress={firstRun} next={firstRun.next} locale={locale} />;
+    }
+  }
+
   /*
    * The period, taken from the query string and checked before anything reads
    * it. `<input type="date">` sends a real day, but the URL is editable by
@@ -392,6 +415,14 @@ export default async function AppPage({
         />
       </details>
 
+      {/*
+        Diagnosis now, not onboarding. A studio still on its way to the first
+        visit never reaches this page — it gets `FirstRun` above — so what is
+        left here is the studio that has been trading for a year and has just
+        had a ○ come back: a commission rule that ended, the last service a
+        rule covered archived. Those close visits with MISSING_COMMISSION_RULE
+        and have nowhere else to be told why.
+      */}
       {data.onboarding && !data.onboarding.complete && (
         <OnboardingPanel progress={data.onboarding} locale={locale} />
       )}

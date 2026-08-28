@@ -201,6 +201,12 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
 /**
  * Whether a screen should be running the guided setup, and from what standing.
  *
+ * `loadFirstRun` is the same question with the whole checklist as its answer —
+ * what the dashboard needs to name the one thing to do next — and
+ * `loadSetupGuide` is the counter the guided window compares against. One
+ * `count` decides both, so a studio that has finished setting up pays for a
+ * single row and nothing else.
+ *
  * The guide ends at the first closed visit, which is the answer to «пока не
  * будет закрыт первый визит» and also the cheapest question in this file: one
  * count, paid by every studio that has long finished setting up. Only a studio
@@ -215,14 +221,43 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
  * It must not put a studio that has been trading for a year back into a guided
  * first run.
  */
-export async function loadSetupGuide(
-  tx: TenantTransaction,
-): Promise<{ done: number; total: number } | null> {
+export async function loadFirstRun(tx: TenantTransaction): Promise<OnboardingProgress | null> {
   const [closedVisits] = await tx.select({ value: count() }).from(visits);
   if (closedVisits.value > 0) return null;
 
-  const progress = await loadOnboarding(tx);
-  return { done: progress.done, total: progress.total };
+  return loadOnboarding(tx);
+}
+
+export async function loadSetupGuide(
+  tx: TenantTransaction,
+): Promise<{ done: number; total: number } | null> {
+  const progress = await loadFirstRun(tx);
+  return progress && { done: progress.done, total: progress.total };
+}
+
+/**
+ * Whether the expense and rota screens should be running the month's guided
+ * setup, and from what standing — `loadSetupGuide` for the second checklist.
+ *
+ * Two silences, and they are different. Before the first closed visit there is
+ * no month to correct: that studio is still on «Первый расчёт», and a second
+ * guide running underneath the first one would be two windows arguing over the
+ * same person. After both steps are done the guide is over for good — the
+ * ledger is used every week, and an owner recording March's electricity does
+ * not want a congratulation window for it.
+ *
+ * Measured for the month asked about, like everything else here, so a studio
+ * that filled January in and stopped is guided again in March.
+ */
+export async function loadMonthGuide(
+  tx: TenantTransaction,
+  options: { month: string; currency: string },
+): Promise<{ done: number; total: number } | null> {
+  const [closedVisits] = await tx.select({ value: count() }).from(visits);
+  if (closedVisits.value === 0) return null;
+
+  const progress = await loadMonthSetup(tx, options);
+  return progress.complete ? null : { done: progress.done, total: progress.total };
 }
 
 /**
