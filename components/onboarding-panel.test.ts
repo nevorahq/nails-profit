@@ -30,18 +30,11 @@ describe("checklist strings", () => {
     // The guided-setup window, which names its strings the same way and is the
     // other half of the same journey.
     "setupGuide.title",
-    "setupGuide.body",
-    "setupGuide.back",
-    "setupGuide.stay",
-    "setupGuide.toVisits",
     "setupGuide.doneTitle",
     "setupGuide.doneBody",
     "setupGuide.doneAction",
     // The month's window, which is the same journey run a second time.
     "monthGuide.title",
-    "monthGuide.body",
-    "monthGuide.back",
-    "monthGuide.stay",
     "monthGuide.doneTitle",
     "monthGuide.doneBody",
     "monthGuide.doneAction",

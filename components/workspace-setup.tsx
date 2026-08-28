@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { currencies } from "@/domain/money";
+import { slugify } from "@/domain/slug";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { AccountDeletion } from "@/components/account-deletion";
 import { getTranslator } from "@/i18n/t";
@@ -36,11 +37,12 @@ export function WorkspaceSetup({
     setPending(true);
     setError(null);
     const data = new FormData(event.currentTarget);
+    const name = String(data.get("name") ?? "").trim();
     const response = await fetch("/api/v1/organizations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: data.get("name"),
+        name,
         type: data.get("type"),
         currency: data.get("currency"),
         locale,
@@ -58,6 +60,35 @@ export function WorkspaceSetup({
       setPending(false);
       return;
     }
+
+    /*
+     * The studio's first address, created with the studio rather than found
+     * missing later.
+     *
+     * Without one the rota cannot be written at all — a schedule belongs to a
+     * specialist *at an address* — so «Рабочие часы в графике», the last step
+     * of the month's checklist, used to send an owner to a screen that first
+     * demanded something nobody had told them about. The one fact only they
+     * know is asked here; the rest is derived: the address is named after the
+     * studio, its link is the transliteration of that name, and the timezone is
+     * the browser's own.
+     *
+     * A failure here is not fatal and does not hold the workspace hostage: the
+     * organization exists, and `/app/booking` can still add an address by hand.
+     * Blocking would leave somebody stuck on a form whose resubmission is
+     * refused as MEMBERSHIP_EXISTS.
+     */
+    await fetch("/api/v1/locations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        slug: slugify(name),
+        address: String(data.get("address") ?? "").trim(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    }).catch(() => undefined);
+
     router.refresh();
   }
 
@@ -90,6 +121,16 @@ export function WorkspaceSetup({
               placeholder={t("workspace.namePlaceholder")}
             />
             <span className="field-hint">{t("workspace.nameLatin")}</span>
+          </label>
+          <label>
+            {t("workspace.address")}
+            <input
+              name="address"
+              required
+              maxLength={300}
+              placeholder={t("workspace.addressPlaceholder")}
+            />
+            <span className="field-hint">{t("workspace.addressHint")}</span>
           </label>
           <fieldset>
             <legend>{t("workspace.format")}</legend>

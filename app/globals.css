@@ -827,8 +827,21 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .modal-card { width: min(440rem, 100%); max-height: 90vh; overflow-y: auto; padding: 28rem 26rem; border-radius: 24rem; border: 1rem solid var(--line); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
 .modal-card h2 { margin: 0 0 12rem; font-size: 24rem; }
 .modal-card p { margin: 0 0 22rem; color: var(--muted); font-size: 15rem; line-height: 1.6; }
-/* The next thing to do, named inside the window that announced the last one. */
-.modal-card p.modal-goal { color: var(--ink); font-weight: 700; }
+/*
+ * The next thing to do, named inside the window that announced the last one.
+ *
+ * It is the whole message now — the line counting the steps still to come was
+ * removed — so it carries the weight of a heading rather than of a paragraph.
+ */
+.modal-card p.modal-goal { margin: 0 0 24rem; color: var(--ink); font-size: 20rem; line-height: 1.35; font-weight: 700; text-align: center; }
+/*
+ * Two doors, equal and side by side, wrapping to full width when the screen is
+ * too narrow to hold them — 360 px is what this flow is checked at, and two
+ * pill buttons on one line there leave neither of them readable.
+ */
+.modal-card .button-row { gap: 10rem 12rem; }
+.modal-card .button-row .primary-button,
+.modal-card .button-row .secondary-button { flex: 1 1 180rem; justify-content: center; text-align: center; }
 /* What the closed visit earned, shown where the run ends rather than promised. */
 .modal-card .visit-card-metrics { margin: 0 0 22rem; padding-top: 0; border-top: 0; text-align: center; }
 
@@ -853,6 +866,17 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .goal-panel-remaining { color: var(--muted); font-size: 13rem; }
 
 /* The way out of the product, closed: one button, no panel and no heading. */
+/* A badge that is also the way to fix what it reports. */
+.badge-button { border: 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3rem; }
+
+/* Somebody in the studio with no master card yet, and the button that writes one. */
+.waiting-member { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8rem 12rem; padding: 6rem 0; }
+.waiting-member .unit-hint { display: block; }
+
+/* «Это я» and its kind: a tick, its label, and the consequence underneath. */
+.checkbox-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4rem 10rem; }
+.checkbox-row .field-hint { grid-column: 2; margin-top: 0; }
+
 /* A rule about what may be typed, said under the field it applies to. */
 .field-hint { display: block; margin-top: 6rem; color: var(--muted); font-size: 12rem; }
 

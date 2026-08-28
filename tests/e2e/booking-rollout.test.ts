@@ -18,6 +18,7 @@ import { createCanonicalStudio, type Studio } from "../helpers/studio";
 describe("booking rollout levels", () => {
   let studio: Studio;
   let locationId: string;
+  let levelAtCreation: string;
   let manageToken: string;
   const previousFlag = process.env.PUBLIC_BOOKING_ENABLED;
 
@@ -41,6 +42,13 @@ describe("booking rollout levels", () => {
     await resetDatabase();
     studio = await createCanonicalStudio("rollout-owner@studio.example", "Rollout Studio");
     await studio.owner.patch("/api/v1/organizations/settings", { slug: "rollout-studio" });
+
+    // Read before anything is published: publishing an address now raises the
+    // level, so the shipped default can only be observed here.
+    [{ level: levelAtCreation }] = await adminDb
+      .select({ level: organizations.bookingAccess })
+      .from(organizations)
+      .where(eq(organizations.id, studio.organizationId));
 
     locationId = dataOf<{ id: string }>(
       await studio.owner.post("/api/v1/locations", {
@@ -73,21 +81,41 @@ describe("booking rollout levels", () => {
 
   test("a new organization gets the calendar and not the public page", async () => {
     // The default the migration ships: every studio that exists already has the
-    // calendar, and none of them has a page strangers can reach.
-    const [organization] = await adminDb
-      .select({ level: organizations.bookingAccess })
-      .from(organizations)
-      .where(eq(organizations.id, studio.organizationId));
-    expect(organization.level).toBe("calendar");
+    // calendar, and none of them has a page strangers can reach until somebody
+    // publishes an address.
+    expect(levelAtCreation).toBe("calendar");
+
+    await setLevel("calendar");
 
     const bookings = await studio.owner.get("/api/v1/bookings");
     expect(bookings.status).toBe(200);
 
     // Published location, published slug, environment flag on — and still no
-    // page, because this tenant has not been through the gates.
+    // page while the organization itself sits on `calendar`.
     const page = await anonymous.get("/api/v1/public/booking/rollout-studio");
     expect(page.status).toBe(404);
     expect(errorCodeOf(page)).toBe("BOOKING_PAGE_NOT_FOUND");
+  });
+
+  test("publishing an address is what opens the public page", async () => {
+    /*
+     * The gap this closes. `public_status` and `booking_access` are two
+     * switches with one meaning, and until now only the first was reachable:
+     * an owner published the address, the organization stayed on `calendar`,
+     * and `/book/<slug>` answered 404 with nothing on screen to explain it.
+     */
+    await setLevel("calendar");
+    await studio.owner.put(`/api/v1/locations/${locationId}/booking-settings`, {
+      public_status: "published",
+    });
+
+    const [organization] = await adminDb
+      .select({ access: organizations.bookingAccess })
+      .from(organizations)
+      .where(eq(organizations.id, studio.organizationId));
+    expect(organization.access).toBe("public");
+
+    expect((await anonymous.get("/api/v1/public/booking/rollout-studio")).status).toBe(200);
   });
 
   test("raising the level opens the public page and lowering it closes it", async () => {
@@ -233,20 +261,25 @@ describe("booking rollout levels", () => {
     ).toBe(201);
   });
 
-  test("an owner may step the module down but not publish it themselves", async () => {
+  test("an owner may step the module down and back up again", async () => {
     const down = await studio.owner.patch("/api/v1/organizations/settings", {
       booking_access: "off",
     });
     expect(down.status).toBe(200);
     expect(dataOf<{ booking_access: string }>(down).booking_access).toBe("off");
 
-    // Publishing is what section 7.11 puts behind the security and concurrency
-    // gates, so it is an operator action, not a settings toggle.
+    /*
+     * Raising it used to be refused here, on the reasoning that publishing is
+     * an operator action. That left an owner who had closed their page unable
+     * to reopen it — and, once publishing an address became the act that opens
+     * the page, unable to understand why the same button no longer worked.
+     * `PUBLIC_BOOKING_ENABLED` remains the switch this cannot reach past.
+     */
     const up = await studio.owner.patch("/api/v1/organizations/settings", {
       booking_access: "public",
     });
-    expect(up.status).toBe(422);
-    expect(errorCodeOf(up)).toBe("VALIDATION_ERROR");
+    expect(up.status).toBe(200);
+    expect(dataOf<{ booking_access: string }>(up).booking_access).toBe("public");
 
     await setLevel("calendar");
   });

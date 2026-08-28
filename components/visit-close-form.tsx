@@ -246,7 +246,6 @@ export function VisitCloseForm({
             </div>
           )
         }
-        stayKey="setupGuide.toVisits"
         onStay={() => {
           // «Остаться здесь» would be a lie on this screen: the visit is
           // written and the form behind the window is a spent one.

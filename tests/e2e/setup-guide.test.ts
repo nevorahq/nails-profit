@@ -83,6 +83,45 @@ describe("the guided setup", () => {
     expect(await progress()).toMatchObject({ done: 3, total: 3, complete: true, next: null });
   });
 
+  test("catalogues the owner as their own master when they say so", async () => {
+    /*
+     * A solo studio is one person wearing both hats, and until «это я» the
+     * product could not be told: `specialist.user_id` is what every "own" scope
+     * resolves through — the calendar, the visits, the notification that a
+     * client just booked them — and `is_principal` is what returns their
+     * commission to the month's profit. Both were set afterwards, from two
+     * different screens, or not at all.
+     */
+    const rows = dataOf<{ id: string; user_id: string | null; is_principal: boolean }[]>(
+      await owner.get("/api/v1/specialists"),
+    );
+    const mine = rows.find((row) => row.id === specialistId);
+    expect(mine).toMatchObject({ user_id: null, is_principal: false });
+
+    const linked = dataOf<{ id: string }>(
+      await owner.post("/api/v1/specialists", {
+        name: "Владелец",
+        default_rule: { type: "percentage", basis_points: 5_000 },
+        is_me: true,
+      }),
+    );
+
+    const after = dataOf<{ id: string; user_id: string | null; is_principal: boolean }[]>(
+      await owner.get("/api/v1/specialists"),
+    ).find((row) => row.id === linked.id);
+    expect(after).toMatchObject({ user_id: owner.userId, is_principal: true });
+
+    // One account, one card: saying it twice is refused by name rather than by
+    // a unique-index 500.
+    const again = await owner.post("/api/v1/specialists", {
+      name: "Владелец снова",
+      default_rule: { type: "percentage", basis_points: 5_000 },
+      is_me: true,
+    });
+    expect(again.status).toBe(409);
+    expect(errorCodeOf(again)).toBe("SPECIALIST_ALREADY_LINKED");
+  });
+
   test("refuses a studio name that is not in Latin script", async () => {
     /*
      * The rule the workspace form states under its own field, enforced where it

@@ -93,6 +93,25 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const [existing] = await tx.select().from(specialists).where(eq(specialists.id, id)).limit(1);
       if (!existing) return null;
 
+      /*
+       * One working owner, or none.
+       *
+       * A principal's commission is added back below the month's margin because
+       * it never left the business (`domain/period-pl.ts`). Two of them would
+       * add back two people's pay and report a profit the studio does not have.
+       * The screen hides the button while one is marked; this refuses the same
+       * thing to anybody reaching the endpoint directly, and says which of the
+       * two it is rather than silently ignoring the field.
+       */
+      if (parsed.data.is_principal === true && !existing.isPrincipal) {
+        const [other] = await tx
+          .select({ id: specialists.id })
+          .from(specialists)
+          .where(and(eq(specialists.isPrincipal, true), isNull(specialists.archivedAt)))
+          .limit(1);
+        if (other) return "principal_exists" as const;
+      }
+
       const [specialist] = await tx
         .update(specialists)
         .set({
@@ -138,6 +157,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
       return specialist;
     });
+
+    if (updated === "principal_exists") {
+      return apiError(
+        409,
+        "PRINCIPAL_EXISTS",
+        "Another specialist is already marked as the working owner",
+        requestIdentifier,
+      );
+    }
 
     if (!updated) {
       return apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", requestIdentifier);

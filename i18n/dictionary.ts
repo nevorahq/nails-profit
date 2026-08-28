@@ -75,6 +75,7 @@ const ru = {
   "landing.perHour": "Прибыль в час",
 
   "common.cancel": "Отмена",
+  "common.return": "Вернуться",
   "common.save": "Сохранить",
   "common.saving": "Сохраняем…",
   "common.line": "Строка",
@@ -555,6 +556,14 @@ const ru = {
   "tax.hint.payroll":
     "Начисляются на комиссию мастера по этому визиту. Взносы с окладов задаются отдельно, в блоке оплаты труда, — здесь только визитная часть.",
   "specialists.principal": "Владелец",
+  "specialists.waitingTitle": "Ждут карточки",
+  "specialists.waitingHint":
+    "Эти люди уже в студии, но их ещё некуда записывать: у мастера должна быть карточка, связанная с аккаунтом. Правило комиссии зададите после.",
+  "specialists.waitingAction": "Добавить как мастера",
+  "specialists.defaultRuleOption": "Все услуги — правило по умолчанию",
+  "specialists.isMe": "Это я — работаю сам",
+  "specialists.isMeHint":
+    "Свяжет карточку с вашим аккаунтом: вы получите свой календарь, свои визиты и уведомления о записях. Комиссия по вашим визитам вернётся в прибыль месяца.",
   "specialists.principalSet": "Отметить владельцем",
   "specialists.principalUnset": "Снять отметку",
   "specialists.imputedLabour": "вменённая стоимость вашего труда",
@@ -627,26 +636,11 @@ const ru = {
   "monthSetup.lead":
     "Ещё два числа — и отчёт месяца станет честным: прибыль после постоянных затрат и точка безубыточности.",
   "monthGuide.title": "Шаг выполнен",
-  "monthGuide.body": {
-    one: "До расчёта месяца остался {count} шаг.",
-    few: "До расчёта месяца осталось {count} шага.",
-    other: "До расчёта месяца осталось {count} шагов.",
-  },
-  "monthGuide.back": "Вернуться к отчёту",
-  "monthGuide.stay": "Остаться здесь",
   "monthGuide.doneTitle": "Расчёт месяца готов",
   "monthGuide.doneBody":
     "Теперь в отчёте есть прибыль после постоянных затрат и точка безубыточности — до этого он показывал больше, чем есть.",
   "monthGuide.doneAction": "Открыть отчёт месяца",
   "setupGuide.title": "Шаг выполнен",
-  "setupGuide.body": {
-    one: "До первого расчёта остался {count} шаг.",
-    few: "До первого расчёта осталось {count} шага.",
-    other: "До первого расчёта осталось {count} шагов.",
-  },
-  "setupGuide.back": "Вернуться к шагам",
-  "setupGuide.stay": "Остаться здесь",
-  "setupGuide.toVisits": "К списку визитов",
   "setupGuide.doneTitle": "Первый расчёт готов",
   "setupGuide.doneBody": "Визит закрыт и посчитан — вот сколько он принёс.",
   "setupGuide.doneAction": "Открыть отчёт",
@@ -824,6 +818,9 @@ const ru = {
 
   "workspace.title": "Создайте рабочее пространство",
   "workspace.namePlaceholder": "Например, Studio Belle",
+  "workspace.address": "Адрес",
+  "workspace.addressPlaceholder": "Улица, дом, город",
+  "workspace.addressHint": "По адресу строится график работы и запись клиентов. Он не виден никому, пока вы не откроете онлайн-запись.",
   "workspace.nameLatin": "Только латиница: A–Z, цифры, пробел и дефис.",
   "workspace.format": "Формат",
   "workspace.solo": "Solo-мастер",
@@ -1131,6 +1128,10 @@ const ru = {
   "bookingSetup.noUpcomingSlots":
     "График задан, но записаться в ближайшие две недели не на что. Проверьте, те ли дни недели отмечены и с какой даты график действует.",
   "bookingSetup.nearestSlot": "Ближайшее свободное время — {date}.",
+  "bookingSetup.publicPageLabel": "Онлайн-запись —",
+  "bookingSetup.openPublic": "Открыть онлайн-запись",
+  "bookingSetup.openPublicHint":
+    "Адрес опубликован, но страница студии ещё закрыта. Откройте её — и по ссылке ниже клиенты смогут записываться сами.",
   "bookingSetup.operatorPending":
     "Публичную страницу включает оператор после проверок безопасности — этот шаг не ваш. Остальную настройку можно закончить, не дожидаясь его.",
 
@@ -1269,6 +1270,7 @@ const ro: Record<MessageKey, Message> = {
   "landing.perHour": "Profit pe oră",
 
   "common.cancel": "Anulare",
+  "common.return": "Înapoi",
   "common.save": "Salvează",
   "common.saving": "Se salvează…",
   "common.line": "Rând",
@@ -1750,6 +1752,14 @@ const ro: Record<MessageKey, Message> = {
   "tax.hint.payroll":
     "Se calculează pe comisionul maestrului pentru această vizită. Contribuțiile la salarii se setează separat, în blocul plății muncii — aici este doar partea legată de vizite.",
   "specialists.principal": "Proprietar",
+  "specialists.waitingTitle": "Așteaptă fișa",
+  "specialists.waitingHint":
+    "Acești oameni sunt deja în studio, dar nu pot fi programați: un maestru are nevoie de o fișă legată de contul lui. Regula de comision o stabiliți după.",
+  "specialists.waitingAction": "Adaugă ca maestru",
+  "specialists.defaultRuleOption": "Toate serviciile — regula implicită",
+  "specialists.isMe": "Sunt eu — lucrez singur",
+  "specialists.isMeHint":
+    "Leagă fișa de contul dumneavoastră: veți avea calendarul, vizitele și notificările proprii. Comisionul vizitelor dumneavoastră revine în profitul lunii.",
   "specialists.principalSet": "Marchează ca proprietar",
   "specialists.principalUnset": "Scoate marcajul",
   "specialists.imputedLabour": "costul imputat al muncii dvs.",
@@ -1822,26 +1832,11 @@ const ro: Record<MessageKey, Message> = {
   "monthSetup.lead":
     "Încă două cifre — și raportul lunii devine corect: profitul după cheltuielile fixe și pragul de rentabilitate.",
   "monthGuide.title": "Pas finalizat",
-  "monthGuide.body": {
-    one: "Până la calculul lunii a mai rămas {count} pas.",
-    few: "Până la calculul lunii au mai rămas {count} pași.",
-    other: "Până la calculul lunii au mai rămas {count} de pași.",
-  },
-  "monthGuide.back": "Înapoi la raport",
-  "monthGuide.stay": "Rămân aici",
   "monthGuide.doneTitle": "Calculul lunii este gata",
   "monthGuide.doneBody":
     "Acum raportul are profitul după cheltuielile fixe și pragul de rentabilitate — până acum arăta mai mult decât este.",
   "monthGuide.doneAction": "Deschide raportul lunii",
   "setupGuide.title": "Pas finalizat",
-  "setupGuide.body": {
-    one: "Până la primul calcul a mai rămas {count} pas.",
-    few: "Până la primul calcul au mai rămas {count} pași.",
-    other: "Până la primul calcul au mai rămas {count} de pași.",
-  },
-  "setupGuide.back": "Înapoi la pași",
-  "setupGuide.stay": "Rămân aici",
-  "setupGuide.toVisits": "La lista vizitelor",
   "setupGuide.doneTitle": "Primul calcul este gata",
   "setupGuide.doneBody": "Vizita este finalizată și calculată — iată cât a adus.",
   "setupGuide.doneAction": "Deschide raportul",
@@ -2019,6 +2014,9 @@ const ro: Record<MessageKey, Message> = {
 
   "workspace.title": "Creați spațiul de lucru",
   "workspace.namePlaceholder": "De exemplu, Studio Belle",
+  "workspace.address": "Adresa",
+  "workspace.addressPlaceholder": "Strada, numărul, orașul",
+  "workspace.addressHint": "Pe adresă se construiesc programul de lucru și programările. Nu o vede nimeni până nu deschideți programarea online.",
   "workspace.nameLatin": "Doar litere latine: A–Z, cifre, spațiu și cratimă.",
   "workspace.format": "Format",
   "workspace.solo": "Maestru solo",
@@ -2326,6 +2324,10 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.noUpcomingSlots":
     "Programul este setat, dar în următoarele două săptămâni nu există niciun interval liber. Verificați ce zile ale săptămânii sunt bifate și de la ce dată se aplică programul.",
   "bookingSetup.nearestSlot": "Cel mai apropiat interval liber — {date}.",
+  "bookingSetup.publicPageLabel": "Programare online —",
+  "bookingSetup.openPublic": "Deschide programarea online",
+  "bookingSetup.openPublicHint":
+    "Adresa este publicată, dar pagina studioului este încă închisă. Deschideți-o — și clienții se vor putea programa singuri prin linkul de mai jos.",
   "bookingSetup.operatorPending":
     "Pagina publică este activată de operator după verificările de securitate — acest pas nu vă aparține. Restul configurării poate fi finalizat fără să îl așteptați.",
 
@@ -2463,6 +2465,7 @@ const en: Record<MessageKey, Message> = {
   "landing.perHour": "Profit per hour",
 
   "common.cancel": "Cancel",
+  "common.return": "Go back",
   "common.save": "Save",
   "common.saving": "Saving…",
   "common.line": "Row",
@@ -2937,6 +2940,14 @@ const en: Record<MessageKey, Message> = {
   "tax.hint.payroll":
     "Charged on the master's commission for this visit. Contributions on salaries are set separately, with the labour costs — this is the per-visit part alone.",
   "specialists.principal": "Owner",
+  "specialists.waitingTitle": "Waiting for a card",
+  "specialists.waitingHint":
+    "These people are already in the studio but cannot be booked yet: a master needs a card linked to their account. The commission rule comes after.",
+  "specialists.waitingAction": "Add as a master",
+  "specialists.defaultRuleOption": "All services — the default rule",
+  "specialists.isMe": "This is me — I work here myself",
+  "specialists.isMeHint":
+    "Links the card to your account: your own calendar, your own visits and booking notifications. The commission booked to you comes back into the month's profit.",
   "specialists.principalSet": "Mark as owner",
   "specialists.principalUnset": "Remove the mark",
   "specialists.imputedLabour": "imputed cost of your own work",
@@ -3006,24 +3017,11 @@ const en: Record<MessageKey, Message> = {
   "monthSetup.lead":
     "Two more figures, and the month's report tells the truth: profit after fixed costs, and break-even.",
   "monthGuide.title": "Step done",
-  "monthGuide.body": {
-    one: "{count} step to go before the month adds up.",
-    other: "{count} steps to go before the month adds up.",
-  },
-  "monthGuide.back": "Back to the report",
-  "monthGuide.stay": "Stay here",
   "monthGuide.doneTitle": "The month adds up",
   "monthGuide.doneBody":
     "The report now has profit after fixed costs and a break-even to compare it with — until now it read higher than the truth.",
   "monthGuide.doneAction": "Open the month's report",
   "setupGuide.title": "Step done",
-  "setupGuide.body": {
-    one: "{count} step to go before the first calculation.",
-    other: "{count} steps to go before the first calculation.",
-  },
-  "setupGuide.back": "Back to the steps",
-  "setupGuide.stay": "Stay here",
-  "setupGuide.toVisits": "To the visits",
   "setupGuide.doneTitle": "The first calculation is ready",
   "setupGuide.doneBody": "The visit is closed and costed — here is what it brought in.",
   "setupGuide.doneAction": "Open the report",
@@ -3200,6 +3198,9 @@ const en: Record<MessageKey, Message> = {
 
   "workspace.title": "Create your workspace",
   "workspace.namePlaceholder": "For example, Studio Belle",
+  "workspace.address": "Address",
+  "workspace.addressPlaceholder": "Street, number, city",
+  "workspace.addressHint": "The rota and client bookings are built on this address. Nobody sees it until you open online booking.",
   "workspace.nameLatin": "Latin letters only: A–Z, digits, space and hyphen.",
   "workspace.format": "Format",
   "workspace.solo": "Solo technician",
@@ -3504,6 +3505,10 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.noUpcomingSlots":
     "The rota is set, but there is nothing to book in the next two weeks. Check which weekdays are marked and the date the rota starts from.",
   "bookingSetup.nearestSlot": "The soonest free time is {date}.",
+  "bookingSetup.publicPageLabel": "Online booking —",
+  "bookingSetup.openPublic": "Open online booking",
+  "bookingSetup.openPublicHint":
+    "The address is published, but the studio's page is still closed. Open it and clients can book themselves through the link below.",
   "bookingSetup.operatorPending":
     "The public page is switched on by the operator after the security checks — that step is not yours. The rest of the setup can be finished without waiting for it.",
 

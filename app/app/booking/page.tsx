@@ -45,7 +45,8 @@ import type { MemberRole } from "@/domain/rbac";
 const SLOT_HORIZON_DAYS = 14;
 
 export default async function BookingSetupPage() {
-  const { membership, bookingAccess, locale, organizationSlug, currency } = await requireWorkspace();
+  const { membership, bookingAccess, locale, organizationSlug, organizationName, currency } =
+    await requireWorkspace();
   const t = getTranslator(locale);
 
   /*
@@ -227,6 +228,7 @@ export default async function BookingSetupPage() {
     <main className="app-shell">
       <BookingSetup
         monthGuide={monthGuide}
+        organizationName={organizationName}
         locations={data.places as LocationRow[]}
         specialists={data.people}
         assignments={data.assignments}

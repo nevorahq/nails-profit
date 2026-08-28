@@ -122,7 +122,6 @@ export function SetupGuideDialog({
   locale,
   strings = "setupGuide",
   doneHref = "/app",
-  stayKey,
   onStay,
   doneSummary,
 }: {
@@ -137,9 +136,7 @@ export function SetupGuideDialog({
   strings?: "setupGuide" | "monthGuide";
   /** Where the last window leads. The month's report is not the dashboard. */
   doneHref?: string;
-  /** What the second button says, when «остаться здесь» is not the honest word. */
-  stayKey?: MessageKey;
-  /** What it does, when leaving the window is not the whole of it. */
+  /** What closing the window does, when dismissing it is not the whole of it. */
   onStay?: () => void;
   /**
    * What the last step produced, shown on the final window. The visit form
@@ -177,7 +174,6 @@ export function SetupGuideDialog({
 
   if (!reached) return null;
 
-  const remaining = reached.total - reached.done;
   const next = reached.steps?.find((step) => !step.done) ?? null;
 
   /*
@@ -208,15 +204,13 @@ export function SetupGuideDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="setup-guide-title">{say(reached.complete ? "doneTitle" : "title")}</h2>
-        <p>
-          {reached.complete
-            ? say("doneBody")
-            : t(`${strings}.body` as MessageKey, {
-                count: remaining,
-                done: reached.done,
-                total: reached.total,
-              })}
-        </p>
+        {reached.complete && <p>{say("doneBody")}</p>}
+        {/*
+          The goal alone, without a count of what is left in front of it. «До
+          первого расчёта осталось 2 шага» measured the distance still to walk
+          at the moment somebody had just walked one — the next thing to do says
+          everything that line did, and says it as an instruction.
+        */}
         {reached.complete
           ? doneSummary
           : next && <p className="modal-goal">{t(`step.goal.${next.key}` as MessageKey)}</p>}
@@ -226,10 +220,16 @@ export function SetupGuideDialog({
               ? say("doneAction")
               : next
                 ? t(`step.action.${next.key}` as MessageKey)
-                : say("back")}
+                : t("common.return")}
           </button>
+          {/*
+            «Вернуться», one word, on every window of both runs. It used to be
+            «Остаться здесь» — true of the specialist and service screens and a
+            lie on the visit form, which is spent the moment it saves, so that
+            screen had to pass its own label. One name for one door.
+          */}
           <button className="secondary-button" type="button" onClick={stay}>
-            {stayKey ? t(stayKey) : say("stay")}
+            {t("common.return")}
           </button>
         </div>
       </div>

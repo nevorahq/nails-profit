@@ -195,6 +195,7 @@ export default async function SpecialistsPage() {
         currency={currency}
         locale={locale}
         canManage={canManage}
+        hasOwnCard={people.some((person) => person.user_id === membership.userId)}
         setupGuide={setupGuide}
       />
     </main>

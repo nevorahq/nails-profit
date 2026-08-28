@@ -46,12 +46,17 @@ const settingsSchema = z
       .optional(),
     slug: z.string().trim().toLowerCase().min(3).max(40).nullable().optional(),
     /**
-     * Section 7.11's rollout switch. An owner may step it down — closing their
-     * own public page or the whole module is their decision to make at any
-     * hour — but stepping *up* to `public` is what the operator does after the
-     * security and concurrency gates, so it is refused here.
+     * Section 7.11's rollout switch, now settable in both directions.
+     *
+     * Refusing to raise it here made sense while the operator was the only one
+     * who could open a public page. It stopped making sense the moment
+     * publishing an address became the act that opens it — see
+     * `app/api/v1/locations/[id]/booking-settings/route.ts` — because then an
+     * owner could open the page but never reopen it after closing it, and no
+     * screen anywhere said which switch had shut them out. `PUBLIC_BOOKING_ENABLED`
+     * is still above all of this: with the flag off, `public` reaches nobody.
      */
-    booking_access: z.enum(["off", "calendar"]).optional(),
+    booking_access: z.enum(["off", "calendar", "public"]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Nothing to change" });
 

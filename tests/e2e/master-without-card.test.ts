@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { dataOf } from "../helpers/api";
+import { dataOf, errorCodeOf } from "../helpers/api";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
@@ -55,6 +55,67 @@ describe("a master with an account but no card", () => {
     const own = dataOf<{ id: string; name: string }[]>(await master.get("/api/v1/specialists"));
     expect(own).toHaveLength(1);
     expect(own[0]).toMatchObject({ id: created.id, name: "Cardless Master" });
+  });
+
+  test("gets a card and a link in one press, from the owner's own screen", async () => {
+    /*
+     * What «Добавить как мастера» does, and the sequence it repairs: invited,
+     * accepted, and then present in «Команда» and nowhere else — no card to be
+     * booked into, and nothing for «Связать мастера с аккаунтом» to offer,
+     * because the row it links to did not exist yet. Creation and linking are
+     * still two operations at the database, but one act for the owner.
+     */
+    const master = await inviteMember(studio.owner, "one-press@studio.example", "master");
+
+    const created = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/specialists", {
+        name: "Одним нажатием",
+        user_id: master.userId,
+      }),
+    );
+
+    const mine = dataOf<{ id: string }[]>(await master.get("/api/v1/specialists"));
+    expect(mine.map((row) => row.id)).toEqual([created.id]);
+
+    // An account from another studio is refused, exactly as the PATCH is.
+    const outsider = await createCanonicalStudio("outsider-owner@studio.example", "Outsider Studio");
+    const refused = await studio.owner.post("/api/v1/specialists", {
+      name: "Чужой",
+      user_id: outsider.owner.userId,
+    });
+    expect(refused.status).toBe(422);
+  });
+
+  test("marks one working owner and refuses a second", async () => {
+    /*
+     * The mark decides how the month reads: a principal's commission is added
+     * back below the margin because it never left the business. Two of them add
+     * back two people's pay and report a profit the studio does not have — so
+     * the second is refused by name, and the list hides the button rather than
+     * offering something that cannot work.
+     */
+    const people = dataOf<{ id: string; is_principal: boolean }[]>(
+      await studio.owner.get("/api/v1/specialists"),
+    );
+    const [first, second] = people;
+    expect(second).toBeDefined();
+
+    expect(
+      (await studio.owner.patch(`/api/v1/specialists/${first.id}`, { is_principal: true })).status,
+    ).toBe(200);
+
+    const refused = await studio.owner.patch(`/api/v1/specialists/${second.id}`, {
+      is_principal: true,
+    });
+    expect(refused.status).toBe(409);
+    expect(errorCodeOf(refused)).toBe("PRINCIPAL_EXISTS");
+
+    // Freed by taking it off, exactly as the screen says.
+    await studio.owner.patch(`/api/v1/specialists/${first.id}`, { is_principal: false });
+    expect(
+      (await studio.owner.patch(`/api/v1/specialists/${second.id}`, { is_principal: true })).status,
+    ).toBe(200);
+    await studio.owner.patch(`/api/v1/specialists/${second.id}`, { is_principal: false });
   });
 
   test("keeps their card when a second master is invited", async () => {
