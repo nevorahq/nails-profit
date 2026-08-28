@@ -134,10 +134,18 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
             <ul className="notifications-list">
               {items.map((item) => (
                 <li key={item.id}>
+                  {/*
+                    The day the request sits on, filtered to the appointments
+                    that are still live rather than to `pending_confirmation`
+                    alone. Confirming is the whole point of following this
+                    link, and a status filter naming only the state being left
+                    behind makes the appointment vanish the moment it is
+                    answered — the calendar refreshes on the same URL.
+                  */}
                   <Link
                     className="notifications-item"
                     role="menuitem"
-                    href={`/app/calendar?view=day&date=${item.local_date}&status=pending_confirmation&specialist=${item.specialist_id}`}
+                    href={`/app/calendar?view=day&date=${item.local_date}&status=pending_confirmation,confirmed&specialist=${item.specialist_id}`}
                     onClick={() => setOpen(false)}
                   >
                     <strong>{item.client_name ?? t("calendar.noClient")}</strong>

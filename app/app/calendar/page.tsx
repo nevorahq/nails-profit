@@ -365,7 +365,6 @@ export default async function CalendarPage({
         ownSpecialistId={data.ownSpecialistId}
         exceptions={exceptions}
         canWrite={canWrite}
-        showFilters={scopeFor(membership.role, "bookings") !== "own"}
         canFilterBySpecialist={scopeFor(membership.role, "bookings") !== "own"}
         currency={currency}
         localeTag={localeTag(locale)}
