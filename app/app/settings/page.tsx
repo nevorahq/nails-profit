@@ -22,6 +22,7 @@ import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
+import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { monthBounds, monthOf } from "@/lib/period";
 import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
@@ -156,7 +157,7 @@ export default async function SettingsPage() {
       }))
     : null;
 
-  const subscription: SubscriptionStatusRow | null = canReadOrg
+  const subscriptionRow = canReadOrg
     ? (
         await withTenant(membership.organizationId, (tx) =>
           tx
@@ -165,11 +166,27 @@ export default async function SettingsPage() {
               status: organizationSubscriptions.status,
               current_period_end: organizationSubscriptions.currentPeriodEnd,
               manage_url: organizationSubscriptions.manageUrl,
+              provider_subscription_id: organizationSubscriptions.providerSubscriptionId,
             })
             .from(organizationSubscriptions)
             .limit(1),
         )
       )[0] ?? null
+    : null;
+
+  const subscription: SubscriptionStatusRow | null = subscriptionRow
+    ? {
+        provider: subscriptionRow.provider,
+        status: subscriptionRow.status,
+        current_period_end: subscriptionRow.current_period_end,
+        // Paddle's webhooks omit `management_urls`, so a stored link is the
+        // exception; read it from the API when we have none.
+        manage_url:
+          subscriptionRow.manage_url ??
+          (subscriptionRow.provider === "paddle"
+            ? await fetchPaddleSubscriptionManageUrl(subscriptionRow.provider_subscription_id)
+            : null),
+      }
     : null;
 
   const checkout: CheckoutConfig = {
