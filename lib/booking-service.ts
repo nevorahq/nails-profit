@@ -24,8 +24,26 @@ import type { LocalizedText } from "@/i18n/localized-text";
  */
 export const HOLD_TTL_MINUTES = 5;
 
-/** The statuses that occupy a specialist; the rest free the slot. */
+/** The statuses of an appointment still ahead of the studio: it can be worked. */
 export const ACTIVE_BOOKING_STATUSES = ["pending_confirmation", "confirmed"] as const;
+
+/**
+ * The statuses that occupy a specialist's time. Only a cancellation frees it.
+ *
+ * A closed appointment holds its hour as firmly as an open one. That is
+ * obvious for the past — nothing is ever booked backwards — and it is the whole
+ * point in the future: closing a visit that has not happened yet is a mistake
+ * somebody makes, and if the slot were freed by it the next request would be
+ * offered a time the master is already standing in. Cancelling is the one act
+ * that means "this time is available again", and it is the one status missing
+ * from this list.
+ */
+export const OCCUPYING_BOOKING_STATUSES = [
+  "pending_confirmation",
+  "confirmed",
+  "completed",
+  "no_show",
+] as const;
 
 export type BookingConflict = "booking" | "hold";
 
@@ -156,7 +174,7 @@ export async function findConflict(
     .from(bookings)
     .where(
       and(
-        inArray(bookings.status, [...ACTIVE_BOOKING_STATUSES]),
+        inArray(bookings.status, [...OCCUPYING_BOOKING_STATUSES]),
         lt(bookings.startsAt, end),
         gt(bookings.endsAt, start),
         query.workplaceId
@@ -389,7 +407,7 @@ export async function activeHoldIntervals(
 }
 
 /** Bookings that occupy the specialist, for the same busy list. */
-export async function activeBookingIntervals(
+export async function occupyingBookingIntervals(
   tx: TenantTransaction,
   specialistId: string,
   window: Interval,
@@ -402,7 +420,7 @@ export async function activeBookingIntervals(
     .where(
       and(
         eq(bookings.specialistId, specialistId),
-        inArray(bookings.status, [...ACTIVE_BOOKING_STATUSES]),
+        inArray(bookings.status, [...OCCUPYING_BOOKING_STATUSES]),
         lt(bookings.startsAt, window.end),
         gt(bookings.endsAt, window.start),
         excludeBookingId ? ne(bookings.id, excludeBookingId) : undefined,
