@@ -974,6 +974,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
 .public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 .public-booking-grid input, .public-booking-grid select { width: 100%; min-height: 48rem; padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 13rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
+/* Lighter than the answer, dark enough to read: the example has to look
+   like a hint, not like a field somebody already filled in. */
+.public-booking-grid input::placeholder { color: rgba(55, 85, 52, 0.8); }
 .public-booking-options { display: grid; gap: 8rem; margin: 0; padding: 16rem; border: 1rem solid var(--line); border-radius: 16rem; }
 .public-booking-options legend { padding: 0 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 .public-booking-options label { display: grid; grid-template-columns: 22rem 1fr auto; align-items: center; gap: 10rem; min-height: 44rem; font-size: 15rem; cursor: pointer; }
