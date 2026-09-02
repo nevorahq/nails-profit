@@ -7,7 +7,7 @@ import {
   loadSlotContext,
   slotsFor,
 } from "@/lib/availability-service";
-import { activeBookingIntervals } from "@/lib/booking-service";
+import { occupyingBookingIntervals } from "@/lib/booking-service";
 import {
   loadPublicCatalog,
   publicSpecialistsFor,
@@ -74,7 +74,7 @@ async function candidateFor(
     start: localToUtc(input.date, 0, timezone),
     end: localToUtc(addLocalDays(input.date, 1), 0, timezone),
   };
-  const occupied = await activeBookingIntervals(tx, person.id, day, input.excludeBookingId ?? null);
+  const occupied = await occupyingBookingIntervals(tx, person.id, day, input.excludeBookingId ?? null);
   const bookedMinutes = occupied.reduce(
     (total, interval) => total + (interval.end.getTime() - interval.start.getTime()) / 60_000,
     0,

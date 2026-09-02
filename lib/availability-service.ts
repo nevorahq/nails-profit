@@ -29,7 +29,7 @@ import {
   type Weekday,
 } from "@/domain/timezone";
 import type { BookingLineInput } from "@/lib/booking-service";
-import { activeBookingIntervals, activeHoldIntervals } from "@/lib/booking-service";
+import { activeHoldIntervals, occupyingBookingIntervals } from "@/lib/booking-service";
 import type { LocalizedText } from "@/i18n/localized-text";
 
 /**
@@ -270,7 +270,7 @@ export async function loadSlotSearch(
   const [rules, exceptions, bookedIntervals, heldIntervals] = await Promise.all([
     loadRules(tx, query.specialistId, query.locationId),
     loadExceptions(tx, query.specialistId, query.locationId, window),
-    activeBookingIntervals(tx, query.specialistId, window, query.excludeBookingId ?? null),
+    occupyingBookingIntervals(tx, query.specialistId, window, query.excludeBookingId ?? null),
     activeHoldIntervals(tx, query.specialistId, query.now),
   ]);
 

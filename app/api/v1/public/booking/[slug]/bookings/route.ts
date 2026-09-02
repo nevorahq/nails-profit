@@ -50,7 +50,11 @@ async function findOrCreateClient(
   },
 ) {
   const matches = await tx
-    .select({ id: clients.id })
+    .select({
+      id: clients.id,
+      normalizedPhone: clients.normalizedPhone,
+      email: clients.email,
+    })
     .from(clients)
     .where(
       or(
@@ -58,23 +62,40 @@ async function findOrCreateClient(
         input.email ? sql`lower(${clients.email}) = ${input.email}` : undefined,
       ),
     );
-  const unique = [...new Set(matches.map((match) => match.id))];
+  const unique = [...new Map(matches.map((match) => [match.id, match])).values()];
   if (unique.length > 1) return null;
 
   if (unique.length === 1) {
+    const existing = unique[0];
+    /*
+     * A returning client is attached to the record the studio already has —
+     * and that record is not rewritten from this form.
+     *
+     * The form is filled in by whoever has the link. Matching is on either
+     * contact, so a request carrying one known address and one new name and
+     * number used to move the studio's client to that name and that number,
+     * silently and with no history: the appointments already in the calendar
+     * are labelled from this row, so every one of them was relabelled too, back
+     * to the first. Knowing a client's email was enough to do it to them.
+     *
+     * What is written is what this request is entitled to say. The consent is
+     * about this booking; the language is the one the client just picked for
+     * their own messages. A contact the record is missing is filled in, because
+     * adding what was blank destroys nothing — an address or a number already
+     * on file stays until the studio itself changes it.
+     */
     const [updated] = await tx
       .update(clients)
       .set({
-        name: input.name,
-        normalizedPhone: input.normalizedPhone,
-        email: input.email,
+        normalizedPhone: existing.normalizedPhone ?? input.normalizedPhone,
+        email: existing.email ?? input.email,
         locale: input.locale,
         termsVersion: TERMS_VERSION,
         privacyVersion: PRIVACY_VERSION,
         consentedAt: input.now,
         updatedAt: input.now,
       })
-      .where(eq(clients.id, unique[0]))
+      .where(eq(clients.id, existing.id))
       .returning({ id: clients.id });
     return updated.id;
   }

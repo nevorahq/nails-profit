@@ -167,6 +167,39 @@ describe("booking transitions", () => {
     expect(replacement).toBeTruthy();
   });
 
+  test("a closed appointment keeps the hour it was closed in", async () => {
+    const bookingId = await makeBooking();
+    // Closing a visit that has not happened yet is a mistake a studio makes,
+    // and the hour must not go back on sale behind a client who is still
+    // expecting to be seen in it.
+    expect(await move(bookingId, "completed")).toMatchObject({ ok: true });
+
+    const clash = await withTenant(organizationId, (tx) =>
+      createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId,
+        interval: SLOT,
+        source: "public_booking",
+        confirmationMode: "manual",
+        confirmationTtlMinutes: 120,
+        lines: LINES,
+        actorUserId: null,
+        now,
+      }),
+    );
+    expect(clash).toMatchObject({ ok: false, conflict: "booking" });
+  });
+
+  test("a cancelled appointment is the one that gives its hour back", async () => {
+    // The other side of the rule above: cancelling is the act that means the
+    // time is free again, and it is the only one.
+    const bookingId = await makeBooking();
+    expect(await move(bookingId, "cancelled")).toMatchObject({ ok: true });
+
+    expect(await makeBooking()).toBeTruthy();
+  });
+
   test("an appointment cannot be moved onto a colleague's booked time", async () => {
     const mine = await makeBooking();
     await makeBooking({ interval: LATER, specialist: otherSpecialistId });

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import {
   bookingAccessTokens,
+  bookings,
   bookingVerifications,
   clients,
   notificationOutbox,
@@ -12,6 +13,24 @@ import {
 import { anonymous, dataOf, errorCodeOf } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, type Studio } from "../helpers/studio";
+
+/**
+ * The nth Wednesday ahead, as a local date.
+ *
+ * The rota below runs on Wednesdays and every test takes one of its own, so
+ * their bookings never compete for a slot. Counted rather than written down: a
+ * fixed date stops being bookable the morning after it passes, and the suite
+ * then fails for the calendar's reasons instead of the code's.
+ */
+function wednesday(nth: number): string {
+  const day = new Date();
+  day.setUTCHours(12, 0, 0, 0);
+  do {
+    day.setUTCDate(day.getUTCDate() + 1);
+  } while (day.getUTCDay() !== 3);
+  day.setUTCDate(day.getUTCDate() + (nth - 1) * 7);
+  return day.toISOString().slice(0, 10);
+}
 
 type Slot = {
   starts_at: string;
@@ -70,7 +89,14 @@ describe("public online booking", () => {
   });
 
   /** Hold and confirm one offered slot, the way the public form does. */
-  async function createBookingAt(slot: Slot) {
+  async function createBookingAt(
+    slot: Slot,
+    contact: { name: string; phone: string; email: string | null } = {
+      name: "Анна",
+      phone: "+373 69 123 456",
+      email: null,
+    },
+  ) {
     const held = dataOf<{ hold_token: string }>(
       await anonymous.post("/api/v1/public/booking/green-nails/holds", {
         location_id: locationId,
@@ -88,9 +114,9 @@ describe("public online booking", () => {
           hold_token: held.hold_token,
           service_id: studio.serviceId,
           add_on_ids: [],
-          name: "Анна",
-          phone: "+373 69 123 456",
-          email: null,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
           locale: "ru",
           legal_accepted: true,
         },
@@ -122,7 +148,7 @@ describe("public online booking", () => {
   test("a client finds a slot, holds it and creates an idempotent booking", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=2026-09-02`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(1)}`,
       ),
     );
     expect(availability.slots.length).toBeGreaterThan(0);
@@ -183,7 +209,7 @@ describe("public online booking", () => {
 
     const available = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=2026-09-09`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(2)}`,
       ),
     );
     const destination = available.slots[0];
@@ -239,7 +265,7 @@ describe("public online booking", () => {
   test("a confirmed booking is queued a reminder for the day before", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=2026-09-16`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(3)}`,
       ),
     );
     const slot = availability.slots[0];
@@ -264,7 +290,7 @@ describe("public online booking", () => {
   test("a client may move an appointment within its own hour", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=2026-09-23`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(4)}`,
       ),
     );
     const created = await createBookingAt(availability.slots[0]);
@@ -297,7 +323,7 @@ describe("public online booking", () => {
   test("one visit produces one walk through the funnel", async () => {
     const visit = crypto.randomUUID();
     const session = { "x-booking-session": visit };
-    const date = "2026-10-14";
+    const date = wednesday(7);
 
     async function eventsOfVisit() {
       const rows = await adminDb
@@ -377,6 +403,56 @@ describe("public online booking", () => {
     expect(anonymousViews).toEqual([]);
   });
 
+  test("a returning client is attached to their record, not written over it", async () => {
+    const free = async () => {
+      const availability = dataOf<{ slots: Slot[] }>(
+        await anonymous.get(
+          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(8)}`,
+        ),
+      );
+      expect(availability.slots.length).toBeGreaterThan(0);
+      return availability.slots[0];
+    };
+
+    const email = "raisa@studio.example";
+    const first = await createBookingAt(await free(), {
+      name: "Раиса Ивановна",
+      phone: "+373 68 969 195",
+      email,
+    });
+    // Asked again rather than taking the next entry of the first answer: the
+    // service is ninety minutes on a half-hour step, so consecutive slots
+    // overlap and the one after a booking is no longer free.
+    //
+    // The same address, a different name and a different number. Whoever fills
+    // in the public form does not get to say who the studio's client is: the
+    // request is attached to the record it matched, and the record stands.
+    const second = await createBookingAt(await free(), {
+      name: "Elena",
+      phone: "+373 68 969 196",
+      email,
+    });
+
+    const [client, ...rest] = await adminDb
+      .select()
+      .from(clients)
+      .where(and(eq(clients.organizationId, studio.organizationId), eq(clients.email, email)));
+    expect(rest).toEqual([]);
+    expect(client.name).toBe("Раиса Ивановна");
+    expect(client.normalizedPhone).toBe("+37368969195");
+
+    // Attached, though — both appointments belong to the one client, which is
+    // what the calendar and the client's own history are read from.
+    const rows = await adminDb
+      .select({ id: bookings.id, clientId: bookings.clientId })
+      .from(bookings)
+      .where(eq(bookings.organizationId, studio.organizationId));
+    const owners = rows
+      .filter((row) => row.id === first.id || row.id === second.id)
+      .map((row) => row.clientId);
+    expect(owners).toEqual([client.id, client.id]);
+  });
+
   describe("with contact verification switched on", () => {
     let holdToken: string;
     let slot: Slot;
@@ -432,7 +508,7 @@ describe("public online booking", () => {
     }
 
     test("an unverified contact cannot create a booking", async () => {
-      await holdOne("2026-09-30");
+      await holdOne(wednesday(5));
       const refused = await createWith({});
 
       expect(refused.status).toBe(403);
@@ -483,7 +559,7 @@ describe("public online booking", () => {
     });
 
     test("a code confirmed for one number does not book another", async () => {
-      await holdOne("2026-10-07");
+      await holdOne(wednesday(6));
       const requested = await anonymous.post("/api/v1/public/booking/green-nails/verify", {
         action: "request",
         hold_token: holdToken,
@@ -519,7 +595,7 @@ describe("public online booking", () => {
     test("Resend verifies email; the booking itself still reaches every channel the client left", async () => {
       process.env.NOTIFICATION_PROVIDER = "resend";
       try {
-        await holdOne("2026-10-14");
+        await holdOne(wednesday(7));
         const requested = await anonymous.post("/api/v1/public/booking/green-nails/verify", {
           action: "request",
           hold_token: holdToken,
