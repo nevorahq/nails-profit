@@ -330,10 +330,14 @@ export function atTime(date: Date, time: string): Date {
  * shows it on.
  */
 export async function moveIntoThePast(studio: Studio, bookingId: string): Promise<Date> {
+  // A move carries the version it is moving from: nothing else would stop this
+  // from overwriting a time somebody had just agreed with the client.
+  const current = await studio.owner.get<{ version: number }>(`/api/v1/bookings/${bookingId}`);
   const startsAt = new Date(Date.now() - 60 * 60_000);
   startsAt.setUTCSeconds(0, 0);
   await studio.owner.post(`/api/v1/bookings/${bookingId}/reschedule`, {
     starts_at: startsAt.toISOString(),
+    version: current.version,
   });
   return startsAt;
 }
