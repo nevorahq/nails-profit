@@ -20,6 +20,7 @@ import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking-service";
 import { bookingPageUrl, issueManageLink } from "@/lib/booking-manage-link";
 import { logEvent } from "@/lib/logger";
 import {
+  asBookingNotificationTemplate,
   formatAppointmentTime,
   renderNotification,
   staffNotificationTemplates,
@@ -299,7 +300,23 @@ async function prepare(
   row: ClaimedRow,
   now: Date,
 ): Promise<Prepared> {
-  const template = row.template as BookingNotificationTemplate;
+  const template = asBookingNotificationTemplate(row.template);
+  if (!template) {
+    /*
+     * A row from a deployment this one is older than. Rendering it would reach
+     * the client as the literal "undefined.subject", marked `sent`, with
+     * nothing left to find afterwards — the failure would be the client's to
+     * discover. A dead letter keeps it in the queue with its cause on it, and
+     * an operator can send it once the wording is deployed.
+     */
+    logEvent(
+      "error",
+      "notification.template_unknown",
+      { organizationId },
+      { template: row.template, channel: row.channel },
+    );
+    return { ok: false, code: "template_unknown" };
+  }
 
   const [organization] = await tx
     .select({ name: organizations.name, slug: organizations.slug, locale: organizations.locale })
@@ -326,6 +343,7 @@ async function prepare(
     when: facts.appointment
       ? formatAppointmentTime(facts.appointment.startsAt, facts.appointment.timezone, locale)
       : "",
+    specialist: facts.specialist ?? "",
     link: facts.link,
     code: row.payload?.code ?? "",
   });
@@ -353,6 +371,8 @@ type Facts =
       locale: string | null;
       /** Absent for a verification code, which is about a slot, not a booking. */
       appointment: Readonly<{ startsAt: Date; timezone: string }> | null;
+      /** Set where a message names the master; absent where none belongs. */
+      specialist?: string;
       link: string;
     }>
   | Readonly<{ ok: false; code: string }>;
@@ -467,9 +487,13 @@ async function bookingFacts(
       clientLocale: clients.locale,
       clientPhone: clients.normalizedPhone,
       clientEmail: clients.email,
+      specialistName: specialists.name,
     })
     .from(bookings)
     .innerJoin(locations, eq(locations.id, bookings.locationId))
+    // The card's name, read at delivery like every other fact here: a master
+    // renamed between the answer and the send is named as they are now.
+    .innerJoin(specialists, eq(specialists.id, bookings.specialistId))
     .leftJoin(clients, eq(clients.id, bookings.clientId))
     .where(eq(bookings.id, row.bookingId))
     .limit(1);
@@ -509,6 +533,7 @@ async function bookingFacts(
     destination,
     locale: found.clientLocale,
     appointment: { startsAt: found.booking.startsAt, timezone: found.timezone },
+    specialist: found.specialistName,
     link,
   };
 }

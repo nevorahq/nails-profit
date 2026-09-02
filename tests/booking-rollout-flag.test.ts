@@ -108,7 +108,20 @@ function routeFiles(directory: string, found: string[] = []): string[] {
   return found;
 }
 
+/**
+ * Parsed once per file, not once per route that reaches it.
+ *
+ * The closure below starts again at every route, and the routes share nearly
+ * everything they import — `db/schema.ts` is thousands of lines and is reached
+ * from almost all of them. Re-parsing that graph thirty times is what pushed
+ * this test past its timeout on a machine slower than a developer's.
+ */
+const parsedImports = new Map<string, string[]>();
+
 function importsOf(file: string): string[] {
+  const remembered = parsedImports.get(file);
+  if (remembered) return remembered;
+
   const source = ts.createSourceFile(
     file,
     readFileSync(file, "utf8"),
@@ -129,6 +142,7 @@ function importsOf(file: string): string[] {
   };
   ts.forEachChild(source, visit);
 
+  parsedImports.set(file, specifiers);
   return specifiers;
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { supportedLocales } from "@/i18n/messages";
 import {
+  asBookingNotificationTemplate,
   bookingNotificationTemplates,
   formatAppointmentTime,
   renderNotification,
@@ -11,6 +12,7 @@ const base = {
   locale: "ru" as const,
   studioName: "Green Nails",
   when: "2 сент. 2026 г., 10:00",
+  specialist: "Ирина",
   link: "https://example.test/booking/abc",
   code: "123456",
 };
@@ -40,9 +42,46 @@ describe("transactional templates", () => {
   });
 
   it("carries the manage link in the messages a client acts on", () => {
-    for (const template of ["booking.confirmed", "booking.rescheduled", "booking.reminder"] as const) {
+    for (const template of [
+      "booking.confirmed",
+      "booking.request_accepted",
+      "booking.rescheduled",
+      "booking.reminder",
+    ] as const) {
       expect(renderNotification({ ...base, template }).body).toContain(base.link);
     }
+  });
+
+  it("names the master in the answer to a request, and only there", () => {
+    // The client asked and a person said yes; the message says who, when, and
+    // in the language the client chose.
+    for (const locale of supportedLocales) {
+      const accepted = renderNotification({ ...base, locale, template: "booking.request_accepted" });
+      expect(accepted.body).toContain("Ирина");
+      expect(accepted.body).toContain(base.when);
+    }
+
+    // A booking the studio made itself has nobody to name: the wording that
+    // announces an acceptance must not leak into it.
+    for (const template of bookingNotificationTemplates) {
+      if (template === "booking.request_accepted") continue;
+      expect(renderNotification({ ...base, template }).body).not.toContain("Ирина");
+    }
+  });
+});
+
+describe("a template read off a queued row", () => {
+  it("is recognised when this build has wording for it", () => {
+    for (const template of bookingNotificationTemplates) {
+      expect(asBookingNotificationTemplate(template)).toBe(template);
+    }
+  });
+
+  it("is refused when it was written by a newer deployment", () => {
+    // The name is deliberately plausible: the queue is shared between builds,
+    // and the one draining it is not always the one that filled it.
+    expect(asBookingNotificationTemplate("booking.invoice_issued")).toBeNull();
+    expect(asBookingNotificationTemplate("")).toBeNull();
   });
 });
 

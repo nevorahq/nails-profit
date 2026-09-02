@@ -74,6 +74,16 @@ describe("notification outbox", () => {
   let organizationId: string;
   let locationId: string;
   let bookingId: string;
+  /**
+   * The fixture's clock, for the rows whose time this file decides: an
+   * appointment three days out, a reminder due the day before it.
+   *
+   * It is not the clock to dispatch on. A message enters the queue at the
+   * database's own `now()`, so a dispatch pinned to a date already past claims
+   * nothing at all — the four tests below dispatch on the real clock for that
+   * reason, and the ones that reach forward to a scheduled reminder do not have
+   * to.
+   */
   const now = new Date("2026-09-01T09:00:00.000Z");
 
   beforeEach(async () => {
@@ -182,7 +192,7 @@ describe("notification outbox", () => {
     await withTenant(organizationId, (tx) =>
       notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
     );
-    await dispatchDueNotifications({ organizationId, now });
+    await dispatchDueNotifications({ organizationId, now: new Date() });
 
     const [email] = (await rows()).filter((row) => row.channel === "email");
     const event = (type: string, createdAt: string) => ({
@@ -232,7 +242,7 @@ describe("notification outbox", () => {
     await withTenant(organizationId, (tx) =>
       notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
     );
-    await dispatchDueNotifications({ organizationId, now });
+    await dispatchDueNotifications({ organizationId, now: new Date() });
 
     const [sms] = (await rows()).filter((row) => row.channel === "sms");
     const report = (status: number) => ({
@@ -286,7 +296,7 @@ describe("notification outbox", () => {
       notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
     );
 
-    const at = new Date("2026-09-01T10:00:00.000Z");
+    const at = new Date();
     const summary = await dispatchDueNotifications({ organizationId, now: at });
     expect(summary).toMatchObject({ retried: 2, sent: 0, deadLettered: 0 });
 
@@ -294,7 +304,7 @@ describe("notification outbox", () => {
     expect(row.status).toBe("retry");
     expect(row.attempts).toBe(1);
     expect(row.lastErrorCode).toBe("provider_timeout");
-    expect(row.nextAttemptAt.toISOString()).toBe("2026-09-01T10:01:00.000Z");
+    expect(row.nextAttemptAt.toISOString()).toBe(new Date(at.getTime() + 60_000).toISOString());
 
     // Nothing is due until the delay has passed.
     expect(await dispatchDueNotifications({ organizationId, now: at })).toMatchObject({
@@ -308,7 +318,7 @@ describe("notification outbox", () => {
       notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
     );
 
-    let at = new Date("2026-09-01T10:00:00.000Z");
+    let at = new Date();
     for (let attempt = 0; attempt < MAX_DELIVERY_ATTEMPTS; attempt += 1) {
       await dispatchDueNotifications({ organizationId, now: at });
       at = new Date(at.getTime() + 2 * 60 * 60_000);
@@ -317,6 +327,28 @@ describe("notification outbox", () => {
     const all = await rows();
     expect(all.every((row) => row.status === "dead_letter")).toBe(true);
     expect(all.every((row) => row.attempts === MAX_DELIVERY_ATTEMPTS)).toBe(true);
+  });
+
+  test("a message this build has no wording for is dead-lettered, not garbled", async () => {
+    const sent = fakeProvider(() => ({ ok: true, providerMessageId: "fake:1" }));
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    // What a row written by a newer deployment looks like to this one.
+    await adminDb
+      .update(notificationOutbox)
+      .set({ template: "booking.invoice_issued" })
+      .where(eq(notificationOutbox.organizationId, organizationId));
+
+    const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    expect(summary).toMatchObject({ sent: 0, retried: 0, deadLettered: 2 });
+    // The point of the guard: the client hears nothing rather than hearing
+    // "undefined.body", and the row keeps its cause for whoever looks.
+    expect(sent).toEqual([]);
+    const all = await rows();
+    expect(all.every((row) => row.status === "dead_letter")).toBe(true);
+    expect(all.every((row) => row.lastErrorCode === "template_unknown")).toBe(true);
   });
 
   test("a permanent failure is not retried at all", async () => {

@@ -51,9 +51,11 @@ type PaddleEventPayload = Readonly<{
     scheduled_change?: Readonly<{ action?: unknown }> | null;
     items?: readonly Readonly<{ price?: Readonly<{ id?: unknown }> }>[];
     custom_data?: Readonly<{ organization_id?: unknown }> | null;
-    // Field name per the Billing API's subscription resource; unconfirmed
-    // against a live payload since no Paddle account exists yet — re-check
-    // once one does.
+    // Confirmed against sandbox (2026-09-01): `subscription.created` and
+    // `subscription.trialing` payloads do NOT carry this, even though the
+    // subscription resource itself does. Still read here in case another event
+    // type includes it; the settings page falls back to a `subscriptions.get`
+    // when it is missing (`lib/paddle-api.ts`).
     management_urls?: Readonly<{ update_payment_method?: unknown; cancel?: unknown }> | null;
   }>;
 }>;

@@ -602,6 +602,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={8}
+                  placeholder={t("publicBooking.codePlaceholder")}
                   aria-invalid={Boolean(codeError)}
                   aria-describedby={codeError ? "booking-code-error" : undefined}
                   onChange={() => setCodeError(null)}
@@ -656,21 +657,22 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
             <div className="public-booking-grid">
-              {/* Defaults, not placeholders: a client sent back here by a wrong
-                  code must find what they typed still typed. */}
+              {/* The placeholder shows the shape each answer should take; the
+                  default carries what was already typed, so a client sent back
+                  here by a wrong code finds their answers still in place. */}
               <label htmlFor="booking-name">
                 {t("publicBooking.name")}
-                <input id="booking-name" name="name" autoComplete="name" required minLength={2} defaultValue={contact?.name ?? ""} aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? "booking-name-error" : undefined} onChange={() => clearFieldError("name")} />
+                <input id="booking-name" name="name" autoComplete="name" placeholder={t("publicBooking.namePlaceholder")} required minLength={2} defaultValue={contact?.name ?? ""} aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? "booking-name-error" : undefined} onChange={() => clearFieldError("name")} />
                 {fieldErrors.name && <span id="booking-name-error" className="field-error">{fieldErrors.name}</span>}
               </label>
               <label htmlFor="booking-phone">
                 {t("publicBooking.phone")}
-                <input id="booking-phone" name="phone" type="tel" autoComplete="tel" required defaultValue={contact?.phone ?? ""} aria-invalid={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? "booking-phone-error" : undefined} onChange={() => clearFieldError("phone")} />
+                <input id="booking-phone" name="phone" type="tel" autoComplete="tel" placeholder={t("publicBooking.phonePlaceholder")} required defaultValue={contact?.phone ?? ""} aria-invalid={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? "booking-phone-error" : undefined} onChange={() => clearFieldError("phone")} />
                 {fieldErrors.phone && <span id="booking-phone-error" className="field-error">{fieldErrors.phone}</span>}
               </label>
               <label htmlFor="booking-email">
                 {t(profile.notification_channel === "email" ? "publicBooking.emailRequired" : "publicBooking.email")}
-                <input id="booking-email" name="email" type="email" autoComplete="email" required={profile.notification_channel === "email"} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
+                <input id="booking-email" name="email" type="email" autoComplete="email" placeholder={t("publicBooking.emailPlaceholder")} required={profile.notification_channel === "email"} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
                 {fieldErrors.email && <span id="booking-email-error" className="field-error">{fieldErrors.email}</span>}
               </label>
               <label htmlFor="booking-locale">

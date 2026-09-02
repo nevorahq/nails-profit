@@ -16,6 +16,14 @@ export const bookingNotificationTemplates = [
   "booking.verification_code",
   "booking.pending_confirmation",
   "booking.confirmed",
+  /**
+   * The answer to a request: somebody looked at it and took it, and the client
+   * is told who. Separate from `booking.confirmed` because that one also covers
+   * an appointment that was never a request — taken at the desk, or confirmed by
+   * the studio's own instant setting — where "принята мастером" would announce a
+   * decision nobody made.
+   */
+  "booking.request_accepted",
   "booking.rescheduled",
   "booking.reminder",
   "booking.cancelled",
@@ -38,10 +46,28 @@ export const bookingNotificationTemplates = [
 
 export type BookingNotificationTemplate = (typeof bookingNotificationTemplates)[number];
 
+/**
+ * The template a queued row names, or null when this build has never heard of
+ * it.
+ *
+ * A row is written by whichever deployment took the booking and sent by
+ * whichever one drains the queue, and those are not always the same one: a
+ * message added on a laptop pointed at the production database outlives the
+ * build that wrote it. Reading the column as a `BookingNotificationTemplate`
+ * without asking is what turns that into a client-visible fault — `KEY_PREFIX`
+ * returns `undefined`, and the renderer cheerfully sends "undefined.body".
+ */
+export function asBookingNotificationTemplate(value: string): BookingNotificationTemplate | null {
+  return (bookingNotificationTemplates as readonly string[]).includes(value)
+    ? (value as BookingNotificationTemplate)
+    : null;
+}
+
 const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.verification_code": "notify.verification",
   "booking.pending_confirmation": "notify.pending",
   "booking.confirmed": "notify.confirmed",
+  "booking.request_accepted": "notify.requestAccepted",
   "booking.rescheduled": "notify.rescheduled",
   "booking.reminder": "notify.reminder",
   "booking.cancelled": "notify.cancelled",
@@ -61,6 +87,11 @@ export type NotificationFacts = Readonly<{
   studioName: string;
   /** Already formatted in the location's zone; a client reads local time only. */
   when: string;
+  /**
+   * The master the appointment is with, by the name on their card. Only one
+   * template names a person; the rest are handed it and ignore it.
+   */
+  specialist: string;
   link: string;
   code: string;
 }>;
@@ -73,6 +104,7 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
   const params = {
     studio: facts.studioName,
     when: facts.when,
+    specialist: facts.specialist,
     link: facts.link,
     code: facts.code,
   };

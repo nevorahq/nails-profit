@@ -11,7 +11,7 @@ export type SubscriptionStatusRow = {
 };
 
 export type CheckoutConfig = {
-  paddle: { clientToken: string; priceId: string } | null;
+  paddle: { clientToken: string; priceId: string; environment: "sandbox" | "live" } | null;
   lemonSqueezyUrl: string | null;
 };
 
@@ -72,6 +72,7 @@ export function BillingSettings({
                 <PaddleCheckoutButton
                   clientToken={checkout.paddle.clientToken}
                   priceId={checkout.paddle.priceId}
+                  environment={checkout.paddle.environment}
                   organizationId={organizationId}
                   label={t("billing.startPaddle")}
                 />

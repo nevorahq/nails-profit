@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import { billingProviderEvents, organizationSubscriptions } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 
@@ -29,6 +31,16 @@ export async function applyBillingEvent(
   providerEventId: string,
 ): Promise<BillingWebhookOutcome> {
   return withTenant(event.organizationId, async (tx) => {
+    // Paddle emits `subscription.created` and `subscription.trialing` within
+    // milliseconds of each other when a checkout completes. Both reach here and
+    // both try to INSERT the `organization_subscription` row; the loser
+    // conflicts on `organization_subscription_org_idx`, which the upsert below
+    // does not name as its arbiter, so PostgreSQL raises the violation instead
+    // of updating and the webhook 500s (Paddle then retries). Serializing per
+    // organization turns the race into two ordered upserts — the same idiom as
+    // the "one organization per user" lock in `app/api/v1/organizations/route.ts`.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${event.organizationId}, 0))`);
+
     const inserted = await tx
       .insert(billingProviderEvents)
       .values({
@@ -64,7 +76,10 @@ export async function applyBillingEvent(
           status: event.status,
           currentPeriodEnd: event.currentPeriodEnd,
           cancelAtPeriodEnd: event.cancelAtPeriodEnd,
-          manageUrl: event.manageUrl,
+          // Most `subscription.*` payloads omit `management_urls` (confirmed
+          // against sandbox), so a later event must not wipe a link an earlier
+          // one happened to carry.
+          manageUrl: sql`coalesce(${event.manageUrl}, ${organizationSubscriptions.manageUrl})`,
           updatedAt: new Date(),
         },
       });

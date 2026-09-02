@@ -116,7 +116,7 @@ export function WorkspaceSetup({
               name="name"
               required
               minLength={2}
-              pattern="[A-Za-zĂÂÎȘȚăâîșț0-9 &'’.-]{2,}"
+              pattern={String.raw`[A-Za-zĂÂÎȘȚăâîșț0-9 &'’.\-]{2,}`}
               title={t("workspace.nameLatin")}
               placeholder={t("workspace.namePlaceholder")}
             />

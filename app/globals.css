@@ -165,7 +165,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .metric-preview strong { font-size: 26rem; }
 
 .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24rem; background: radial-gradient(circle at 22% 18%, rgba(174, 195, 176, 0.72), transparent 38%), var(--paper); }
-.auth-card { width: min(100%, 460rem); background: var(--surface); border: 1rem solid var(--line); border-radius: 28rem; padding: clamp(28rem, 6vw, 48rem); box-shadow: var(--shadow); }
+.auth-card { width: min(100%, 460rem); background: var(--surface); border: 1rem solid var(--line); border-radius: 28rem; padding: clamp(28rem, 6vw, 48rem); }
 .auth-card h1 { font-size: 40rem; margin-bottom: 40rem; text-align: center;}
 .auth-card > p { color: var(--muted); font-size: 18rem; line-height: 1.5; margin-bottom: 28rem; text-align: center; }
 .auth-card form { display: grid; gap: 18rem; }
@@ -333,6 +333,82 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .product-report a { display: inline-flex; align-items: center; gap: 18rem; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; text-decoration: none; }
 .product-report a span { font-size: 17rem; }
 .calculator-card input::-moz-range-thumb { width: 13rem; height: 13rem; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 1rem var(--marketing-on-dark); }
+
+/*
+ * Pricing: the studio's own subscription, not the MDL visit economics above it.
+ * One price per studio on the Solo/Studio/Business line, billed in euro, with a
+ * 1/3/6-month prepay switch that only changes what the cards read. «Студия» is
+ * the featured plan and carries the section's one dark panel, the same
+ * treatment the calculator card uses.
+ */
+.marketing-pricing { padding: 116rem 0; border-top: 1rem solid var(--marketing-line); }
+.pricing-head { display: grid; justify-items: center; max-width: 640rem; margin: 0 auto 56rem; text-align: center; }
+.pricing-head h2 { margin: 0; font-size: clamp(35rem, 3.4vw, 57rem); font-weight: 750; line-height: 1.02; letter-spacing: -.045em; }
+.pricing-head > p { max-width: 520rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }
+.pricing-period { display: inline-flex; gap: 4rem; margin-top: 30rem; padding: 4rem; border-radius: 8rem; background: var(--marketing-sunken); }
+.pricing-period button { min-height: 38rem; padding: 0 18rem; border: 0; border-radius: 5rem; background: transparent; color: var(--marketing-muted); font-size: 12rem; font-weight: 700; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.pricing-period button:hover { color: var(--marketing-ink); }
+.pricing-period button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
+.pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24rem; align-items: start; }
+/*
+ * The cards enter staggered. This is on `translate` (its own property), not
+ * `transform`, so the resting lift on the featured card and the lift on hover —
+ * both `transform` — are left free to compose on top rather than be clamped by
+ * the animation's fill.
+ */
+.pricing-card { position: relative; display: flex; flex-direction: column; gap: 16rem; padding: 32rem 28rem; border: 1rem solid var(--marketing-line); border-radius: 12rem; background: var(--marketing-surface); animation: pricing-card-in var(--duration-slow) var(--ease-standard) both; transition: transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard); }
+.pricing-card:nth-child(2) { animation-delay: 80ms; }
+.pricing-card:nth-child(3) { animation-delay: 160ms; }
+@keyframes pricing-card-in { from { opacity: 0; translate: 0 20rem; } }
+/* A hover is an input, so it belongs to the standard motion system. The plain
+ * cards lift; the featured one is already raised and only deepens its shadow,
+ * so its resting offset never moves. */
+.pricing-card:not(.featured):hover { transform: translateY(-6rem); border-color: var(--marketing-accent); box-shadow: var(--neu-raised); }
+.pricing-card.featured { border-color: var(--marketing-ink); background: var(--marketing-ink); color: var(--marketing-on-dark); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); transform: translateY(-14rem); transition: box-shadow var(--duration-base) var(--ease-standard); }
+.pricing-card.featured:hover { box-shadow: 0 34rem 66rem rgba(15, 42, 29, .26); }
+.pricing-badge { position: absolute; top: -11rem; left: 28rem; padding: 4rem 11rem; border-radius: 99rem; background: var(--marketing-profit); color: var(--marketing-ink); font-size: 10rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.pricing-tier h3 { margin: 0; font-size: 19rem; letter-spacing: -.03em; }
+.pricing-tier p { margin: 6rem 0 0; color: var(--marketing-muted); font-size: 12rem; line-height: 1.45; }
+.pricing-card.featured .pricing-tier p { color: var(--marketing-on-dark-muted); }
+.pricing-price { display: flex; align-items: baseline; gap: 8rem; margin-top: 4rem; }
+.pricing-price span { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; }
+.pricing-card.featured .pricing-price span { color: var(--marketing-on-dark-muted); }
+.pricing-terms { display: flex; align-items: center; flex-wrap: wrap; gap: 8rem; min-height: 22rem; margin: 0; color: var(--marketing-muted); font-size: 12rem; }
+.pricing-card.featured .pricing-terms { color: var(--marketing-on-dark-muted); }
+/* The figure and the terms line are re-keyed on every period switch, so this
+ * entrance replays each time the amount changes, not only on first load. */
+.pricing-price strong { display: inline-block; font-size: 42rem; font-weight: 750; letter-spacing: -.045em; font-variant-numeric: tabular-nums; animation: pricing-figure var(--duration-base) var(--ease-standard) backwards; }
+.pricing-terms { animation: pricing-figure var(--duration-base) var(--ease-standard) backwards; }
+@keyframes pricing-figure { from { opacity: 0; transform: translateY(7rem); } }
+.pricing-save { padding: 2rem 7rem; border-radius: 99rem; background: var(--marketing-canvas); color: var(--marketing-accent); font-size: 10rem; font-weight: 800; }
+.pricing-card.featured .pricing-save { background: var(--marketing-on-dark-line); color: var(--marketing-on-dark); }
+.pricing-features { flex: 1; display: grid; align-content: start; gap: 11rem; margin: 8rem 0 0; padding: 18rem 0 0; border-top: 1rem solid var(--marketing-line); list-style: none; }
+.pricing-card.featured .pricing-features { border-color: var(--marketing-on-dark-line); }
+.pricing-features li { position: relative; padding-left: 22rem; font-size: 13rem; line-height: 1.5; }
+.pricing-features li::before { position: absolute; left: 0; color: var(--marketing-profit); font-weight: 800; content: "✓"; }
+.pricing-cta { width: 100%; margin-top: 4rem; }
+.pricing-card.featured .pricing-cta { background: var(--marketing-on-dark); color: var(--marketing-ink); }
+.pricing-card.featured .pricing-cta:hover { background: var(--marketing-on-dark-muted); }
+.pricing-card > small { color: var(--marketing-muted); font-size: 10rem; text-align: center; }
+.pricing-card.featured > small { color: var(--marketing-on-dark-muted); }
+.pricing-note { max-width: 620rem; margin: 44rem auto 0; color: var(--marketing-muted); font-size: 11rem; line-height: 1.55; text-align: center; }
+/* These overrides follow the base rules above rather than joining the shared
+ * marketing media blocks higher up the file: same specificity, so source order
+ * decides, and a later base rule would otherwise win over an earlier @media. */
+@media (max-width: 900px) {
+  .pricing-grid { grid-template-columns: 1fr; max-width: 680rem; margin: 0 auto; }
+  .pricing-card.featured { transform: none; }
+}
+@media (max-width: 680px) {
+  .marketing-pricing { padding: 76rem 0; }
+  .pricing-head { margin-bottom: 44rem; }
+  .pricing-head h2 { font-size: 37rem; }
+  .pricing-period { display: flex; width: 100%; }
+  .pricing-period button { flex: 1; padding: 0 8rem; }
+  .pricing-grid { gap: 18rem; }
+  .pricing-card { padding: 26rem 22rem; }
+  .pricing-price strong { font-size: 38rem; }
+}
 .workspace-card { width: min(100%, 520rem); }
 
 .app-header h1 { font-size: 42rem; margin: 10rem 0 0; }
@@ -974,6 +1050,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
 .public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 .public-booking-grid input, .public-booking-grid select { width: 100%; min-height: 48rem; padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 13rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
+/* Lighter than the answer, dark enough to read: the example has to look
+   like a hint, not like a field somebody already filled in. */
+.public-booking-grid input::placeholder { color: rgba(55, 85, 52, 0.8); }
 .public-booking-options { display: grid; gap: 8rem; margin: 0; padding: 16rem; border: 1rem solid var(--line); border-radius: 16rem; }
 .public-booking-options legend { padding: 0 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 .public-booking-options label { display: grid; grid-template-columns: 22rem 1fr auto; align-items: center; gap: 10rem; min-height: 44rem; font-size: 15rem; cursor: pointer; }

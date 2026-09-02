@@ -162,21 +162,46 @@ export function getLemonSqueezyWebhookSecret() {
  * The "start subscription" button's own configuration — public by nature,
  * same as a Stripe publishable key: Paddle's own docs call this a
  * client-side token, safe to ship in the browser bundle, unlike
- * `PADDLE_WEBHOOK_SECRET` above. Placeholder/unset on purpose until Paddle
- * confirms a seller account is possible without an EU/US entity (open
- * question from the payments research); `null` hides the button rather than
- * rendering one that opens a checkout for nothing real.
+ * `PADDLE_WEBHOOK_SECRET` above. `null` (either value unset) hides the button
+ * rather than rendering one that opens a checkout for nothing real.
+ *
+ * `environment` is `sandbox` only when `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is
+ * exactly `sandbox`; anything else (including unset) is `live`, which is
+ * Paddle.js's own default. The frontend calls `Paddle.Environment.set('sandbox')`
+ * only for the sandbox case — so switching to live is a one-line env change,
+ * not a code edit.
  */
 export function getPaddleCheckoutConfig() {
   const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN?.trim();
   const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID?.trim();
-  return clientToken && priceId ? { clientToken, priceId } : null;
+  if (!clientToken || !priceId) return null;
+  const environment: "sandbox" | "live" =
+    process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT?.trim() === "sandbox" ? "sandbox" : "live";
+  return { clientToken, priceId, environment };
 }
 
 /** Same reasoning as `getPaddleCheckoutConfig`, for Lemon Squeezy's plain hosted-checkout link. */
 export function getLemonSqueezyCheckoutUrl() {
   const value = process.env.NEXT_PUBLIC_LEMON_SQUEEZY_CHECKOUT_URL?.trim();
   return value || null;
+}
+
+/**
+ * Server-side Paddle API access — a secret key (`pdl_sdbx_…` / `pdl_live_…`),
+ * unlike the public `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`. Used today only to read a
+ * subscription's `management_urls`, which its webhooks omit; later for
+ * upgrades and cancellations. The base URL follows the same
+ * `NEXT_PUBLIC_PADDLE_ENVIRONMENT` switch as the frontend. `null` (key unset)
+ * makes every server-side Paddle call a no-op — see `lib/paddle-api.ts`.
+ */
+export function getPaddleApiConfig() {
+  const apiKey = process.env.PADDLE_API_KEY?.trim();
+  if (!apiKey) return null;
+  const baseUrl =
+    process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT?.trim() === "sandbox"
+      ? "https://sandbox-api.paddle.com"
+      : "https://api.paddle.com";
+  return { apiKey, baseUrl };
 }
 
 /**
@@ -209,6 +234,21 @@ export function isSubscriptionAccessEnforced() {
   if (value === undefined || value === "false") return false;
   if (value === "true") return true;
   throw new Error("SUBSCRIPTION_ACCESS_ENFORCEMENT must be true or false");
+}
+
+/**
+ * Whether `POST /api/v1/webhooks/paddle` rejects callers that are not in
+ * Paddle's published IP allowlist (https://api.paddle.com/ips). Off by default:
+ * the signature check is the hard gate, and this second one only makes sense
+ * where the route is reachable solely from the internet — a laptop testing
+ * against a tunnel is not on Paddle's addresses. A deployment turns it on.
+ * See `lib/paddle-ips.ts`.
+ */
+export function isPaddleWebhookIpAllowlistEnabled() {
+  const value = process.env.PADDLE_WEBHOOK_IP_ALLOWLIST;
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error("PADDLE_WEBHOOK_IP_ALLOWLIST must be true or false");
 }
 
 /** The token the notification dispatch job authenticates with; unset disables the route. */
