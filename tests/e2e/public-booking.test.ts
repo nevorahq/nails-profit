@@ -404,23 +404,30 @@ describe("public online booking", () => {
   });
 
   test("a returning client is attached to their record, not written over it", async () => {
-    const availability = dataOf<{ slots: Slot[] }>(
-      await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(8)}`,
-      ),
-    );
-    expect(availability.slots.length).toBeGreaterThan(1);
+    const free = async () => {
+      const availability = dataOf<{ slots: Slot[] }>(
+        await anonymous.get(
+          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(8)}`,
+        ),
+      );
+      expect(availability.slots.length).toBeGreaterThan(0);
+      return availability.slots[0];
+    };
 
     const email = "raisa@studio.example";
-    const first = await createBookingAt(availability.slots[0], {
+    const first = await createBookingAt(await free(), {
       name: "Раиса Ивановна",
       phone: "+373 68 969 195",
       email,
     });
+    // Asked again rather than taking the next entry of the first answer: the
+    // service is ninety minutes on a half-hour step, so consecutive slots
+    // overlap and the one after a booking is no longer free.
+    //
     // The same address, a different name and a different number. Whoever fills
     // in the public form does not get to say who the studio's client is: the
     // request is attached to the record it matched, and the record stands.
-    const second = await createBookingAt(availability.slots[1], {
+    const second = await createBookingAt(await free(), {
       name: "Elena",
       phone: "+373 68 969 196",
       email,
