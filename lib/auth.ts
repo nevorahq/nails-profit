@@ -38,6 +38,31 @@ const argon2Options = {
   parallelism: 1,
 } as const;
 
+/**
+ * The one way the auth limits may be stood down, and why it cannot happen in
+ * production.
+ *
+ * Five sign-ups an hour per instance is the right rule for a studio and an
+ * impossible budget for a browser suite: every Playwright scenario registers a
+ * real owner and a real master through this very endpoint, which is what makes
+ * those tests worth having. So the limits step aside for them — but only when
+ * two things are true at once: the switch is set deliberately, and the server
+ * is pointed at a database whose name ends in `_test`, the same marker
+ * `tests/test-database-env.ts` refuses to run destructive suites without.
+ *
+ * A production instance fails the second condition no matter what its
+ * environment says, so a leaked or copy-pasted `AUTH_RATE_LIMIT=off` does
+ * nothing there.
+ */
+function relaxedForBrowserTests(): boolean {
+  if (process.env.AUTH_RATE_LIMIT !== "off") return false;
+  try {
+    return new URL(process.env.DATABASE_URL ?? "").pathname.endsWith("_test");
+  } catch {
+    return false;
+  }
+}
+
 function createAuth() {
   const env = getServerEnv();
 
@@ -138,7 +163,7 @@ function createAuth() {
    * anything. Enabled in every environment, not just production.
    */
   rateLimit: {
-    enabled: true,
+    enabled: !relaxedForBrowserTests(),
     window: 60,
     max: 100,
     customRules: {

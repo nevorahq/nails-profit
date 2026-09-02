@@ -45,7 +45,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const posthogConfig = getPostHogConfig();
 
   return (
-    <html lang={localeTag(locale)}>
+    <html lang={localeTag(locale)} data-scroll-behavior="smooth">
       <body className={`${onest.variable} ${onest.className}`}>
         <a className="skip-link" href="#main-content">
           {t("common.skipToContent")}
