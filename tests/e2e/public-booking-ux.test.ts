@@ -52,20 +52,38 @@ describe("public booking UX contract", () => {
   });
 
   test("an empty day returns the nearest available dates without exposing the rota", async () => {
+    /*
+     * The rota is Wednesdays, so the day asked about is the Tuesday in front of
+     * one: empty, and with a working day right behind it to be nearest.
+     *
+     * Both are counted from today rather than written down. The dates that used
+     * to be here stopped being true as the calendar passed them — a day in the
+     * past has nothing ahead of it to offer, and today runs out of slots by
+     * mid-afternoon, which is when this began answering with next week.
+     */
+    const wednesday = new Date();
+    wednesday.setUTCHours(12, 0, 0, 0);
+    do {
+      wednesday.setUTCDate(wednesday.getUTCDate() + 1);
+    } while (wednesday.getUTCDay() !== 3);
+    const tuesday = new Date(wednesday);
+    tuesday.setUTCDate(tuesday.getUTCDate() - 1);
+    const isoDay = (day: Date) => day.toISOString().slice(0, 10);
+
     const availability = dataOf<{
       timezone: string;
       slots: unknown[];
       nearest_dates: { date: string; slot_count: number }[];
     }>(
       await anonymous.get(
-        `/api/v1/public/booking/booking-ux/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=2026-09-01`,
+        `/api/v1/public/booking/booking-ux/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${isoDay(tuesday)}`,
       ),
     );
 
     expect(availability.timezone).toBe("Europe/Chisinau");
     expect(availability.slots).toEqual([]);
     expect(availability.nearest_dates[0]).toEqual({
-      date: "2026-09-02",
+      date: isoDay(wednesday),
       slot_count: expect.any(Number),
     });
     expect(availability.nearest_dates[0].slot_count).toBeGreaterThan(0);
