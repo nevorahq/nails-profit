@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import {
   bookingAccessTokens,
+  bookings,
   bookingVerifications,
   clients,
   notificationOutbox,
@@ -88,7 +89,14 @@ describe("public online booking", () => {
   });
 
   /** Hold and confirm one offered slot, the way the public form does. */
-  async function createBookingAt(slot: Slot) {
+  async function createBookingAt(
+    slot: Slot,
+    contact: { name: string; phone: string; email: string | null } = {
+      name: "Анна",
+      phone: "+373 69 123 456",
+      email: null,
+    },
+  ) {
     const held = dataOf<{ hold_token: string }>(
       await anonymous.post("/api/v1/public/booking/green-nails/holds", {
         location_id: locationId,
@@ -106,9 +114,9 @@ describe("public online booking", () => {
           hold_token: held.hold_token,
           service_id: studio.serviceId,
           add_on_ids: [],
-          name: "Анна",
-          phone: "+373 69 123 456",
-          email: null,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
           locale: "ru",
           legal_accepted: true,
         },
@@ -393,6 +401,49 @@ describe("public online booking", () => {
         ),
       );
     expect(anonymousViews).toEqual([]);
+  });
+
+  test("a returning client is attached to their record, not written over it", async () => {
+    const availability = dataOf<{ slots: Slot[] }>(
+      await anonymous.get(
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(8)}`,
+      ),
+    );
+    expect(availability.slots.length).toBeGreaterThan(1);
+
+    const email = "raisa@studio.example";
+    const first = await createBookingAt(availability.slots[0], {
+      name: "Раиса Ивановна",
+      phone: "+373 68 969 195",
+      email,
+    });
+    // The same address, a different name and a different number. Whoever fills
+    // in the public form does not get to say who the studio's client is: the
+    // request is attached to the record it matched, and the record stands.
+    const second = await createBookingAt(availability.slots[1], {
+      name: "Elena",
+      phone: "+373 68 969 196",
+      email,
+    });
+
+    const [client, ...rest] = await adminDb
+      .select()
+      .from(clients)
+      .where(and(eq(clients.organizationId, studio.organizationId), eq(clients.email, email)));
+    expect(rest).toEqual([]);
+    expect(client.name).toBe("Раиса Ивановна");
+    expect(client.normalizedPhone).toBe("+37368969195");
+
+    // Attached, though — both appointments belong to the one client, which is
+    // what the calendar and the client's own history are read from.
+    const rows = await adminDb
+      .select({ id: bookings.id, clientId: bookings.clientId })
+      .from(bookings)
+      .where(eq(bookings.organizationId, studio.organizationId));
+    const owners = rows
+      .filter((row) => row.id === first.id || row.id === second.id)
+      .map((row) => row.clientId);
+    expect(owners).toEqual([client.id, client.id]);
   });
 
   describe("with contact verification switched on", () => {
