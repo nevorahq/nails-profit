@@ -326,6 +326,7 @@ async function prepare(
     when: facts.appointment
       ? formatAppointmentTime(facts.appointment.startsAt, facts.appointment.timezone, locale)
       : "",
+    specialist: facts.specialist ?? "",
     link: facts.link,
     code: row.payload?.code ?? "",
   });
@@ -353,6 +354,8 @@ type Facts =
       locale: string | null;
       /** Absent for a verification code, which is about a slot, not a booking. */
       appointment: Readonly<{ startsAt: Date; timezone: string }> | null;
+      /** Set where a message names the master; absent where none belongs. */
+      specialist?: string;
       link: string;
     }>
   | Readonly<{ ok: false; code: string }>;
@@ -467,9 +470,13 @@ async function bookingFacts(
       clientLocale: clients.locale,
       clientPhone: clients.normalizedPhone,
       clientEmail: clients.email,
+      specialistName: specialists.name,
     })
     .from(bookings)
     .innerJoin(locations, eq(locations.id, bookings.locationId))
+    // The card's name, read at delivery like every other fact here: a master
+    // renamed between the answer and the send is named as they are now.
+    .innerJoin(specialists, eq(specialists.id, bookings.specialistId))
     .leftJoin(clients, eq(clients.id, bookings.clientId))
     .where(eq(bookings.id, row.bookingId))
     .limit(1);
@@ -509,6 +516,7 @@ async function bookingFacts(
     destination,
     locale: found.clientLocale,
     appointment: { startsAt: found.booking.startsAt, timezone: found.timezone },
+    specialist: found.specialistName,
     link,
   };
 }

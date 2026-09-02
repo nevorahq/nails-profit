@@ -275,6 +275,9 @@ const ru = {
     "{studio}: запрос на {when} отправлен студии. Мы напишем, когда его подтвердят. Управление записью: {link}",
   "notify.confirmed.subject": "{studio}: запись подтверждена",
   "notify.confirmed.body": "{studio}: запись на {when} подтверждена. Перенести или отменить: {link}",
+  "notify.requestAccepted.subject": "{studio}: заявка принята",
+  "notify.requestAccepted.body":
+    "{studio}: ваша заявка принята мастером {specialist}. Визит забронирован на {when}. Перенести или отменить: {link}",
   "notify.rescheduled.subject": "{studio}: запись перенесена",
   "notify.rescheduled.body": "{studio}: новое время записи — {when}. Управление записью: {link}",
   "notify.reminder.subject": "{studio}: напоминание о записи",
@@ -1476,6 +1479,9 @@ const ro: Record<MessageKey, Message> = {
   "notify.confirmed.subject": "{studio}: programare confirmată",
   "notify.confirmed.body":
     "{studio}: programarea pentru {when} este confirmată. Reprogramați sau anulați: {link}",
+  "notify.requestAccepted.subject": "{studio}: cererea a fost acceptată",
+  "notify.requestAccepted.body":
+    "{studio}: cererea dumneavoastră a fost acceptată de {specialist}. Vizita este rezervată pentru {when}. Reprogramați sau anulați: {link}",
   "notify.rescheduled.subject": "{studio}: programare reprogramată",
   "notify.rescheduled.body": "{studio}: noua oră a programării este {when}. Gestionați programarea: {link}",
   "notify.reminder.subject": "{studio}: reamintire despre programare",
@@ -2673,6 +2679,9 @@ const en: Record<MessageKey, Message> = {
     "{studio}: your request for {when} has been sent to the studio. We will write when it is confirmed. Manage the booking: {link}",
   "notify.confirmed.subject": "{studio}: booking confirmed",
   "notify.confirmed.body": "{studio}: your booking for {when} is confirmed. Reschedule or cancel: {link}",
+  "notify.requestAccepted.subject": "{studio}: your request was accepted",
+  "notify.requestAccepted.body":
+    "{studio}: your request was accepted by {specialist}. The visit is booked for {when}. Reschedule or cancel: {link}",
   "notify.rescheduled.subject": "{studio}: booking moved",
   "notify.rescheduled.body": "{studio}: your booking is now {when}. Manage the booking: {link}",
   "notify.reminder.subject": "{studio}: booking reminder",

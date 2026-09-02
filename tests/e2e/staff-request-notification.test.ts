@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
 import { notificationOutbox, organizations } from "@/db/schema";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
+import { formatAppointmentTime } from "@/lib/notification-message";
 import {
   setNotificationProvider,
   type OutgoingMessage,
@@ -107,12 +108,12 @@ function nextRotaDay(): string {
   return day.toISOString().slice(0, 10);
 }
 
-/** A card that is linked to an account and can actually be booked. */
-async function bookableCard(name: string, userId: string) {
+/** A card that can actually be booked, linked to an account when given one. */
+async function bookableCard(name: string, userId?: string) {
   const id = dataOf<{ id: string }>(
     await studio.owner.post("/api/v1/specialists", { name, cooperation_type: "commission" }),
   ).id;
-  await studio.owner.patch(`/api/v1/specialists/${id}`, { user_id: userId });
+  if (userId) await studio.owner.patch(`/api/v1/specialists/${id}`, { user_id: userId });
   await studio.owner.put(`/api/v1/specialists/${id}/locations`, { location_ids: [locationId] });
   await studio.owner.put("/api/v1/availability/rules", {
     specialist_id: id,
@@ -142,7 +143,7 @@ async function requestAppointment(specialistId: string = "any") {
     }),
   );
 
-  return dataOf<{ id: string; status: string }>(
+  const created = dataOf<{ id: string; status: string }>(
     await anonymous.post(
       "/api/v1/public/booking/notify-studio/bookings",
       {
@@ -160,6 +161,8 @@ async function requestAppointment(specialistId: string = "any") {
       { "idempotency-key": `staff-notify-${crypto.randomUUID()}` },
     ),
   );
+
+  return { ...created, startsAt: slot.starts_at };
 }
 
 describe("a request nobody in the studio has seen", () => {
@@ -273,6 +276,42 @@ describe("a request nobody in the studio has seen", () => {
     // Not "does not contain this one": a master with no requests of their own
     // has an empty list, however busy the studio around them is.
     expect(theirBell).toEqual([]);
+  });
+});
+
+describe("a request the studio answers", () => {
+  /**
+   * The other end of the message above. The studio was told somebody was
+   * waiting; when a person takes the request, the client is told who took it
+   * and when they are expected — by every route they left open, because a
+   * client who gave a phone and an address reads whichever reaches them first.
+   */
+  test("tells the client who accepted it and when, by email and by SMS", async () => {
+    const card = await bookableCard("Ирина");
+    const booking = await requestAppointment(card);
+    expect(booking.status).toBe("pending_confirmation");
+
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+    capturingProvider();
+
+    await dispatchDueNotifications({ organizationId: studio.organizationId });
+
+    const accepted = sent.filter((message) => message.body.includes("принята мастером Ирина"));
+    expect([...accepted].map((message) => message.channel).sort()).toEqual(["email", "sms"]);
+    expect([...new Set(accepted.map((message) => message.destination))].sort()).toEqual([
+      "+37369123456",
+      "client@studio.example",
+    ]);
+
+    for (const message of accepted) {
+      // The time as the client reads it: the location's zone, their language.
+      expect(message.body).toContain(
+        formatAppointmentTime(new Date(booking.startsAt), "Europe/Chisinau", "ru"),
+      );
+      // Confirming does not end the client's business with the appointment —
+      // the way to move or call it off has to survive the good news.
+      expect(message.body).toContain("/booking/");
+    }
   });
 });
 

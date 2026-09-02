@@ -49,11 +49,16 @@ export type TransitionOutcome =
 /**
  * What the client is told when the studio changes a booking, section 7.7.
  *
- * The templates the roadmap lists are about the appointment, not about who
- * touched it: "запись подтверждена" is the same message whether the studio
- * pressed confirm or the client's instant booking confirmed itself. Sitting in
- * the transition rather than in each route is what keeps a fourth staff action
- * from quietly shipping without it.
+ * Sitting in the transition rather than in each route is what keeps a fourth
+ * staff action from quietly shipping without it.
+ *
+ * Arriving at `confirmed` here always means one thing. `BOOKING_TRANSITIONS`
+ * reaches `confirmed` from `pending_confirmation` and nowhere else, so a
+ * confirmation that passes through a staff action is by construction the answer
+ * to a request — and the client is told who answered it. The plainer
+ * "запись подтверждена" belongs to the bookings that were never requests: taken
+ * at the desk, or confirmed on arrival by the studio's instant setting, both of
+ * which enqueue their own message where they are created.
  *
  * A no-show and a completion end the appointment without anything left to say
  * to the client — but both make a pending reminder wrong, so it goes.
@@ -68,7 +73,7 @@ async function notifyTransition(
     await notifyBooking(tx, {
       organizationId,
       bookingId: booking.id,
-      template: "booking.confirmed",
+      template: "booking.request_accepted",
       occurrence: String(booking.version),
     });
     await scheduleBookingReminder(tx, {
