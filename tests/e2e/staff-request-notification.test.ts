@@ -10,7 +10,7 @@ import {
 } from "@/lib/notification-provider";
 import { anonymous, dataOf } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
-import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
+import { CANONICAL, createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
 /**
  * Telling the studio that somebody is waiting for an answer.
@@ -111,7 +111,14 @@ function nextRotaDay(): string {
 /** A card that can actually be booked, linked to an account when given one. */
 async function bookableCard(name: string, userId?: string) {
   const id = dataOf<{ id: string }>(
-    await studio.owner.post("/api/v1/specialists", { name, cooperation_type: "commission" }),
+    // With a commission rule, like the studio's own: a card the "any available"
+    // assignment can hand an appointment to is a card whose visit somebody has
+    // to be paid for, and closing one without a rule is refused.
+    await studio.owner.post("/api/v1/specialists", {
+      name,
+      cooperation_type: "commission",
+      default_rule: { type: "percentage", basis_points: CANONICAL.commissionBasisPoints },
+    }),
   ).id;
   if (userId) await studio.owner.patch(`/api/v1/specialists/${id}`, { user_id: userId });
   await studio.owner.put(`/api/v1/specialists/${id}/locations`, { location_ids: [locationId] });

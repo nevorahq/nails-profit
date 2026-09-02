@@ -244,8 +244,14 @@ describe("configuring a bookable studio", () => {
     );
     expect(exceptions.map((entry) => entry.id)).toContain(created.id);
 
+    // Expired ones included, and filtered below by the date this test is about.
+    // The rota for that Wednesday was closed by the test above the moment the
+    // real calendar reached September, and asking only for the rules in force
+    // today would leave this one with no working hours to remove an hour from.
     const rules = dataOf<RuleRow[]>(
-      await studio.owner.get(`/api/v1/availability/rules?specialist_id=${studio.specialistId}`),
+      await studio.owner.get(
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&include_expired=true`,
+      ),
     );
 
     const slots = generateSlots({
