@@ -6,9 +6,16 @@ import { useMemo, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 
+type PricingPlanCopy = {
+  name: string;
+  audience: string;
+  features: readonly string[];
+};
+
 type Copy = {
   navHow: string;
   navFor: string;
+  navPricing: string;
   signIn: string;
   start: string;
   eyebrow: string;
@@ -45,15 +52,60 @@ type Copy = {
   hourNote: string;
   finalTitle: string;
   finalBody: string;
+  pricingEyebrow: string;
+  pricingTitle: string;
+  pricingBody: string;
+  pricingPeriodGroupLabel: string;
+  pricingPeriodLabels: readonly [string, string, string];
+  pricingPerMonth: string;
+  pricingBilledMonthly: string;
+  pricingFor: string;
+  pricingSaveLabel: string;
+  pricingCta: string;
+  pricingTrial: string;
+  pricingFeaturedBadge: string;
+  pricingNote: string;
+  pricingTiers: readonly [PricingPlanCopy, PricingPlanCopy, PricingPlanCopy];
   footer: string;
   privacy: string;
   terms: string;
 };
 
+/**
+ * The subscription the studio pays for the tool, distinct from the MDL visit
+ * economics above it: one price per studio, billed in EUR through Paddle, on
+ * the approved Solo/Studio/Business line with 1/3/6-month prepay. Amounts are
+ * locale-independent — only the labels below are translated.
+ */
+type PricingPeriod = 1 | 3 | 6;
+const pricingPeriods: readonly [PricingPeriod, PricingPeriod, PricingPeriod] = [1, 3, 6];
+
+type PricingTier = {
+  readonly id: "solo" | "studio" | "business";
+  readonly totals: Readonly<Record<PricingPeriod, number>>;
+  readonly featured?: boolean;
+};
+
+const pricingTiers: readonly [PricingTier, PricingTier, PricingTier] = [
+  { id: "solo", totals: { 1: 17, 3: 46, 6: 89 } },
+  { id: "studio", totals: { 1: 29, 3: 76, 6: 149 }, featured: true },
+  { id: "business", totals: { 1: 59, 3: 156, 6: 299 } },
+];
+
+/** Euro, symbol first, whole numbers bare and part-euros to the cent. */
+function formatEuro(amount: number, locale: AppLocale): string {
+  const fractionDigits = Number.isInteger(amount) ? 0 : 2;
+  return `€${amount.toLocaleString(locale === "en" ? "en-GB" : "ru-RU", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 const content: Record<AppLocale, Copy> = {
   ru: {
     navHow: "Как это работает",
     navFor: "Для студии",
+    navPricing: "Тарифы",
     signIn: "Войти",
     start: "Начать расчёт",
     eyebrow: "Финансовая система для nail-бизнеса",
@@ -94,6 +146,53 @@ const content: Record<AppLocale, Copy> = {
     hourNote: "Для примера используется визит длительностью 1 ч 30 мин.",
     finalTitle: "Узнайте, сколько на самом деле приносит каждая услуга.",
     finalBody: "Соберите первый расчёт и получите основу для понятных решений о цене и команде.",
+    pricingEyebrow: "Тарифы",
+    pricingTitle: "Один тариф на студию. Без процента с выручки.",
+    pricingBody:
+      "Оплата за инструмент, а не за каждую транзакцию. Себестоимость и маржа — на всех тарифах; выше только команда, адреса и маркетинг.",
+    pricingPeriodGroupLabel: "Период оплаты",
+    pricingPeriodLabels: ["Помесячно", "3 месяца", "6 месяцев"],
+    pricingPerMonth: "в месяц",
+    pricingBilledMonthly: "Оплата каждый месяц",
+    pricingFor: "за",
+    pricingSaveLabel: "экономия",
+    pricingCta: "Попробовать бесплатно",
+    pricingTrial: "7 дней бесплатно, карта не нужна",
+    pricingFeaturedBadge: "Популярный",
+    pricingNote:
+      "Цены в евро, оплата через Paddle. В «Студии» — +€7 в месяц за каждого мастера сверх трёх; в «Бизнесе» — +€5 за мастера и +€15 за дополнительный адрес.",
+    pricingTiers: [
+      {
+        name: "Соло",
+        audience: "Один мастер, один адрес",
+        features: [
+          "Себестоимость услуги по последней цене материала",
+          "Отчёты: маржа и прибыль в час",
+          "Учёт расходов студии",
+          "История клиентов и визитов",
+        ],
+      },
+      {
+        name: "Студия",
+        audience: "Небольшая команда на одном адресе",
+        features: [
+          "Всё из «Соло»",
+          "До 3 мастеров, дальше — за доплату",
+          "Роли и управление командой",
+          "Правила комиссий по каждому мастеру",
+        ],
+      },
+      {
+        name: "Бизнес",
+        audience: "Несколько адресов и большая команда",
+        features: [
+          "Всё из «Студии»",
+          "До 8 мастеров и 3 адреса",
+          "Маркетинговые кампании",
+          "Экспорт данных",
+        ],
+      },
+    ],
     footer: "Nail Profit OS · финансовая ясность для nail-бизнеса",
     privacy: "Конфиденциальность",
     terms: "Условия",
@@ -101,6 +200,7 @@ const content: Record<AppLocale, Copy> = {
   ro: {
     navHow: "Cum funcționează",
     navFor: "Pentru salon",
+    navPricing: "Prețuri",
     signIn: "Autentificare",
     start: "Începe calculul",
     eyebrow: "Sistem financiar pentru nail business",
@@ -141,6 +241,53 @@ const content: Record<AppLocale, Copy> = {
     hourNote: "Exemplul folosește o vizită de 1 h 30 min.",
     finalTitle: "Aflați ce aduce cu adevărat fiecare serviciu.",
     finalBody: "Faceți primul calcul și luați decizii mai clare despre preț și echipă.",
+    pricingEyebrow: "Prețuri",
+    pricingTitle: "Un abonament pe salon. Fără comision din încasări.",
+    pricingBody:
+      "Plătiți pentru instrument, nu pentru fiecare tranzacție. Costul și marja sunt pe toate planurile; diferă doar echipa, adresele și marketingul.",
+    pricingPeriodGroupLabel: "Perioada de plată",
+    pricingPeriodLabels: ["Lunar", "3 luni", "6 luni"],
+    pricingPerMonth: "pe lună",
+    pricingBilledMonthly: "Plată în fiecare lună",
+    pricingFor: "pentru",
+    pricingSaveLabel: "economie",
+    pricingCta: "Încearcă gratuit",
+    pricingTrial: "7 zile gratuit, fără card",
+    pricingFeaturedBadge: "Popular",
+    pricingNote:
+      "Prețuri în euro, plată prin Paddle. La «Studio» — +€7 pe lună pentru fiecare specialist peste trei; la «Business» — +€5 pe specialist și +€15 pe adresă suplimentară.",
+    pricingTiers: [
+      {
+        name: "Solo",
+        audience: "Un specialist, o adresă",
+        features: [
+          "Costul serviciului după ultimul preț al materialului",
+          "Rapoarte: marjă și profit pe oră",
+          "Evidența cheltuielilor salonului",
+          "Istoricul clienților și al vizitelor",
+        ],
+      },
+      {
+        name: "Studio",
+        audience: "Echipă mică la o singură adresă",
+        features: [
+          "Tot din «Solo»",
+          "Până la 3 specialiști, apoi contra cost",
+          "Roluri și gestionarea echipei",
+          "Reguli de comision pentru fiecare specialist",
+        ],
+      },
+      {
+        name: "Business",
+        audience: "Mai multe adrese și o echipă mare",
+        features: [
+          "Tot din «Studio»",
+          "Până la 8 specialiști și 3 adrese",
+          "Campanii de marketing",
+          "Export de date",
+        ],
+      },
+    ],
     footer: "Nail Profit OS · claritate financiară pentru nail business",
     privacy: "Confidențialitate",
     terms: "Termeni",
@@ -148,6 +295,7 @@ const content: Record<AppLocale, Copy> = {
   en: {
     navHow: "How it works",
     navFor: "For studios",
+    navPricing: "Pricing",
     signIn: "Sign in",
     start: "Start costing",
     eyebrow: "Financial clarity for nail businesses",
@@ -188,6 +336,53 @@ const content: Record<AppLocale, Copy> = {
     hourNote: "This example uses a 1 h 30 min visit.",
     finalTitle: "Find out what every service really brings in.",
     finalBody: "Build your first calculation and make clearer decisions about price and your team.",
+    pricingEyebrow: "Pricing",
+    pricingTitle: "One subscription per studio. No cut of your revenue.",
+    pricingBody:
+      "Pay for the tool, not for every transaction. Costing and margin are on every plan — only team, locations, and marketing change.",
+    pricingPeriodGroupLabel: "Billing period",
+    pricingPeriodLabels: ["Monthly", "3 months", "6 months"],
+    pricingPerMonth: "per month",
+    pricingBilledMonthly: "Billed every month",
+    pricingFor: "for",
+    pricingSaveLabel: "saved",
+    pricingCta: "Start free trial",
+    pricingTrial: "7 days free, no card",
+    pricingFeaturedBadge: "Most popular",
+    pricingNote:
+      "Prices in euro, billed through Paddle. Studio adds €7/month per specialist beyond three; Business adds €5 per specialist and €15 per extra location.",
+    pricingTiers: [
+      {
+        name: "Solo",
+        audience: "One specialist, one location",
+        features: [
+          "Service cost from the latest material price",
+          "Reports: margin and profit per hour",
+          "Studio expense ledger",
+          "Client and visit history",
+        ],
+      },
+      {
+        name: "Studio",
+        audience: "A small team at a single location",
+        features: [
+          "Everything in Solo",
+          "Up to 3 specialists, more for a fee",
+          "Roles and team management",
+          "Commission rules per specialist",
+        ],
+      },
+      {
+        name: "Business",
+        audience: "Several locations and a larger team",
+        features: [
+          "Everything in Studio",
+          "Up to 8 specialists and 3 locations",
+          "Marketing campaigns",
+          "Data export",
+        ],
+      },
+    ],
     footer: "Nail Profit OS · financial clarity for nail businesses",
     privacy: "Privacy",
     terms: "Terms",
@@ -204,6 +399,7 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
   const [price, setPrice] = useState(600);
   const [taxes, setTaxes] = useState(42);
   const [commission, setCommission] = useState(240);
+  const [pricingPeriod, setPricingPeriod] = useState<PricingPeriod>(1);
 
   const demo = mode === "studio" ? { price: 600, taxes: 42, commission: 240 } : { price: 600, taxes: 42, commission: 0 };
   const takeHome = useMemo(() => Math.max(0, price - taxes - commission), [price, taxes, commission]);
@@ -220,6 +416,7 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
         <div className="marketing-nav-links">
           <a href="#how">{copy.navHow}</a>
           <a href="#studio">{copy.navFor}</a>
+          <a href="#pricing">{copy.navPricing}</a>
         </div>
         <div className="marketing-nav-actions">
           <Link className="marketing-login" href="/login">{copy.signIn}</Link>
@@ -240,7 +437,7 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
         </div>
 
         <div className="hero-visual marketing-reveal marketing-reveal-delayed">
-          <Image src="/images/studio-ledger-hero.png" alt="Рабочее место nail-мастера и финансовая книга" width={1536} height={1024} priority />
+          <Image src="/images/studio-ledger-hero.png" alt="Рабочее место nail-мастера и финансовая книга" width={1536} height={1024} loading="eager" />
           <div className="hero-sun" aria-hidden="true" />
           <div className="hero-calculation" aria-label={copy.demoLabel}>
             <div className="calculation-topline"><span>{copy.demoLabel}</span><i /></div>
@@ -310,6 +507,75 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
           </div>
           <small>{copy.hourNote}</small>
         </div>
+      </section>
+
+      <section id="pricing" className="marketing-pricing section-wrap">
+        <div className="pricing-head marketing-reveal">
+          <p className="marketing-kicker"><span />{copy.pricingEyebrow}</p>
+          <h2>{copy.pricingTitle}</h2>
+          <p>{copy.pricingBody}</p>
+          <div className="pricing-period" role="group" aria-label={copy.pricingPeriodGroupLabel}>
+            {pricingPeriods.map((months, index) => (
+              <button
+                key={months}
+                type="button"
+                className={pricingPeriod === months ? "active" : ""}
+                aria-pressed={pricingPeriod === months}
+                onClick={() => setPricingPeriod(months)}
+              >
+                {copy.pricingPeriodLabels[index]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="pricing-grid">
+          {pricingTiers.map((tier, index) => {
+            const plan = copy.pricingTiers[index];
+            const total = tier.totals[pricingPeriod];
+            const perMonth = total / pricingPeriod;
+            const saved = Math.round((1 - total / (tier.totals[1] * pricingPeriod)) * 100);
+            return (
+              <article key={tier.id} className={`pricing-card${tier.featured ? " featured" : ""}`}>
+                {tier.featured && <span className="pricing-badge">{copy.pricingFeaturedBadge}</span>}
+                <div className="pricing-tier">
+                  <h3>{plan.name}</h3>
+                  <p>{plan.audience}</p>
+                </div>
+                <div className="pricing-price">
+                  <strong key={pricingPeriod}>{formatEuro(perMonth, locale)}</strong>
+                  <span>{copy.pricingPerMonth}</span>
+                </div>
+                <p key={pricingPeriod} className="pricing-terms">
+                  {pricingPeriod === 1 ? (
+                    copy.pricingBilledMonthly
+                  ) : (
+                    <>
+                      {formatEuro(total, locale)} {copy.pricingFor}{" "}
+                      {copy.pricingPeriodLabels[pricingPeriod === 3 ? 1 : 2]}
+                      {saved > 0 && (
+                        <b className="pricing-save" aria-label={`${saved}% ${copy.pricingSaveLabel}`}>
+                          −{saved}%
+                        </b>
+                      )}
+                    </>
+                  )}
+                </p>
+                <ul className="pricing-features">
+                  {plan.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+                <Link className="marketing-cta pricing-cta" href="/login?mode=signup">
+                  {copy.pricingCta}<span aria-hidden="true">↗</span>
+                </Link>
+                <small>{copy.pricingTrial}</small>
+              </article>
+            );
+          })}
+        </div>
+
+        <p className="pricing-note">{copy.pricingNote}</p>
       </section>
 
       <section className="marketing-final section-wrap marketing-reveal">
