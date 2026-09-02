@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { notificationOutbox, organizations } from "@/db/schema";
+import { bookings, notificationOutbox, organizations } from "@/db/schema";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import { formatAppointmentTime } from "@/lib/notification-message";
 import {
@@ -328,6 +328,13 @@ describe("after the visit is closed", () => {
     // A request has to be answered before it can be worked, and closing it into
     // a visit is what this message hangs on.
     expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+    // And the appointment has to have happened: a visit cannot be closed
+    // before its own time.
+    const startsAt = new Date(Date.now() - 2 * 60 * 60_000);
+    await adminDb
+      .update(bookings)
+      .set({ startsAt, endsAt: new Date(startsAt.getTime() + 90 * 60_000) })
+      .where(eq(bookings.id, booking.id));
     expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/complete`, {})).status).toBe(201);
 
     capturingProvider();

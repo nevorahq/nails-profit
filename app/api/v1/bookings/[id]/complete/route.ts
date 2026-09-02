@@ -64,6 +64,21 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         return { ok: false as const, failure: "not_found" as const };
       }
 
+      /*
+       * A visit cannot be closed before it happens.
+       *
+       * `completed` is a statement about the past — the client came, the work
+       * was done, and the money is counted from it — and it is terminal, so
+       * there is no way back out of it. Closing an appointment days ahead of
+       * itself therefore books revenue for a visit nobody has had, on a studio
+       * whose calendar still shows the client due; it happened twice in one
+       * afternoon on the pilot. Refusing costs nothing: an appointment that has
+       * begun can be closed at any point, early finishes included.
+       */
+      if (existing.startsAt.getTime() > now.getTime()) {
+        return { ok: false as const, failure: "not_started" as const };
+      }
+
       const lines = await bookingLinesOf(tx, existing.id);
       const service = lines.find((line) => line.kind === "service");
       if (!service?.serviceId) {
@@ -235,6 +250,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         // situation has one code however it was detected.
         case "already_completed":
           return apiError(409, "BOOKING_ALREADY_COMPLETED", "This booking already has a visit", id);
+        case "not_started":
+          return apiError(
+            409,
+            "BOOKING_NOT_STARTED",
+            "This appointment has not started yet",
+            id,
+          );
         default:
           return mutationFailureResponse(outcome, id);
       }
