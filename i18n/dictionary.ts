@@ -799,7 +799,8 @@ const ru = {
   "auth.forgot": "Забыли пароль?",
   "auth.signInFailed": "Не удалось выполнить вход",
   "auth.signInNoMatch": "Аккаунт не найден — нужна регистрация.",
-  "auth.verifyPending": "Адрес почты не подтверждён — без него не восстановить пароль.",
+  "auth.verifyPending":
+    "Адрес почты не подтверждён. Восстановление доступа идёт только на него — убедитесь, что письмо дошло.",
   "auth.verifyResend": "Отправить письмо ещё раз",
   "auth.verifyRetry": "Не отправилось — попробовать снова",
   "auth.verifySent": "Письмо отправлено",
@@ -2002,7 +2003,8 @@ const ro: Record<MessageKey, Message> = {
   "auth.forgot": "Ați uitat parola?",
   "auth.signInFailed": "Autentificarea nu a reușit",
   "auth.signInNoMatch": "Cont inexistent — înregistrați-vă.",
-  "auth.verifyPending": "Adresa nu este confirmată — fără ea parola nu poate fi recuperată.",
+  "auth.verifyPending":
+    "Adresa de e-mail nu este confirmată. Recuperarea accesului merge doar la ea — asigurați-vă că scrisoarea a ajuns.",
   "auth.verifyResend": "Trimite din nou mesajul",
   "auth.verifyRetry": "Nu s-a trimis — încercați din nou",
   "auth.verifySent": "Mesajul a fost trimis",
@@ -3194,7 +3196,8 @@ const en: Record<MessageKey, Message> = {
   "auth.forgot": "Forgot your password?",
   "auth.signInFailed": "Could not sign in",
   "auth.signInNoMatch": "No account found — please register.",
-  "auth.verifyPending": "Your address is unconfirmed — the password cannot be reset without it.",
+  "auth.verifyPending":
+    "This address is unconfirmed. Account recovery goes to it and nowhere else — make sure the letter arrived.",
   "auth.verifyResend": "Send the email again",
   "auth.verifyRetry": "It did not send — try again",
   "auth.verifySent": "Email sent",

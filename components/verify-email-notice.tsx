@@ -14,6 +14,12 @@ import { authClient } from "@/lib/auth-client";
  * account when the password is lost — and that is a future problem, while the
  * studio in front of the owner is a present one. So nothing here refuses to let
  * them work; it says the thing once, in a line, until it is done.
+ *
+ * What it must not say is that recovery needs the confirmation. It does not:
+ * `sendResetPassword` mails whatever address is on file, confirmed or not, and
+ * nothing in the reset path reads `emailVerified` at all. What an unconfirmed
+ * address hides is a typo — and a typo is what turns "I forgot my password"
+ * into a studio shut out of its own books with no way back.
  */
 export function VerifyEmailNotice({ locale, email }: { locale: AppLocale; email: string }) {
   const t = getTranslator(locale);
