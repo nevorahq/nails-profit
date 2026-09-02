@@ -28,8 +28,21 @@ npm run dev
 npm run lint
 npm run typecheck
 npm test
+npm run test:coverage
+npm run test:smoke
+npm run test:playwright
 npm run build
 ```
+
+`test:coverage` измеряет весь `domain/`, а не только случайно импортированные
+файлы, и не пропускает регрессию ниже порогов в `vitest.config.mts`.
+`test:smoke` — быстрый Chromium-прогон критических публичных страниц, auth
+redirect и API health/auth contracts. `test:playwright` запускает полный
+браузерный набор в desktop и mobile Chromium, включая signup → workspace,
+формы восстановления, интерактивный калькулятор и cookie consent. Playwright
+автоматически поднимает Next.js на `:3100`, использует отдельный
+`.next-playwright` и жёстко переключает запись данных на базу с суффиксом
+`_test`; браузер устанавливается командой `npx playwright install chromium`.
 
 Юнит-тесты не требуют ничего кроме Node. Интеграционные работают против настоящего PostgreSQL и запускаются отдельно:
 
@@ -49,7 +62,7 @@ npm run test:e2e
 
 Таблица маршрутов читается из файловой системы, а не выписана руками: рукописная разъезжается с деревом при первом же новом endpoint, и набор молча перестаёт что-то покрывать. Неизвестный путь роняет тест, а не проходит мимо.
 
-`npm run test:all` запускает все три набора.
+`npm run test:all` запускает unit coverage, оба DB-набора и полный Playwright.
 
 `npm run build` читает `.env`, потому что серверные модули валидируют переменные окружения при импорте. Без `.env` сборка падает на этапе сбора данных страницы `/app`.
 

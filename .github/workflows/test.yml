@@ -1,0 +1,94 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+
+  database-and-browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: nail_profit
+          POSTGRES_USER: nail_profit
+          POSTGRES_PASSWORD: nail_profit
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U nail_profit -d nail_profit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://nail_profit_app:nail_profit_app@127.0.0.1:55432/nail_profit
+      MIGRATION_DATABASE_URL: postgres://nail_profit:nail_profit@127.0.0.1:55432/nail_profit
+      TEST_DATABASE_URL: postgres://nail_profit_app:nail_profit_app@127.0.0.1:55432/nail_profit_test
+      TEST_MIGRATION_DATABASE_URL: postgres://nail_profit:nail_profit@127.0.0.1:55432/nail_profit_test
+      BETTER_AUTH_SECRET: playwright-ci-secret-at-least-32-characters
+      BETTER_AUTH_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      PILOT_ACCESS_ENFORCEMENT: "false"
+      PUBLIC_BOOKING_ENABLED: "false"
+      NOTIFICATIONS_ENABLED: "true"
+      NOTIFICATION_PROVIDER: log
+      SMS_PROVIDER: log
+      SUBSCRIPTION_ACCESS_ENFORCEMENT: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create isolated test database and application role
+        env:
+          PGPASSWORD: nail_profit
+        run: |
+          psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit -v ON_ERROR_STOP=1 -c "CREATE ROLE nail_profit_app WITH LOGIN PASSWORD 'nail_profit_app' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
+          psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit -v ON_ERROR_STOP=1 -c "CREATE DATABASE nail_profit_test"
+      - run: npm run db:migrate:test
+      - name: Grant application role access in test database
+        env:
+          PGPASSWORD: nail_profit
+        run: |
+          psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT CONNECT ON DATABASE nail_profit_test TO nail_profit_app"
+          psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nail_profit_app"
+          psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nail_profit_app"
+          psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nail_profit_app"
+      - run: npm run test:integration
+      - run: npm run test:e2e
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:smoke
+      - run: npm run test:playwright
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

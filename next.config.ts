@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Browser tests may run beside a developer's `next dev`. Giving that second
+  // process its own distDir avoids Next's shared .next/dev lock and keeps its
+  // generated artifacts out of the developer server.
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   poweredByHeader: false,
   experimental: {
     typedEnv: true,
