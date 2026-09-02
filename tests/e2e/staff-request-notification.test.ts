@@ -340,10 +340,16 @@ describe("after the visit is closed", () => {
     capturingProvider();
     await dispatchDueNotifications({ organizationId: studio.organizationId });
 
-    const thanks = sent.find((message) => message.body.includes("/book/notify-studio"));
-    expect(thanks?.destination).toBe("client@studio.example");
+    // Every way the client left, not whichever row the dispatcher happened to
+    // claim first: two messages are queued in one transaction, so they share a
+    // due time and the queue orders them by a random id.
+    const thanks = sent.filter((message) => message.body.includes("/book/notify-studio"));
+    expect([...new Set(thanks.map((message) => message.destination))].sort()).toEqual([
+      "+37369123456",
+      "client@studio.example",
+    ]);
     // Not a manage link: the appointment is over, and there is nothing left on
     // it to move or cancel.
-    expect(thanks?.body).not.toContain("/booking/");
+    for (const message of thanks) expect(message.body).not.toContain("/booking/");
   });
 });
