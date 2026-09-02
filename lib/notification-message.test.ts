@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { supportedLocales } from "@/i18n/messages";
 import {
+  asBookingNotificationTemplate,
   bookingNotificationTemplates,
   formatAppointmentTime,
   renderNotification,
@@ -66,6 +67,21 @@ describe("transactional templates", () => {
       if (template === "booking.request_accepted") continue;
       expect(renderNotification({ ...base, template }).body).not.toContain("Ирина");
     }
+  });
+});
+
+describe("a template read off a queued row", () => {
+  it("is recognised when this build has wording for it", () => {
+    for (const template of bookingNotificationTemplates) {
+      expect(asBookingNotificationTemplate(template)).toBe(template);
+    }
+  });
+
+  it("is refused when it was written by a newer deployment", () => {
+    // The name is deliberately plausible: the queue is shared between builds,
+    // and the one draining it is not always the one that filled it.
+    expect(asBookingNotificationTemplate("booking.invoice_issued")).toBeNull();
+    expect(asBookingNotificationTemplate("")).toBeNull();
   });
 });
 

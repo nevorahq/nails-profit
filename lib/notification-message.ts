@@ -46,6 +46,23 @@ export const bookingNotificationTemplates = [
 
 export type BookingNotificationTemplate = (typeof bookingNotificationTemplates)[number];
 
+/**
+ * The template a queued row names, or null when this build has never heard of
+ * it.
+ *
+ * A row is written by whichever deployment took the booking and sent by
+ * whichever one drains the queue, and those are not always the same one: a
+ * message added on a laptop pointed at the production database outlives the
+ * build that wrote it. Reading the column as a `BookingNotificationTemplate`
+ * without asking is what turns that into a client-visible fault — `KEY_PREFIX`
+ * returns `undefined`, and the renderer cheerfully sends "undefined.body".
+ */
+export function asBookingNotificationTemplate(value: string): BookingNotificationTemplate | null {
+  return (bookingNotificationTemplates as readonly string[]).includes(value)
+    ? (value as BookingNotificationTemplate)
+    : null;
+}
+
 const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.verification_code": "notify.verification",
   "booking.pending_confirmation": "notify.pending",

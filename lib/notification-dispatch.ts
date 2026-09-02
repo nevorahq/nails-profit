@@ -20,6 +20,7 @@ import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking-service";
 import { bookingPageUrl, issueManageLink } from "@/lib/booking-manage-link";
 import { logEvent } from "@/lib/logger";
 import {
+  asBookingNotificationTemplate,
   formatAppointmentTime,
   renderNotification,
   staffNotificationTemplates,
@@ -299,7 +300,23 @@ async function prepare(
   row: ClaimedRow,
   now: Date,
 ): Promise<Prepared> {
-  const template = row.template as BookingNotificationTemplate;
+  const template = asBookingNotificationTemplate(row.template);
+  if (!template) {
+    /*
+     * A row from a deployment this one is older than. Rendering it would reach
+     * the client as the literal "undefined.subject", marked `sent`, with
+     * nothing left to find afterwards — the failure would be the client's to
+     * discover. A dead letter keeps it in the queue with its cause on it, and
+     * an operator can send it once the wording is deployed.
+     */
+    logEvent(
+      "error",
+      "notification.template_unknown",
+      { organizationId },
+      { template: row.template, channel: row.channel },
+    );
+    return { ok: false, code: "template_unknown" };
+  }
 
   const [organization] = await tx
     .select({ name: organizations.name, slug: organizations.slug, locale: organizations.locale })

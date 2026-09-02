@@ -319,6 +319,28 @@ describe("notification outbox", () => {
     expect(all.every((row) => row.attempts === MAX_DELIVERY_ATTEMPTS)).toBe(true);
   });
 
+  test("a message this build has no wording for is dead-lettered, not garbled", async () => {
+    const sent = fakeProvider(() => ({ ok: true, providerMessageId: "fake:1" }));
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    // What a row written by a newer deployment looks like to this one.
+    await adminDb
+      .update(notificationOutbox)
+      .set({ template: "booking.invoice_issued" })
+      .where(eq(notificationOutbox.organizationId, organizationId));
+
+    const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    expect(summary).toMatchObject({ sent: 0, retried: 0, deadLettered: 2 });
+    // The point of the guard: the client hears nothing rather than hearing
+    // "undefined.body", and the row keeps its cause for whoever looks.
+    expect(sent).toEqual([]);
+    const all = await rows();
+    expect(all.every((row) => row.status === "dead_letter")).toBe(true);
+    expect(all.every((row) => row.lastErrorCode === "template_unknown")).toBe(true);
+  });
+
   test("a permanent failure is not retried at all", async () => {
     fakeProvider(() => ({ ok: false, code: "invalid_destination", retryable: false }));
     await withTenant(organizationId, (tx) =>
