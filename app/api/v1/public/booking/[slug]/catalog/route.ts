@@ -13,7 +13,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, refused } = publicRequest(request, PUBLIC_BOOKING_READ_RULE, "public_booking.catalog");
+  const { id, refused } = await publicRequest(request, PUBLIC_BOOKING_READ_RULE, "public_booking.catalog");
   if (refused) return refused;
 
   const query = querySchema.safeParse(

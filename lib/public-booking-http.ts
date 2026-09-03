@@ -18,7 +18,7 @@ import { callerKey, checkRateLimit, type RateLimitRule } from "@/lib/rate-limit"
  * unchallenged, because a client comparing times should never be asked to
  * compute anything, and the rate limits already bound what a scraper gets.
  */
-export function publicRequest(
+export async function publicRequest(
   request: Request,
   rule: RateLimitRule,
   bucket: string,
@@ -28,11 +28,14 @@ export function publicRequest(
   const caller = callerKey(request, null);
   const { organizationId = null, challenge = false } = options;
 
-  const decision = checkRateLimit(`${bucket}:${caller}`, rule);
+  // Awaited rather than counted in memory: the counters are shared across
+  // instances now, which is the only way the numbers in `rate-limit.ts` hold on
+  // a deployment that answers requests from more than one lambda.
+  const decision = await checkRateLimit(`${bucket}:${caller}`, rule);
   if (!decision.allowed) {
     // A refusal is the signal, not the punishment: the count is what eventually
     // turns the challenge on for this caller.
-    recordSuspiciousActivity(caller);
+    await recordSuspiciousActivity(caller);
     return {
       id,
       caller,
@@ -40,8 +43,8 @@ export function publicRequest(
     };
   }
 
-  if (challenge && challengeRequired(caller)) {
-    const verdict = verifyChallenge(caller, request.headers.get("x-booking-challenge"));
+  if (challenge && (await challengeRequired(caller))) {
+    const verdict = await verifyChallenge(caller, request.headers.get("x-booking-challenge"));
     if (verdict !== "ok") {
       logEvent("warn", "security.challenge_required", { requestId: id, organizationId }, {
         bucket,
