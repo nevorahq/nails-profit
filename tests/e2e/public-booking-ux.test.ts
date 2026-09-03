@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { organizations } from "@/db/schema";
 import { anonymous, dataOf } from "../helpers/api";
+import { isoDay, weekdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, type Studio } from "../helpers/studio";
 
@@ -61,14 +62,9 @@ describe("public booking UX contract", () => {
      * past has nothing ahead of it to offer, and today runs out of slots by
      * mid-afternoon, which is when this began answering with next week.
      */
-    const wednesday = new Date();
-    wednesday.setUTCHours(12, 0, 0, 0);
-    do {
-      wednesday.setUTCDate(wednesday.getUTCDate() + 1);
-    } while (wednesday.getUTCDay() !== 3);
+    const wednesday = weekdayAhead(3);
     const tuesday = new Date(wednesday);
     tuesday.setUTCDate(tuesday.getUTCDate() - 1);
-    const isoDay = (day: Date) => day.toISOString().slice(0, 10);
 
     const availability = dataOf<{
       timezone: string;

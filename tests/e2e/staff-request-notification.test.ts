@@ -9,6 +9,7 @@ import {
   type OutgoingMessage,
 } from "@/lib/notification-provider";
 import { anonymous, dataOf } from "../helpers/api";
+import { wednesdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { CANONICAL, createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
@@ -92,22 +93,6 @@ function capturingProvider() {
   });
 }
 
-/**
- * The rota is Wednesdays, so a request has to land on one. Computed rather than
- * written down: a fixed date stops being bookable the day after it passes, and
- * this file would then fail for a reason that has nothing to do with what it
- * tests. The next one, never today, so the slots do not depend on the hour the
- * suite happens to run at.
- */
-function nextRotaDay(): string {
-  const day = new Date();
-  day.setUTCHours(12, 0, 0, 0);
-  do {
-    day.setUTCDate(day.getUTCDate() + 1);
-  } while (day.getUTCDay() !== 3);
-  return day.toISOString().slice(0, 10);
-}
-
 /** A card that can actually be booked, linked to an account when given one. */
 async function bookableCard(name: string, userId?: string) {
   const id = dataOf<{ id: string }>(
@@ -134,7 +119,7 @@ async function bookableCard(name: string, userId?: string) {
 async function requestAppointment(specialistId: string = "any") {
   const slots = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
     await anonymous.get(
-      `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${specialistId}&date=${nextRotaDay()}`,
+      `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${specialistId}&date=${wednesdayAhead()}`,
     ),
   );
   const slot = slots.slots[0];

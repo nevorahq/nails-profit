@@ -11,26 +11,9 @@ import {
   pilotProductEvents,
 } from "@/db/schema";
 import { anonymous, dataOf, errorCodeOf } from "../helpers/api";
+import { wednesdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, type Studio } from "../helpers/studio";
-
-/**
- * The nth Wednesday ahead, as a local date.
- *
- * The rota below runs on Wednesdays and every test takes one of its own, so
- * their bookings never compete for a slot. Counted rather than written down: a
- * fixed date stops being bookable the morning after it passes, and the suite
- * then fails for the calendar's reasons instead of the code's.
- */
-function wednesday(nth: number): string {
-  const day = new Date();
-  day.setUTCHours(12, 0, 0, 0);
-  do {
-    day.setUTCDate(day.getUTCDate() + 1);
-  } while (day.getUTCDay() !== 3);
-  day.setUTCDate(day.getUTCDate() + (nth - 1) * 7);
-  return day.toISOString().slice(0, 10);
-}
 
 type Slot = {
   starts_at: string;
@@ -148,7 +131,7 @@ describe("public online booking", () => {
   test("a client finds a slot, holds it and creates an idempotent booking", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(1)}`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(1)}`,
       ),
     );
     expect(availability.slots.length).toBeGreaterThan(0);
@@ -209,7 +192,7 @@ describe("public online booking", () => {
 
     const available = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(2)}`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(2)}`,
       ),
     );
     const destination = available.slots[0];
@@ -265,7 +248,7 @@ describe("public online booking", () => {
   test("a confirmed booking is queued a reminder for the day before", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(3)}`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(3)}`,
       ),
     );
     const slot = availability.slots[0];
@@ -290,7 +273,7 @@ describe("public online booking", () => {
   test("a client may move an appointment within its own hour", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
-        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(4)}`,
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(4)}`,
       ),
     );
     const created = await createBookingAt(availability.slots[0]);
@@ -323,7 +306,7 @@ describe("public online booking", () => {
   test("one visit produces one walk through the funnel", async () => {
     const visit = crypto.randomUUID();
     const session = { "x-booking-session": visit };
-    const date = wednesday(7);
+    const date = wednesdayAhead(7);
 
     async function eventsOfVisit() {
       const rows = await adminDb
@@ -407,7 +390,7 @@ describe("public online booking", () => {
     const free = async () => {
       const availability = dataOf<{ slots: Slot[] }>(
         await anonymous.get(
-          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesday(8)}`,
+          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(8)}`,
         ),
       );
       expect(availability.slots.length).toBeGreaterThan(0);
@@ -508,7 +491,7 @@ describe("public online booking", () => {
     }
 
     test("an unverified contact cannot create a booking", async () => {
-      await holdOne(wednesday(5));
+      await holdOne(wednesdayAhead(5));
       const refused = await createWith({});
 
       expect(refused.status).toBe(403);
@@ -559,7 +542,7 @@ describe("public online booking", () => {
     });
 
     test("a code confirmed for one number does not book another", async () => {
-      await holdOne(wednesday(6));
+      await holdOne(wednesdayAhead(6));
       const requested = await anonymous.post("/api/v1/public/booking/green-nails/verify", {
         action: "request",
         hold_token: holdToken,
@@ -595,7 +578,7 @@ describe("public online booking", () => {
     test("Resend verifies email; the booking itself still reaches every channel the client left", async () => {
       process.env.NOTIFICATION_PROVIDER = "resend";
       try {
-        await holdOne(wednesday(7));
+        await holdOne(wednesdayAhead(7));
         const requested = await anonymous.post("/api/v1/public/booking/green-nails/verify", {
           action: "request",
           hold_token: holdToken,
