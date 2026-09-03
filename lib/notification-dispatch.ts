@@ -27,6 +27,7 @@ import {
   type BookingNotificationTemplate,
 } from "@/lib/notification-message";
 import { notificationProvider, type OutgoingMessage } from "@/lib/notification-provider";
+import { pollSmsMdDeliveryStatuses } from "@/lib/smsmd-delivery-status";
 
 /**
  * The scheduler half of the outbox, roadmap section 7.7.
@@ -139,6 +140,21 @@ export async function sweepDueNotifications(input?: {
     total.sent += summary.sent;
     total.retried += summary.retried;
     total.deadLettered += summary.deadLettered;
+
+    // The SMS provider has no way to tell us what became of a message — see
+    // `lib/smsmd-delivery-status.ts` — so this run asks. Telemetry only: a
+    // failure here must not stop the queue from being drained for the tenants
+    // that come after.
+    try {
+      await pollSmsMdDeliveryStatuses({ organizationId: tenant.id, now });
+    } catch (error) {
+      logEvent(
+        "warn",
+        "notification.status_poll_failed",
+        { organizationId: tenant.id },
+        { reason: error instanceof Error ? error.name : "unknown" },
+      );
+    }
   }
 
   return total;
@@ -355,6 +371,12 @@ async function prepare(
       destination: facts.destination,
       subject: rendered.subject,
       body: rendered.body,
+      // Email only. An SMS is answered by a sender alias registered with the
+      // operators, one for the whole account, and its 11 characters could not
+      // hold a studio's name even if it could be chosen per message.
+      ...(row.channel === "email"
+        ? { html: rendered.html, fromName: organization.name }
+        : {}),
       idempotencyKey: row.idempotencyKey,
       tags: [
         { name: "organization_id", value: organizationId },

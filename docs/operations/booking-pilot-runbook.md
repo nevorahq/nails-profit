@@ -75,7 +75,22 @@ App runtime использует tenant-scoped `DATABASE_URL`; миграции,
 
 Официальные инструкции: [Send Email API](https://resend.com/docs/api-reference/emails/send-email), [Idempotency Keys](https://resend.com/docs/dashboard/emails/idempotency-keys), [Domain verification](https://resend.com/docs/dashboard/domains/introduction), [Webhook verification](https://resend.com/docs/webhooks/verify-webhooks-requests).
 
-Resend — email provider, не SMS. В production public profile объявляет email-канал, форма требует email для записи, verification code доказывает владение email, а outbox не создаёт SMS. Телефон остаётся обязательным клиентским контактом. Не обещать SMS fallback в текстах пилота.
+Resend — email provider, не SMS. В production public profile объявляет email-канал, форма требует email для записи, а verification code доказывает владение email: канал верификации выбирает `getPublicNotificationChannel()` (`env.ts`) по `NOTIFICATION_PROVIDER`, а не по `SMS_PROVIDER`. Уведомления о самой записи при этом уходят по обоим каналам, которые есть у клиента, — SMS через настройку ниже.
+
+## Настройка sms.md
+
+1. Аккаунт на `app.sms.md` (только юрлица РМ, договор, депозит от 500 MDL).
+2. Settings → API: создать токен со скоупами `messages:send` и `messages:read` — второй нужен опросу статусов доставки. Сохранить в secret manager как `SMSMD_API_TOKEN`; при возможности добавить IP-whitelist. Токен бессрочный, ротация — руками.
+3. Settings → Sender names: зарегистрировать имя отправителя у операторов (1–2 рабочих дня) и записать одобренное значение в `SMSMD_SENDER_ID`. Отправка с неодобренным именем отвечает `422`.
+4. `SMS_PROVIDER=smsmd` включает канал. `NOTIFICATION_PROVIDER` (email) при этом не меняется — каналы независимы.
+5. **DLR URL в кабинете не заполнять.** Их колбэк не несёт ничего, по чему можно определить организацию, поэтому статусы забираются опросом `GET /v3/messages/{id}` на том же cron (`lib/smsmd-delivery-status.ts`). Побочная выгода: их колбэк присылает обратно текст сообщения — с одноразовым кодом включительно, — и при опросе он к нам не приходит.
+6. Проверочная отправка на контролируемый номер: сверить `provider_message_id` в `notification_outbox`, переход `provider_status` в `delivered` после следующего прогона cron (до 5 минут) и отсутствие номера и текста в логах.
+7. Баланс: `402 INSUFFICIENT_BALANCE` считается retryable — сообщения ждут пополнения вместо `dead_letter`. Пустой баланс поэтому выглядит как растущая очередь, а не как ошибка; следить отдельно (`GET /v3/account/balance`, скоуп `account:read`).
+8. Зафиксировать владельца аккаунта, дату ротации токена и escalation route sms.md вне репозитория.
+
+Официальная документация: [docs.sms.md](https://docs.sms.md), кабинет — [app.sms.md/settings/api](https://app.sms.md/settings/api).
+
+Телефон остаётся обязательным клиентским контактом. Не обещать SMS fallback в текстах пилота там, где канал ещё не включён.
 
 ## Preflight релиза
 

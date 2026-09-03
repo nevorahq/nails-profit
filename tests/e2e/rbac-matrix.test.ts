@@ -205,14 +205,6 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/webhooks/lemon-squeezy", body: {} }),
   },
   {
-    route: "/api/v1/webhooks/messaggio/[token]",
-    method: "POST",
-    allowed: ALL_ROLES,
-    public: true,
-    note: "Delivery report authenticated by the token in the URL itself, not a user session; 404 without a matching MESSAGGIO_WEBHOOK_TOKEN",
-    request: async () => ({ path: "/api/v1/webhooks/messaggio/placeholder-token", body: {} }),
-  },
-  {
     route: "/api/v1/public/bookings/[token]",
     method: "GET",
     allowed: ALL_ROLES,

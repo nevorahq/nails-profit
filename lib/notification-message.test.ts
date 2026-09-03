@@ -52,6 +52,44 @@ describe("transactional templates", () => {
     }
   });
 
+  it("keeps the link in the plain text, where SMS is the only shape there is", () => {
+    // The catalogue no longer welds the link into the sentence, so this is the
+    // check that putting it back together still reads the way it always did.
+    const confirmed = renderNotification({ ...base, template: "booking.confirmed" });
+    expect(confirmed.body).toBe(
+      `Green Nails: запись на 2 сент. 2026 г., 10:00 подтверждена.\n\nПеренести или отменить: ${base.link}`,
+    );
+  });
+
+  it("gives email a button for the same action, in every language", () => {
+    for (const locale of supportedLocales) {
+      const confirmed = renderNotification({ ...base, locale, template: "booking.confirmed" });
+      expect(confirmed.html).toContain(base.link);
+      // The button's words come from the catalogue, so they are the locale's.
+      const [, label] = /\n\n(.+): https/.exec(confirmed.body) ?? [];
+      expect(label).toBeTruthy();
+      expect(confirmed.html).toContain(label);
+    }
+  });
+
+  it("sends the verification code with nothing to click", () => {
+    const verification = renderNotification({ ...base, template: "booking.verification_code" });
+    expect(verification.body).not.toContain(base.link);
+    expect(verification.html).not.toContain("<a ");
+  });
+
+  it("leaves out the button when the studio has nowhere to send anyone back to", () => {
+    // A completed visit at a studio with no public page: `bookingFacts` hands
+    // the renderer an empty link rather than inventing one.
+    const thanks = renderNotification({
+      ...base,
+      template: "booking.visit_completed",
+      link: "",
+    });
+    expect(thanks.body).toBe("Спасибо, что были у нас 2 сент. 2026 г., 10:00.");
+    expect(thanks.html).not.toContain("<a ");
+  });
+
   it("names the master in the answer to a request, and only there", () => {
     // The client asked and a person said yes; the message says who, when, and
     // in the language the client chose.

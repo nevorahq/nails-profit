@@ -90,46 +90,37 @@ export function getResendConfig() {
  */
 export function getSmsProviderName() {
   const value = (process.env.SMS_PROVIDER ?? "log").trim();
-  if (value === "log" || value === "messaggio") return value;
-  throw new Error("SMS_PROVIDER must be log or messaggio");
+  if (value === "log" || value === "smsmd") return value;
+  throw new Error("SMS_PROVIDER must be log or smsmd");
 }
 
-const messaggioEnvSchema = z.object({
-  // The value of the `Messaggio-Login` header — the whole of this API's
-  // authentication. Its own documentation shows no separate secret.
-  login: z.string().trim().min(1),
-  // Messaggio's own limit on a registered sender name.
-  from: z.string().trim().min(1).max(11),
+const smsMdEnvSchema = z.object({
+  // The whole of this API's authentication: the value of `X-Api-Token`, issued
+  // in Settings → API with a set of scopes. Sending needs `messages:send`;
+  // reading delivery statuses back needs `messages:read` as well.
+  token: z.string().trim().min(1),
+  /**
+   * The registered sender name. Capped at what the API itself accepts rather
+   * than at the 11 characters the operators' own registration is described
+   * with: an alias that the dashboard approved is valid by definition, and a
+   * stricter check here would reject it before the request is ever made.
+   */
+  from: z.string().trim().min(1).max(15),
 });
 
 /**
- * Server-only credentials for the Messaggio SMS adapter (`msg.messaggio.com`,
- * not the older `bulk.sms-online.com` gateway an earlier version of this
- * adapter targeted). `MESSAGGIO_API_KEY` is what the dashboard calls the
- * login it hands out; `MESSAGGIO_LOGIN` is accepted too, matching the
- * documentation's own name for the header — same reasoning as
- * `RESEND_FROM`/`RESEND_FROM_EMAIL` above.
+ * Server-only credentials for the sms.md adapter (`api.sms.md/v3`).
+ *
+ * `SMSMD_SENDER_ID` is the sender name approved for the account; unlike the
+ * token it is not a secret, but a send without it fails with 422, so it is
+ * required here rather than defaulted to something that would look like a
+ * working configuration.
  */
-export function getMessaggioConfig() {
-  return messaggioEnvSchema.parse({
-    login: process.env.MESSAGGIO_LOGIN ?? process.env.MESSAGGIO_API_KEY,
-    from: process.env.MESSAGGIO_SENDER_ID ?? process.env.MESSAGGIO_FROM,
+export function getSmsMdConfig() {
+  return smsMdEnvSchema.parse({
+    token: process.env.SMSMD_API_TOKEN,
+    from: process.env.SMSMD_SENDER_ID ?? process.env.SMSMD_FROM,
   });
-}
-
-/**
- * Unlike Resend, Messaggio's delivery-report callback carries no signature —
- * its API documentation does not describe one. The token below stands in for
- * that: it is the last path segment of the URL registered in the Messaggio
- * account's own Bulk system settings, so a request that does not know it
- * cannot reach this route at all. Unset disables the route (fail closed),
- * same as `getResendWebhookSecret`.
- */
-export function getMessaggioWebhookToken() {
-  const value = process.env.MESSAGGIO_WEBHOOK_TOKEN?.trim();
-  if (!value) return null;
-  if (value.length < 20) throw new Error("MESSAGGIO_WEBHOOK_TOKEN must be at least 20 characters");
-  return value;
 }
 
 /** Unset disables the public Resend webhook route (fail closed). */
