@@ -1,10 +1,10 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, notLike, or } from "drizzle-orm";
 
 import { notificationOutbox, notificationProviderEvents } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { getSmsMdConfig, getSmsProviderName } from "@/env";
 import { logEvent } from "@/lib/logger";
-import { SMSMD_API_BASE } from "@/lib/notification-provider";
+import { LOGGED_MESSAGE_ID_PREFIX, SMSMD_API_BASE } from "@/lib/notification-provider";
 
 /**
  * Delivery statuses for sms.md, the pull counterpart of the webhook Resend
@@ -102,6 +102,16 @@ export async function pollSmsMdDeliveryStatuses(input: {
           eq(notificationOutbox.channel, "sms"),
           eq(notificationOutbox.status, "sent"),
           isNotNull(notificationOutbox.providerMessageId),
+          /*
+           * Only ids sms.md issued. A row sent while the provider was `log`
+           * carries a fake id in that provider's own namespace, and asking
+           * sms.md about one is a 404 against somebody's account — repeated
+           * every run, because a 404 leaves the row open and it is selected
+           * again. That is what happened on the pilot the day the provider was
+           * switched: the queue still held rows from before the switch, and
+           * their ids were polled for as long as the window kept them.
+           */
+          notLike(notificationOutbox.providerMessageId, `${LOGGED_MESSAGE_ID_PREFIX}%`),
           gte(notificationOutbox.sentAt, new Date(now.getTime() - POLL_WINDOW_HOURS * 3_600_000)),
           or(
             isNull(notificationOutbox.providerStatus),
@@ -115,6 +125,7 @@ export async function pollSmsMdDeliveryStatuses(input: {
 
   let checked = 0;
   let updated = 0;
+  let unknownIds = 0;
 
   for (const row of open) {
     const providerMessageId = row.providerMessageId;
@@ -142,6 +153,17 @@ export async function pollSmsMdDeliveryStatuses(input: {
       );
       break;
     }
+    /*
+     * An id the platform does not recognise. Nothing here can make it
+     * recognisable, and no delivery outcome may be invented from it — 404 is
+     * silence, not failure — so it is counted and said out loud instead of
+     * disappearing into the `continue` below. The 24-hour window is what
+     * finally stops it being asked about.
+     */
+    if (response.status === 404) {
+      unknownIds += 1;
+      continue;
+    }
     if (!response.ok) continue;
 
     const body = (await response.json().catch(() => null)) as MessageStatusResponse | null;
@@ -165,7 +187,19 @@ export async function pollSmsMdDeliveryStatuses(input: {
       "info",
       "notification.status_polled",
       { organizationId: input.organizationId },
-      { checked, updated },
+      { checked, updated, unknown_ids: unknownIds },
+    );
+  }
+
+  // Loud, because the only healthy number here is zero: every one of these is a
+  // request the provider had no reason to receive, and a run of them is how an
+  // account gets its token pulled.
+  if (unknownIds > 0) {
+    logEvent(
+      "warn",
+      "notification.status_poll_unknown_ids",
+      { organizationId: input.organizationId },
+      { unknown_ids: unknownIds },
     );
   }
 

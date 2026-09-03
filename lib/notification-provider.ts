@@ -79,7 +79,7 @@ export const logNotificationProvider: NotificationProvider = {
         body_length: message.body.length,
       },
     );
-    return { ok: true, providerMessageId: `log:${message.idempotencyKey}` };
+    return { ok: true, providerMessageId: `${LOGGED_MESSAGE_ID_PREFIX}${message.idempotencyKey}` };
   },
 };
 
@@ -176,6 +176,17 @@ export function createResendNotificationProvider(
 
 /** Shared by the adapter below and the delivery-status poll that reads it back. */
 export const SMSMD_API_BASE = "https://api.sms.md/v3";
+
+/**
+ * The namespace the `log` provider mints its message ids in.
+ *
+ * It is not a provider's id and no provider will recognise it, which is the
+ * whole point — and the reason it has a name rather than being spelled inline.
+ * The delivery poller reads message ids back and asks sms.md about them, so a
+ * fake one that looks real is a stream of 404s against somebody's account: see
+ * `pollSmsMdDeliveryStatuses`, which filters on exactly this prefix.
+ */
+export const LOGGED_MESSAGE_ID_PREFIX = "log:";
 
 /**
  * Error codes this API answers with (`ApiError.code` in its OpenAPI document)
