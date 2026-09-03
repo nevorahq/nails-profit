@@ -7,6 +7,11 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
+import {
+  publicBookingErrorKey,
+  readApiError,
+  retryAfterMinutes,
+} from "@/lib/public-booking-ux";
 
 type Status = "pending_confirmation" | "confirmed" | "cancelled" | "completed" | "no_show";
 type BookingView = {
@@ -47,10 +52,23 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const moveKeys = useRef(new Map<string, string>());
   const t = useMemo(() => getTranslator(booking.locale), [booking.locale]);
   const tag = localeTag(booking.locale);
   const active = booking.status === "confirmed" || booking.status === "pending_confirmation";
+
+  /**
+   * The same reading of a refusal the booking form does. This screen offers
+   * fewer ways to fail and used to translate one of them, so a client whose
+   * appointment had been moved underneath them, or who had asked too often,
+   * was told to "check the details" of a page with no details to check.
+   */
+  function showApiError(response: Response, body: unknown) {
+    const parsed = readApiError(body, response.status);
+    setError(t(publicBookingErrorKey(parsed), { minutes: retryAfterMinutes(parsed) }));
+    setRequestId(parsed.requestId);
+  }
 
   async function refresh() {
     const response = await fetch(`/api/v1/public/bookings/${encodeURIComponent(token)}`);
@@ -63,6 +81,7 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
     if (!booking.service_id) return;
     setPending(true);
     setError(null);
+    setRequestId(null);
     setNotice(null);
     const query = new URLSearchParams({
       location_id: booking.location.id,
@@ -76,7 +95,7 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
     );
     const body = await response.json().catch(() => null);
     setPending(false);
-    if (!response.ok) return setError(t("publicBooking.error"));
+    if (!response.ok) return showApiError(response, body);
     setSlots(body.data.slots);
   }
 
@@ -86,6 +105,7 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
     moveKeys.current.set(selection, idempotencyKey);
     setPending(true);
     setError(null);
+    setRequestId(null);
     const response = await fetch(`/api/v1/public/bookings/${encodeURIComponent(token)}/reschedule`, {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
@@ -98,7 +118,7 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
     const body = await response.json().catch(() => null);
     setPending(false);
     if (!response.ok) {
-      setError(body?.error?.code === "SLOT_UNAVAILABLE" ? t("publicBooking.slotUnavailable") : t("publicBooking.error"));
+      showApiError(response, body);
       return;
     }
     await refresh();
@@ -109,13 +129,15 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
   async function cancel() {
     setPending(true);
     setError(null);
+    setRequestId(null);
     const response = await fetch(`/api/v1/public/bookings/${encodeURIComponent(token)}/cancel`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ version: booking.version }),
     });
+    const body = await response.json().catch(() => null);
     setPending(false);
-    if (!response.ok) return setError(t("publicBooking.error"));
+    if (!response.ok) return showApiError(response, body);
     await refresh();
     setConfirmCancel(false);
     setNotice(t("publicBooking.cancelledMessage"));
@@ -143,7 +165,16 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
         </dl>
 
         {notice && <p className="booking-manage-notice" role="status">{notice}</p>}
-        {error && <p className="form-error" role="alert">{error}</p>}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+            {requestId && (
+              <span className="error-reference">
+                {t("publicBooking.requestId", { id: requestId })}
+              </span>
+            )}
+          </p>
+        )}
 
         {active && booking.service_id && (
           <details className="booking-manage-action">

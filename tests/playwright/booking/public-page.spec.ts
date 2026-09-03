@@ -109,3 +109,73 @@ test.describe("the public booking page", () => {
     expect(response?.status()).toBe(404);
   });
 });
+
+/**
+ * What a client is told when the studio refuses them.
+ *
+ * Split from the walk above because the interesting part is the answer, not the
+ * journey: the form used to translate five of the twenty codes the public API
+ * can refuse with and print "check the details and try again" for the rest, so
+ * "you have tried too often", "this page is stale" and "the server is down" all
+ * arrived as an instruction to re-read a form that was already correct.
+ */
+test.describe("a refused booking", () => {
+  let studio: Studio;
+
+  test.beforeEach(async ({ baseURL, page }, testInfo) => {
+    studio = await seedStudio(baseURL!, testInfo);
+    await useClientAddress(page, baseURL!);
+  });
+
+  test.afterEach(async () => {
+    if (studio) await disposeStudio(studio);
+  });
+
+  test("says which refusal it was and leaves something to look it up by", async ({
+    page,
+    browserErrors,
+  }) => {
+    const walk = async (dayOffset: number, contact: { name: string; phone: string; email: string }) => {
+      await page.goto(`/book/${studio.slug}`);
+      await page.getByLabel("Date").fill(isoDate(daysFromToday(dayOffset)));
+      await page.getByRole("button", { name: "Show available times" }).click();
+      const times = page.locator(".public-booking-slots button");
+      await expect(times.first()).toBeVisible();
+      await times.first().click();
+
+      await page.getByLabel("Name").fill(contact.name);
+      await page.getByLabel("Phone").fill(contact.phone);
+      await page.getByLabel("Email (optional)").fill(contact.email);
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Confirm booking" }).click();
+    };
+
+    // Two clients on the studio's list, then a form carrying one's number and
+    // the other's address. Matching is on either contact, so that form belongs
+    // to two people at once and the API refuses it as `CONTACT_CONFLICT` — a
+    // refusal a person can actually act on, once they are told which it is.
+    await walk(2, { name: "Ana One", phone: "+373 69 555 201", email: "one@example.com" });
+    await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
+
+    await walk(3, { name: "Bea Two", phone: "+373 69 555 202", email: "two@example.com" });
+    await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
+
+    await walk(4, { name: "Ana One", phone: "+373 69 555 201", email: "two@example.com" });
+
+    const banner = page.locator(".form-error");
+    await expect(banner).toContainText("two different clients");
+    // The identifier the API puts on every refusal. Without it on screen, a
+    // studio asked why a client could not book had a screenshot of one sentence
+    // and no way to find the request behind it.
+    await expect(banner.locator(".error-reference")).toContainText("Reference code:");
+
+    /*
+     * The browser logs the refused POST as a failed resource load, which is the
+     * one console error this scenario is supposed to produce. Everything else
+     * still has to be empty, so the fixture's list is checked here and cleared
+     * before its own teardown asserts it.
+     */
+    expect(browserErrors.filter((entry) => !entry.includes("409"))).toEqual([]);
+    browserErrors.length = 0;
+  });
+});
