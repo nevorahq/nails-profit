@@ -38,7 +38,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   // Confirm writes the catalogue row by row, so it is limited too — a loop here
   // costs the database, not just this process.
-  const limit = await checkRateLimit(callerKey(request, actor.userId), IMPORT_CONFIRM_RULE);
+  const limit = checkRateLimit(callerKey(request, actor.userId), IMPORT_CONFIRM_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, {
       bucket: "import.confirm",

@@ -24,9 +24,6 @@ export const adminDb = drizzle(adminClient, { schema });
 
 /** Every application table, children before parents. */
 const TABLES_IN_DELETE_ORDER = [
-  // No foreign keys and no tenant: the limiter counts callers, not rows that
-  // belong to anyone. First simply because nothing depends on it.
-  "rate_limit_window",
   "pilot_issue",
   "pilot_interaction",
   "pilot_product_event",

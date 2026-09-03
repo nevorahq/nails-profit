@@ -47,7 +47,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, caller, refused } = await publicRequest(request, PUBLIC_BOOKING_VERIFY_RULE, "public_booking.verify", {
+  const { id, caller, refused } = publicRequest(request, PUBLIC_BOOKING_VERIFY_RULE, "public_booking.verify", {
     challenge: true,
   });
   if (refused) return refused;
@@ -140,7 +140,7 @@ export async function POST(
   // A wrong code is the cheapest thing for a script to produce and the rarest
   // thing for a client to produce ten times, which is what section 7.9's
   // threshold is about.
-  await recordSuspiciousActivity(caller);
+  recordSuspiciousActivity(caller);
 
   switch (outcome.verification.reason) {
     case "expired":

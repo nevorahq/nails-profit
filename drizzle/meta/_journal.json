@@ -309,13 +309,6 @@
       "when": 1787928105387,
       "tag": "0043_snapshot_allows_author_erasure",
       "breakpoints": true
-    },
-    {
-      "idx": 44,
-      "version": "7",
-      "when": 1788449862309,
-      "tag": "0044_rate_limits_across_instances",
-      "breakpoints": true
     }
   ]
 }

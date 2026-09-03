@@ -45,14 +45,7 @@ try {
       select count(*)::int as requests from booking
        where status = 'pending_confirmation' and confirmation_due_at is not null and confirmation_due_at <= now()
     `;
-    const [{ windows }] = await sql`
-      select count(*)::int as windows from rate_limit_window where window_expires_at <= now() - interval '1 day'
-    `;
-    line("booking.maintenance_preview", {
-      expired_holds: holds,
-      lapsed_requests: requests,
-      stale_rate_limit_windows: windows,
-    });
+    line("booking.maintenance_preview", { expired_holds: holds, lapsed_requests: requests });
   } else {
     const holds = await sql`
       update booking_hold
@@ -118,23 +111,11 @@ try {
       delete from booking_verification where expires_at <= now() - interval '1 day' returning id
     `;
 
-    /*
-     * One row per caller the limiter has ever counted. A live window is left
-     * alone whatever its age — the row is reset in place when it lapses, so
-     * deleting one mid-window would forgive a caller mid-refusal. A day past
-     * its end is well beyond the longest rule and means the caller has simply
-     * gone away.
-     */
-    const windows = await sql`
-      delete from rate_limit_window where window_expires_at <= now() - interval '1 day' returning bucket_key
-    `;
-
     line("booking.maintenance_completed", {
       expired_holds: holds.length,
       lapsed_requests: lapsed.length,
       queued_cancellations: cancellations,
       purged_verifications: verifications.length,
-      purged_rate_limit_windows: windows.length,
     });
   }
 } finally {

@@ -35,8 +35,6 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 
 - `request.error` from `instrumentation.ts`;
 - `rate_limit.exceeded` from API rate limiting;
-- `rate_limit.unavailable`, raised when the counters cannot be reached. The limiter fails open by design — a database the limiter cannot read is one the booking page cannot read either, and refusing everyone would add a second outage to the first — so this line is the only sign that every limit is currently off. Alert on the first occurrence;
-- `bot_challenge.unavailable`, the same failure for the proof-of-work state: suspicion stops being counted and a solved nonce stops being claimable, so the challenge is off and replayable while it lasts;
 - `booking.slot_conflict` and `booking.exclusion_violation` from booking creation and rescheduling;
 - `booking.confirmed`, `booking.cancelled`, `booking.no_show` and `booking.completed` from the lifecycle endpoints, which carry the booking id and nothing about the client;
 - `booking.maintenance_completed` from the hold sweep, which must appear every minute;
