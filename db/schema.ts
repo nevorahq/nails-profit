@@ -2031,6 +2031,38 @@ export const notificationProviderEvents = pgTable(
   ],
 );
 
+/**
+ * Rate limit counters, spec section 15.3, kept where every instance can see them.
+ *
+ * They used to be a `Map` in the process, which the module itself called
+ * "correct for a single-instance pilot". Production is not one instance: on
+ * Netlify each request may be answered by a different lambda, each with its own
+ * empty map, so "ten an hour" meant ten per instance per hour and a caller
+ * refused by one instance was served by the next. A client hit an intermittent
+ * wall and an abuser simply kept knocking until a fresh instance answered.
+ *
+ * No `organization_id`, deliberately: the public limiter runs before the slug
+ * is resolved, and the imports it also protects are keyed by user. That puts
+ * the table outside tenant RLS, which is why the migration revokes the Supabase
+ * API roles by hand — the structural check in `scripts/verify-rls.sql` only
+ * demands a policy of tables that carry a tenant.
+ *
+ * One row per bucket, reused rather than appended: an expired window is reset
+ * in place by the same statement that counts the request, so the table grows
+ * with the number of distinct callers and not with traffic. The operator sweep
+ * in `scripts/booking-maintenance.mjs` drops the ones that stopped calling.
+ */
+export const rateLimitWindows = pgTable(
+  "rate_limit_window",
+  {
+    /** `<bucket>:<caller>` — see `callerKey` in `lib/rate-limit.ts`. */
+    bucketKey: text("bucket_key").primaryKey(),
+    hits: integer("hits").notNull().default(0),
+    windowExpiresAt: timestamp("window_expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("rate_limit_window_expiry_idx").on(table.windowExpiresAt)],
+);
+
 export const organizationRelations = relations(organizations, ({ many }) => ({
   memberships: many(memberships),
   services: many(services),

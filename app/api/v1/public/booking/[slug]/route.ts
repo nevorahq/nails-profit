@@ -16,7 +16,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, refused } = publicRequest(request, PUBLIC_BOOKING_READ_RULE, "public_booking.profile");
+  const { id, refused } = await publicRequest(request, PUBLIC_BOOKING_READ_RULE, "public_booking.profile");
   if (refused) return refused;
 
   const { slug } = await params;

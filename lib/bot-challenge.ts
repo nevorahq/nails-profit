@@ -2,6 +2,8 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { DEFAULT_DIFFICULTY_BITS, isSolved } from "@/domain/proof-of-work";
 import { getServerEnv } from "@/env";
+import { logEvent } from "@/lib/logger";
+import { countInWindow, forgetWindows, peekWindow } from "@/lib/rate-limit";
 
 /**
  * The bot challenge of roadmap section 7.9, and the suspicion that switches it
@@ -17,21 +19,27 @@ import { getServerEnv } from "@/env";
  * to remember every challenge it ever issued; what it does remember is the
  * nonces already spent, because a proof of work that can be replayed is a
  * proof of nothing.
+ *
+ * Both pieces of memory live in the database, in the same counter table the
+ * rate limiter uses. They were two `Map`s in the process, and on a deployment
+ * that answers from several lambdas that made the mechanism a good deal weaker
+ * than it reads: the suspicion count was divided among instances, so a caller
+ * had to be refused ten times *by one lambda* before anything switched on, and
+ * the spent-nonce set was local, so one proof of work could be replayed once
+ * per instance. A counter shared across instances is what makes ten mean ten
+ * and once mean once.
  */
 const SUSPICION_THRESHOLD = 10;
-const SUSPICION_WINDOW_MS = 10 * 60_000;
+const SUSPICION_WINDOW_SECONDS = 10 * 60;
 const CHALLENGE_TTL_MS = 5 * 60_000;
-const SWEEP_THRESHOLD = 10_000;
 
-type Suspicion = { count: number; resetAt: number };
-
-const suspicion = new Map<string, Suspicion>();
-const spent = new Map<string, number>();
-
-function sweep(now: number) {
-  for (const [key, entry] of suspicion) if (entry.resetAt <= now) suspicion.delete(key);
-  for (const [nonce, expiresAt] of spent) if (expiresAt <= now) spent.delete(nonce);
-}
+/**
+ * Two namespaces in one table. Suspicion counts a caller; a nonce counts
+ * itself, and its window is its own remaining life — by the time that row
+ * lapses the nonce is expired anyway and refused before anything reads it.
+ */
+const SUSPICION_KEY = "bot_challenge.suspicion:";
+const NONCE_KEY = "bot_challenge.nonce:";
 
 /**
  * One refusal a legitimate client would rarely see.
@@ -39,22 +47,33 @@ function sweep(now: number) {
  * Counted per caller, not per endpoint: a loop that spreads itself across
  * holds, verification and booking is the shape this is meant to notice.
  */
-export function recordSuspiciousActivity(key: string, now = Date.now()) {
-  const existing = suspicion.get(key);
-  if (!existing || existing.resetAt <= now) {
-    if (suspicion.size >= SWEEP_THRESHOLD) sweep(now);
-    suspicion.set(key, { count: 1, resetAt: now + SUSPICION_WINDOW_MS });
-    return 1;
+export async function recordSuspiciousActivity(key: string): Promise<number> {
+  try {
+    const { hits } = await countInWindow(`${SUSPICION_KEY}${key}`, SUSPICION_WINDOW_SECONDS);
+    return hits;
+  } catch (error) {
+    // Fail open, like the limiter beside it and for the same reason: a database
+    // that cannot record suspicion is one the endpoints behind it cannot use
+    // either, and a challenge nobody can be asked for protects nothing.
+    unavailable("record", error);
+    return 0;
   }
-
-  existing.count += 1;
-  return existing.count;
 }
 
-export function challengeRequired(key: string, now = Date.now()) {
-  const existing = suspicion.get(key);
-  if (!existing || existing.resetAt <= now) return false;
-  return existing.count >= SUSPICION_THRESHOLD;
+export async function challengeRequired(key: string): Promise<boolean> {
+  try {
+    return (await peekWindow(`${SUSPICION_KEY}${key}`)) >= SUSPICION_THRESHOLD;
+  } catch (error) {
+    unavailable("require", error);
+    return false;
+  }
+}
+
+function unavailable(stage: string, error: unknown) {
+  logEvent("error", "bot_challenge.unavailable", {}, {
+    stage,
+    reason: error instanceof Error ? error.message : String(error),
+  });
 }
 
 export type IssuedChallenge = Readonly<{
@@ -85,11 +104,11 @@ export type ChallengeVerdict = "ok" | "missing" | "invalid" | "expired" | "spent
  * pair is meaningless apart and a client that sends half of it has a bug rather
  * than a partial credential.
  */
-export function verifyChallenge(
+export async function verifyChallenge(
   key: string,
   header: string | null,
   now = Date.now(),
-): ChallengeVerdict {
+): Promise<ChallengeVerdict> {
   if (!header) return "missing";
 
   const separator = header.lastIndexOf(":");
@@ -105,14 +124,33 @@ export function verifyChallenge(
 
   const expiresAt = Number(expiry);
   if (!Number.isFinite(expiresAt) || expiresAt <= now) return "expired";
-  // Bound to the caller by the signature and to one attempt by this map: the
-  // work has to be redone for the next request, which is the entire cost.
-  if (spent.has(nonce)) return "spent";
+
+  // The proof is checked before the nonce is claimed, so a wrong answer costs
+  // the caller nothing but the work: only an accepted proof spends its nonce.
   if (!isSolved(nonce, solution, DEFAULT_DIFFICULTY_BITS)) return "unsolved";
 
-  if (spent.size >= SWEEP_THRESHOLD) sweep(now);
-  spent.set(nonce, expiresAt);
-  return "ok";
+  /*
+   * Claiming and checking in one statement, which is what makes "once" true.
+   * The old set was read and then written, so two copies of the same proof
+   * arriving together both passed — and being per process, the same proof
+   * passed again on every other instance besides. Counting the nonce answers
+   * both halves: the claim that returns 1 is the one that got there first.
+   *
+   * The row lives exactly as long as the nonce does. Any later replay is
+   * refused as `expired` above, before this is reached at all.
+   */
+  try {
+    const { hits } = await countInWindow(
+      `${NONCE_KEY}${nonce}`,
+      Math.max(1, Math.ceil((expiresAt - now) / 1_000)),
+    );
+    return hits > 1 ? "spent" : "ok";
+  } catch (error) {
+    // Fail open, as everywhere else here: the mutation this guards is about to
+    // ask the same unreachable database for something far more important.
+    unavailable("claim", error);
+    return "ok";
+  }
 }
 
 function sign(key: string, body: string) {
@@ -128,7 +166,6 @@ function matches(expected: string, supplied: string) {
 }
 
 /** Test seam, like `resetRateLimits`. */
-export function resetBotChallenges() {
-  suspicion.clear();
-  spent.clear();
+export async function resetBotChallenges() {
+  await forgetWindows("bot_challenge.");
 }

@@ -14,13 +14,14 @@ import { configureTestDatabase } from "../test-database-env";
 configureTestDatabase();
 
 /**
- * Rate limit counters are process-global, so without this a test's verdict
+ * Rate limit counters are shared — they live in the database now, so they
+ * outlive the process as well as the test — and without this a test's verdict
  * would depend on how many requests the tests before it happened to make.
  * The limits themselves are exercised deliberately, in one test.
  */
 beforeEach(async () => {
   const { resetRateLimits } = await import("@/lib/rate-limit");
-  resetRateLimits();
+  await resetRateLimits();
 });
 
 vi.mock("next/headers", async () => {
