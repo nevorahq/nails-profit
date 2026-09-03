@@ -176,6 +176,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-card .radio-row { display: flex; align-items: center; gap: 10rem; color: var(--ink); padding: 6rem 0; }
 .auth-card .radio-row input { width: auto; margin: 0; }
 .form-error { color: var(--danger); background: var(--danger-soft); padding: 12rem; border-radius: 10rem; font-size: 14rem; }
+/* The request id under a refusal: readable when it is needed, quiet when it is not. */
+.error-reference { display: block; margin-top: 6rem; font-size: 12rem; opacity: 0.75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .switch-button { display: block; width: 100%; margin-top: 10rem; border: 0; background: transparent; color: var(--accent); font-size: 16rem; text-align: center; cursor: pointer; }
 /* Unconfirmed address: one line above the app, never a gate across it. */
 .verify-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6rem 14rem; padding: 10rem 16rem; background: var(--surface-strong); border-bottom: 1rem solid var(--line); color: var(--muted); font-size: 13rem; text-align: center; }

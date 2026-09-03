@@ -9,7 +9,13 @@ import { localeTag } from "@/i18n/translate";
 import type { AppLocale } from "@/i18n/messages";
 import { formatMoneyMinor } from "@/lib/format";
 import {
+  bookingRequestSignature,
+  publicBookingErrorKey,
+  readApiError,
+  retryAfterMinutes,
+  toContactFieldErrors,
   validatePublicContact,
+  type PublicApiError,
   type PublicContactError,
   type PublicContactField,
 } from "@/lib/public-booking-ux";
@@ -110,20 +116,6 @@ function challengeOf(body: unknown): Challenge | null {
   return error?.code === "CHALLENGE_REQUIRED" && error.details?.nonce ? error.details : null;
 }
 
-function apiErrorMessage(body: unknown, fallback: string, t: ReturnType<typeof getTranslator>) {
-  const code = apiErrorCode(body);
-  if (code === "SLOT_UNAVAILABLE") return t("publicBooking.slotUnavailable");
-  if (code === "HOLD_EXPIRED") return t("publicBooking.holdExpired");
-  if (code === "VERIFICATION_FAILED") return t("publicBooking.verifyFailed");
-  if (code === "VERIFICATION_EXPIRED") return t("publicBooking.verifyExpired");
-  if (code === "VERIFICATION_LOCKED") return t("publicBooking.verifyLocked");
-  return fallback;
-}
-
-function apiErrorCode(body: unknown) {
-  return (body as { error?: { code?: string } })?.error?.code ?? null;
-}
-
 export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const t = useMemo(() => getTranslator(profile.locale), [profile.locale]);
   const [locationId, setLocationId] = useState(profile.locations[0]?.id ?? "");
@@ -151,8 +143,27 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<PublicContactField, string>>>({});
   const [codeError, setCodeError] = useState<string | null>(null);
+  /**
+   * The identifier the API already puts on every refusal, kept so the person
+   * looking at the error can read it out. Without it a studio asking why a
+   * client could not book has a screenshot of one sentence and no way to find
+   * the request behind it.
+   */
+  const [requestId, setRequestId] = useState<string | null>(null);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  /**
+   * One key per distinct request rather than one per held slot.
+   *
+   * The key used to be minted with the hold and reused for every attempt on it,
+   * which is right for a retry and wrong for a correction. The API fingerprints
+   * what was sent, so the moment a client fixed a digit in their number the same
+   * key arrived carrying something else and was refused as reuse — and refused
+   * from then on, because every further edit kept that key. Keyed on the payload
+   * instead, a double tap gets one key and a corrected form gets a new one,
+   * which is what idempotency was asking for. Same shape as `move()` on the
+   * manage screen.
+   */
+  const bookingKeys = useRef(new Map<string, string>());
   /**
    * One anonymous visit, for section 7.10's funnel. Minted here and forgotten
    * when the tab closes: it identifies a sitting at this form, not a person and
@@ -169,13 +180,19 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     fetch(`/api/v1/public/booking/${profile.slug}/catalog?location_id=${locationId}`, {
       headers: { "x-booking-session": sessionKey },
     })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok) throw new Error(body?.error?.message ?? "catalog");
-        return body.data.services as Service[];
-      })
-      .then((next) => {
+      .then(async (response) => ({ response, body: await response.json().catch(() => null) }))
+      .then(({ response, body }) => {
         if (!active) return;
+        if (!response.ok) {
+          // Inlined rather than routed through `showApiError`, which changes on
+          // every render and would have to be a dependency of this effect.
+          const parsed = readApiError(body, response.status);
+          setError(t(publicBookingErrorKey(parsed), { minutes: retryAfterMinutes(parsed) }));
+          setRequestId(parsed.requestId);
+          return;
+        }
+
+        const next = body.data.services as Service[];
         setServices(next);
         setServiceId(next[0]?.id ?? "");
         setAddOnIds([]);
@@ -185,9 +202,11 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         setSearched(false);
         setHeld(null);
       })
-      .catch((reason: unknown) => {
+      .catch(() => {
+        // Only a transport failure reaches here now; a refusal is answered above.
         if (!active) return;
-        setError(reason instanceof TypeError ? t("publicBooking.offline") : t("publicBooking.error"));
+        setError(t("publicBooking.offline"));
+        setRequestId(null);
       })
       .finally(() => active && setPendingAction(null));
     return () => {
@@ -241,7 +260,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   async function loadTimes(nextDate: string) {
     if (!service) return;
     setPendingAction("availability");
-    setError(null);
+    clearError();
     setHeld(null);
     setSearched(false);
     setSlots([]);
@@ -260,7 +279,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        showApiError(response, body);
         return;
       }
       setSlots(body.data.slots);
@@ -286,7 +305,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   async function chooseSlot(slot: Slot) {
     if (!service) return;
     setPendingAction("hold");
-    setError(null);
+    clearError();
     try {
       const response = await postPublic(`/api/v1/public/booking/${profile.slug}/holds`, {
         location_id: locationId,
@@ -297,16 +316,75 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        showApiError(response, body);
         return;
       }
       setHeld({ token: body.data.hold_token, expiresAt: body.data.expires_at, slot: body.data.slot });
-      setIdempotencyKey(crypto.randomUUID());
     } catch {
       setError(t("publicBooking.offline"));
     } finally {
       setPendingAction(null);
     }
+  }
+
+  function clearError() {
+    setError(null);
+    setRequestId(null);
+  }
+
+  /**
+   * A refusal turned into the three things the person at the form needs: what
+   * happened, which field to look at, and what to quote when they ask the studio.
+   *
+   * One place for all of it, because the previous arrangement — each caller
+   * reading `error.code` and translating the handful it recognised — is exactly
+   * how twenty distinct answers came to be shown as "check the details and try
+   * again", including the ones about waiting, about a stale page, and about the
+   * server being down.
+   */
+  function showApiError(response: Response, body: unknown): PublicApiError {
+    const parsed = readApiError(body, response.status);
+
+    setError(t(publicBookingErrorKey(parsed), { minutes: retryAfterMinutes(parsed) }));
+    setRequestId(parsed.requestId);
+    setFieldErrors(
+      Object.fromEntries(
+        Object.entries(toContactFieldErrors(parsed)).map(([field, issue]) => [
+          field,
+          validationMessage(field as PublicContactField, issue as PublicContactError),
+        ]),
+      ),
+    );
+    // The hold is gone whichever step noticed it, and the search form is the
+    // only screen that can get another one.
+    if (parsed.code === "HOLD_EXPIRED") setHeld(null);
+
+    return parsed;
+  }
+
+  /**
+   * The key this exact request travels under; see `bookingKeys`.
+   *
+   * Everything the API fingerprints goes into the map key, so two attempts are
+   * "the same request" here precisely when the server would call them that.
+   */
+  function bookingIdempotencyKey(holdToken: string, serviceId: string, entered: Contact) {
+    const request = bookingRequestSignature({
+      holdToken,
+      serviceId,
+      addOnIds,
+      name: entered.name,
+      phone: entered.phone,
+      email: entered.email,
+      locale: entered.locale,
+    });
+
+    const existing = bookingKeys.current.get(request);
+    if (existing) return existing;
+
+    const key = crypto.randomUUID();
+    bookingKeys.current.set(request, key);
+    return key;
   }
 
   function validationMessage(field: PublicContactField, issue: PublicContactError) {
@@ -329,6 +407,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   async function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!service || !held) return;
+    // A fresh attempt starts with the last one's banner gone: the reference
+    // code beneath it belongs to a request that is no longer being answered.
+    clearError();
     const data = new FormData(event.currentTarget);
     const entered: Contact = {
       name: String(data.get("name") ?? "").trim(),
@@ -366,7 +447,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   async function requestCode(entered: Contact) {
     if (!held) return false;
     setPendingAction("verification");
-    setError(null);
+    clearError();
     try {
       const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
         action: "request",
@@ -377,13 +458,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        const code = apiErrorCode(body);
-        if (code === "HOLD_EXPIRED") setHeld(null);
-        setError(
-          response.status >= 500
-            ? t("publicBooking.providerFailure")
-            : apiErrorMessage(body, t("publicBooking.error"), t),
-        );
+        const parsed = showApiError(response, body);
+        // A code that never left the provider is not something a client can fix
+        // by editing the form, and this says so by name rather than by status.
+        if (parsed.status >= 500) setError(t("publicBooking.providerFailure"));
         return false;
       }
       return true;
@@ -405,7 +483,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     }
     setCodeError(null);
     setPendingAction("verification");
-    setError(null);
+    clearError();
     try {
       const response = await postPublic(`/api/v1/public/booking/${profile.slug}/verify`, {
         action: "confirm",
@@ -414,8 +492,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        if (apiErrorCode(body) === "HOLD_EXPIRED") setHeld(null);
-        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        showApiError(response, body);
         return;
       }
     } catch {
@@ -430,7 +507,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   async function createBooking(entered: Contact) {
     if (!service || !held) return;
     setPendingAction("booking");
-    setError(null);
+    clearError();
     try {
       const response = await postPublic(
         `/api/v1/public/booking/${profile.slug}/bookings`,
@@ -444,12 +521,11 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           locale: entered.locale,
           legal_accepted: entered.legalAccepted,
         },
-        { "idempotency-key": idempotencyKey },
+        { "idempotency-key": bookingIdempotencyKey(held.token, service.id, entered) },
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        if (apiErrorCode(body) === "HOLD_EXPIRED") setHeld(null);
-        setError(apiErrorMessage(body, t("publicBooking.error"), t));
+        showApiError(response, body);
         return;
       }
       setResult({ status: body.data.status, manageUrl: body.data.manage_url });
@@ -493,7 +569,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             <div className="public-booking-grid">
               <label>
                 {t("publicBooking.location")}
-                <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); setError(null); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
+                <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); clearError(); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
                   {profile.locations.map((entry) => (
                     <option key={entry.id} value={entry.id}>{entry.name}</option>
                   ))}
@@ -754,7 +830,16 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             <p className="muted">{t("publicBooking.noSlots")}</p>
           </div>
         )}
-        {error && <p className="form-error" role="alert">{error}</p>}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+            {requestId && (
+              <span className="error-reference">
+                {t("publicBooking.requestId", { id: requestId })}
+              </span>
+            )}
+          </p>
+        )}
       </section>
     </main>
   );
