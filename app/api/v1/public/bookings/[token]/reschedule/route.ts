@@ -31,7 +31,7 @@ async function handlePost(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
-  const { id, refused } = publicRequest(request, PUBLIC_BOOKING_MANAGE_RULE, "public_booking.reschedule");
+  const { id, refused } = await publicRequest(request, PUBLIC_BOOKING_MANAGE_RULE, "public_booking.reschedule");
   if (refused) return refused;
   const idempotencyKey = request.headers.get("idempotency-key")?.trim();
   if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 200) {

@@ -20,7 +20,7 @@ async function handleGet(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, refused } = publicRequest(
+  const { id, refused } = await publicRequest(
     request,
     PUBLIC_BOOKING_AVAILABILITY_RULE,
     "public_booking.availability",
