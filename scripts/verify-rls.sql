@@ -113,6 +113,41 @@ BEGIN
 END
 $app_grants$;
 
+-- 1d. Structural: row-level security without a policy is a table nobody can
+-- use.
+--
+-- The checks above ask whether tenant tables are protected. This one asks the
+-- opposite question, and it exists because nobody was asking it: `rate_limit_window`
+-- carries no `organization_id`, so 1a skipped it, the grants were right so 1c
+-- passed, and the table still refused every write the application made. RLS had
+-- been switched on by the platform — Supabase does that for new tables in
+-- `public` — and a migration that never mentioned RLS created no policy to go
+-- with it. Enabled with no policy means denied to everyone who is not the owner.
+--
+-- Locally the same migration produced a table with RLS off, so the suites were
+-- green against a table configured differently from the one in production. That
+-- is the failure this catches: not a missing policy in the abstract, but a
+-- migration that leaves the answer to the environment.
+DO $rls_without_policy$
+DECLARE
+  offenders text;
+BEGIN
+  SELECT string_agg(c.relname, ', ' ORDER BY c.relname)
+    INTO offenders
+    FROM pg_class c
+   WHERE c.relnamespace = 'public'::regnamespace
+     AND c.relkind = 'r'
+     AND c.relrowsecurity
+     AND NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid);
+
+  IF offenders IS NOT NULL THEN
+    RAISE EXCEPTION
+      'Tables with row-level security and no policy: %. Enabled without a policy denies every role but the owner.',
+      offenders;
+  END IF;
+END
+$rls_without_policy$;
+
 -- 2. Behavioural: rows must not cross organizations.
 INSERT INTO organization (id, name, type)
 VALUES

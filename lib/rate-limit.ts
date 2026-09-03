@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/db";
+import { findPostgresError } from "@/lib/db-errors";
 import { logEvent } from "@/lib/logger";
 
 /**
@@ -162,7 +163,7 @@ export async function checkRateLimit(
      */
     logEvent("error", "rate_limit.unavailable", {}, {
       bucket: key.slice(0, key.indexOf(":")) || key,
-      reason: error instanceof Error ? error.message : String(error),
+      ...describeFailure(error),
     });
     return { allowed: true, remaining: rule.limit, retryAfterSeconds: rule.windowSeconds };
   }
@@ -183,4 +184,22 @@ export function callerKey(request: Request, userId: string | null) {
   if (userId) return `user:${userId}`;
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return `ip:${forwarded || "unknown"}`;
+}
+
+/**
+ * The driver's own words, not drizzle's wrapper.
+ *
+ * Drizzle raises "Failed query: <sql>" and hangs the PostgresError off `cause`,
+ * so a log that reads `error.message` prints the statement it already knows and
+ * nothing about why it was refused. That is exactly what happened the first
+ * time this shipped: the line said the upsert failed and gave no SQLSTATE, and
+ * the diagnosis took a round trip through a human with database access.
+ */
+function describeFailure(error: unknown) {
+  const pg = findPostgresError(error);
+  return {
+    reason: pg?.message ?? (error instanceof Error ? error.message : String(error)),
+    sqlstate: pg?.code ?? null,
+    detail: pg?.detail ?? null,
+  };
 }

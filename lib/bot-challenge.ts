@@ -2,6 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { DEFAULT_DIFFICULTY_BITS, isSolved } from "@/domain/proof-of-work";
 import { getServerEnv } from "@/env";
+import { findPostgresError } from "@/lib/db-errors";
 import { logEvent } from "@/lib/logger";
 import { countInWindow, forgetWindows, peekWindow } from "@/lib/rate-limit";
 
@@ -70,9 +71,13 @@ export async function challengeRequired(key: string): Promise<boolean> {
 }
 
 function unavailable(stage: string, error: unknown) {
+  // The driver's message and SQLSTATE, not drizzle's "Failed query" wrapper —
+  // see `describeFailure` in `rate-limit.ts` for what that cost the first time.
+  const pg = findPostgresError(error);
   logEvent("error", "bot_challenge.unavailable", {}, {
     stage,
-    reason: error instanceof Error ? error.message : String(error),
+    reason: pg?.message ?? (error instanceof Error ? error.message : String(error)),
+    sqlstate: pg?.code ?? null,
   });
 }
 
