@@ -1,4 +1,9 @@
-import { getMessaggioConfig, getNotificationProviderName, getResendConfig, getSmsProviderName } from "@/env";
+import {
+  getNotificationProviderName,
+  getResendConfig,
+  getSmsMdConfig,
+  getSmsProviderName,
+} from "@/env";
 import { logEvent } from "@/lib/logger";
 
 /**
@@ -20,6 +25,20 @@ export type OutgoingMessage = Readonly<{
   destination: string;
   subject: string;
   body: string;
+  /**
+   * The email's HTML alternative, sent beside `body` rather than instead of
+   * it: a client that will not render HTML — or a filter that strips it — is
+   * left with the same message in plain text.
+   */
+  html?: string;
+  /**
+   * Who the message appears to be from, for the reader: the studio's own name,
+   * not the product's. Only the display part of the address — the mailbox and
+   * its domain stay the verified ones, because those are what the signature is
+   * checked against. SMS has no equivalent: its sender is one operator-approved
+   * alias for the whole account.
+   */
+  fromName?: string;
   /** Handed to the provider so its own deduplication sees a retry as a retry. */
   idempotencyKey: string;
   /** Non-PII routing metadata echoed by Resend in signed webhook events. */
@@ -77,6 +96,31 @@ function resendFailureIsRetryable(status: number, body: ResendError | null) {
 }
 
 /**
+ * The `From` header, with the studio's name in front of the configured
+ * address.
+ *
+ * Only the display name changes. The mailbox and its domain are what Resend
+ * verified and what SPF/DKIM sign, so they come from `RESEND_FROM` and are
+ * never built from tenant data — a studio that could choose its own sending
+ * domain could send as anyone.
+ *
+ * The name is quoted rather than trusted: `\r\n` typed into a studio's name
+ * would otherwise end the header and start one of the sender's choosing, and a
+ * bare comma or dot would be read as address syntax. Non-ASCII stays as it is
+ * — Resend encodes the header itself, and encoding it twice is what turns a
+ * Cyrillic studio name into mojibake.
+ */
+function resendFrom(configured: string, fromName?: string): string {
+  if (!fromName) return configured;
+
+  const display = fromName.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/["\\]/g, "").trim().slice(0, 64);
+  if (display === "") return configured;
+
+  const address = /<([^>]+)>/.exec(configured)?.[1]?.trim() ?? configured.trim();
+  return `"${display}" <${address}>`;
+}
+
+/**
  * Resend's REST adapter. Kept behind the existing provider interface so the
  * transactional outbox, retry schedule and dead-letter policy remain the
  * source of truth. Resend receives the same logical idempotency key on every
@@ -103,10 +147,11 @@ export function createResendNotificationProvider(
           "user-agent": "nail-profit-os/0.1",
         },
         body: JSON.stringify({
-          from: config.from,
+          from: resendFrom(config.from, message.fromName),
           to: [message.destination],
           subject: message.subject,
           text: message.body,
+          ...(message.html ? { html: message.html } : {}),
           ...(message.tags ? { tags: message.tags } : {}),
         }),
       });
@@ -129,109 +174,89 @@ export function createResendNotificationProvider(
   };
 }
 
-const MESSAGGIO_ENDPOINT = "https://msg.messaggio.com/api/v1/send";
+/** Shared by the adapter below and the delivery-status poll that reads it back. */
+export const SMSMD_API_BASE = "https://api.sms.md/v3";
 
 /**
- * Messaggio has no tags/metadata field on a message — only the free-text
- * `options.external_id`, which its documentation describes as "used to
- * identify messages by the user in the system and transmitted together with
- * the delivery status." The outbox row's own identity is packed into it here
- * and unpacked by `lib/messaggio-webhook.ts`. Colon-joined rather than JSON:
- * the field is meant for a short reference string.
+ * Error codes this API answers with (`ApiError.code` in its OpenAPI document)
+ * that another attempt could still get past. `INSUFFICIENT_BALANCE` is in the
+ * list on purpose: it is not the request being wrong, it is the account being
+ * empty, and dead-lettering every client's message on the morning a top-up is
+ * late would throw away messages that a retry an hour later delivers. What is
+ * left out is the request itself being unacceptable — a bad token, a missing
+ * scope, a sender name or number the platform rejects — which no number of
+ * attempts changes.
  */
-export function messaggioExternalId(message: OutgoingMessage): string {
-  const organizationId = message.tags?.find((tag) => tag.name === "organization_id")?.value;
-  const notificationId = message.tags?.find((tag) => tag.name === "notification_id")?.value;
-  return organizationId && notificationId
-    ? `${organizationId}:${notificationId}`
-    : message.idempotencyKey;
-}
+const SMSMD_RETRYABLE_CODES = new Set(["INSUFFICIENT_BALANCE", "RATE_LIMIT_EXCEEDED", "INTERNAL_ERROR"]);
 
-/** The inverse of `messaggioExternalId` — null for anything not in that shape. */
-export function parseMessaggioExternalId(
-  value: string,
-): Readonly<{ organizationId: string; notificationId: string }> | null {
-  const [organizationId, notificationId] = value.split(":");
-  return organizationId && notificationId ? { organizationId, notificationId } : null;
-}
-
-/** A code and a title/detail pair — the shape of both a top-level and a per-recipient failure. */
-function messaggioFailureCode(title: string | undefined, fallback: string) {
-  return `messaggio_${(title ?? fallback).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+function smsMdFailureCode(code: string | undefined, status: number) {
+  const name = code ?? `http_${status}`;
+  return `smsmd_${name.toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 80)}`;
 }
 
 /**
- * Messaggio's multichannel API (`msg.messaggio.com`), roadmap section 7.7's
- * second channel: SMS to Moldovan numbers at Moldcell/Orange/Unité rates.
- * JSON over HTTPS like this codebase's other providers, authenticated by a
- * single `Messaggio-Login` header — its documentation shows no separate
- * signing secret, so there is none to compute here.
+ * sms.md's v3 API (`api.sms.md`), the platform this pilot sends its Moldovan
+ * SMS through: JSON over HTTPS, authenticated by a single `X-Api-Token`
+ * header issued in Settings → API.
  *
- * `phone` in the outgoing request is digits only, no leading "+"; `destination`
- * on `OutgoingMessage` carries it in E.164 form (`domain/phone.ts`), so the one
- * translation this adapter owns is stripping that "+".
+ * `to` is handed over exactly as the client record stores it. E.164
+ * (`+37369123456`) is one of the forms the API documents as accepted, so there
+ * is no format to translate here — and a translation is a thing that can be
+ * wrong.
+ *
+ * What this API does not have, and Resend on the email side does, is anywhere
+ * to put an idempotency key: `POST /v3/messages` takes `from`, `to`, `text`
+ * and `sendAt`, nothing else, and it charges the balance the moment it queues
+ * the message. So a request that times out after the platform accepted it and
+ * is then retried sends — and bills — a second SMS. The outbox still prevents
+ * a *logical* send from being recreated, which bounds this to the one case of
+ * a provider call whose answer was lost in flight; there is no field here that
+ * would let the provider recognise the retry, and pretending otherwise by
+ * packing an id into the message text would put it in front of the client.
  */
-export function createMessaggioNotificationProvider(
-  config: Readonly<{ login: string; from: string }>,
+export function createSmsMdNotificationProvider(
+  config: Readonly<{ token: string; from: string }>,
   fetchImpl: typeof fetch = fetch,
 ): NotificationProvider {
   return {
-    name: "messaggio",
+    name: "smsmd",
     async send(message) {
       if (message.channel !== "sms") {
-        return { ok: false, code: "messaggio_unsupported_channel", retryable: false };
+        return { ok: false, code: "smsmd_unsupported_channel", retryable: false };
       }
 
-      const phone = message.destination.replace(/^\+/, "");
-
-      const response = await fetchImpl(MESSAGGIO_ENDPOINT, {
+      const response = await fetchImpl(`${SMSMD_API_BASE}/messages`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "messaggio-login": config.login,
+          "x-api-token": config.token,
         },
         body: JSON.stringify({
-          recipients: [{ phone }],
-          channels: ["sms"],
-          options: { external_id: messaggioExternalId(message) },
-          sms: { from: config.from, content: [{ type: "text", text: message.body }] },
+          from: config.from,
+          to: message.destination,
+          text: message.body,
         }),
       });
 
-      // 400/403/422 are this request being wrong in a way retrying will not
-      // fix; 500 is the one status the documentation itself asks the caller
-      // to repeat.
+      const body = (await response.json().catch(() => null)) as
+        | Readonly<{ code?: string; data?: Readonly<{ id?: unknown }> }>
+        | null;
+
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | Readonly<{ title?: string }>
-          | null;
+        const code = typeof body?.code === "string" ? body.code : undefined;
         return {
           ok: false,
-          code: messaggioFailureCode(body?.title, `http_${response.status}`),
-          retryable: response.status === 500,
+          code: smsMdFailureCode(code, response.status),
+          // A 5xx with no readable body is still the platform failing rather
+          // than the request being wrong.
+          retryable: code ? SMSMD_RETRYABLE_CODES.has(code) : response.status >= 500,
         };
       }
 
-      const body = (await response.json().catch(() => null)) as
-        | Readonly<{
-            messages?: readonly Readonly<{
-              message_id?: string;
-              error?: Readonly<{ title?: string }>;
-            }>[];
-          }>
-        | null;
-      const sent = body?.messages?.[0];
-      if (!sent) return { ok: false, code: "messaggio_invalid_response", retryable: true };
-
-      // A 200 with a per-recipient error is what an invalid phone number looks
-      // like: the request itself was fine, this one recipient was not.
-      if (sent.error) {
-        return { ok: false, code: messaggioFailureCode(sent.error.title, "recipient_error"), retryable: false };
-      }
-
-      return sent.message_id
-        ? { ok: true, providerMessageId: sent.message_id }
-        : { ok: false, code: "messaggio_missing_message_id", retryable: true };
+      const id = body?.data?.id;
+      return typeof id === "string" && id.length > 0
+        ? { ok: true, providerMessageId: id }
+        : { ok: false, code: "smsmd_invalid_response", retryable: true };
     },
   };
 }
@@ -253,8 +278,8 @@ export function notificationProvider(channel: "email" | "sms"): NotificationProv
   if (override) return override;
 
   if (channel === "sms") {
-    return getSmsProviderName() === "messaggio"
-      ? createMessaggioNotificationProvider(getMessaggioConfig())
+    return getSmsProviderName() === "smsmd"
+      ? createSmsMdNotificationProvider(getSmsMdConfig())
       : logNotificationProvider;
   }
 

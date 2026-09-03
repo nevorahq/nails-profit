@@ -235,9 +235,8 @@ async function insertOutbox(
  * than the row sitting in `dead_letter` forever. This used to special-case
  * `NOTIFICATION_PROVIDER === "resend"` into email-only, from when there was no SMS
  * adapter at all and queuing one would have meant exactly that dead-lettering; now that
- * Messaggio is a real, independently-configured channel, the only question is whether
- * the client left a phone number or an email, not which provider happens to answer for
- * the other channel.
+ * SMS has a provider of its own, the only question is whether the client left a phone
+ * number or an email, not which provider happens to answer for the other channel.
  */
 export async function notifyBooking(
   tx: TenantTransaction,

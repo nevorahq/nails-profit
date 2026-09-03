@@ -10,7 +10,6 @@ import {
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
 import { createBooking } from "@/lib/booking-service";
-import { handleVerifiedMessaggioWebhook } from "@/lib/messaggio-webhook";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import {
   setNotificationProvider,
@@ -18,6 +17,7 @@ import {
   type OutgoingMessage,
 } from "@/lib/notification-provider";
 import { handleVerifiedResendWebhook } from "@/lib/resend-webhook";
+import { pollSmsMdDeliveryStatuses } from "@/lib/smsmd-delivery-status";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
   createClient,
@@ -121,6 +121,9 @@ describe("notification outbox", () => {
     setNotificationProvider(null);
     delete process.env.NOTIFICATIONS_ENABLED;
     delete process.env.NOTIFICATION_PROVIDER;
+    delete process.env.SMS_PROVIDER;
+    delete process.env.SMSMD_API_TOKEN;
+    delete process.env.SMSMD_SENDER_ID;
   });
 
   afterAll(async () => {
@@ -229,64 +232,6 @@ describe("notification outbox", () => {
       data: { email_id: "unknown", tags: {} },
     };
     await expect(handleVerifiedResendWebhook(common, "evt-no-tags")).resolves.toBe("unmatched");
-    expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
-  });
-
-  test("Messaggio delivery reports are deduplicated and cannot rewind delivery state", async () => {
-    setNotificationProvider({
-      name: "messaggio-test",
-      async send() {
-        return { ok: true, providerMessageId: "messaggio-msg-1" };
-      },
-    });
-    await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
-    );
-    await dispatchDueNotifications({ organizationId, now: new Date() });
-
-    const [sms] = (await rows()).filter((row) => row.channel === "sms");
-    const report = (status: number) => ({
-      type: "status",
-      message_id: "messaggio-msg-1",
-      external_id: `${organizationId}:${sms.id}`,
-      status,
-    });
-
-    // 100: "message sent to provider" — the closest SMS gets to a good
-    // terminal status in Messaggio's own table (section 3.1).
-    await expect(
-      handleVerifiedMessaggioWebhook(report(100), new Date("2026-09-01T09:02:00.000Z")),
-    ).resolves.toBe("recorded");
-    await expect(
-      handleVerifiedMessaggioWebhook(report(100), new Date("2026-09-01T09:02:00.000Z")),
-    ).resolves.toBe("duplicate");
-    // A different status (so a different provider event id) but chronologically
-    // earlier — recorded for audit, must not replace the newer "sent" summary.
-    // Messaggio's report carries no event time of its own, so this is the only
-    // lever a test has on ordering: the `receivedAt` argument.
-    await expect(
-      handleVerifiedMessaggioWebhook(report(60), new Date("2026-09-01T09:01:00.000Z")),
-    ).resolves.toBe("recorded");
-
-    const [after] = (await rows()).filter((row) => row.channel === "sms");
-    expect(after.providerStatus).toBe("sent");
-    expect(after.providerEventAt?.toISOString()).toBe("2026-09-01T09:02:00.000Z");
-    expect(
-      (await adminDb.select().from(notificationProviderEvents)).filter(
-        (event) => event.notificationId === sms.id,
-      ),
-    ).toHaveLength(2);
-  });
-
-  test("Messaggio reports with no matching transaction id or message are acknowledged but ignored", async () => {
-    await expect(
-      handleVerifiedMessaggioWebhook({
-        type: "status",
-        message_id: "unknown",
-        external_id: "not-a-colon-joined-reference",
-        status: 100,
-      }),
-    ).resolves.toBe("unmatched");
     expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
   });
 
@@ -460,5 +405,125 @@ describe("notification outbox", () => {
 
     expect(channels).toEqual([]);
     expect(await rows()).toHaveLength(0);
+  });
+
+  /**
+   * sms.md's own delivery callback carries nothing that says which tenant a
+   * message belongs to, so statuses are read back instead of awaited. What
+   * that has to get right is everything a webhook would: one event per status,
+   * no rewinding, and a message that has finished being asked about again.
+   */
+  test("sms.md delivery statuses are polled until they reach a terminal one", async () => {
+    process.env.SMS_PROVIDER = "smsmd";
+    process.env.SMSMD_API_TOKEN = "smsmd_test_token";
+    process.env.SMSMD_SENDER_ID = "NailProfit";
+
+    setNotificationProvider({
+      name: "smsmd-test",
+      async send() {
+        return { ok: true, providerMessageId: "smsmd-msg-1" };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    const [sms] = (await rows()).filter((row) => row.channel === "sms");
+    const requested: string[] = [];
+    const answer = (statusId: number, name: string, dateUpdated: string) =>
+      (async (input: RequestInfo | URL) => {
+        requested.push(String(input));
+        return new Response(
+          JSON.stringify({
+            status: "success",
+            httpCode: 200,
+            data: { id: "smsmd-msg-1", status: { id: statusId, name }, dateUpdated },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as unknown as typeof fetch;
+
+    await expect(
+      pollSmsMdDeliveryStatuses({
+        organizationId,
+        fetchImpl: answer(2, "Sent", "2026-09-01T12:02:00+03:00"),
+      }),
+    ).resolves.toEqual({ checked: 1, updated: 1 });
+    expect(requested).toEqual(["https://api.sms.md/v3/messages/smsmd-msg-1"]);
+
+    // The same status again is the normal case for polling, not an anomaly:
+    // the row stays open until it is terminal, so every run re-reads it.
+    await expect(
+      pollSmsMdDeliveryStatuses({
+        organizationId,
+        fetchImpl: answer(2, "Sent", "2026-09-01T12:02:00+03:00"),
+      }),
+    ).resolves.toEqual({ checked: 1, updated: 0 });
+
+    await expect(
+      pollSmsMdDeliveryStatuses({
+        organizationId,
+        fetchImpl: answer(3, "Delivered", "2026-09-01T12:03:00+03:00"),
+      }),
+    ).resolves.toEqual({ checked: 1, updated: 1 });
+
+    const [delivered] = (await rows()).filter((row) => row.channel === "sms");
+    expect(delivered.providerStatus).toBe("delivered");
+    // Their own timestamp, not ours: the status changed when the carrier said so.
+    expect(delivered.providerEventAt?.toISOString()).toBe("2026-09-01T09:03:00.000Z");
+    expect(
+      (await adminDb.select().from(notificationProviderEvents)).filter(
+        (event) => event.notificationId === sms.id,
+      ),
+    ).toHaveLength(2);
+
+    // Delivered is the end of it — nothing is asked about a second time.
+    await expect(
+      pollSmsMdDeliveryStatuses({
+        organizationId,
+        fetchImpl: answer(3, "Delivered", "2026-09-01T12:04:00+03:00"),
+      }),
+    ).resolves.toEqual({ checked: 0, updated: 0 });
+  });
+
+  test("an sms.md status the platform itself could not resolve is left unrecorded", async () => {
+    process.env.SMS_PROVIDER = "smsmd";
+    process.env.SMSMD_API_TOKEN = "smsmd_test_token";
+    process.env.SMSMD_SENDER_ID = "NailProfit";
+
+    setNotificationProvider({
+      name: "smsmd-test",
+      async send() {
+        return { ok: true, providerMessageId: "smsmd-msg-2" };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    // 8 "Unknown" means the platform never learned what happened. Writing
+    // `failed` would report a failure nobody observed.
+    const summary = await pollSmsMdDeliveryStatuses({
+      organizationId,
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            status: "success",
+            httpCode: 200,
+            data: { id: "smsmd-msg-2", status: { id: 8, name: "Unknown" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )) as unknown as typeof fetch,
+    });
+
+    expect(summary).toEqual({ checked: 1, updated: 0 });
+    const [sms] = (await rows()).filter((row) => row.channel === "sms");
+    // Exactly as the send left it: `accepted` is this deployment's own record
+    // that the platform took the message, and nothing since has contradicted it.
+    expect(sms.providerStatus).toBe("accepted");
+    expect(sms.providerEventAt).toBeNull();
+    expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
   });
 });

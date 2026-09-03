@@ -1,6 +1,7 @@
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
+import { renderNotificationHtml } from "@/lib/notification-email";
 
 /**
  * The transactional templates of roadmap section 7.7, and the text each one
@@ -8,9 +9,10 @@ import { localeTag } from "@/i18n/translate";
  *
  * Rendering lives apart from the queue and the provider so that the wording —
  * the part a studio owner reads and a client receives — can be tested with
- * nothing running. It is also the only place that knows a message has both a
- * subject and a body: SMS uses the body alone, email needs both, and the
- * difference belongs here rather than in the sending code.
+ * nothing running. It is also the only place that knows what shapes a message
+ * comes in: SMS sends the plain body alone, email carries a subject and an
+ * HTML alternative beside it, and that difference belongs here rather than in
+ * the sending code.
  */
 export const bookingNotificationTemplates = [
   "booking.verification_code",
@@ -96,8 +98,38 @@ export type NotificationFacts = Readonly<{
   code: string;
 }>;
 
-export type RenderedNotification = Readonly<{ subject: string; body: string }>;
+/**
+ * Templates that end in something the reader does somewhere else, and so have
+ * a button in the email and a link in the SMS. The verification code is the
+ * one that does not: the code is the whole message, and there is nowhere to
+ * send anybody.
+ */
+const CTA_TEMPLATES: readonly BookingNotificationTemplate[] = bookingNotificationTemplates.filter(
+  (template) => template !== "booking.verification_code",
+);
 
+export type RenderedNotification = Readonly<{
+  subject: string;
+  /** Plain text: the whole message for SMS, the fallback part of an email. */
+  body: string;
+  /** The email's HTML alternative. SMS never sends it. */
+  html: string;
+}>;
+
+/**
+ * One set of words, two shapes.
+ *
+ * The catalogue holds the sentence and the button's label separately, so the
+ * link is not welded into the middle of a sentence — that is what makes a
+ * button possible at all. Plain text puts them back together the way it always
+ * read (`…подтверждена.` then `Перенести или отменить: <link>`), which is what
+ * an SMS still gets; the HTML version turns the same two strings into a
+ * paragraph and a button.
+ *
+ * A message whose link came out empty — a studio with no public page, so
+ * nowhere to send the client back to — renders as the sentence alone rather
+ * than as a button pointing at nothing.
+ */
 export function renderNotification(facts: NotificationFacts): RenderedNotification {
   const t = getTranslator(facts.locale);
   const prefix = KEY_PREFIX[facts.template];
@@ -109,9 +141,20 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
     code: facts.code,
   };
 
+  const lead = t(`${prefix}.body` as MessageKey, params);
+  const action =
+    CTA_TEMPLATES.includes(facts.template) && facts.link !== ""
+      ? {
+          label: t(`${prefix}.cta` as MessageKey, params),
+          url: facts.link,
+          fallbackLabel: t("notify.linkFallback"),
+        }
+      : null;
+
   return {
     subject: t(`${prefix}.subject` as MessageKey, params),
-    body: t(`${prefix}.body` as MessageKey, params),
+    body: action ? `${lead}\n\n${action.label}: ${action.url}` : lead,
+    html: renderNotificationHtml({ locale: facts.locale, body: lead, action }),
   };
 }
 
