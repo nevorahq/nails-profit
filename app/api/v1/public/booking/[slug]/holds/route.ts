@@ -27,7 +27,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, caller, refused } = await publicRequest(request, PUBLIC_BOOKING_HOLD_RULE, "public_booking.hold", {
+  const { id, caller, refused } = publicRequest(request, PUBLIC_BOOKING_HOLD_RULE, "public_booking.hold", {
     challenge: true,
   });
   if (refused) return refused;
@@ -63,7 +63,7 @@ export async function POST(
   if (!availability || !offered) {
     // Asking to hold a time that was never offered is what a script does and
     // what a form cannot.
-    await recordSuspiciousActivity(caller);
+    recordSuspiciousActivity(caller);
     return apiError(409, "SLOT_UNAVAILABLE", "This slot is no longer free", id, {
       details: { alternatives: availability?.slots.slice(0, 6) ?? [] },
     });

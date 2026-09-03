@@ -16,7 +16,7 @@ async function handlePost(
   request: Request,
   { params }: { params: Promise<{ token: string }> },
 ) {
-  const { id, refused } = await publicRequest(request, PUBLIC_BOOKING_MANAGE_RULE, "public_booking.cancel");
+  const { id, refused } = publicRequest(request, PUBLIC_BOOKING_MANAGE_RULE, "public_booking.cancel");
   if (refused) return refused;
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);

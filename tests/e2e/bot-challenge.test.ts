@@ -59,7 +59,7 @@ describe("bot challenge", () => {
   beforeAll(async () => {
     process.env.PUBLIC_BOOKING_ENABLED = "true";
     await resetDatabase();
-    await resetBotChallenges();
+    resetBotChallenges();
     studio = await createCanonicalStudio("challenge-owner@studio.example", "Challenge Studio");
     await studio.owner.patch("/api/v1/organizations/settings", { slug: "challenge-studio" });
 
@@ -93,7 +93,7 @@ describe("bot challenge", () => {
   afterAll(async () => {
     if (previousFlag === undefined) delete process.env.PUBLIC_BOOKING_ENABLED;
     else process.env.PUBLIC_BOOKING_ENABLED = previousFlag;
-    await resetBotChallenges();
+    resetBotChallenges();
     await closeTestConnections();
   });
 

@@ -120,7 +120,7 @@ async function handlePost(
   request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const { id, caller, refused } = await publicRequest(
+  const { id, caller, refused } = publicRequest(
     request,
     PUBLIC_BOOKING_CREATE_RULE,
     "public_booking.create",
@@ -338,7 +338,7 @@ async function handlePost(
     if ("failure" in outcome) {
       // A hold that expired, a slot that went, a contact never verified: one of
       // these is an unlucky client, ten in ten minutes is a loop.
-      await recordSuspiciousActivity(caller);
+      recordSuspiciousActivity(caller);
       switch (outcome.failure) {
         case "IDEMPOTENCY_CONFLICT":
           return apiError(409, "IDEMPOTENCY_KEY_REUSED", "This key belongs to another request", id);

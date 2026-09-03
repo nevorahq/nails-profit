@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   // Section 15.3 counts invitation links among the public ones to protect. The
   // token is 256 bits, so this is not about guessing odds — it is about making
   // an attempt cost something.
-  const limit = await checkRateLimit(callerKey(request, session.user.id), INVITATION_ACCEPT_RULE);
+  const limit = checkRateLimit(callerKey(request, session.user.id), INVITATION_ACCEPT_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, { bucket: "invitation.accept", userId: session.user.id });
   }
