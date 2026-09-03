@@ -13,6 +13,7 @@ import { createBooking } from "@/lib/booking-service";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import {
   setNotificationProvider,
+  LOGGED_MESSAGE_ID_PREFIX,
   type DeliveryResult,
   type OutgoingMessage,
 } from "@/lib/notification-provider";
@@ -525,5 +526,52 @@ describe("notification outbox", () => {
     expect(sms.providerStatus).toBe("accepted");
     expect(sms.providerEventAt).toBeNull();
     expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
+  });
+
+  /**
+   * The pilot's own incident, the day the SMS provider was switched.
+   *
+   * The queue still held rows sent by the `log` provider, whose message ids are
+   * its own invention. The poller asked sms.md about them, sms.md answered 404
+   * — correctly, they were never its messages — and because a 404 leaves the
+   * row open, the same ids were asked about on every run for as long as the
+   * window held them. The account owner watched a stream of 404s from an
+   * application that had no business calling at all, and the token came close
+   * to being revoked over it.
+   */
+  test("a message the log provider sent is never asked about at sms.md", async () => {
+    process.env.SMS_PROVIDER = "smsmd";
+    process.env.SMSMD_API_TOKEN = "smsmd_test_token";
+    process.env.SMSMD_SENDER_ID = "NailProfit";
+
+    // Sent while the provider was `log`, exactly as the rows left over from
+    // before a switch were.
+    setNotificationProvider({
+      name: "log-test",
+      async send(message) {
+        return { ok: true, providerMessageId: `${LOGGED_MESSAGE_ID_PREFIX}${message.idempotencyKey}` };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+    );
+    await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    const [sms] = (await rows()).filter((row) => row.channel === "sms");
+    expect(sms.providerMessageId?.startsWith(LOGGED_MESSAGE_ID_PREFIX)).toBe(true);
+
+    const requested: string[] = [];
+    const summary = await pollSmsMdDeliveryStatuses({
+      organizationId,
+      fetchImpl: (async (input: RequestInfo | URL) => {
+        requested.push(String(input));
+        return new Response("not found", { status: 404 });
+      }) as unknown as typeof fetch,
+    });
+
+    // Not "asked and got a 404" — never asked. Somebody else's API is not the
+    // place to find out that an id was ours all along.
+    expect(requested).toEqual([]);
+    expect(summary).toEqual({ checked: 0, updated: 0 });
   });
 });
