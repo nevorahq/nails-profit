@@ -316,6 +316,32 @@ export function atTime(date: Date, time: string): Date {
  * Returns a `pending_confirmation` booking whenever the location confirms
  * manually, which is what puts a row in the studio's bell.
  */
+/**
+ * Moves an appointment to an hour ago, over the studio's own endpoint.
+ *
+ * A visit cannot be closed before its appointment has started — the product
+ * refuses it, because closing one days ahead books revenue for work nobody has
+ * had — and a browser test cannot wait until tomorrow to click the button. So
+ * the studio does what a studio can do on any day it works: it moves the
+ * appointment to a time that has passed. Nothing is written behind the
+ * product's back here either.
+ *
+ * Returns the new start, because the day it now sits on is the day the calendar
+ * shows it on.
+ */
+export async function moveIntoThePast(studio: Studio, bookingId: string): Promise<Date> {
+  // A move carries the version it is moving from: nothing else would stop this
+  // from overwriting a time somebody had just agreed with the client.
+  const current = await studio.owner.get<{ version: number }>(`/api/v1/bookings/${bookingId}`);
+  const startsAt = new Date(Date.now() - 60 * 60_000);
+  startsAt.setUTCSeconds(0, 0);
+  await studio.owner.post(`/api/v1/bookings/${bookingId}/reschedule`, {
+    starts_at: startsAt.toISOString(),
+    version: current.version,
+  });
+  return startsAt;
+}
+
 export async function requestAppointmentAsClient(
   baseURL: string,
   studio: Studio,

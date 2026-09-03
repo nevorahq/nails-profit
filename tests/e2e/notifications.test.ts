@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { financialSnapshots, notificationOutbox, visits } from "@/db/schema";
+import { bookings, financialSnapshots, notificationOutbox, visits } from "@/db/schema";
 import { setNotificationProvider, type OutgoingMessage } from "@/lib/notification-provider";
 import { anonymous, dataOf, errorCodeOf, type Actor } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -54,6 +54,29 @@ describe("transactional notifications", () => {
         { "idempotency-key": `notify-${crypto.randomUUID()}` },
       ),
     );
+  }
+
+  /**
+   * Time passes.
+   *
+   * A visit cannot be closed before its appointment has started, so a test that
+   * closes one moves it into the past first — which is all the calendar does on
+   * its own between the booking and the visit. The duration is preserved: it is
+   * the clock that moves, not the appointment.
+   */
+  async function alreadyHappened(bookingId: string) {
+    const [row] = await adminDb
+      .select({ startsAt: bookings.startsAt, endsAt: bookings.endsAt })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId));
+    const shift = row.startsAt.getTime() - (Date.now() - 2 * 60 * 60_000);
+    await adminDb
+      .update(bookings)
+      .set({
+        startsAt: new Date(row.startsAt.getTime() - shift),
+        endsAt: new Date(row.endsAt.getTime() - shift),
+      })
+      .where(eq(bookings.id, bookingId));
   }
 
   async function templatesFor(bookingId: string) {
@@ -135,6 +158,7 @@ describe("transactional notifications", () => {
 
   test("a completed appointment stops being reminded about, and is thanked for", async () => {
     const created = await book();
+    await alreadyHappened(created.id);
     const completed = await owner.post(`/api/v1/bookings/${created.id}/complete`, {
       version: created.version,
     });
@@ -159,6 +183,7 @@ describe("transactional notifications", () => {
 
   test("a retried booking completion replays one visit and one snapshot", async () => {
     const created = await book();
+    await alreadyHappened(created.id);
     const payload = { version: created.version };
     const headers = { "idempotency-key": `complete-${created.id}` };
 

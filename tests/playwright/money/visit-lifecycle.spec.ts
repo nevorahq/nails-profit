@@ -4,6 +4,7 @@ import {
   daysFromToday,
   isoDate,
   disposeStudio,
+  moveIntoThePast,
   requestAppointmentAsClient,
   seedStudio,
   type Studio,
@@ -70,6 +71,11 @@ test.describe("from a client's request to the month's profit", () => {
     const booking = await requestAppointmentAsClient(baseURL!, studio, { date: daysFromToday(1) });
     expect(booking.status).toBe("pending_confirmation");
 
+    // The client asked for tomorrow, as clients do. The studio then moves it to
+    // an hour ago, because the rest of this test is about closing the work, and
+    // a visit cannot be closed before its appointment has started.
+    const startedAt = await moveIntoThePast(studio, booking.id);
+
     const context = await browser.newContext({ storageState: await studio.owner.storageState() });
     const page = await context.newPage();
 
@@ -100,7 +106,7 @@ test.describe("from a client's request to the month's profit", () => {
     await expect(entry).toHaveCount(0);
     await expect(page.locator("details.calendar-filters")).toBeVisible();
 
-    await page.goto(`/app/calendar?view=day&date=${isoDate(daysFromToday(1))}`);
+    await page.goto(`/app/calendar?view=day&date=${isoDate(startedAt)}`);
     await expect(page.locator(".calendar-entry")).toContainText("Completed");
 
     await page.goto("/app/visits");

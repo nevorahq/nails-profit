@@ -1,7 +1,10 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
+import { bookings } from "@/db/schema";
+
 import { dataOf, errorCodeOf, type Actor, type ApiResponse } from "../helpers/api";
-import { closeTestConnections, resetDatabase } from "../helpers/database";
+import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { CANONICAL, createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
 /**
@@ -57,6 +60,30 @@ describe("booking lifecycle", () => {
     start.setUTCDate(start.getUTCDate() + 7 * Math.floor(index / 6));
     start.setUTCHours(6 + 2 * (index % 6));
     return start.toISOString();
+  }
+
+
+  /**
+   * Time passes.
+   *
+   * A visit cannot be closed before its appointment has started, so a test that
+   * closes one moves it into the past first — which is all the calendar does on
+   * its own between the booking and the visit. The duration is preserved: it is
+   * the clock that moves, not the appointment.
+   */
+  async function alreadyHappened(bookingId: string) {
+    const [row] = await adminDb
+      .select({ startsAt: bookings.startsAt, endsAt: bookings.endsAt })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId));
+    const shift = row.startsAt.getTime() - (Date.now() - 2 * 60 * 60_000);
+    await adminDb
+      .update(bookings)
+      .set({
+        startsAt: new Date(row.startsAt.getTime() - shift),
+        endsAt: new Date(row.endsAt.getTime() - shift),
+      })
+      .where(eq(bookings.id, bookingId));
   }
 
   async function book(
@@ -299,6 +326,7 @@ describe("booking lifecycle", () => {
 
   test("closing an appointment produces the same snapshot as recording the visit by hand", async () => {
     const created = await book();
+    await alreadyHappened(created.id);
     const completed = dataOf<{
       status: string;
       visit: {
@@ -342,8 +370,27 @@ describe("booking lifecycle", () => {
     expect(visible.map((visit) => visit.id)).toContain(completed.visit.id);
   });
 
+  test("an appointment cannot be closed before it has started", async () => {
+    const created = await book();
+
+    // Terminal, and it books revenue: a visit closed days ahead of itself is
+    // money counted for something nobody has had, on a calendar still showing
+    // the client as due.
+    const early = await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {});
+    expect(early.status).toBe(409);
+    expect(errorCodeOf(early)).toBe("BOOKING_NOT_STARTED");
+
+    // From its own time it closes as it always did — the rule is about the
+    // clock, not about the appointment.
+    await alreadyHappened(created.id);
+    expect((await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {})).status).toBe(
+      201,
+    );
+  });
+
   test("the visit an appointment became cannot be deleted", async () => {
     const created = await book();
+    await alreadyHappened(created.id);
     const closed = dataOf<{ visit: { id: string } }>(
       await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {}),
     );
@@ -359,6 +406,7 @@ describe("booking lifecycle", () => {
 
   test("an appointment cannot be closed twice", async () => {
     const created = await book();
+    await alreadyHappened(created.id);
     await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {});
 
     // Double revenue in every report is what this prevents; the partial unique

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { notificationOutbox, organizations } from "@/db/schema";
+import { bookings, notificationOutbox, organizations } from "@/db/schema";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import { formatAppointmentTime } from "@/lib/notification-message";
 import {
@@ -328,15 +328,28 @@ describe("after the visit is closed", () => {
     // A request has to be answered before it can be worked, and closing it into
     // a visit is what this message hangs on.
     expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+    // And the appointment has to have happened: a visit cannot be closed
+    // before its own time.
+    const startsAt = new Date(Date.now() - 2 * 60 * 60_000);
+    await adminDb
+      .update(bookings)
+      .set({ startsAt, endsAt: new Date(startsAt.getTime() + 90 * 60_000) })
+      .where(eq(bookings.id, booking.id));
     expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/complete`, {})).status).toBe(201);
 
     capturingProvider();
     await dispatchDueNotifications({ organizationId: studio.organizationId });
 
-    const thanks = sent.find((message) => message.body.includes("/book/notify-studio"));
-    expect(thanks?.destination).toBe("client@studio.example");
+    // Every way the client left, not whichever row the dispatcher happened to
+    // claim first: two messages are queued in one transaction, so they share a
+    // due time and the queue orders them by a random id.
+    const thanks = sent.filter((message) => message.body.includes("/book/notify-studio"));
+    expect([...new Set(thanks.map((message) => message.destination))].sort()).toEqual([
+      "+37369123456",
+      "client@studio.example",
+    ]);
     // Not a manage link: the appointment is over, and there is nothing left on
     // it to move or cancel.
-    expect(thanks?.body).not.toContain("/booking/");
+    for (const message of thanks) expect(message.body).not.toContain("/booking/");
   });
 });

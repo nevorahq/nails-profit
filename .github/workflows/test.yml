@@ -1,8 +1,19 @@
 name: Tests
 
 on:
+  # A branch is checked through its pull request, and `main` on the way in.
+  # Listening to both events unfiltered ran every suite twice for every push:
+  # double the minutes, and two runs of one commit competing for the same
+  # runners — which is how a green commit came back red, after forty-six
+  # minutes in which the second run executed nothing at all.
   push:
+    branches: [main]
   pull_request:
+
+# A newer push makes the run before it irrelevant, and Playwright is not cheap.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
