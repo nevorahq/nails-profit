@@ -236,13 +236,20 @@ describe("public online booking", () => {
       .select({ template: notificationOutbox.template })
       .from(notificationOutbox)
       .where(eq(notificationOutbox.organizationId, studio.organizationId));
-    // The reminder that was queued on creation left with the cancellation:
-    // nobody is coming, so nobody is reminded.
-    expect(queued.map((row) => row.template).sort()).toEqual([
-      "booking.cancelled",
-      "booking.confirmed",
-      "booking.rescheduled",
-    ]);
+    /*
+     * The reminder that was queued on creation left with the cancellation:
+     * nobody is coming, so nobody is reminded.
+     *
+     * Nothing is left at all, and for this client that is the whole picture:
+     * they left a phone and no address, SMS carries only the reminder, and the
+     * reminder went with the cancellation. The confirmation, the move and the
+     * cancellation each had no channel to take — which here is the right
+     * silence rather than a gap, because every one of those three was something
+     * this client did themselves on the manage page and watched the answer to.
+     * The studio-side cancellation that reaches nobody is the case with real
+     * cost, and it is pinned in `tests/e2e/notifications.test.ts`.
+     */
+    expect(queued.map((row) => row.template).sort()).toEqual([]);
   });
 
   test("a confirmed booking is queued a reminder for the day before", async () => {
@@ -657,7 +664,7 @@ describe("public online booking", () => {
       expect(errorCodeOf(refused)).toBe("VERIFICATION_REQUIRED");
     });
 
-    test("Resend verifies email; the booking itself still reaches every channel the client left", async () => {
+    test("Resend verifies email; the booking reaches the inbox twice and the phone once", async () => {
       process.env.NOTIFICATION_PROVIDER = "resend";
       try {
         await holdOne(wednesdayAhead(7));
@@ -701,16 +708,15 @@ describe("public online booking", () => {
         expect(created.status).toBe("confirmed");
 
         // Verification picked one channel (email, since NOTIFICATION_PROVIDER
-        // is resend) — but the client also left a phone number, and every
-        // `notifyBooking` call (confirmation, then the reminder queued right
-        // behind it) reaches every channel the client can be reached on,
-        // independent of which provider answers for email. Two calls, two
-        // channels each.
+        // is resend). The booking queues two messages behind it — the
+        // confirmation, then the reminder — and the client left both a phone
+        // and an address, so three rows: both messages by email, and the
+        // reminder alone by SMS, which is the only thing SMS carries.
         const rows = await adminDb
           .select({ channel: notificationOutbox.channel })
           .from(notificationOutbox)
           .where(eq(notificationOutbox.bookingId, created.id));
-        expect(rows.map((row) => row.channel).sort()).toEqual(["email", "email", "sms", "sms"]);
+        expect(rows.map((row) => row.channel).sort()).toEqual(["email", "email", "sms"]);
       } finally {
         delete process.env.NOTIFICATION_PROVIDER;
       }

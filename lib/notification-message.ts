@@ -83,8 +83,34 @@ export const staffNotificationTemplates: readonly BookingNotificationTemplate[] 
   "booking.staff_requested",
 ];
 
+/**
+ * The one message a client hears on their phone. Everything else reaches them
+ * by email alone.
+ *
+ * SMS is a paid, interrupting channel, and this is the single thing it is kept
+ * for: the client is due somewhere tomorrow and may have stopped thinking
+ * about it. Every other message answers something the client just did — they
+ * asked, they were answered, they moved a time, they cancelled — and arrives
+ * while they are still looking at the screen that caused it. The reminder is
+ * the only one that arrives out of nowhere, into a day that has moved on, and
+ * it is the one whose absence costs the studio an empty chair.
+ *
+ * It carries no link (see `messageCarriesLink`), so SMS is now one sentence and
+ * one segment: the whole channel costs a studio 0,30 MDL per appointment. The
+ * button to move or cancel is in the same reminder's email, where it is free.
+ */
+export const smsNotificationTemplates: readonly BookingNotificationTemplate[] = [
+  "booking.reminder",
+];
+
 export type NotificationFacts = Readonly<{
   template: BookingNotificationTemplate;
+  /**
+   * Which shape is being built. Only the reminder reads differently between the
+   * two (see `messageCarriesLink`), but a row is queued per channel, so the
+   * renderer is always told which one it is answering rather than guessing.
+   */
+  channel: "email" | "sms";
   locale: AppLocale;
   studioName: string;
   /** Already formatted in the location's zone; a client reads local time only. */
@@ -110,14 +136,25 @@ export type NotificationFacts = Readonly<{
 }>;
 
 /**
- * Templates that end in something the reader does somewhere else, and so have
- * a button in the email and a link in the SMS. The verification code is the
- * one that does not: the code is the whole message, and there is nowhere to
- * send anybody.
+ * Whether this message ends in something the reader does somewhere else — a
+ * button in the email, the address spelled out in the SMS.
+ *
+ * Two say no. The verification code is the whole message and there is nowhere
+ * to send anybody. And the reminder, once it is an SMS: a manage link is a
+ * one-time token on a long domain, around 120 characters, and Cyrillic text is
+ * UCS-2 — 67 characters to a joined segment. Carrying it turns a one-segment
+ * reminder into a four-segment one, so three quarters of what the studio pays
+ * to remind a client buys a URL rather than words. The same reminder still
+ * reaches their inbox with the button on it, which is where a client who wants
+ * to move the time was always going to press.
  */
-const CTA_TEMPLATES: readonly BookingNotificationTemplate[] = bookingNotificationTemplates.filter(
-  (template) => template !== "booking.verification_code",
-);
+export function messageCarriesLink(
+  template: BookingNotificationTemplate,
+  channel: "email" | "sms",
+): boolean {
+  if (template === "booking.verification_code") return false;
+  return !(channel === "sms" && template === "booking.reminder");
+}
 
 export type RenderedNotification = Readonly<{
   subject: string;
@@ -154,7 +191,7 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
 
   const lead = t(`${prefix}.body` as MessageKey, params);
   const action =
-    CTA_TEMPLATES.includes(facts.template) && facts.link !== ""
+    messageCarriesLink(facts.template, facts.channel) && facts.link !== ""
       ? {
           label: t(`${prefix}.cta` as MessageKey, params),
           url: facts.link,

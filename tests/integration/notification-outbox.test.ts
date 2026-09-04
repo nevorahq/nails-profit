@@ -42,6 +42,18 @@ const SLOT = {
   end: new Date("2026-09-04T08:30:00.000Z"),
 };
 
+/**
+ * The template these tests reach for when the scenario needs one message per
+ * channel — retries, dead letters, idempotency, the delivery-status poll.
+ *
+ * SMS carries the reminder and nothing else (see `smsNotificationTemplates`),
+ * so for a client with both contacts this is the only template that still
+ * writes two rows. None of those scenarios care which message it is; they care
+ * that there are two of it, and naming that here keeps the next change to the
+ * SMS rule a one-line change to this file rather than fifteen.
+ */
+const BOTH_CHANNELS = "booking.reminder" as const;
+
 const LINES = [
   {
     kind: "service" as const,
@@ -138,16 +150,89 @@ describe("notification outbox", () => {
       .where(eq(notificationOutbox.organizationId, organizationId));
   }
 
-  test("one event reaches every channel the client has", async () => {
+  test("a reminder reaches every channel the client has", async () => {
     const sent = fakeProvider([]);
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
     expect(summary).toMatchObject({ claimed: 2, sent: 2, retried: 0, deadLettered: 0 });
     expect(sent.map((message) => message.channel).sort()).toEqual(["email", "sms"]);
     expect(sent.every((message) => message.body.includes("Green Nails"))).toBe(true);
+  });
+
+  /**
+   * The pilot's own bill, written down as a test. A public request queued both
+   * of these within six seconds — "мы напишем, когда его подтвердят", then
+   * "визит забронирован" — and sent both to the same phone, four paid segments
+   * each, for one piece of news. Only the second is worth interrupting somebody
+   * for; the first is a receipt, and a receipt belongs in an inbox.
+   */
+  test("only the reminder is worth an SMS", async () => {
+    for (const template of [
+      "booking.pending_confirmation",
+      "booking.confirmed",
+      "booking.request_accepted",
+      "booking.rescheduled",
+      "booking.reminder",
+      "booking.cancelled",
+      "booking.link_reissued",
+      "booking.visit_completed",
+    ] as const) {
+      const channels = await withTenant(organizationId, (tx) =>
+        notifyBooking(tx, { organizationId, bookingId, template }),
+      );
+      expect(channels.sort()).toEqual(
+        template === "booking.reminder" ? ["email", "sms"] : ["email"],
+      );
+    }
+  });
+
+  /**
+   * The client the studio typed in from a phone call: a number and nothing
+   * else. The reminder reaches them; every other message has no channel left
+   * and queues nothing at all, which is the part a caller has to be able to
+   * see — `notifyBooking` returns the channels it used for exactly that.
+   */
+  test("a client with only a phone is reminded, and hears nothing else", async () => {
+    const phoneOnly = await createClient(organizationId, {
+      normalizedPhone: "+37369555444",
+      email: null,
+    });
+    const theirBooking = await withTenant(organizationId, async (tx) => {
+      const created = await createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId: (await createSpecialist(organizationId)).id,
+        clientId: phoneOnly.id,
+        interval: {
+          start: new Date("2026-09-05T07:00:00.000Z"),
+          end: new Date("2026-09-05T08:30:00.000Z"),
+        },
+        source: "public_booking",
+        confirmationMode: "instant",
+        lines: LINES,
+        actorUserId: null,
+        now,
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+
+    const reminder = await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.reminder" }),
+    );
+    const confirmed = await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.confirmed" }),
+    );
+    const cancelled = await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.cancelled" }),
+    );
+
+    expect(reminder).toEqual(["sms"]);
+    expect(confirmed).toEqual([]);
+    expect(cancelled).toEqual([]);
   });
 
   test("Resend for email does not stop SMS from also being queued", async () => {
@@ -158,7 +243,7 @@ describe("notification outbox", () => {
     process.env.NOTIFICATION_PROVIDER = "resend";
     const sent = fakeProvider([]);
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
@@ -169,14 +254,14 @@ describe("notification outbox", () => {
   test("a sent message is not sent again", async () => {
     const sent = fakeProvider([]);
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     await dispatchDueNotifications({ organizationId, now: new Date() });
 
     // Same logical send, same key: the second write is a no-op, and a second
     // dispatch finds nothing due.
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     const second = await dispatchDueNotifications({ organizationId, now: new Date() });
 
@@ -194,7 +279,7 @@ describe("notification outbox", () => {
       },
     });
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     await dispatchDueNotifications({ organizationId, now: new Date() });
 
@@ -239,7 +324,7 @@ describe("notification outbox", () => {
   test("a temporary failure comes back later, with a growing gap", async () => {
     fakeProvider(() => ({ ok: false, code: "provider_timeout", retryable: true }));
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     const at = new Date();
@@ -261,7 +346,7 @@ describe("notification outbox", () => {
   test("attempts run out and the message becomes a dead letter", async () => {
     fakeProvider(() => ({ ok: false, code: "provider_timeout", retryable: true }));
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     let at = new Date();
@@ -278,7 +363,7 @@ describe("notification outbox", () => {
   test("a message this build has no wording for is dead-lettered, not garbled", async () => {
     const sent = fakeProvider(() => ({ ok: true, providerMessageId: "fake:1" }));
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     // What a row written by a newer deployment looks like to this one.
     await adminDb
@@ -300,7 +385,7 @@ describe("notification outbox", () => {
   test("a permanent failure is not retried at all", async () => {
     fakeProvider(() => ({ ok: false, code: "invalid_destination", retryable: false }));
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
@@ -316,7 +401,7 @@ describe("notification outbox", () => {
       },
     });
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     const summary = await dispatchDueNotifications({ organizationId, now: new Date() });
@@ -335,12 +420,15 @@ describe("notification outbox", () => {
       claimed: 0,
     });
     expect(sent).toHaveLength(0);
-    expect((await rows()).every((row) => row.status === "pending")).toBe(true);
+    const paused = await rows();
+    expect(paused.every((row) => row.status === "pending")).toBe(true);
 
-    // Section 7's rollback: unpausing sends what accumulated.
+    // Section 7's rollback: unpausing sends what accumulated — all of it,
+    // however many channels the template turned out to use. Counting the queue
+    // rather than naming a number keeps this test about the pause switch.
     process.env.NOTIFICATIONS_ENABLED = "true";
     expect(await dispatchDueNotifications({ organizationId, now: new Date() })).toMatchObject({
-      sent: 2,
+      sent: paused.length,
     });
   });
 
@@ -359,7 +447,40 @@ describe("notification outbox", () => {
       now: new Date("2026-09-03T07:00:01.000Z"),
     });
     expect(summary).toMatchObject({ sent: 2 });
-    expect(sent[0].body).toContain("/booking/");
+
+    /*
+     * The reminder is the one message whose two shapes differ. Email carries
+     * the manage link, because a client who wants to move the time presses a
+     * button. SMS does not: the link is three of its four paid segments, and
+     * the same button is already sitting in their inbox.
+     */
+    const byChannel = Object.fromEntries(sent.map((message) => [message.channel, message]));
+    expect(byChannel.email.body).toContain("/booking/");
+    expect(byChannel.sms.body).not.toContain("/booking/");
+    expect(byChannel.sms.body).not.toContain("http");
+  });
+
+  /**
+   * Minting is a write. A token issued for a message that never prints it is
+   * one more live way into the appointment, handed to nobody — so the SMS
+   * reminder must not create one, and the email beside it still must.
+   */
+  test("an SMS reminder mints no manage link", async () => {
+    fakeProvider([]);
+    await withTenant(organizationId, (tx) =>
+      scheduleBookingReminder(tx, { organizationId, bookingId, locationId, startsAt: SLOT.start, now }),
+    );
+    await dispatchDueNotifications({
+      organizationId,
+      now: new Date("2026-09-03T07:00:01.000Z"),
+    });
+
+    const { bookingAccessTokens } = await import("@/db/schema");
+    const minted = await adminDb
+      .select()
+      .from(bookingAccessTokens)
+      .where(eq(bookingAccessTokens.bookingId, bookingId));
+    expect(minted).toHaveLength(1);
   });
 
   test("a cancelled appointment takes its pending reminder with it", async () => {
@@ -401,7 +522,7 @@ describe("notification outbox", () => {
     await adminDb.update(bookings).set({ clientId: silent.id }).where(eq(bookings.id, bookingId));
 
     const channels = await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
 
     expect(channels).toEqual([]);
@@ -426,7 +547,7 @@ describe("notification outbox", () => {
       },
     });
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     await dispatchDueNotifications({ organizationId, now: new Date() });
 
@@ -500,7 +621,7 @@ describe("notification outbox", () => {
       },
     });
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     await dispatchDueNotifications({ organizationId, now: new Date() });
 
@@ -553,7 +674,7 @@ describe("notification outbox", () => {
       },
     });
     await withTenant(organizationId, (tx) =>
-      notifyBooking(tx, { organizationId, bookingId, template: "booking.confirmed" }),
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
     );
     await dispatchDueNotifications({ organizationId, now: new Date() });
 

@@ -11,7 +11,10 @@ import {
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { reminderTimeFor } from "@/domain/notification-schedule";
-import type { BookingNotificationTemplate } from "@/lib/notification-message";
+import {
+  smsNotificationTemplates,
+  type BookingNotificationTemplate,
+} from "@/lib/notification-message";
 
 export type { BookingNotificationTemplate };
 
@@ -229,14 +232,23 @@ async function insertOutbox(
  * email, the other assumed there was none. A booking with no client — a staff
  * placeholder in the calendar — notifies nobody, and that is not an error.
  *
- * Email and SMS queue independently of one another's provider: `notificationProvider`
- * (see `lib/notification-provider.ts`) resolves each channel to its own adapter, or to
- * `log` when that channel has none configured — either way delivery is attempted rather
- * than the row sitting in `dead_letter` forever. This used to special-case
- * `NOTIFICATION_PROVIDER === "resend"` into email-only, from when there was no SMS
- * adapter at all and queuing one would have meant exactly that dead-lettering; now that
- * SMS has a provider of its own, the only question is whether the client left a phone
- * number or an email, not which provider happens to answer for the other channel.
+ * Email goes wherever the client left an address; SMS goes only for the templates in
+ * `smsNotificationTemplates`, which is the reminder and nothing else. It used to go for
+ * all of them, which is how one public request put two paid messages on a client's
+ * phone six seconds apart: that the request had arrived, and then that it was accepted.
+ * The first says nothing the second does not, and it costs the same to send.
+ *
+ * The consequence, stated rather than discovered: a client the studio entered with a
+ * phone and no email is reminded of their appointment and hears nothing else at all —
+ * not that it was booked, not that it was called off. Whether that client should exist
+ * is the studio's call, made when they type the card; what the code owes them is to
+ * fail visibly rather than quietly, so a caller that needed a message delivered reads
+ * the channels this returns. `manage-link` is the one that does, and answers 422.
+ *
+ * Each channel resolves its own provider: `notificationProvider`
+ * (see `lib/notification-provider.ts`) gives it its own adapter, or `log` when that
+ * channel has none configured — either way delivery is attempted rather than the row
+ * sitting in `dead_letter` forever.
  */
 export async function notifyBooking(
   tx: TenantTransaction,
@@ -263,7 +275,9 @@ export async function notifyBooking(
   if (!client) return [] as Channel[];
 
   const channels: Channel[] = [
-    ...(client.phone ? (["sms"] as const) : []),
+    ...(client.phone && smsNotificationTemplates.includes(input.template)
+      ? (["sms"] as const)
+      : []),
     ...(client.email ? (["email"] as const) : []),
   ];
 

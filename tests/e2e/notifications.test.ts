@@ -40,7 +40,7 @@ describe("transactional notifications", () => {
     return start.toISOString();
   }
 
-  async function book() {
+  async function book(forClientId: string = clientId) {
     return dataOf<{ id: string; version: number }>(
       await owner.post(
         "/api/v1/bookings",
@@ -48,7 +48,7 @@ describe("transactional notifications", () => {
           location_id: locationId,
           specialist_id: studio.specialistId,
           service_id: studio.serviceId,
-          client_id: clientId,
+          client_id: forClientId,
           starts_at: nextSlot(),
         },
         { "idempotency-key": `notify-${crypto.randomUUID()}` },
@@ -79,12 +79,21 @@ describe("transactional notifications", () => {
       .where(eq(bookings.id, bookingId));
   }
 
+  /**
+   * Which messages an action queued, once each.
+   *
+   * A template with two channels writes two rows, and this file is about
+   * whether the studio's action produced the right message at all — how many
+   * channels carry it is decided in `notifyBooking` and pinned in
+   * `tests/integration/notification-outbox.test.ts`, where the client's
+   * contacts are the subject rather than the fixture.
+   */
   async function templatesFor(bookingId: string) {
     const rows = await adminDb
       .select({ template: notificationOutbox.template, status: notificationOutbox.status })
       .from(notificationOutbox)
       .where(eq(notificationOutbox.bookingId, bookingId));
-    return rows.map((row) => row.template).sort();
+    return [...new Set(rows.map((row) => row.template))].sort();
   }
 
   beforeAll(async () => {
@@ -106,8 +115,17 @@ describe("transactional notifications", () => {
       effective_from: new Date().toISOString().slice(0, 10),
     });
 
+    // Both contacts, because that is the client these tests are about: SMS now
+    // carries only the confirmation and the reminder, so a client with a phone
+    // alone would leave most of the templates below with nothing to queue —
+    // which is its own test, at the bottom of this file, rather than the
+    // silent shape of every other one.
     clientId = dataOf<{ id: string }>(
-      await owner.post("/api/v1/clients", { name: "Мария", phone: "+373 69 777 888" }),
+      await owner.post("/api/v1/clients", {
+        name: "Мария",
+        phone: "+373 69 777 888",
+        email: "maria@example.test",
+      }),
     ).id;
   });
 
@@ -209,11 +227,61 @@ describe("transactional notifications", () => {
     const reissued = await owner.post(`/api/v1/bookings/${created.id}/manage-link`, {});
 
     expect(reissued.status).toBe(200);
-    expect(dataOf<{ sent_to: string[] }>(reissued).sent_to).toEqual(["sms"]);
+    expect(dataOf<{ sent_to: string[] }>(reissued).sent_to).toEqual(["email"]);
     // The response carries no token: the link travels to the contact on the
     // booking, not through the screen of whoever pressed the button.
     expect(JSON.stringify(reissued.body)).not.toContain(studio.organizationId);
     expect(await templatesFor(created.id)).toContain("booking.link_reissued");
+  });
+
+  /**
+   * The cost of the rule, written down where it can be read rather than
+   * discovered by a studio.
+   *
+   * SMS carries the reminder and nothing else, so a client the studio typed in
+   * from a phone call — a number, no address — is reminded of the appointment
+   * and hears nothing else about it whatsoever. Not that it was booked, and not
+   * that it was called off. Every test here is that sentence made concrete, so
+   * that changing it means changing a test rather than noticing a silence in
+   * production.
+   */
+  describe("a client reachable only by phone", () => {
+    let phoneOnlyId: string;
+
+    beforeAll(async () => {
+      phoneOnlyId = dataOf<{ id: string }>(
+        await owner.post("/api/v1/clients", { name: "Ольга", phone: "+373 69 111 222" }),
+      ).id;
+    });
+
+    test("is reminded, and hears nothing about the booking itself", async () => {
+      const created = await book(phoneOnlyId);
+
+      // The confirmation queued no row at all: not an SMS by the rule, and no
+      // address for the email that would otherwise have carried it.
+      expect(await templatesFor(created.id)).toEqual(["booking.reminder"]);
+    });
+
+    test("is left with nothing at all when the studio calls the appointment off", async () => {
+      const created = await book(phoneOnlyId);
+      await owner.post(`/api/v1/bookings/${created.id}/cancel`, {
+        reason: "studio_request",
+        cancelled_by: "staff",
+      });
+
+      // Cancelling drops the pending reminder, and the cancellation itself has
+      // no channel to travel on. This client learns of it by ringing the
+      // studio, or by turning up.
+      expect(await templatesFor(created.id)).toEqual([]);
+    });
+
+    test("cannot be handed a reissued link, and is told so", async () => {
+      const created = await book(phoneOnlyId);
+      const reissued = await owner.post(`/api/v1/bookings/${created.id}/manage-link`, {});
+
+      expect(reissued.status).toBe(422);
+      expect(reissued.body).toMatchObject({ error: { code: "NO_CLIENT_CONTACT" } });
+    });
   });
 
   describe("the dispatch job", () => {
@@ -239,7 +307,11 @@ describe("transactional notifications", () => {
       const summary = dataOf<{ claimed: number; sent: number; dead_lettered: number }>(
         await anonymous.post(
           "/api/v1/ops/notifications",
-          { organization_id: studio.organizationId },
+          // Every test above leaves its messages in the same tenant's queue, and
+          // there are now more of them than one default batch of 25 claims — a
+          // drain that stops halfway would leave this test reading a row nobody
+          // got to and calling it a failure to send.
+          { organization_id: studio.organizationId, limit: 100 },
           { authorization: `Bearer ${opsToken}` },
         ),
       );

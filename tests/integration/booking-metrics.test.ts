@@ -96,10 +96,13 @@ describe("booking metrics report", () => {
         now,
       });
       if (!created.ok) throw new Error("fixture booking was refused");
+      // The reminder, because this fixture's client left a phone and no
+      // address and SMS carries nothing else: any other template would queue
+      // no row at all, and the count below is the point of the test.
       await notifyBooking(tx, {
         organizationId,
         bookingId: created.bookingId,
-        template: "booking.confirmed",
+        template: "booking.reminder",
       });
       return created.bookingId;
     });
