@@ -1,4 +1,4 @@
-import { asc, eq, isNull, isNotNull, sql } from "drizzle-orm";
+import { asc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { ClientManager, type ClientRow } from "@/components/client-manager";
 import { ToolIcon } from "@/components/icons";
@@ -46,12 +46,13 @@ export default async function ClientsPage() {
             normalizedPhone: clients.normalizedPhone,
             email: clients.email,
             anonymizedAt: clients.anonymizedAt,
+            archivedAt: clients.archivedAt,
           })
           .from(clients)
           .innerJoin(visits, eq(visits.clientId, clients.id))
-          .where(
-            sql`${clients.archivedAt} is null and ${visits.specialistId} = ${ownSpecialistId}`,
-          )
+          // Archived clients travel with the rest and are filtered in the
+          // component, behind a toggle: hidden by default, reachable on ask.
+          .where(sql`${visits.specialistId} = ${ownSpecialistId}`)
           .orderBy(asc(clients.name))
       : await tx
           .select({
@@ -60,9 +61,9 @@ export default async function ClientsPage() {
             normalizedPhone: clients.normalizedPhone,
             email: clients.email,
             anonymizedAt: clients.anonymizedAt,
+            archivedAt: clients.archivedAt,
           })
           .from(clients)
-          .where(isNull(clients.archivedAt))
           .orderBy(asc(clients.name));
 
     if (clientRows.length === 0) return [];
@@ -112,6 +113,7 @@ export default async function ClientsPage() {
         phone: hidePii ? null : (client.normalizedPhone ?? null),
         email: hidePii ? null : (client.email ?? null),
         anonymized: client.anonymizedAt !== null,
+        archived: client.archivedAt !== null,
         visitCount: stats?.visitCount ?? 0,
         lastVisitAt: stats?.lastVisitAt ?? null,
         totalSpent: totalMinor > 0 ? money(totalMinor) : null,

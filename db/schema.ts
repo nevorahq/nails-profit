@@ -788,14 +788,23 @@ export const clients = pgTable(
   },
   (table) => [
     index("client_org_idx").on(table.organizationId),
-    // Section 11.3: partial unique on normalized contacts, so the same person
-    // cannot be entered twice, while any number of clients may have no contact.
+    /*
+     * Section 11.3: partial unique on normalized contacts, so the same person
+     * cannot be entered twice, while any number of clients may have no contact.
+     *
+     * Archived rows are outside it. They used to hold their phone and address
+     * for good: a studio that removed a client from its list kept the contacts
+     * reserved, the public form still matched on them — refusing a booking as a
+     * contact conflict, or attaching it to a card nobody could see — and there
+     * was no way back, because an archived client is not listed anywhere. The
+     * contacts of a hidden client belong to nobody until it is restored.
+     */
     uniqueIndex("client_org_phone_idx")
       .on(table.organizationId, table.normalizedPhone)
-      .where(sql`${table.normalizedPhone} is not null`),
+      .where(sql`${table.normalizedPhone} is not null and ${table.archivedAt} is null`),
     uniqueIndex("client_org_email_idx")
       .on(table.organizationId, sql`lower(${table.email})`)
-      .where(sql`${table.email} is not null`),
+      .where(sql`${table.email} is not null and ${table.archivedAt} is null`),
   ],
 );
 

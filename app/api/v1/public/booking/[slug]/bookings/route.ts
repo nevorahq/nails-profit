@@ -1,4 +1,4 @@
-import { and, eq, gt, or, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { bookingHolds, clients } from "@/db/schema";
@@ -49,6 +49,20 @@ async function findOrCreateClient(
     now: Date;
   },
 ) {
+  /*
+   * Only the clients the studio can see.
+   *
+   * An archived one used to count here, and that is what a studio met after
+   * cleaning its list: a booking refused as a conflict between two clients it
+   * no longer had, with a message telling the person to ring the studio about
+   * records the studio could not open. The other half was quieter — a single
+   * archived match took the booking, and the appointment carried a name from a
+   * card missing from every screen.
+   *
+   * Hidden means hidden. A client who books again after being archived is a new
+   * card, which the partial indexes of 0046 now allow; their old visits stay
+   * where they are, under the card the studio put away.
+   */
   const matches = await tx
     .select({
       id: clients.id,
@@ -57,9 +71,12 @@ async function findOrCreateClient(
     })
     .from(clients)
     .where(
-      or(
-        eq(clients.normalizedPhone, input.normalizedPhone),
-        input.email ? sql`lower(${clients.email}) = ${input.email}` : undefined,
+      and(
+        isNull(clients.archivedAt),
+        or(
+          eq(clients.normalizedPhone, input.normalizedPhone),
+          input.email ? sql`lower(${clients.email}) = ${input.email}` : undefined,
+        ),
       ),
     );
   const unique = [...new Map(matches.map((match) => [match.id, match])).values()];

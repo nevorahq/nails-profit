@@ -37,7 +37,9 @@ export default async function ClientCardPage({
     const [client] = await tx
       .select()
       .from(clients)
-      .where(and(eq(clients.id, clientId), isNull(clients.anonymizedAt), isNull(clients.archivedAt)))
+      // Archived clients open too: hidden from the list is not hidden from the
+      // studio, and this page is where their data can be erased for good.
+      .where(and(eq(clients.id, clientId), isNull(clients.anonymizedAt)))
       .limit(1);
 
     if (!client) return null;

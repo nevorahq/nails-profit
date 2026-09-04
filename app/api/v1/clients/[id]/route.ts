@@ -82,7 +82,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (name !== undefined) patch.name = name;
       if (normalizedPhone !== undefined) patch.normalizedPhone = normalizedPhone;
       if (email !== undefined) patch.email = email;
+      /*
+       * Hiding and bringing back, from the one field. Restoring can collide:
+       * since 0046 an archived client no longer reserves its phone or address,
+       * so somebody else may hold one by now. That surfaces as the unique
+       * violation the catch below already names, which is a far better answer
+       * than the index raising through it as a 500.
+       */
       if (archived === true) patch.archivedAt = now;
+      if (archived === false) patch.archivedAt = null;
 
       const [row] = await tx
         .update(clients)

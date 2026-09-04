@@ -13,6 +13,8 @@ export type ClientRow = {
   phone: string | null;
   email: string | null;
   anonymized: boolean;
+  /** Hidden from the working list, and no longer holding its contacts. */
+  archived: boolean;
   visitCount: number;
   lastVisitAt: Date | string | null;
   totalSpent: string | null;
@@ -88,6 +90,13 @@ export function ClientManager({
   const [editError, setEditError] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /*
+   * Off by default: the list is the studio's working set, and a client they
+   * put away should stay away. What it must not be is unreachable — before
+   * this there was no screen at all where an archived client existed, so the
+   * only way to bring one back, or to erase its contacts for good, was SQL.
+   */
+  const [showArchived, setShowArchived] = useState(false);
 
   /*
    * The add-client panel: nothing on the page until the header opens it —
@@ -184,6 +193,27 @@ export function ClientManager({
     router.refresh();
   }
 
+  async function restoreClient(client: ClientRow) {
+    setDeletingId(client.id);
+    const response = await fetch(`/api/v1/clients/${client.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ archived: false }),
+    });
+    setDeletingId(null);
+
+    if (!response.ok) {
+      // Most likely CLIENT_PHONE_EXISTS or CLIENT_EMAIL_EXISTS: while this one
+      // was away somebody else took the contact, and the studio has to decide
+      // which of the two is the person.
+      const payload = await response.json().catch(() => null);
+      setError(payload?.error?.message ?? t("clients.restoreFailed"));
+      return;
+    }
+
+    router.refresh();
+  }
+
   async function deleteClient(client: ClientRow) {
     if (!confirm(t("clients.deleteConfirm", { name: client.name }))) return;
     setDeletingId(client.id);
@@ -211,9 +241,21 @@ export function ClientManager({
   }
 
   const colSpan = canWrite ? 7 : 6;
+  const archivedCount = clients.filter((client) => client.archived).length;
+  const visible = showArchived ? clients : clients.filter((client) => !client.archived);
 
   return (
     <>
+      {archivedCount > 0 && (
+        <label className="clients-archived-toggle">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => setShowArchived(event.target.checked)}
+          />
+          <span>{t("clients.showArchived", { count: archivedCount })}</span>
+        </label>
+      )}
       <table className="data-table clients-table">
         <thead>
           <tr>
@@ -227,14 +269,14 @@ export function ClientManager({
           </tr>
         </thead>
         <tbody>
-          {clients.length === 0 && (
+          {visible.length === 0 && (
             <tr>
               <td colSpan={colSpan} className="muted">
                 {t("clients.none")}
               </td>
             </tr>
           )}
-          {clients.map((client) => {
+          {visible.map((client) => {
             const isEditing = edit?.id === client.id;
             return (
               <tr
@@ -245,6 +287,7 @@ export function ClientManager({
                 style={!isEditing && !client.anonymized ? { cursor: "pointer" } : undefined}
               >
                 <td>
+                  {client.archived && <span className="client-hidden-badge">{t("clients.archivedBadge")}</span>}
                   {client.anonymized ? (
                     <span className="muted">{t("clients.anonymized")}</span>
                   ) : isEditing ? (
@@ -332,16 +375,28 @@ export function ClientManager({
                           <IconEdit />
                           <span className="btn-label">{t("services.edit")}</span>
                         </button>
-                        <button
-                          className="inline-action danger"
-                          type="button"
-                          onClick={() => deleteClient(client)}
-                          disabled={deletingId === client.id}
-                          aria-label={t("common.delete")}
-                        >
-                          <IconTrash />
-                          <span className="btn-label">{t("common.delete")}</span>
-                        </button>
+                        {client.archived ? (
+                          <button
+                            className="inline-action"
+                            type="button"
+                            onClick={() => restoreClient(client)}
+                            disabled={deletingId === client.id}
+                            aria-label={t("clients.restore")}
+                          >
+                            <span className="btn-label">{t("clients.restore")}</span>
+                          </button>
+                        ) : (
+                          <button
+                            className="inline-action danger"
+                            type="button"
+                            onClick={() => deleteClient(client)}
+                            disabled={deletingId === client.id}
+                            aria-label={t("common.delete")}
+                          >
+                            <IconTrash />
+                            <span className="btn-label">{t("common.delete")}</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -359,8 +414,8 @@ export function ClientManager({
         `.client-cards` in globals.css for the toggle.
       */}
       <ul className="client-cards" aria-label={t("clients.title")}>
-        {clients.length === 0 && <li className="muted">{t("clients.none")}</li>}
-        {clients.map((client) => {
+        {visible.length === 0 && <li className="muted">{t("clients.none")}</li>}
+        {visible.map((client) => {
           const isEditing = edit?.id === client.id;
           return (
             <li
@@ -422,6 +477,7 @@ export function ClientManager({
                 <>
                   <div className="client-card-head">
                     <span className="client-card-name">{client.name}</span>
+                    {client.archived && <span className="client-hidden-badge">{t("clients.archivedBadge")}</span>}
                   </div>
                   {client.anonymized ? (
                     <p className="muted">{t("clients.anonymized")}</p>
@@ -461,16 +517,28 @@ export function ClientManager({
                         <IconEdit />
                         <span className="btn-label">{t("services.edit")}</span>
                       </button>
-                      <button
-                        className="inline-action danger"
-                        type="button"
-                        onClick={() => deleteClient(client)}
-                        disabled={deletingId === client.id}
-                        aria-label={t("common.delete")}
-                      >
-                        <IconTrash />
-                        <span className="btn-label">{t("common.delete")}</span>
-                      </button>
+                      {client.archived ? (
+                        <button
+                          className="inline-action"
+                          type="button"
+                          onClick={() => restoreClient(client)}
+                          disabled={deletingId === client.id}
+                          aria-label={t("clients.restore")}
+                        >
+                          <span className="btn-label">{t("clients.restore")}</span>
+                        </button>
+                      ) : (
+                        <button
+                          className="inline-action danger"
+                          type="button"
+                          onClick={() => deleteClient(client)}
+                          disabled={deletingId === client.id}
+                          aria-label={t("common.delete")}
+                        >
+                          <IconTrash />
+                          <span className="btn-label">{t("common.delete")}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </>

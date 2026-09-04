@@ -176,6 +176,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-card .radio-row { display: flex; align-items: center; gap: 10rem; color: var(--ink); padding: 6rem 0; }
 .auth-card .radio-row input { width: auto; margin: 0; }
 .form-error { color: var(--danger); background: var(--danger-soft); padding: 12rem; border-radius: 10rem; font-size: 14rem; }
+/* Hidden clients: the toggle that reveals them, and the mark that names them. */
+.clients-archived-toggle { display: inline-flex; align-items: center; gap: 8rem; margin-bottom: 12rem; font-size: 13rem; color: var(--muted); cursor: pointer; }
+.client-hidden-badge { display: inline-block; margin-right: 8rem; padding: 2rem 8rem; border-radius: 999rem; background: var(--surface-2, rgba(0,0,0,0.06)); font-size: 11rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); vertical-align: middle; }
 /* The request id under a refusal: readable when it is needed, quiet when it is not. */
 .error-reference { display: block; margin-top: 6rem; font-size: 12rem; opacity: 0.75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .switch-button { display: block; width: 100%; margin-top: 10rem; border: 0; background: transparent; color: var(--accent); font-size: 16rem; text-align: center; cursor: pointer; }

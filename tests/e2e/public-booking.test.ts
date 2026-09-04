@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import {
@@ -434,6 +434,88 @@ describe("public online booking", () => {
       .filter((row) => row.id === first.id || row.id === second.id)
       .map((row) => row.clientId);
     expect(owners).toEqual([client.id, client.id]);
+  });
+
+  /**
+   * The pilot's own report: "the data is cleaned and it still refuses".
+   *
+   * "Delete" on the client list archives — the row stays and keeps its phone
+   * and address — and this matcher used to read every row. So a studio that had
+   * tidied its list met a booking refused as a conflict between two clients it
+   * could no longer see, with a message telling the person to ring the studio
+   * about records the studio had no screen for. The quieter half was worse: a
+   * single archived match simply took the booking, and the appointment carried
+   * a name from a card missing everywhere.
+   */
+  test("a client the studio hid neither claims a booking nor blocks one", async () => {
+    // A week of its own: the neighbouring test fills its Wednesday, and a
+    // ninety-minute service on a half-hour step leaves overlapping slots behind.
+    const free = async () => {
+      const availability = dataOf<{ slots: Slot[] }>(
+        await anonymous.get(
+          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(9)}`,
+        ),
+      );
+      expect(availability.slots.length).toBeGreaterThan(0);
+      return availability.slots[0];
+    };
+
+    const hidden = await createBookingAt(await free(), {
+      name: "Скрытая Первая",
+      phone: "+373 68 969 191",
+      email: "hidden-one@studio.example",
+    });
+    const alsoHidden = await createBookingAt(await free(), {
+      name: "Скрытая Вторая",
+      phone: "+373 68 969 192",
+      email: "hidden-two@studio.example",
+    });
+    void hidden;
+    void alsoHidden;
+
+    // What the client list's "delete" does: hide, keep the contacts.
+    await adminDb
+      .update(clients)
+      .set({ archivedAt: new Date() })
+      .where(
+        and(
+          eq(clients.organizationId, studio.organizationId),
+          inArray(clients.email, ["hidden-one@studio.example", "hidden-two@studio.example"]),
+        ),
+      );
+
+    // One hidden client's number, the other's address — the pair that used to
+    // produce CONTACT_CONFLICT. It books.
+    const created = await createBookingAt(await free(), {
+      name: "Новая Карточка",
+      phone: "+373 68 969 191",
+      email: "hidden-two@studio.example",
+    });
+    expect(created.id).toBeTruthy();
+
+    const live = await adminDb
+      .select()
+      .from(clients)
+      .where(
+        and(eq(clients.organizationId, studio.organizationId), isNull(clients.archivedAt)),
+      );
+    const fresh = live.filter((row) => row.normalizedPhone === "+37368969191");
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0].name).toBe("Новая Карточка");
+    expect(fresh[0].email).toBe("hidden-two@studio.example");
+
+    // And the cards the studio put away are exactly as they were left: their
+    // history stays theirs, under the names it was recorded with.
+    const archived = await adminDb
+      .select()
+      .from(clients)
+      .where(
+        and(
+          eq(clients.organizationId, studio.organizationId),
+          isNotNull(clients.archivedAt),
+        ),
+      );
+    expect(archived.map((row) => row.name).sort()).toEqual(["Скрытая Вторая", "Скрытая Первая"]);
   });
 
   describe("with contact verification switched on", () => {
