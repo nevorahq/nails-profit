@@ -361,6 +361,7 @@ async function prepare(
       : "",
     specialist: facts.specialist ?? "",
     link: facts.link,
+    linkIsOneTime: facts.linkIsOneTime,
     code: row.payload?.code ?? "",
   });
 
@@ -396,6 +397,8 @@ type Facts =
       /** Set where a message names the master; absent where none belongs. */
       specialist?: string;
       link: string;
+      /** See `linkIsOneTime` on the renderer's facts: minted here, so decided here. */
+      linkIsOneTime: boolean;
     }>
   | Readonly<{ ok: false; code: string }>;
 
@@ -420,6 +423,7 @@ async function verificationFacts(
     locale: verification.locale,
     appointment: null,
     link: "",
+    linkIsOneTime: false,
   };
 }
 
@@ -490,6 +494,7 @@ async function staffFacts(
     locale: null,
     appointment: { startsAt: found.startsAt, timezone: found.timezone },
     link: `${getPublicAppUrl()}/app/calendar/${row.bookingId}`,
+    linkIsOneTime: false,
   };
 }
 
@@ -537,18 +542,19 @@ async function bookingFacts(
   // Two templates that are not about managing this appointment any more — it is
   // cancelled, or it already happened — so they point at the studio's booking
   // page instead of minting a manage link for a booking nobody can change.
-  const link =
-    template === "booking.cancelled" || template === "booking.visit_completed"
-      ? slug
-        ? bookingPageUrl(slug)
-        : ""
-      : (
-          await issueManageLink(tx, {
-            organizationId: found.booking.organizationId,
-            bookingId: found.booking.id,
-            now,
-          })
-        ).url;
+  const pointsAtBookingPage =
+    template === "booking.cancelled" || template === "booking.visit_completed";
+  const link = pointsAtBookingPage
+    ? slug
+      ? bookingPageUrl(slug)
+      : ""
+    : (
+        await issueManageLink(tx, {
+          organizationId: found.booking.organizationId,
+          bookingId: found.booking.id,
+          now,
+        })
+      ).url;
 
   return {
     ok: true,
@@ -557,6 +563,7 @@ async function bookingFacts(
     appointment: { startsAt: found.booking.startsAt, timezone: found.timezone },
     specialist: found.specialistName,
     link,
+    linkIsOneTime: !pointsAtBookingPage,
   };
 }
 
