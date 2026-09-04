@@ -26,6 +26,11 @@ const ENTITY_CAPABILITY: Record<ImportableEntity, Capability> = {
   service: "services",
   specialist: "commissions",
   client: "clients",
+  // Visits are guarded by `bookings`, the same capability the visit API checks.
+  // That leaves the bulk import to Owner and Manager: a Master holds `bookings`
+  // at scope "own", and a file that writes the studio's financial history is
+  // not the place to work out whose rows are whose.
+  visit: "bookings",
 };
 
 export function canImport(role: MemberRole, entity: ImportableEntity): boolean {

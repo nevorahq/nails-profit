@@ -1015,6 +1015,7 @@ const ru = {
   "entity.service": "Услуги",
   "entity.specialist": "Мастера",
   "entity.client": "Клиенты",
+  "entity.visit": "Визиты",
 
   "issue.required_missing": "обязательное поле пустое",
   "issue.not_a_number": "не похоже на число",
@@ -2242,6 +2243,7 @@ const ro: Record<MessageKey, Message> = {
   "entity.service": "Servicii",
   "entity.specialist": "Maeștri",
   "entity.client": "Clienți",
+  "entity.visit": "Vizite",
 
   "issue.required_missing": "câmp obligatoriu gol",
   "issue.not_a_number": "nu pare a fi un număr",
@@ -3456,6 +3458,7 @@ const en: Record<MessageKey, Message> = {
   "entity.service": "Services",
   "entity.specialist": "Specialists",
   "entity.client": "Clients",
+  "entity.visit": "Visits",
 
   "issue.required_missing": "required field is empty",
   "issue.not_a_number": "does not look like a number",

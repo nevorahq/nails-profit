@@ -41,6 +41,33 @@ describe("downloadable templates", () => {
     expect(unmapped).toEqual([]);
   });
 
+  it("maps a visit file written with the headers a schedule export carries", () => {
+    const mapping = suggestMapping(importTemplates.visit, [
+      "Дата",
+      "Мастер",
+      "Услуга",
+      "Клиент",
+      "Факт",
+    ]);
+
+    expect(mapping).toMatchObject({
+      date: 0,
+      specialist: 1,
+      service: 2,
+      client: 3,
+      actual_duration: 4,
+    });
+  });
+
+  it("does not let the commission start date claim the rate column", () => {
+    // The third mapping pass matches on substring, so a short alias on the date
+    // field can swallow a header that belongs to the percentage next to it.
+    const mapping = suggestMapping(importTemplates.specialist, ["Имя", "Ставка"]);
+
+    expect(mapping.commission_percent).toBe(1);
+    expect(mapping.commission_from).toBeNull();
+  });
+
   it.each(importableEntities)("%s natural key names real fields", (entity) => {
     const template = importTemplates[entity];
     const keys = template.fields.map((field) => field.key);

@@ -61,7 +61,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const [organization] = await tx
-      .select({ currency: organizations.currency, locale: organizations.locale })
+      .select({
+        currency: organizations.currency,
+        locale: organizations.locale,
+        timezone: organizations.timezone,
+      })
       .from(organizations)
       .where(eq(organizations.id, actor.organizationId))
       .limit(1);
@@ -84,6 +88,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         actorUserId: actor.userId,
         currency: organization.currency as Currency,
         locale: organization.locale as AppLocale,
+        actorRole: actor.role,
+        timezone: organization.timezone,
+        requestId: id,
       },
       job.entityType,
       preview.rows,
