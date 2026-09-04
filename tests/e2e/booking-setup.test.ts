@@ -75,7 +75,7 @@ describe("setting booking up from an empty studio", () => {
     // studio that changes one thing does not silently reset the rest.
     const settings = await studio.owner.put(`/api/v1/locations/${locationId}/booking-settings`, {
       public_status: "published",
-      slot_step_minutes: 30,
+      slot_step_minutes: 90,
       min_lead_minutes: 0,
       max_advance_days: 60,
       buffer_before_minutes: 0,

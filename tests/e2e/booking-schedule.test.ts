@@ -79,7 +79,7 @@ describe("configuring a bookable studio", () => {
       // Created in the same transaction as the location: settings that exist
       // are easier to reason about than nulls meaning "ask somewhere else".
       public_status: "draft",
-      slot_step_minutes: 15,
+      slot_step_minutes: 60,
     });
   });
 

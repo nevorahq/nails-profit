@@ -74,7 +74,17 @@ const WEEKDAY_KEYS: Record<Weekday, MessageKey> = {
   7: "weekday.sunday",
 };
 
-const SLOT_STEPS = [5, 10, 15, 20, 30, 60] as const;
+/**
+ * The grid a studio offers slots on, and the same list the API and the check
+ * constraint accept — one of them alone changing is how a select offers a value
+ * the endpoint refuses.
+ *
+ * The step is counted from local midnight, not from the start of a shift. Sixty
+ * divides every hour, so an opening time always lands on the grid; ninety and
+ * a hundred and fifty do not, and a shift starting at 08:00 offers its first
+ * slot at 09:00 or 10:00 respectively.
+ */
+const SLOT_STEPS = [60, 90, 120, 150] as const;
 
 /**
  * The zones a browser knows, which is every IANA name the location endpoint
@@ -980,7 +990,7 @@ export function BookingSetup({
                 silently reverts it. */}
             <label>
               {t("bookingSetup.slotStep")}
-              <select name="slot_step_minutes" defaultValue={settingsLocation.slot_step_minutes ?? 15}>
+              <select name="slot_step_minutes" defaultValue={settingsLocation.slot_step_minutes ?? 60}>
                 {SLOT_STEPS.map((step) => (
                   <option key={step} value={step}>
                     {t("bookingSetup.minutes", { count: String(step) })}
