@@ -523,6 +523,50 @@ describe("CSV import", () => {
       expect(outcome.created).toBe(2);
     });
 
+    it("imports the file the calendar converter produces", async () => {
+      // The whole migration path in one test: a Masters feed, through the
+      // converter, through the mapping, into a costed visit. Each half is
+      // covered on its own; this is the seam between them, which is where a
+      // column that moved or a timezone that did not convert would show up.
+      await studio();
+      const { eventsToRows, parseIcs, toCsv, VISIT_HEADERS } = await import(
+        "../../scripts/ics-to-visits-core.mjs"
+      );
+
+      const feed = [
+        "BEGIN:VCALENDAR",
+        "BEGIN:VEVENT",
+        "UID:masters-9001@mastersapp.ru",
+        "DTSTART;TZID=Europe/Chisinau:20260403T143000",
+        "DTEND;TZID=Europe/Chisinau:20260403T161500",
+        "SUMMARY:Мария — Мани",
+        " кюр",
+        "END:VEVENT",
+        "END:VCALENDAR",
+      ].join("\r\n");
+
+      const { rows } = eventsToRows(parseIcs(feed, "Europe/Chisinau"), {
+        timeZone: "Europe/Chisinau",
+        specialist: "Ирина",
+        to: new Date("2026-09-01T00:00:00Z"),
+      });
+
+      const { outcome } = await importCsv("visit", toCsv([VISIT_HEADERS, ...rows]));
+
+      expect(outcome).toMatchObject({ created: 1, failed: 0 });
+      const [visit] = await withTenant(organizationId, (tx) => tx.select().from(visits));
+      expect(visit.completedAt.toISOString()).toBe("2026-04-03T11:30:00.000Z");
+      expect(visit.actualDurationMinutes).toBe(105);
+
+      const [snapshot] = await withTenant(organizationId, (tx) =>
+        tx.select().from(financialSnapshots),
+      );
+      expect(snapshot.revenueMinor).toBe(60_000);
+
+      const everyone = await withTenant(organizationId, (tx) => tx.select().from(clients));
+      expect(everyone.map((row) => row.name)).toEqual(["Мария"]);
+    });
+
     it("refuses a row whose date never parsed", async () => {
       await studio();
       // The preview would have failed this row. The guard is what stops a
