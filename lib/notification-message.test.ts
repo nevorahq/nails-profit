@@ -14,6 +14,7 @@ const base = {
   when: "2 сент. 2026 г., 10:00",
   specialist: "Ирина",
   link: "https://example.test/booking/abc",
+  linkIsOneTime: true,
   code: "123456",
 };
 
@@ -39,6 +40,31 @@ describe("transactional templates", () => {
       if (template === "booking.verification_code") continue;
       expect(renderNotification({ ...base, template }).body).not.toContain("123456");
     }
+  });
+
+  /**
+   * The grey line under the button prints the address as text, which is what
+   * survives a client whose sanitizer strips `<a>` and leaves the button as
+   * dead words. It is worth a line of noise for a manage link — a token minted
+   * for one appointment, held nowhere else, and unguessable by a client who has
+   * no account — and worth nothing for the studio's own booking page, which is
+   * on their materials already.
+   */
+  it("prints the address under the button only where losing it would strand the reader", () => {
+    const managed = renderNotification({ ...base, template: "booking.confirmed" });
+    expect(managed.html).toContain("Если кнопка не открывается");
+    // Three: the button's href, the fallback's href, and the address printed
+    // as the text a stripped anchor leaves behind.
+    expect(managed.html.match(new RegExp(base.link, "g"))).toHaveLength(3);
+
+    const publicPage = renderNotification({
+      ...base,
+      template: "booking.visit_completed",
+      linkIsOneTime: false,
+    });
+    expect(publicPage.html).not.toContain("Если кнопка не открывается");
+    // Still a button, and still the one link it needs.
+    expect(publicPage.html.match(new RegExp(base.link, "g"))).toHaveLength(1);
   });
 
   it("carries the manage link in the messages a client acts on", () => {

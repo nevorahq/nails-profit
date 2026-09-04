@@ -95,6 +95,17 @@ export type NotificationFacts = Readonly<{
    */
   specialist: string;
   link: string;
+  /**
+   * Whether losing the link costs the reader their way in.
+   *
+   * A manage link is a token minted for one appointment and held nowhere else:
+   * the client has no account, and nothing about it can be guessed. The studio's
+   * booking page and the staff calendar are the opposite — public, or behind a
+   * login the reader already has. Only the first kind earns the plain URL under
+   * the button, and the side that mints the link is the side that knows which
+   * kind it is.
+   */
+  linkIsOneTime: boolean;
   code: string;
 }>;
 
@@ -147,7 +158,15 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
       ? {
           label: t(`${prefix}.cta` as MessageKey, params),
           url: facts.link,
-          fallbackLabel: t("notify.linkFallback"),
+          /*
+           * The button is an `<a>`, and a sanitizer that strips those leaves it
+           * as dead words. Printing the address under it costs a line of grey
+           * text and is the difference between a client reaching their
+           * appointment and not — but only where the address is theirs alone.
+           * A studio's booking page is on their own materials; repeating it
+           * here buys nothing but noise.
+           */
+          ...(facts.linkIsOneTime ? { fallbackLabel: t("notify.linkFallback") } : {}),
         }
       : null;
 

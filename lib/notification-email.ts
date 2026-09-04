@@ -21,7 +21,8 @@ export type EmailAction = Readonly<{
   label: string;
   url: string;
   /** Introduces the copyable link for whoever the button failed. */
-  fallbackLabel: string;
+  /** Absent where the address is public and repeating it is only noise. */
+  fallbackLabel?: string;
 }>;
 
 export type EmailContent = Readonly<{
@@ -68,10 +69,15 @@ function button(action: EmailAction): string {
             </td>
           </tr>
         </table>
+${
+    action.fallbackLabel
+      ? `
         <p style="margin:0;font-family:${FONT_STACK};font-size:13px;line-height:1.5;color:#78716c;">
           ${escapeHtml(action.fallbackLabel)}<br />
           <a href="${href}" style="color:#78716c;word-break:break-all;">${href}</a>
-        </p>`;
+        </p>`
+      : ""
+  }`;
 }
 
 /**
