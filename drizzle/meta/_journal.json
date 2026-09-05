@@ -330,6 +330,13 @@
       "when": 1788516725599,
       "tag": "0046_archived_clients_release_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1788562191889,
+      "tag": "0047_slot_step_moves_to_hour_grid",
+      "breakpoints": true
     }
   ]
 }

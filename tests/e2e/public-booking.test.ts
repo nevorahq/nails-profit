@@ -277,7 +277,7 @@ describe("public online booking", () => {
     );
   });
 
-  test("a client may move an appointment within its own hour", async () => {
+  test("a client may move an appointment inside the time it already occupies", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(
         `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(4)}`,
@@ -285,21 +285,23 @@ describe("public online booking", () => {
     );
     const created = await createBookingAt(availability.slots[0]);
 
-    // The appointment occupies its own hour and a half, so every start time
-    // inside it overlaps the booking being moved. Counting that as busy would
-    // hide exactly the small shifts a client actually asks for.
+    // The appointment occupies its own hour and a half, so the next start on
+    // the grid still overlaps the booking being moved. Counting that as busy
+    // would hide exactly the small shifts a client actually asks for.
     const current = dataOf<{ version: number }>(
       await anonymous.get(`/api/v1/public/bookings/${created.manage_token}`),
     );
-    const fifteenLater = new Date(
-      new Date(availability.slots[0].starts_at).getTime() + 15 * 60_000,
+    // One step, which is the smallest move the grid allows: the studio offers
+    // starts on the hour, so half-hour nudges are not a thing to test for.
+    const oneStepLater = new Date(
+      new Date(availability.slots[0].starts_at).getTime() + 60 * 60_000,
     ).toISOString();
 
     const moved = dataOf<{ starts_at: string }>(
       await anonymous.post(
         `/api/v1/public/bookings/${created.manage_token}/reschedule`,
         {
-          starts_at: fifteenLater,
+          starts_at: oneStepLater,
           specialist_id: availability.slots[0].specialist_id,
           version: current.version,
         },
@@ -307,7 +309,7 @@ describe("public online booking", () => {
       ),
     );
 
-    expect(new Date(moved.starts_at).toISOString()).toBe(fifteenLater);
+    expect(new Date(moved.starts_at).toISOString()).toBe(oneStepLater);
   });
 
   test("one visit produces one walk through the funnel", async () => {
