@@ -311,6 +311,46 @@ describe("notification outbox", () => {
     expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(2);
   });
 
+  /**
+   * Resend redelivers. A summary an earlier delivery failed to move has no
+   * other chance to be corrected, so the redelivery is still allowed to move
+   * it — even though the event itself is old news and reported as such.
+   */
+  test("a redelivered event repairs a summary that was left behind", async () => {
+    process.env.NOTIFICATION_PROVIDER = "resend";
+    setNotificationProvider({
+      name: "resend-test",
+      async send(message) {
+        return { ok: true, providerMessageId: `resend-${message.channel}` };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
+    );
+    await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    const [email] = (await rows()).filter((row) => row.channel === "email");
+    const delivered = {
+      type: "email.delivered",
+      created_at: "2026-09-01T09:02:00.000Z",
+      data: {
+        email_id: "resend-email",
+        tags: { organization_id: organizationId, notification_id: email.id },
+      },
+    };
+
+    await expect(handleVerifiedResendWebhook(delivered, "evt-1")).resolves.toBe("recorded");
+    await adminDb
+      .update(notificationOutbox)
+      .set({ providerStatus: "accepted" })
+      .where(eq(notificationOutbox.id, email.id));
+
+    // Old news, and still the only thing that can put this right.
+    await expect(handleVerifiedResendWebhook(delivered, "evt-1")).resolves.toBe("duplicate");
+    const [repaired] = (await rows()).filter((row) => row.channel === "email");
+    expect(repaired.providerStatus).toBe("delivered");
+  });
+
   test("provider events without trusted routing tags or message match are acknowledged but ignored", async () => {
     const common = {
       type: "email.delivered",
@@ -751,6 +791,104 @@ describe("notification outbox", () => {
     await expect(
       pollSmsMdDeliveryStatuses({ organizationId, now: soon, fetchImpl: answer }),
     ).resolves.toMatchObject({ unconfirmed: 0 });
+  });
+
+  /**
+   * The incident of 05.09: five messages sms.md marked «Отклонено» while their
+   * `dateUpdated` still said what it said when they were created.
+   *
+   * The failure therefore arrived carrying the same provider timestamp as the
+   * `accepted` already stored, the summary's "only move forward in time" guard
+   * read that as not-newer, and four messages recorded in the event table as
+   * failures went on reporting `accepted` everywhere anyone looks.
+   */
+  describe("a status that arrives on the same second as the last one", () => {
+    async function sendOne() {
+      process.env.SMS_PROVIDER = "smsmd";
+      process.env.SMSMD_API_TOKEN = "smsmd_test_token";
+      process.env.SMSMD_SENDER_ID = "NailProfit";
+      setNotificationProvider({
+        name: "smsmd-test",
+        async send() {
+          return { ok: true, providerMessageId: "smsmd-same-second" };
+        },
+      });
+      await withTenant(organizationId, (tx) =>
+        notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
+      );
+      await dispatchDueNotifications({ organizationId, now: new Date() });
+    }
+
+    /** Every answer carries the one timestamp sms.md never moved. */
+    const FROZEN = "2026-09-05T00:05:13+03:00";
+    const answer = (statusId: number, name: string) =>
+      (async () =>
+        new Response(
+          JSON.stringify({
+            status: "success",
+            httpCode: 200,
+            data: { id: "smsmd-same-second", status: { id: statusId, name }, dateUpdated: FROZEN },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )) as unknown as typeof fetch;
+
+    const smsRow = async () => (await rows()).find((row) => row.channel === "sms");
+
+    test("an outcome replaces an unfinished status it cannot be ordered against", async () => {
+      await sendOne();
+
+      await pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(1, "Queued") });
+      expect((await smsRow())?.providerStatus).toBe("accepted");
+
+      // The same second, a settled outcome. Time cannot separate the two, so
+      // finishing does.
+      await expect(
+        pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(10, "Failed") }),
+      ).resolves.toMatchObject({ updated: 1 });
+      expect((await smsRow())?.providerStatus).toBe("failed");
+    });
+
+    test("and nothing takes an outcome back", async () => {
+      await sendOne();
+      await pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(10, "Failed") });
+
+      // A platform re-reporting an earlier stage on the same timestamp must not
+      // reopen a message that has finished.
+      await expect(
+        pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(1, "Queued") }),
+      ).resolves.toMatchObject({ updated: 0 });
+      expect((await smsRow())?.providerStatus).toBe("failed");
+    });
+
+    /**
+     * The production rows this was found on, in the state it left them: the
+     * failure written to the event table, the summary still saying `accepted`,
+     * and the event id taken — so the deduplication that was meant to protect
+     * the summary was the thing keeping it wrong.
+     */
+    test("repairs a summary an earlier run left behind", async () => {
+      await sendOne();
+      await pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(10, "Failed") });
+
+      const stuck = await smsRow();
+      await adminDb
+        .update(notificationOutbox)
+        .set({ providerStatus: "accepted" })
+        .where(eq(notificationOutbox.id, stuck!.id));
+      expect((await smsRow())?.providerStatus).toBe("accepted");
+
+      // The event is already recorded, so this run inserts nothing — and has to
+      // fix the summary anyway.
+      await expect(
+        pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(10, "Failed") }),
+      ).resolves.toMatchObject({ updated: 1 });
+      expect((await smsRow())?.providerStatus).toBe("failed");
+      expect(
+        (await adminDb.select().from(notificationProviderEvents)).filter(
+          (row) => row.eventType === "failed",
+        ),
+      ).toHaveLength(1);
+    });
   });
 
   /**

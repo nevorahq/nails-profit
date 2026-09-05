@@ -4,6 +4,7 @@ import { notificationOutbox, notificationProviderEvents } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { getSmsMdConfig, getSmsProviderName } from "@/env";
 import { logEvent } from "@/lib/logger";
+import { advanceProviderStatus } from "@/lib/notification-provider-status";
 import { LOGGED_MESSAGE_ID_PREFIX, SMSMD_API_BASE } from "@/lib/notification-provider";
 
 /**
@@ -308,10 +309,11 @@ export async function pollSmsMdDeliveryStatuses(input: {
 
 /**
  * The same two writes the webhook handlers make, and for the same reasons: an
- * event row that deduplicates on this message at this status, and a summary
- * on the outbox that only ever moves forward in time. Polling repeats what it
- * already knows by design — every run re-reads a message that has not reached
- * a terminal status — so the conflict below is the normal case, not the
+ * event row that deduplicates on this message at this status, and a summary on
+ * the outbox that only ever moves forward — see `advanceProviderStatus` for
+ * what forward means when a provider reuses a timestamp. Polling repeats what
+ * it already knows by design — every run re-reads a message that has not
+ * reached a terminal status — so the conflict below is the normal case, not the
  * exception.
  */
 async function record(
@@ -325,7 +327,7 @@ async function record(
   }>,
 ): Promise<boolean> {
   return withTenant(organizationId, async (tx) => {
-    const inserted = await tx
+    await tx
       .insert(notificationProviderEvents)
       .values({
         organizationId,
@@ -336,27 +338,24 @@ async function record(
         eventCreatedAt: input.eventAt,
         receivedAt: input.receivedAt,
       })
-      .onConflictDoNothing({ target: notificationProviderEvents.providerEventId })
-      .returning({ id: notificationProviderEvents.id });
-    if (inserted.length === 0) return false;
+      .onConflictDoNothing({ target: notificationProviderEvents.providerEventId });
 
-    await tx
-      .update(notificationOutbox)
-      .set({
-        providerStatus: input.providerStatus,
-        providerEventAt: input.eventAt,
-        updatedAt: input.receivedAt,
-      })
-      .where(
-        and(
-          eq(notificationOutbox.id, input.notificationId),
-          or(
-            isNull(notificationOutbox.providerEventAt),
-            lt(notificationOutbox.providerEventAt, input.eventAt),
-          ),
-        ),
-      );
-
-    return true;
+    /*
+     * Attempted whether or not that insert did anything.
+     *
+     * It used to be conditional on the event being new, which turned the
+     * deduplication into a lock: once sms.md's «Отклонено» had been written to
+     * the event table with a timestamp the summary would not accept, the
+     * summary could never be corrected — the next poll inserted nothing and
+     * stopped there. Reading the summary as a thing to reconcile rather than a
+     * side effect of an insert is what lets a run repair what an earlier one
+     * got wrong.
+     */
+    return advanceProviderStatus(tx, {
+      notificationId: input.notificationId,
+      providerStatus: input.providerStatus,
+      eventAt: input.eventAt,
+      receivedAt: input.receivedAt,
+    });
   });
 }
