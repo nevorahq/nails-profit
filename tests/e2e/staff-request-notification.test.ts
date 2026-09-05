@@ -275,10 +275,15 @@ describe("a request the studio answers", () => {
   /**
    * The other end of the message above. The studio was told somebody was
    * waiting; when a person takes the request, the client is told who took it
-   * and when they are expected — by every route they left open, because a
-   * client who gave a phone and an address reads whichever reaches them first.
+   * and when they are expected.
+   *
+   * By email, though the client also left a phone. This message answers
+   * something the client did and were waiting on, so it finds them already
+   * looking — and SMS is kept for the reminder alone, which is the one message
+   * that has to reach a day that moved on. The manage link rides along, because
+   * being told yes does not end the client's business with the appointment.
    */
-  test("tells the client who accepted it and when, by email and by SMS", async () => {
+  test("tells the client who accepted it and when", async () => {
     const card = await bookableCard("Ирина");
     const booking = await requestAppointment(card);
     expect(booking.status).toBe("pending_confirmation");
@@ -289,9 +294,8 @@ describe("a request the studio answers", () => {
     await dispatchDueNotifications({ organizationId: studio.organizationId });
 
     const accepted = sent.filter((message) => message.body.includes("принята мастером Ирина"));
-    expect([...accepted].map((message) => message.channel).sort()).toEqual(["email", "sms"]);
+    expect([...accepted].map((message) => message.channel).sort()).toEqual(["email"]);
     expect([...new Set(accepted.map((message) => message.destination))].sort()).toEqual([
-      "+37369123456",
       "client@studio.example",
     ]);
 
@@ -325,12 +329,15 @@ describe("after the visit is closed", () => {
     capturingProvider();
     await dispatchDueNotifications({ organizationId: studio.organizationId });
 
-    // Every way the client left, not whichever row the dispatcher happened to
-    // claim first: two messages are queued in one transaction, so they share a
-    // due time and the queue orders them by a random id.
+    /*
+     * By email, and only by email. The client left a phone as well, and this
+     * message used to go there too — but SMS now carries the confirmation and
+     * the reminder and nothing else, and a thank-you after the visit is the
+     * clearest case of a message worth writing and not worth interrupting
+     * somebody's evening for.
+     */
     const thanks = sent.filter((message) => message.body.includes("/book/notify-studio"));
     expect([...new Set(thanks.map((message) => message.destination))].sort()).toEqual([
-      "+37369123456",
       "client@studio.example",
     ]);
     // Not a manage link: the appointment is over, and there is nothing left on

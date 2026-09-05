@@ -22,6 +22,7 @@ import { logEvent } from "@/lib/logger";
 import {
   asBookingNotificationTemplate,
   formatAppointmentTime,
+  messageCarriesLink,
   renderNotification,
   staffNotificationTemplates,
   type BookingNotificationTemplate,
@@ -354,6 +355,7 @@ async function prepare(
   const locale = asLocale(facts.locale) ?? asLocale(organization.locale) ?? "ru";
   const rendered = renderNotification({
     template,
+    channel: row.channel,
     locale,
     studioName: organization.name,
     when: facts.appointment
@@ -544,17 +546,25 @@ async function bookingFacts(
   // page instead of minting a manage link for a booking nobody can change.
   const pointsAtBookingPage =
     template === "booking.cancelled" || template === "booking.visit_completed";
-  const link = pointsAtBookingPage
-    ? slug
-      ? bookingPageUrl(slug)
-      : ""
-    : (
-        await issueManageLink(tx, {
-          organizationId: found.booking.organizationId,
-          bookingId: found.booking.id,
-          now,
-        })
-      ).url;
+  /*
+   * A message that shows no link needs none minted. `issueManageLink` is a
+   * write — a token stored against the booking — and doing it for an SMS
+   * reminder would spend one on a message that never prints it, then leave it
+   * live for whoever else can read the row.
+   */
+  const link = !messageCarriesLink(template, row.channel)
+    ? ""
+    : pointsAtBookingPage
+      ? slug
+        ? bookingPageUrl(slug)
+        : ""
+      : (
+          await issueManageLink(tx, {
+            organizationId: found.booking.organizationId,
+            bookingId: found.booking.id,
+            now,
+          })
+        ).url;
 
   return {
     ok: true,

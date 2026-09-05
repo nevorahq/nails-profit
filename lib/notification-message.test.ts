@@ -9,6 +9,7 @@ import {
 } from "@/lib/notification-message";
 
 const base = {
+  channel: "email" as const,
   locale: "ru" as const,
   studioName: "Green Nails",
   when: "2 сент. 2026 г., 10:00",
@@ -24,10 +25,15 @@ describe("transactional templates", () => {
     // a message is the one part of the flow the client cannot re-read on a page.
     for (const template of bookingNotificationTemplates) {
       for (const locale of supportedLocales) {
-        const rendered = renderNotification({ ...base, template, locale });
-        expect(rendered.subject.trim()).not.toBe("");
-        expect(rendered.body.trim()).not.toBe("");
-        expect(rendered.body).not.toMatch(/\{\w+\}/);
+        // Both shapes: the reminder differs between them, and a message that
+        // renders empty on one channel is as broken as one that renders empty
+        // on both.
+        for (const channel of ["email", "sms"] as const) {
+          const rendered = renderNotification({ ...base, template, locale, channel });
+          expect(rendered.subject.trim()).not.toBe("");
+          expect(rendered.body.trim()).not.toBe("");
+          expect(rendered.body).not.toMatch(/\{\w+\}/);
+        }
       }
     }
   });
@@ -75,6 +81,40 @@ describe("transactional templates", () => {
       "booking.reminder",
     ] as const) {
       expect(renderNotification({ ...base, template }).body).toContain(base.link);
+    }
+  });
+
+  /**
+   * A reminder is the one message the studio pays for on a schedule rather than
+   * in answer to something, and the link is most of what it would pay for: a
+   * one-time token on a long domain against 67 Cyrillic characters to a joined
+   * segment. The sentence still has to survive losing it — a reminder that
+   * reads as a fragment is worse than a long one.
+   */
+  it("drops the link from the reminder on SMS and keeps it in the email", () => {
+    const sms = renderNotification({ ...base, template: "booking.reminder", channel: "sms" });
+    expect(sms.body).not.toContain(base.link);
+    expect(sms.body).toBe("Green Nails: напоминаем о записи 2 сент. 2026 г., 10:00.");
+
+    const email = renderNotification({ ...base, template: "booking.reminder", channel: "email" });
+    expect(email.body).toContain(base.link);
+    expect(email.html).toContain(base.link);
+  });
+
+  it("keeps every other client message the same on both channels", () => {
+    // Only the reminder was singled out. A rule that quietly stripped links
+    // from the confirmation too would take away the one thing a client needs
+    // when they want to move an appointment they have already been promised.
+    for (const template of [
+      "booking.confirmed",
+      "booking.request_accepted",
+      "booking.rescheduled",
+      "booking.link_reissued",
+    ] as const) {
+      const sms = renderNotification({ ...base, template, channel: "sms" });
+      const email = renderNotification({ ...base, template, channel: "email" });
+      expect(sms.body).toContain(base.link);
+      expect(sms.body).toBe(email.body);
     }
   });
 
