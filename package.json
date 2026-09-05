@@ -34,7 +34,8 @@
     "ops:notifications": "node scripts/notifications.mjs",
     "ops:booking-metrics": "node scripts/booking-metrics.mjs",
     "ops:log-events": "node scripts/log-events.mjs",
-    "ops:booking-latency": "node scripts/booking-latency.mjs"
+    "ops:booking-latency": "node scripts/booking-latency.mjs",
+    "ops:smsmd-stuck": "node scripts/smsmd-stuck.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
