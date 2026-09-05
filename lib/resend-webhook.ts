@@ -1,8 +1,9 @@
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { notificationOutbox, notificationProviderEvents } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { advanceProviderStatus } from "@/lib/notification-provider-status";
 
 const TRACKED_EVENTS = {
   "email.sent": "sent",
@@ -79,27 +80,24 @@ export async function handleVerifiedResendWebhook(
       })
       .onConflictDoNothing({ target: notificationProviderEvents.providerEventId })
       .returning({ id: notificationProviderEvents.id });
-    if (inserted.length === 0) return "duplicate" as const;
 
-    // Resend does not guarantee event ordering. Historical events stay in the
-    // audit table, while the outbox summary only moves along provider time.
-    await tx
-      .update(notificationOutbox)
-      .set({
-        providerStatus,
-        providerEventAt: eventCreatedAt,
-        updatedAt: receivedAt,
-      })
-      .where(
-        and(
-          eq(notificationOutbox.id, notificationId),
-          or(
-            isNull(notificationOutbox.providerEventAt),
-            lt(notificationOutbox.providerEventAt, eventCreatedAt),
-          ),
-        ),
-      );
+    /*
+     * Resend does not guarantee event ordering. Historical events stay in the
+     * audit table; the outbox summary only moves forward — `advanceProviderStatus`
+     * holds what that means, including the case two events share a second and
+     * time cannot decide between them.
+     *
+     * Attempted even for an event already seen. A redelivered webhook is
+     * Resend's normal behaviour, and a summary that an earlier delivery failed
+     * to move has no other chance to be corrected.
+     */
+    await advanceProviderStatus(tx, {
+      notificationId,
+      providerStatus,
+      eventAt: eventCreatedAt,
+      receivedAt,
+    });
 
-    return "recorded" as const;
+    return inserted.length === 0 ? ("duplicate" as const) : ("recorded" as const);
   });
 }
