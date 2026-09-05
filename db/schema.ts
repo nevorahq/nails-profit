@@ -1533,7 +1533,14 @@ export const bookingSettings = pgTable(
       .notNull()
       .references(() => locations.id, { onDelete: "restrict" }),
     publicStatus: bookingPublicStatus("public_status").notNull().default("draft"),
-    slotStepMinutes: integer("slot_step_minutes").notNull().default(15),
+    /**
+     * The grid public slots are offered on, counted from local midnight rather
+     * than from the shift's own start — so a step has to divide the hours a
+     * studio opens at, not just the day. At 60 every opening time lands on the
+     * grid; at 90 or 150 a shift starting at 08:00 offers its first slot at
+     * 09:00 or 10:00.
+     */
+    slotStepMinutes: integer("slot_step_minutes").notNull().default(60),
     minLeadMinutes: integer("min_lead_minutes").notNull().default(120),
     maxAdvanceDays: integer("max_advance_days").notNull().default(60),
     bufferBeforeMinutes: integer("buffer_before_minutes").notNull().default(0),
@@ -1554,7 +1561,7 @@ export const bookingSettings = pgTable(
   },
   (table) => [
     uniqueIndex("booking_settings_location_idx").on(table.locationId),
-    check("booking_settings_step", sql`${table.slotStepMinutes} in (5, 10, 15, 20, 30, 60)`),
+    check("booking_settings_step", sql`${table.slotStepMinutes} in (60, 90, 120, 150)`),
     check("booking_settings_lead", sql`${table.minLeadMinutes} between 0 and 43200`),
     check("booking_settings_advance", sql`${table.maxAdvanceDays} between 1 and 365`),
     check(

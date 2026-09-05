@@ -26,12 +26,10 @@ const settingsSchema = z
   .object({
     public_status: z.enum(["draft", "published", "paused"]).optional(),
     slot_step_minutes: z.union([
-      z.literal(5),
-      z.literal(10),
-      z.literal(15),
-      z.literal(20),
-      z.literal(30),
       z.literal(60),
+      z.literal(90),
+      z.literal(120),
+      z.literal(150),
     ]).optional(),
     min_lead_minutes: z.int().min(0).max(43_200).optional(),
     max_advance_days: z.int().min(1).max(365).optional(),
