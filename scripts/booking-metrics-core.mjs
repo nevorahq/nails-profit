@@ -130,6 +130,24 @@ function timeToBookSeconds(events) {
 }
 
 /**
+ * How long a message may sit without the provider saying what became of it
+ * before that silence is itself the finding.
+ *
+ * The same day `lib/smsmd-delivery-status.ts` polls for — `POLL_WINDOW_HOURS`
+ * there — because this counts precisely the rows that poll gave up on. A test
+ * pins the two together; they are duplicated rather than shared because one is
+ * TypeScript the application bundles and the other is a script run by hand.
+ */
+export const PROVIDER_CONFIRMATION_WINDOW_HOURS = 24;
+
+/**
+ * Provider statuses that settle a message one way or another. Everything else —
+ * `accepted`, `sent`, `delayed`, or no status at all — means the provider is
+ * still holding it, or has quietly stopped talking about it.
+ */
+const OUTCOME_STATUSES = ["delivered", "bounced", "complained", "failed", "suppressed"];
+
+/**
  * @param bookings rows of `{ status, source, created_at }`
  * @param holds rows of `{ status }`
  * @param notifications rows of `{ status, template, attempts, next_attempt_at, scheduled_at, sent_at, provider_status, provider_event_at }`
@@ -198,13 +216,41 @@ export function buildBookingMetricsReport({
     notifications.filter((row) => row.provider_status),
     "provider_status",
   );
+  /*
+   * Messages the provider took and never reported an outcome on.
+   *
+   * The delivery poll gives up after a day (`POLL_WINDOW_HOURS` in
+   * `lib/smsmd-delivery-status.ts`), which is right, and it used to give up
+   * without leaving a mark: the row kept `accepted`, and `accepted` appears in
+   * neither half of the fraction below. Four SMS a provider charged for and
+   * never sent therefore read as a hundred per cent delivery — which is exactly
+   * what the pilot saw on the night its international route stopped carrying
+   * anything.
+   *
+   * Counted from the row rather than from a status of its own, because there is
+   * no status to write: the provider said nothing, and inventing `failed` would
+   * report a failure nobody confirmed. What is knowable is that the window
+   * closed, and that is what this measures.
+   */
+  const unconfirmedByProvider = sent.filter((row) => {
+    if (OUTCOME_STATUSES.includes(row.provider_status)) return false;
+    if (row.sent_at === null || row.sent_at === undefined) return false;
+    const waited = reportTime.getTime() - asDate(row.sent_at).getTime();
+    return waited > PROVIDER_CONFIRMATION_WINDOW_HOURS * 3_600_000;
+  });
   const providerFinished =
     (providerStatuses.delivered ?? 0) +
     (providerStatuses.bounced ?? 0) +
     (providerStatuses.complained ?? 0) +
     (providerStatuses.failed ?? 0) +
     (providerStatuses.suppressed ?? 0);
-  const mailServerDeliveryRate = ratio(providerStatuses.delivered ?? 0, providerFinished);
+  // The unconfirmed go in the denominator and not the numerator, which is the
+  // whole point: a channel that stops delivering has to move this number, and
+  // leaving them out of both halves is how it stayed at one.
+  const mailServerDeliveryRate = ratio(
+    providerStatuses.delivered ?? 0,
+    providerFinished + unconfirmedByProvider.length,
+  );
   const onTimeDeliveryRate = ratio(
     sentWithinTwoMinutes.length,
     finishedMessages + overdueUnfinished.length,
@@ -245,6 +291,20 @@ export function buildBookingMetricsReport({
       0,
       deadLetters.length === 0,
     ),
+    /*
+     * A dead letter is a message we know did not arrive. This is the other
+     * kind: one the provider accepted, charged for, and then said nothing about
+     * for a day. It used to be indistinguishable from a delivery, which is why
+     * it earns a criterion of its own rather than a line in the metrics nobody
+     * reads unless the verdict already says something is wrong.
+     */
+    criterion(
+      "provider_confirms_delivery",
+      "Ни одно принятое provider сообщение не осталось без исхода дольше суток",
+      unconfirmedByProvider.length,
+      0,
+      unconfirmedByProvider.length === 0,
+    ),
     criterion(
       "scheduler_keeps_up",
       "Job lag не больше пяти минут",
@@ -284,6 +344,7 @@ export function buildBookingMetricsReport({
       notifications_dead_letter: deadLetters.length,
       notification_provider_acceptance_rate: providerAcceptanceRate,
       notification_provider_statuses: providerStatuses,
+      notifications_provider_unconfirmed: unconfirmedByProvider.length,
       notification_mail_server_delivery_rate: mailServerDeliveryRate,
       notification_delivery_rate: onTimeDeliveryRate,
       notification_job_lag_seconds: lagSeconds,

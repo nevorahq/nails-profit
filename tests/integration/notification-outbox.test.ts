@@ -18,7 +18,7 @@ import {
   type OutgoingMessage,
 } from "@/lib/notification-provider";
 import { handleVerifiedResendWebhook } from "@/lib/resend-webhook";
-import { pollSmsMdDeliveryStatuses } from "@/lib/smsmd-delivery-status";
+import { pollSmsMdDeliveryStatuses, POLL_WINDOW_HOURS } from "@/lib/smsmd-delivery-status";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
   createClient,
@@ -571,7 +571,7 @@ describe("notification outbox", () => {
         organizationId,
         fetchImpl: answer(2, "Sent", "2026-09-01T12:02:00+03:00"),
       }),
-    ).resolves.toEqual({ checked: 1, updated: 1 });
+    ).resolves.toEqual({ checked: 1, updated: 1, unconfirmed: 0 });
     expect(requested).toEqual(["https://api.sms.md/v3/messages/smsmd-msg-1"]);
 
     // The same status again is the normal case for polling, not an anomaly:
@@ -581,14 +581,14 @@ describe("notification outbox", () => {
         organizationId,
         fetchImpl: answer(2, "Sent", "2026-09-01T12:02:00+03:00"),
       }),
-    ).resolves.toEqual({ checked: 1, updated: 0 });
+    ).resolves.toEqual({ checked: 1, updated: 0, unconfirmed: 0 });
 
     await expect(
       pollSmsMdDeliveryStatuses({
         organizationId,
         fetchImpl: answer(3, "Delivered", "2026-09-01T12:03:00+03:00"),
       }),
-    ).resolves.toEqual({ checked: 1, updated: 1 });
+    ).resolves.toEqual({ checked: 1, updated: 1, unconfirmed: 0 });
 
     const [delivered] = (await rows()).filter((row) => row.channel === "sms");
     expect(delivered.providerStatus).toBe("delivered");
@@ -606,7 +606,7 @@ describe("notification outbox", () => {
         organizationId,
         fetchImpl: answer(3, "Delivered", "2026-09-01T12:04:00+03:00"),
       }),
-    ).resolves.toEqual({ checked: 0, updated: 0 });
+    ).resolves.toEqual({ checked: 0, updated: 0, unconfirmed: 0 });
   });
 
   test("an sms.md status the platform itself could not resolve is left unrecorded", async () => {
@@ -640,13 +640,117 @@ describe("notification outbox", () => {
         )) as unknown as typeof fetch,
     });
 
-    expect(summary).toEqual({ checked: 1, updated: 0 });
+    expect(summary).toEqual({ checked: 1, updated: 0, unconfirmed: 0 });
     const [sms] = (await rows()).filter((row) => row.channel === "sms");
     // Exactly as the send left it: `accepted` is this deployment's own record
     // that the platform took the message, and nothing since has contradicted it.
     expect(sms.providerStatus).toBe("accepted");
     expect(sms.providerEventAt).toBeNull();
     expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(0);
+  });
+
+  /**
+   * The two statuses their own list hides.
+   *
+   * `GET /v3/messages/statuses` answers six; the specification says it omits
+   * «Повторная отправка» (4) and «У оператора» (5), and both occur in their
+   * production data. A status this build has no meaning for used to be skipped
+   * in silence, so a message sitting at 5 kept whatever it had and every run
+   * skipped it again — a delivery outcome thrown away every five minutes.
+   */
+  test("the statuses sms.md hides from its own list are recorded, not skipped", async () => {
+    process.env.SMS_PROVIDER = "smsmd";
+    process.env.SMSMD_API_TOKEN = "smsmd_test_token";
+    process.env.SMSMD_SENDER_ID = "NailProfit";
+
+    setNotificationProvider({
+      name: "smsmd-test",
+      async send() {
+        return { ok: true, providerMessageId: "smsmd-hidden" };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
+    );
+    await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    const answer = (statusId: number, name: string) =>
+      (async () =>
+        new Response(
+          JSON.stringify({
+            status: "success",
+            httpCode: 200,
+            data: {
+              id: "smsmd-hidden",
+              status: { id: statusId, name },
+              dateUpdated: `2026-09-01T12:0${statusId}:00+03:00`,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )) as unknown as typeof fetch;
+
+    // 4 is their platform about to try again: not delivered, not failed.
+    await expect(
+      pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(4, "Повторная отправка") }),
+    ).resolves.toEqual({ checked: 1, updated: 1, unconfirmed: 0 });
+    expect((await rows()).find((row) => row.channel === "sms")?.providerStatus).toBe("delayed");
+
+    // And `delayed` has to stay open, or the row freezes at the one status that
+    // says it is still moving.
+    await expect(
+      pollSmsMdDeliveryStatuses({ organizationId, fetchImpl: answer(5, "У оператора") }),
+    ).resolves.toEqual({ checked: 1, updated: 1, unconfirmed: 0 });
+    expect((await rows()).find((row) => row.channel === "sms")?.providerStatus).toBe("sent");
+  });
+
+  /**
+   * The blind spot itself, in the shape the pilot met it.
+   *
+   * Polling gives up after a day, which is right. It used to give up in
+   * silence: the row kept `accepted`, no metric moved, and four SMS a provider
+   * had charged for and never sent were indistinguishable from four delivered.
+   */
+  test("a message the provider never reported on is counted once the window closes", async () => {
+    process.env.SMS_PROVIDER = "smsmd";
+    process.env.SMSMD_API_TOKEN = "smsmd_test_token";
+    process.env.SMSMD_SENDER_ID = "NailProfit";
+
+    setNotificationProvider({
+      name: "smsmd-test",
+      async send() {
+        return { ok: true, providerMessageId: "smsmd-stuck" };
+      },
+    });
+    await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId, template: BOTH_CHANNELS }),
+    );
+    await dispatchDueNotifications({ organizationId, now: new Date() });
+
+    const refuse = (async () => {
+      throw new Error("the poller must not ask about a row outside its window");
+    }) as unknown as typeof fetch;
+
+    // A day and an hour later the row is past the window: not asked about, and
+    // no longer silent about it either.
+    const later = new Date(Date.now() + (POLL_WINDOW_HOURS + 1) * 3_600_000);
+    await expect(
+      pollSmsMdDeliveryStatuses({ organizationId, now: later, fetchImpl: refuse }),
+    ).resolves.toEqual({ checked: 0, updated: 0, unconfirmed: 1 });
+
+    // Inside the window it is an ordinary open row, not a finding.
+    const soon = new Date(Date.now() + 3_600_000);
+    const answer = (async () =>
+      new Response(
+        JSON.stringify({
+          status: "success",
+          httpCode: 200,
+          data: { id: "smsmd-stuck", status: { id: 1, name: "Queued" } },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch;
+    await expect(
+      pollSmsMdDeliveryStatuses({ organizationId, now: soon, fetchImpl: answer }),
+    ).resolves.toMatchObject({ unconfirmed: 0 });
   });
 
   /**
@@ -693,6 +797,6 @@ describe("notification outbox", () => {
     // Not "asked and got a 404" — never asked. Somebody else's API is not the
     // place to find out that an id was ours all along.
     expect(requested).toEqual([]);
-    expect(summary).toEqual({ checked: 0, updated: 0 });
+    expect(summary).toEqual({ checked: 0, updated: 0, unconfirmed: 0 });
   });
 });
