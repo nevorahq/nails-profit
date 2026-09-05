@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildBookingMetricsReport } from "./booking-metrics-core.mjs";
+import {
+  buildBookingMetricsReport,
+  PROVIDER_CONFIRMATION_WINDOW_HOURS,
+} from "./booking-metrics-core.mjs";
 
 const NOW = new Date("2026-09-10T12:00:00.000Z");
 
@@ -294,5 +297,107 @@ describe("booking metrics", () => {
     // One criterion short of the whole set is still NOT_READY: a gate that
     // passes on five of six is not a gate.
     expect(buildBookingMetricsReport({ ...passing, events: [] }).verdict).toBe("NOT_READY");
+  });
+
+  /**
+   * The night the pilot's international SMS route stopped carrying anything.
+   *
+   * Four messages accepted and charged for, no outcome ever reported, and a
+   * delivery rate of one — because `accepted` sat in neither half of the
+   * fraction. The window closing on a message is now the finding, not the
+   * absence of one.
+   */
+  describe("a message the provider never reported on", () => {
+    const longAgo = new Date(
+      NOW.getTime() - (PROVIDER_CONFIRMATION_WINDOW_HOURS + 1) * 3_600_000,
+    );
+
+    it("drags the delivery rate down instead of vanishing from it", () => {
+      const report = buildBookingMetricsReport({
+        notifications: [
+          message({ provider_status: "delivered" }),
+          message({ sent_at: longAgo, provider_status: "accepted", provider_event_at: null }),
+          message({ sent_at: longAgo, provider_status: "accepted", provider_event_at: null }),
+          message({ sent_at: longAgo, provider_status: null, provider_event_at: null }),
+        ],
+        now: NOW,
+      });
+
+      expect(report.metrics.notifications_provider_unconfirmed).toBe(3);
+      // One delivered out of four the provider was handed, not one out of one.
+      expect(report.metrics.notification_mail_server_delivery_rate).toBe(0.25);
+    });
+
+    it("turns the verdict, which is the whole point of counting it", () => {
+      const report = buildBookingMetricsReport({
+        notifications: [
+          message({ sent_at: longAgo, provider_status: "accepted", provider_event_at: null }),
+        ],
+        now: NOW,
+      });
+
+      const criterion = report.criteria.find((row) => row.key === "provider_confirms_delivery");
+      expect(criterion).toMatchObject({ actual: 1, target: 0, passed: false });
+      expect(report.verdict).toBe("NOT_READY");
+    });
+
+    it("leaves a message still inside the window alone", () => {
+      // Sent an hour ago and not yet confirmed is the ordinary case, not a
+      // finding: the poll has not finished asking.
+      const report = buildBookingMetricsReport({
+        notifications: [
+          message({
+            sent_at: new Date(NOW.getTime() - 3_600_000),
+            provider_status: "accepted",
+            provider_event_at: null,
+          }),
+        ],
+        now: NOW,
+      });
+
+      expect(report.metrics.notifications_provider_unconfirmed).toBe(0);
+      expect(
+        report.criteria.find((row) => row.key === "provider_confirms_delivery")?.passed,
+      ).toBe(true);
+    });
+
+    it("counts every status that is not an outcome, and no status that is", () => {
+      const report = buildBookingMetricsReport({
+        notifications: [
+          message({ sent_at: longAgo, provider_status: "sent" }),
+          message({ sent_at: longAgo, provider_status: "delayed" }),
+          message({ sent_at: longAgo, provider_status: "delivered" }),
+          message({ sent_at: longAgo, provider_status: "bounced" }),
+          message({ sent_at: longAgo, provider_status: "failed" }),
+          message({ sent_at: longAgo, provider_status: "suppressed" }),
+          message({ sent_at: longAgo, provider_status: "complained" }),
+        ],
+        now: NOW,
+      });
+
+      // `sent` and `delayed` say the provider still holds it; the other five
+      // say what became of it.
+      expect(report.metrics.notifications_provider_unconfirmed).toBe(2);
+    });
+
+    it("ignores a message that never reached a provider at all", () => {
+      // Dead-lettered or still queued: nobody was charged, and there is no
+      // provider silence to report.
+      const report = buildBookingMetricsReport({
+        notifications: [
+          message({ status: "dead_letter", sent_at: null, provider_status: null }),
+          message({
+            status: "pending",
+            sent_at: null,
+            provider_status: null,
+            scheduled_at: NOW,
+            next_attempt_at: NOW,
+          }),
+        ],
+        now: NOW,
+      });
+
+      expect(report.metrics.notifications_provider_unconfirmed).toBe(0);
+    });
   });
 });
