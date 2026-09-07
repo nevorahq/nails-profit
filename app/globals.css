@@ -923,6 +923,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .modal-card .button-row { gap: 10rem 12rem; }
 .modal-card .button-row .primary-button,
 .modal-card .button-row .secondary-button { flex: 1 1 180rem; justify-content: center; text-align: center; }
+/*
+ * A window that asks one question carries no paragraph under its heading, so
+ * the heading itself leaves the gap the paragraph would have left — and reads
+ * at the weight of a question rather than of a title.
+ */
+.modal-card h2.modal-ask { margin-bottom: 24rem; font-size: 20rem; line-height: 1.35; }
 /* What the closed visit earned, shown where the run ends rather than promised. */
 .modal-card .visit-card-metrics { margin: 0 0 22rem; padding-top: 0; border-top: 0; text-align: center; }
 
