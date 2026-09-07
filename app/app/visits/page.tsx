@@ -11,7 +11,7 @@ import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
-import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
+import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function VisitsPage({
@@ -228,7 +228,15 @@ export default async function VisitsPage({
                     </p>
                     <p className="visit-card-client">{clientName ?? <span className="muted">—</span>}</p>
 
-                    {incomplete ? (
+                    {/*
+                      Only an incomplete visit says anything about money in
+                      the card now: a complete one no longer carries the four
+                      figures it used to (`.visit-card-metrics`). They are
+                      still what the calendar's completion preview and the
+                      close form show, and the page's own total below the
+                      list is unchanged.
+                    */}
+                    {incomplete && (
                       <>
                         <p className="visit-card-revenue">
                           <span>{t("visits.revenue")}</span>
@@ -250,34 +258,6 @@ export default async function VisitsPage({
                           />
                         </div>
                       </>
-                    ) : (
-                      <div className="visit-card-metrics">
-                        <div>
-                          <span>{t("visits.revenue")}</span>
-                          <strong>{money(snapshot!.revenueMinor)}</strong>
-                        </div>
-                        <div>
-                          <span>{t("visits.keeps")}</span>
-                          <strong
-                            className={snapshot!.contributionMarginMinor! < 0 ? "metric-negative" : undefined}
-                          >
-                            {money(snapshot!.contributionMarginMinor!)}
-                          </strong>
-                        </div>
-                        <div>
-                          <span>{t("visits.margin")}</span>
-                          <strong>{formatBasisPoints(snapshot!.marginBasisPoints, localeTag(locale))}</strong>
-                        </div>
-                        <div>
-                          <span>{t("visits.hourly")}</span>
-                          <strong className={snapshot!.profitPerHourMinor! < 0 ? "metric-negative" : undefined}>
-                            {money(snapshot!.profitPerHourMinor!)}
-                            {snapshot!.estimatedDuration && (
-                              <span className="unit-hint">{t("visits.estimate")}</span>
-                            )}
-                          </strong>
-                        </div>
-                      </div>
                     )}
                     {/*
                       Offered on a complete visit as well, not only on one that
