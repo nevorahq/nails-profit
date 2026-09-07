@@ -680,6 +680,14 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Inline beside the name, not a banner across the row. */
 .specialist-photo .form-error { padding: 4rem 8rem; font-size: 12rem; justify-self: start; }
 
+/* The two facts a master's card states rather than asks about: how they are
+   paid, and at what rate. A definition list because that is what they are, and
+   because a two-column table for two rows would be a table for the sake of one. */
+.specialist-facts { display: grid; gap: 12rem; margin: 16rem 0 0; }
+.specialist-facts > div { display: grid; gap: 2rem; }
+.specialist-facts dt { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.specialist-facts dd { margin: 0; font-size: 15rem; }
+
 .inline-form label.name-combobox {
   position: relative;
   min-width: 280rem;

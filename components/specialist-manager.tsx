@@ -4,10 +4,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
-import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
+import { getTranslator, type MessageKey } from "@/i18n/t";
 import { NameCombobox } from "@/components/name-combobox";
 import { SpecialistPhoto } from "@/components/specialist-photo";
+import { describeRule, ruleFromForm } from "@/lib/commission-rule";
+import type { SpecialistRow } from "@/lib/specialist-cards";
 import {
   SetupGuideDialog,
   useSetupGuide,
@@ -22,64 +23,8 @@ export type OrganizationMember = {
   role: string;
 };
 
-export type SpecialistRow = {
-  id: string;
-  name: string;
-  cooperation_type: string;
-  user_id: string | null;
-  /** Takes the residual profit rather than a fee — the owner who also works. */
-  is_principal: boolean;
-  /** The version of their photo, or null when the card has none. */
-  avatar_version: number | null;
-  default_rule: {
-    type: string;
-    basis_points: number | null;
-    fixed_amount_minor: number | null;
-    base: string;
-  } | null;
-  service_exceptions: {
-    service_id: string | null;
-    type: string;
-    basis_points: number | null;
-    fixed_amount_minor: number | null;
-    base: string;
-  }[];
-  service_assignments: {
-    service_id: string;
-    duration_minutes: number | null;
-    requires_workplace: boolean;
-  }[];
-};
-
 type ServiceOption = { id: string; name: string; duration_minutes: number | null };
 
-type ServiceEditor = {
-  specialistId: string;
-  selected: string[];
-  durationByService: Record<string, string>;
-  workplaceByService: Record<string, boolean>;
-};
-
-function describeRule(rule: SpecialistRow["default_rule"], currency: string, t: Translate) {
-  if (!rule) return null;
-  if (rule.type === "fixed") {
-    return t("specialists.perService", {
-      amount: formatMoneyMinor(rule.fixed_amount_minor ?? 0, currency),
-    });
-  }
-  const rate = formatBasisPoints(rule.basis_points);
-  if (rule.type === "hybrid") {
-    return t("specialists.hybridRule", {
-      amount: formatMoneyMinor(rule.fixed_amount_minor ?? 0, currency),
-      rate,
-    });
-  }
-  const described = t("specialists.ofRevenue", { rate });
-  // Only worth saying when it is not the usual answer. Every rule written
-  // before the base existed is `after_discount`, and labelling all of them
-  // would be noise on every row.
-  return rule.base === "full_price" ? `${described} · ${t("commissionBase.full_price")}` : described;
-}
 
 export function SpecialistManager({
   specialists,
@@ -116,27 +61,6 @@ export function SpecialistManager({
   const guide = useSetupGuide(setupGuide);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  /** Which master is one click from being removed. Null while nobody is. */
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [exceptionOpen, setExceptionOpen] = useState(false);
-  /*
-   * Whose rule the panel is open for, and for which service.
-   *
-   * A master with no rule at all had nowhere to go from their own row: the cell
-   * said «не задана» in a badge that did nothing, while the thing that would
-   * fix it was a panel below, asking again which master was meant. Both are now
-   * the same form, opened already pointing at the row somebody pressed.
-   */
-  const [ruleSpecialist, setRuleSpecialist] = useState("");
-  const [ruleService, setRuleService] = useState("");
-  /*
-   * The panel is at the bottom of a long table, so opening it from a cell near
-   * the top used to look like nothing happening at all: the state flipped, the
-   * form appeared, and it was two screens below the button that summoned it.
-   */
-  const ruleRef = useRef<HTMLDivElement>(null);
-  const [serviceEditor, setServiceEditor] = useState<ServiceEditor | null>(null);
   /*
    * The rule builder needs two pieces of state, and they are per form: showing
    * the guaranteed-amount field only for a hybrid, and remembering which
@@ -151,7 +75,6 @@ export function SpecialistManager({
    * box. Saying so beside the field beats a validation message after the fact.
    */
   const [addCooperation, setAddCooperation] = useState("commission");
-  const [exceptionRuleType, setExceptionRuleType] = useState("percentage");
   const [coveredServiceIds, setCoveredServiceIds] = useState<string[]>([]);
 
   /*
@@ -222,41 +145,6 @@ export function SpecialistManager({
     return true;
   }
 
-  /**
-   * The three shapes the API and the database both insist on: an amount, a
-   * rate, or — for a hybrid — one of each.
-   */
-  function ruleFromForm(data: FormData) {
-    const type = String(data.get("rule_type"));
-    /*
-     * An empty field is not a zero.
-     *
-     * `Number("")` is 0 and passes `Number.isFinite`, so leaving the box blank
-     * used to write a real 0% rule: the master appeared to work for nothing,
-     * every margin on the dashboard read too high, and nothing on screen said
-     * so — a rule was there, so no banner and no refusal. A blank field means
-     * the question was not answered, and the form says so instead.
-     */
-    const typed = String(data.get("rule_value") ?? "").trim();
-    const value = Number(typed);
-    if (typed === "" || !Number.isFinite(value)) return null;
-
-    const base = String(data.get("rule_base") ?? "after_discount");
-    if (type === "fixed") return { type, fixed_amount_minor: Math.round(value * 100) };
-
-    const typedGuarantee = String(data.get("rule_guaranteed") ?? "").trim();
-    const guaranteed = Number(typedGuarantee);
-    if (type === "hybrid") {
-      if (typedGuarantee === "" || !Number.isFinite(guaranteed)) return null;
-      return {
-        type,
-        basis_points: Math.round(value * 100),
-        fixed_amount_minor: Math.round(guaranteed * 100),
-        base,
-      };
-    }
-    return { type, basis_points: Math.round(value * 100), base };
-  }
 
   async function createSpecialist(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -318,100 +206,6 @@ export function SpecialistManager({
     });
   }
 
-  async function addException(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const rule = ruleFromForm(data);
-    if (!rule) {
-      setError(t("specialists.valueRequired"));
-      return;
-    }
-    const service = String(data.get("service_id") ?? "");
-    const ok = await send(
-      `/api/v1/specialists/${data.get("specialist_id")}/commission-rules`,
-      // Empty means «все услуги», which is what a default rule is: the endpoint
-      // reads an absent service_id as exactly that.
-      { ...rule, ...(service ? { service_id: service } : {}) },
-      form,
-    );
-    if (ok) setExceptionOpen(false);
-  }
-
-  async function linkAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    await send(
-      `/api/v1/specialists/${data.get("specialist_id")}`,
-      { user_id: data.get("user_id") },
-      form,
-      "PATCH",
-    );
-  }
-
-  async function unlinkAccount(specialistId: string) {
-    await send(`/api/v1/specialists/${specialistId}`, { user_id: null }, undefined, "PATCH");
-  }
-
-  async function setPrincipal(specialistId: string, value: boolean) {
-    await send(`/api/v1/specialists/${specialistId}`, { is_principal: value }, undefined, "PATCH");
-  }
-
-  /**
-   * Removing a master, in two clicks on purpose.
-   *
-   * The row goes for good when the master never worked — the one entered with a
-   * typo, or the one who never started. A master who has visits or bookings is
-   * archived instead and the answer says so: their commission is inside every
-   * financial snapshot those visits wrote, and a payroll month with nobody
-   * attached to it is not a tidier database, it is a broken report.
-   */
-  async function deleteSpecialist(specialistId: string) {
-    const removed = await send(`/api/v1/specialists/${specialistId}`, null, undefined, "DELETE");
-    if (removed) setConfirmDelete(null);
-  }
-
-  function editServices(person: SpecialistRow) {
-    setError(null);
-    setServiceEditor({
-      specialistId: person.id,
-      selected: person.service_assignments.map((assignment) => assignment.service_id),
-      durationByService: Object.fromEntries(
-        person.service_assignments.map((assignment) => [
-          assignment.service_id,
-          assignment.duration_minutes === null ? "" : String(assignment.duration_minutes),
-        ]),
-      ),
-      workplaceByService: Object.fromEntries(
-        person.service_assignments.map((assignment) => [
-          assignment.service_id,
-          assignment.requires_workplace,
-        ]),
-      ),
-    });
-  }
-
-  async function saveServices(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!serviceEditor) return;
-    const entries = serviceEditor.selected.map((serviceId) => {
-      const duration = serviceEditor.durationByService[serviceId]?.trim() ?? "";
-      return {
-        service_id: serviceId,
-        duration_minutes: duration ? Number(duration) : null,
-        requires_workplace: serviceEditor.workplaceByService[serviceId] ?? false,
-      };
-    });
-    const ok = await send(
-      `/api/v1/specialists/${serviceEditor.specialistId}/services`,
-      { services: entries },
-      undefined,
-      "PUT",
-    );
-    if (ok) setServiceEditor(null);
-  }
-
   /*
    * Anybody without a rule, whatever they are paid by.
    *
@@ -439,18 +233,6 @@ export function SpecialistManager({
    * only masters are named, and only while nothing is linked to their account.
    */
   const waitingForCard = unlinkedMembers.filter((member) => member.role === "master");
-
-  /*
-   * A studio has one owner who works, or none.
-   *
-   * The mark decides how the month's report reads: a principal's commission is
-   * added back below the margin because it never left the business (see
-   * `domain/period-pl.ts`). Two of them would add back two people's pay and
-   * report a profit the studio does not have — so while one is marked, the
-   * button is gone from everybody else's row rather than offered and refused.
-   * Removing the mark brings it back for all of them.
-   */
-  const principal = specialists.find((person) => person.is_principal) ?? null;
 
   return (
     <>
@@ -621,15 +403,13 @@ export function SpecialistManager({
             <th>{t("specialists.specialist")}</th>
             <th>{t("specialists.cooperation")}</th>
             <th>{t("specialists.defaultRule")}</th>
-            <th>{t("specialists.exceptions")}</th>
-            <th>{t("specialists.offeredServices")}</th>
             <th>{t("specialists.account")}</th>
           </tr>
         </thead>
         <tbody>
           {specialists.length === 0 && (
             <tr>
-              <td colSpan={6} className="muted">
+              <td colSpan={4} className="muted">
                 {t("specialists.none")}
               </td>
             </tr>
@@ -637,34 +417,31 @@ export function SpecialistManager({
           {specialists.map((person) => (
             <tr key={person.id}>
               <td>
+                {/*
+                  The name is the way in. Everything decided about one master —
+                  their rule, the exceptions to it, the services they are booked
+                  for, the account behind them, their photograph — is on their
+                  own page now; this table answers who works here, how they are
+                  paid, and whether they can sign in.
+                */}
                 <SpecialistPhoto
                   specialistId={person.id}
                   name={person.name}
                   version={person.avatar_version}
-                  canManage={canManage}
+                  canManage={false}
+                  href={`/app/specialists/${person.id}`}
                   locale={locale}
                 />
               </td>
               {/*
-                The principal mark lives beside the cooperation type because it
-                answers the same question — how this person is paid — and not
-                beside the account, where it would compete with two actions
-                already there. `badge-accent`, not `badge-warning`: it states a
-                fact, it is not something to go and fix.
+                The principal mark reads beside the cooperation type because it
+                answers the same question — how this person is paid.
+                `badge-accent`, not `badge-warning`: it states a fact, it is not
+                something to go and fix.
               */}
               <td>
                 {t(`cooperation.${person.cooperation_type}` as MessageKey)}
                 {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
-                {canManage && (principal === null || principal.id === person.id) && (
-                  <button
-                    className="inline-action"
-                    type="button"
-                    disabled={pending}
-                    onClick={() => setPrincipal(person.id, !person.is_principal)}
-                  >
-                    {person.is_principal ? t("specialists.principalUnset") : t("specialists.principalSet")}
-                  </button>
-                )}
               </td>
               <td>
                 {person.default_rule ? (
@@ -679,118 +456,15 @@ export function SpecialistManager({
                       <span className="unit-hint">{t("specialists.imputedLabour")}</span>
                     )}
                   </>
-                ) : canManage ? (
-                  // The badge used to state the gap and do nothing about it.
-                  <button
-                    className="badge-warning badge-button"
-                    type="button"
-                    onClick={() => {
-                      setRuleSpecialist(person.id);
-                      setRuleService("");
-                      setExceptionOpen(true);
-                      // After the panel has been told to open, not before.
-                      requestAnimationFrame(() =>
-                        ruleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
-                      );
-                    }}
-                  >
-                    {t("specialists.notSet")}
-                  </button>
                 ) : (
                   <span className="badge-warning">{t("specialists.notSet")}</span>
                 )}
               </td>
               <td>
-                {person.service_exceptions.length === 0 ? (
-                  <span className="muted">—</span>
-                ) : (
-                  <ul className="compact-list">
-                    {person.service_exceptions.map((rule) => (
-                      <li key={`${person.id}-${rule.service_id}`}>
-                        {services.find((service) => service.id === rule.service_id)?.name ?? t("services.service")}:{" "}
-                        {describeRule(rule, currency, t)}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </td>
-              <td>
-                {person.service_assignments.length === 0 ? (
-                  <span className="muted">{t("specialists.allServices")}</span>
-                ) : (
-                  <ul className="compact-list">
-                    {person.service_assignments.map((assignment) => (
-                      <li key={assignment.service_id}>
-                        {services.find((service) => service.id === assignment.service_id)?.name ?? t("services.service")}
-                        {assignment.duration_minutes !== null && (
-                          <span className="unit-hint">{assignment.duration_minutes} {t("common.minutes")}</span>
-                        )}
-                        {assignment.requires_workplace && (
-                          <span className="unit-hint">{t("specialists.requiresWorkplace")}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {canManage && services.length > 0 && (
-                  <button className="inline-action" type="button" disabled={pending} onClick={() => editServices(person)}>
-                    {t("specialists.manageServices")}
-                  </button>
-                )}
-              </td>
-              <td>
                 {person.user_id ? (
-                  <>
-                    {members.find((member) => member.user_id === person.user_id)?.email ?? person.user_id}
-                    {canManage && (
-                      <button
-                        className="inline-action"
-                        type="button"
-                        disabled={pending}
-                        onClick={() => unlinkAccount(person.id)}
-                      >
-                        {t("specialists.unlink")}
-                      </button>
-                    )}
-                  </>
+                  members.find((member) => member.user_id === person.user_id)?.email ?? person.user_id
                 ) : (
-                  <div className="inline-actions">
-                    <span className="badge-warning">{t("specialists.notLinked")}</span>
-                    {canManage &&
-                      (confirmDelete === person.id ? (
-                        <>
-                          <button
-                            className="inline-action danger"
-                            type="button"
-                            disabled={pending}
-                            onClick={() => deleteSpecialist(person.id)}
-                          >
-                            {t("specialists.deleteConfirm")}
-                          </button>
-                          <button
-                            className="inline-action"
-                            type="button"
-                            disabled={pending}
-                            onClick={() => setConfirmDelete(null)}
-                          >
-                            {t("common.cancel")}
-                          </button>
-                          <span className="muted">{t("specialists.deleteHint")}</span>
-                        </>
-                      ) : (
-                        <button
-                          className="inline-action danger"
-                          type="button"
-                          disabled={pending}
-                          onClick={() => {
-                            setError(null);
-                            setConfirmDelete(person.id);
-                          }}
-                        >
-                          {t("common.delete")}
-                        </button>
-                      ))}
-                  </div>
+                  <span className="badge-warning">{t("specialists.notLinked")}</span>
                 )}
               </td>
             </tr>
@@ -798,239 +472,6 @@ export function SpecialistManager({
         </tbody>
       </table>
 
-      {canManage && serviceEditor && (
-        <section className="panel specialist-services-panel">
-          <h2>
-            {t("specialists.servicesOf", {
-              name: specialists.find((person) => person.id === serviceEditor.specialistId)?.name ?? "",
-            })}
-          </h2>
-          <p className="muted">{t("specialists.servicesHint")}</p>
-          <form onSubmit={saveServices}>
-            <fieldset className="specialist-service-list">
-              <legend>{t("specialists.offeredServices")}</legend>
-              {services.map((service) => {
-                const selected = serviceEditor.selected.includes(service.id);
-                return (
-                  <div className="specialist-service-row" key={service.id}>
-                    <label className="checkbox-field specialist-service-name">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={(event) => setServiceEditor({
-                          ...serviceEditor,
-                          selected: event.target.checked
-                            ? [...serviceEditor.selected, service.id]
-                            : serviceEditor.selected.filter((id) => id !== service.id),
-                        })}
-                      />
-                      <strong>{service.name}</strong>
-                    </label>
-                    <label>
-                      {t("specialists.durationOverride")}
-                      <input
-                        type="number"
-                        min="1"
-                        max="720"
-                        step="1"
-                        disabled={!selected}
-                        placeholder={service.duration_minutes ? String(service.duration_minutes) : "—"}
-                        value={serviceEditor.durationByService[service.id] ?? ""}
-                        onChange={(event) => setServiceEditor({
-                          ...serviceEditor,
-                          durationByService: {
-                            ...serviceEditor.durationByService,
-                            [service.id]: event.target.value,
-                          },
-                        })}
-                      />
-                    </label>
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        disabled={!selected}
-                        checked={serviceEditor.workplaceByService[service.id] ?? false}
-                        onChange={(event) => setServiceEditor({
-                          ...serviceEditor,
-                          workplaceByService: {
-                            ...serviceEditor.workplaceByService,
-                            [service.id]: event.target.checked,
-                          },
-                        })}
-                      />
-                      {t("specialists.requiresWorkplace")}
-                    </label>
-                  </div>
-                );
-              })}
-            </fieldset>
-            <div className="inline-actions">
-              <button className="primary-button" type="submit" disabled={pending}>
-                {pending ? t("common.saving") : t("specialists.saveServices")}
-              </button>
-              <button className="secondary-button" type="button" disabled={pending} onClick={() => setServiceEditor(null)}>
-                {t("common.cancel")}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {canManage && specialists.length > 0 && (
-        <>
-          <div className="add-form-toggle">
-            {linkOpen ? (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button className="btn-toggle-close" type="button" onClick={() => setLinkOpen(false)} aria-label={t("common.cancel")}>−</button>
-              </div>
-            ) : (
-              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setLinkOpen(true)}>
-                {t("specialists.linkAccount")}
-              </button>
-            )}
-          </div>
-          <div className={`add-form-wrap${linkOpen ? "" : " add-form-closed"}`}>
-            <div className="add-form-inner">
-              <section className="panel">
-                <h2>{t("specialists.linkAccount")}</h2>
-                <p className="muted">{t("specialists.linkHint")}</p>
-                {unlinkedMembers.length === 0 ? (
-                  <p className="muted">{t("specialists.noMembers")}</p>
-                ) : (
-                  <form className="inline-form" onSubmit={linkAccount}>
-                    <label>
-                      {t("specialists.specialist")}
-                      <select name="specialist_id">
-                        {specialists.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      {t("specialists.member")}
-                      <select name="user_id">
-                        {unlinkedMembers.map((member) => (
-                          <option key={member.user_id} value={member.user_id}>
-                            {member.email} — {t(`roles.${member.role}` as MessageKey)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button className="primary-button" type="submit" disabled={pending}>
-                      {pending ? t("common.saving") : t("specialists.link")}
-                    </button>
-                  </form>
-                )}
-              </section>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/*
-        Services are not a precondition. They are needed to write an exception
-        *for* a service, and not at all for the rule that pays on everything —
-        which is the one a studio is missing when the table says «не задана».
-        Requiring them hid the only control that could fix it from exactly the
-        studio that had not got that far yet.
-      */}
-      {canManage && specialists.length > 0 && (
-        <>
-          <div className="add-form-toggle">
-            {exceptionOpen ? (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button className="btn-toggle-close" type="button" onClick={() => setExceptionOpen(false)} aria-label={t("common.cancel")}>−</button>
-              </div>
-            ) : (
-              <button className="primary-button" type="button" style={{ width: "100%" }} onClick={() => setExceptionOpen(true)}>
-                {t("specialists.serviceException")}
-              </button>
-            )}
-          </div>
-          <div
-            className={`add-form-wrap${exceptionOpen ? "" : " add-form-closed"}`}
-            ref={ruleRef}
-          >
-            <div className="add-form-inner">
-              <section className="panel">
-                <h2>{t("specialists.serviceException")}</h2>
-                <p className="muted">
-{t("specialists.exceptionHint")}
-                </p>
-                <form className="inline-form" onSubmit={addException}>
-                  <label>
-                    {t("specialists.specialist")}
-                    <select
-                      name="specialist_id"
-                      value={ruleSpecialist || specialists[0]?.id || ""}
-                      onChange={(event) => setRuleSpecialist(event.target.value)}
-                    >
-                      {specialists.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t("services.service")}
-                    <select
-                      name="service_id"
-                      value={ruleService}
-                      onChange={(event) => setRuleService(event.target.value)}
-                    >
-                      {/* The default rule, which is «все услуги» rather than a
-                          service left unchosen. */}
-                      <option value="">{t("specialists.defaultRuleOption")}</option>
-                      {services.map((service) => (
-                        <option key={service.id} value={service.id}>
-                          {service.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    {t("specialists.type")}
-                    <select
-                      name="rule_type"
-                      value={exceptionRuleType}
-                      onChange={(event) => setExceptionRuleType(event.target.value)}
-                    >
-                      <option value="percentage">{t("commissionType.percentage")}</option>
-                        <option value="fixed">{t("commissionType.fixed")}</option>
-                      <option value="hybrid">{t("commissionType.hybrid")}</option>
-                    </select>
-                  </label>
-                  {exceptionRuleType === "hybrid" && (
-                    <label>
-                      {t("specialists.guaranteed", { currency })}
-                      <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
-                    </label>
-                  )}
-                  <label>
-                    {t("specialists.value")}
-                    <input name="rule_value" type="number" step="0.01" min="0" placeholder="50" required />
-                  </label>
-                  {exceptionRuleType !== "fixed" && (
-                    <label>
-                      {t("specialists.commissionBase")}
-                      <select name="rule_base" defaultValue="after_discount">
-                        <option value="after_discount">{t("commissionBase.after_discount")}</option>
-                        <option value="full_price">{t("commissionBase.full_price")}</option>
-                      </select>
-                    </label>
-                  )}
-                  <button className="primary-button" type="submit" disabled={pending}>
-                    {t("specialists.saveException")}
-                  </button>
-                </form>
-              </section>
-            </div>
-          </div>
-        </>
-      )}
     </>
   );
 }

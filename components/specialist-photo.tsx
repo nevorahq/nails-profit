@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { AVATAR_EDGE_PIXELS, avatarUrl, squareCrop } from "@/domain/avatar-image";
@@ -27,6 +28,8 @@ export function SpecialistPhoto({
   name,
   version,
   canManage,
+  href,
+  withName = true,
   locale,
 }: {
   specialistId: string;
@@ -34,6 +37,18 @@ export function SpecialistPhoto({
   /** The stored photo's version, or null when there is none. Also cache-busts. */
   version: number | null;
   canManage: boolean;
+  /**
+   * Where the name leads, when it leads anywhere. The list gives it the
+   * master's own page; on that page the name is already the heading, so it
+   * stays plain text rather than linking to where the reader is standing.
+   */
+  href?: string;
+  /**
+   * Whether the name is written beside the circle. The list writes it — that is
+   * the row's first cell. The master's own page does not: the name is the
+   * heading directly above, and printing it twice would read as two people.
+   */
+  withName?: boolean;
   locale: AppLocale;
 }) {
   const t = getTranslator(locale);
@@ -102,7 +117,7 @@ export function SpecialistPhoto({
       </span>
 
       <div className="specialist-photo-name">
-        <span>{name}</span>
+        {withName && (href ? <Link href={href}>{name}</Link> : <span>{name}</span>)}
         {canManage && (
           <div className="inline-actions">
             {/*

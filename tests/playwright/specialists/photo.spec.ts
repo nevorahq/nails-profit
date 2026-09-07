@@ -47,8 +47,18 @@ test.describe("a master's photo", () => {
 
     await page.goto("/app/specialists");
 
+    // The list is a list now: the name is the way into the card, and the photo
+    // is set there rather than in a cell.
     const row = page.locator(".data-table tbody tr").filter({ hasText: studio.specialistName });
-    const circle = row.locator(".specialist-photo .avatar").first();
+    await expect(row.locator(".specialist-photo .avatar")).toHaveText(
+      studio.specialistName.slice(0, 1).toUpperCase(),
+    );
+    await row.getByRole("link", { name: studio.specialistName }).click();
+    // `.app-header h1`, not `h1`: the topbar carries one of its own with the
+    // section's name in it, on this page as on every other.
+    await expect(page.locator(".app-header h1")).toHaveText(studio.specialistName);
+
+    const circle = page.locator(".specialist-photo .avatar").first();
     await expect(circle).toHaveText(studio.specialistName.slice(0, 1).toUpperCase());
 
     // A 600×200 landscape PNG, so the crop has something to do: what is stored
@@ -65,7 +75,7 @@ test.describe("a master's photo", () => {
       return Array.from(bytes);
     });
 
-    await row
+    await page
       .locator('input[type="file"]')
       .setInputFiles({ name: "wide.png", mimeType: "image/png", buffer: Buffer.from(wide) });
 
@@ -90,8 +100,8 @@ test.describe("a master's photo", () => {
     // account behind it — and the browser has it cached already.
     await expect(columnHead.locator(".avatar img")).toHaveAttribute("src", address as string);
 
-    await page.goto("/app/specialists");
-    await row.getByRole("button", { name: /Remove the photo/i }).click();
+    await page.goBack();
+    await page.getByRole("button", { name: /Remove the photo/i }).click();
     await expect(circle).toHaveText(studio.specialistName.slice(0, 1).toUpperCase());
 
     await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
