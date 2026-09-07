@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { avatarImageTypeOf, squareCrop } from "@/domain/avatar-image";
+import { avatarImageTypeOf, avatarUrl, squareCrop } from "@/domain/avatar-image";
 
 function bytes(...values: number[]): Uint8Array {
   return new Uint8Array(values);
@@ -70,5 +70,16 @@ describe("squareCrop", () => {
       expect(crop.x + crop.size).toBeLessThanOrEqual(width);
       expect(crop.y + crop.size).toBeLessThanOrEqual(height);
     }
+  });
+});
+
+describe("avatarUrl", () => {
+  test("a card with no photo has no address", () => {
+    expect(avatarUrl("6f2b", null)).toBeNull();
+  });
+
+  test("carries the version, so a replacement is not the cached one", () => {
+    expect(avatarUrl("6f2b", 3)).toBe("/api/v1/specialists/6f2b/avatar?v=3");
+    expect(avatarUrl("6f2b", 3)).not.toBe(avatarUrl("6f2b", 4));
   });
 });

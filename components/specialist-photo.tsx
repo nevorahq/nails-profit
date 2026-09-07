@@ -3,7 +3,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { AVATAR_EDGE_PIXELS, squareCrop } from "@/domain/avatar-image";
+import { AVATAR_EDGE_PIXELS, avatarUrl, squareCrop } from "@/domain/avatar-image";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 
@@ -97,7 +97,7 @@ export function SpecialistPhoto({
           name.trim().slice(0, 1).toUpperCase() || "?"
         ) : (
           // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
-          <img src={`/api/v1/specialists/${specialistId}/avatar?v=${version}`} alt="" />
+          <img src={avatarUrl(specialistId, version) as string} alt="" />
         )}
       </span>
 

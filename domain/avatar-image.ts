@@ -61,3 +61,15 @@ export function squareCrop(width: number, height: number): { x: number; y: numbe
     size,
   };
 }
+
+/**
+ * Where a card's photo is fetched from, or null when it has none.
+ *
+ * The version is in the query string so that replacing a photo replaces the one
+ * the browser is holding. The bytes are behind a session and answer a
+ * conditional request with a 304, so this is a cache key rather than a cache
+ * buster: it changes when the picture does and never otherwise.
+ */
+export function avatarUrl(specialistId: string, version: number | null): string | null {
+  return version === null ? null : `/api/v1/specialists/${specialistId}/avatar?v=${version}`;
+}

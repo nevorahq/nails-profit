@@ -1,5 +1,12 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import {
+  daysFromToday,
+  disposeStudio,
+  isoDate,
+  requestAppointmentAsClient,
+  seedStudio,
+  type Studio,
+} from "../helpers/studio";
 
 /**
  * Putting a face on a master's card.
@@ -10,12 +17,20 @@ import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
  * e2e test can check the endpoint; only this can check that the two meet — that
  * the file leaving the page is an image the server recognises, and that the
  * circle afterwards holds a photograph instead of a letter.
+ *
+ * It follows the picture out of the screen that sets it, too. The calendar's
+ * day columns used to read `user.image` — the account's photo, which nothing
+ * ever wrote — and the point of moving them to the card is that a face set here
+ * is the face there.
  */
 test.describe("a master's photo", () => {
   let studio: Studio;
+  const day = daysFromToday(1);
 
   test.beforeAll(async ({ baseURL }, testInfo) => {
     studio = await seedStudio(baseURL!, testInfo);
+    // The day view draws a column for a master who has something that day.
+    await requestAppointmentAsClient(baseURL!, studio, { date: day });
   });
 
   test.afterAll(async () => {
@@ -66,8 +81,21 @@ test.describe("a master's photo", () => {
     expect(drawn.width).toBe(256);
     expect(drawn.height).toBe(256);
 
+    const address = await photo.getAttribute("src");
+
+    await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
+    const columnHead = page.locator(".calendar-column > h2");
+    await expect(columnHead).toContainText(studio.specialistName);
+    // The same address, so the calendar is reading the card rather than the
+    // account behind it — and the browser has it cached already.
+    await expect(columnHead.locator(".avatar img")).toHaveAttribute("src", address as string);
+
+    await page.goto("/app/specialists");
     await row.getByRole("button", { name: /Remove the photo/i }).click();
     await expect(circle).toHaveText(studio.specialistName.slice(0, 1).toUpperCase());
+
+    await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
+    await expect(page.locator(".calendar-column > h2 .avatar img")).toHaveCount(0);
 
     await context.close();
   });

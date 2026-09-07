@@ -824,7 +824,7 @@ export function CalendarBoard({
               <span className="avatar" aria-hidden="true">
                 {person.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
-                  <img src={person.avatar} alt="" referrerPolicy="no-referrer" />
+                  <img src={person.avatar} alt="" />
                 ) : (
                   person.name.trim().slice(0, 1).toUpperCase() || "?"
                 )}
