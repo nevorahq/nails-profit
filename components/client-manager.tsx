@@ -91,6 +91,15 @@ export function ClientManager({
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   /*
+   * The client the studio has asked to remove, held until they say it twice.
+   * This was a native `confirm()` — an OS window, in the browser's language
+   * rather than the studio's, drawn over a page it shares no styling with.
+   * The row and the request both wait here until the window is answered.
+   */
+  const [confirmDelete, setConfirmDelete] = useState<ClientRow | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const cancelDelete = useRef<HTMLButtonElement>(null);
+  /*
    * Off by default: the list is the studio's working set, and a client they
    * put away should stay away. What it must not be is unreachable — before
    * this there was no screen at all where an archived client existed, so the
@@ -133,6 +142,27 @@ export function ClientManager({
       if (label) button.setAttribute("aria-label", label);
     });
   }, [addOpen]);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    /*
+     * The safe door takes the focus: an Enter still travelling from the
+     * keyboard that opened this window must not be what removes somebody.
+     */
+    cancelDelete.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      // Mid-request the window stays: it is holding the only report of how
+      // the request ended.
+      if (event.key === "Escape" && deletingId === null) {
+        setConfirmDelete(null);
+        setDeleteError(null);
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [confirmDelete, deletingId]);
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -214,9 +244,20 @@ export function ClientManager({
     router.refresh();
   }
 
+  function askDelete(client: ClientRow) {
+    setConfirmDelete(client);
+    setDeleteError(null);
+  }
+
+  function closeConfirm() {
+    if (deletingId !== null) return;
+    setConfirmDelete(null);
+    setDeleteError(null);
+  }
+
   async function deleteClient(client: ClientRow) {
-    if (!confirm(t("clients.deleteConfirm", { name: client.name }))) return;
     setDeletingId(client.id);
+    setDeleteError(null);
 
     const response = await fetch(`/api/v1/clients/${client.id}`, {
       method: "PATCH",
@@ -227,11 +268,18 @@ export function ClientManager({
     setDeletingId(null);
 
     if (!response.ok) {
+      /*
+       * Reported inside the window that asked, rather than through `setError`
+       * below: that message is rendered in the add-client panel, which is
+       * collapsed unless the studio opened it — so the reason a removal
+       * failed used to be written where nobody could read it.
+       */
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? t("clients.deleteFailed"));
+      setDeleteError(payload?.error?.message ?? t("clients.deleteFailed"));
       return;
     }
 
+    setConfirmDelete(null);
     router.refresh();
   }
 
@@ -241,6 +289,7 @@ export function ClientManager({
   }
 
   const colSpan = canWrite ? 7 : 6;
+  const deletePending = confirmDelete !== null && deletingId === confirmDelete.id;
   const archivedCount = clients.filter((client) => client.archived).length;
   const visible = showArchived ? clients : clients.filter((client) => !client.archived);
 
@@ -389,7 +438,7 @@ export function ClientManager({
                           <button
                             className="inline-action danger"
                             type="button"
-                            onClick={() => deleteClient(client)}
+                            onClick={() => askDelete(client)}
                             disabled={deletingId === client.id}
                             aria-label={t("common.delete")}
                           >
@@ -531,7 +580,7 @@ export function ClientManager({
                         <button
                           className="inline-action danger"
                           type="button"
-                          onClick={() => deleteClient(client)}
+                          onClick={() => askDelete(client)}
                           disabled={deletingId === client.id}
                           aria-label={t("common.delete")}
                         >
@@ -586,6 +635,53 @@ export function ClientManager({
                 </div>
               )}
             </section>
+          </div>
+        </div>
+      )}
+
+      {/*
+        The question asked in the studio's own window. `.modal-backdrop` and
+        `.modal-card` are the two classes `components/setup-guide.tsx` already
+        draws itself with, so removal looks like the rest of the application
+        rather than like the browser. Both ways out — the backdrop and Esc —
+        mean «оставить», the same as the left button.
+      */}
+      {confirmDelete && (
+        <div className="modal-backdrop" role="presentation" onClick={closeConfirm}>
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-delete-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="modal-ask" id="client-delete-title">
+              {t("clients.deleteConfirm", { name: confirmDelete.name })}
+            </h2>
+            {deleteError && (
+              <div className="form-error" role="alert" style={{ marginBottom: "18rem" }}>
+                {deleteError}
+              </div>
+            )}
+            <div className="button-row">
+              <button
+                className="secondary-button"
+                type="button"
+                ref={cancelDelete}
+                onClick={closeConfirm}
+                disabled={deletePending}
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => deleteClient(confirmDelete)}
+                disabled={deletePending}
+              >
+                {t("common.delete")}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -923,6 +923,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .modal-card .button-row { gap: 10rem 12rem; }
 .modal-card .button-row .primary-button,
 .modal-card .button-row .secondary-button { flex: 1 1 180rem; justify-content: center; text-align: center; }
+/*
+ * A window that asks one question carries no paragraph under its heading, so
+ * the heading itself leaves the gap the paragraph would have left — and reads
+ * at the weight of a question rather than of a title.
+ */
+.modal-card h2.modal-ask { margin-bottom: 24rem; font-size: 20rem; line-height: 1.35; }
 /* What the closed visit earned, shown where the run ends rather than promised. */
 .modal-card .visit-card-metrics { margin: 0 0 22rem; padding-top: 0; border-top: 0; text-align: center; }
 
@@ -1246,7 +1252,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-card .primary-button,
 .public-booking-shell .primary-button {
   box-shadow: var(--neu-raised-sm);
-  margin-bottom: 20rem;
 }
 
 .app-frame .primary-button:active:not(:disabled),
@@ -2306,6 +2311,13 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/*
+ * The master's own face at the top of their column, the same pairing /visits
+ * heads a group with — sized to the sticky bar rather than to the visit card's
+ * row, so the head keeps its 52rem and the hours below it do not move.
+ */
+.calendar-column > h2 .avatar { width: 28rem; height: 28rem; font-size: 12rem; }
 
 /* The track the cards are placed on, ruled once per hour. */
 .calendar-grid .calendar-list {

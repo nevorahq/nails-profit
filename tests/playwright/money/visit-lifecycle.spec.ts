@@ -110,9 +110,15 @@ test.describe("from a client's request to the month's profit", () => {
     await expect(page.locator(".calendar-entry")).toContainText("Completed");
 
     await page.goto("/app/visits");
-    const visit = page.locator(".visit-card, .panel").filter({ hasText: "Manicure with coating" }).first();
-    await expect(visit).toContainText("MDL 600.00");
-    await expect(visit).toContainText("MDL 240.00");
+    await expect(page.locator(".visit-card").filter({ hasText: "Manicure with coating" })).toHaveCount(1);
+
+    // The card itself no longer prints figures — the four metrics were taken
+    // out of this list — so the money is read where the page still states it,
+    // under the list: what the work brought in, and what the master earned of
+    // it. The same 600 and 240 as before, from the same visit.
+    const total = page.locator(".visit-card-total");
+    await expect(total).toContainText("MDL 600.00");
+    await expect(total).toContainText("MDL 240.00");
 
     await page.goto("/app/reports/month");
     await expect(page.locator("main")).toContainText("MDL 600.00");
