@@ -68,6 +68,13 @@ export type CalendarBooking = Readonly<{
 
 type Option = Readonly<{ id: string; name: string }>;
 
+/**
+ * A specialist as the board draws them: the option plus the photo their column
+ * is headed with. Kept apart from `Option` so the service, add-on and client
+ * selects are not handed a field they have no use for.
+ */
+type Person = Readonly<{ id: string; name: string; avatar?: string | null }>;
+
 /** Statuses that still occupy the specialist, and so still have actions. */
 const LIVE_STATUSES = new Set(["pending_confirmation", "confirmed"]);
 
@@ -149,7 +156,7 @@ export function CalendarBoard({
   today: string;
   bookings: CalendarBooking[];
   locations: readonly Readonly<{ id: string; name: string; timezone: string }>[];
-  specialists: readonly Option[];
+  specialists: readonly Person[];
   services: readonly Readonly<{ id: string; name: string; durationMinutes: number | null }>[];
   addOns: readonly Option[];
   assignments: readonly Readonly<{ specialistId: string; locationId: string }>[];
@@ -797,12 +804,34 @@ export function CalendarBoard({
           };
         };
 
+        /*
+         * A day is grouped by specialist and every other view by date, so the
+         * key is the only thing that says which of the two this heading is
+         * about — a person's id resolves here, a date does not. The face is
+         * drawn inside the `<h2>` rather than around it: the sticky column head
+         * is styled as `.calendar-column > h2` and is already a flex row, so a
+         * wrapper would cost the heading both its stickiness and its rules.
+         */
+        const person = specialists.find((candidate) => candidate.id === group.key);
+
         return (
         <section
           className={isGrid ? "calendar-column" : "panel calendar-group"}
           key={group.key}
         >
-          <h2>{group.title}</h2>
+          <h2>
+            {person && (
+              <span className="avatar" aria-hidden="true">
+                {person.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+                  <img src={person.avatar} alt="" referrerPolicy="no-referrer" />
+                ) : (
+                  person.name.trim().slice(0, 1).toUpperCase() || "?"
+                )}
+              </span>
+            )}
+            {group.title}
+          </h2>
           {items.length === 0 && !isGrid ? (
             <p className="muted">{t("calendar.emptyDay")}</p>
           ) : (

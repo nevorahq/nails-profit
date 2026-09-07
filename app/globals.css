@@ -2313,6 +2313,13 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   text-overflow: ellipsis;
 }
 
+/*
+ * The master's own face at the top of their column, the same pairing /visits
+ * heads a group with — sized to the sticky bar rather than to the visit card's
+ * row, so the head keeps its 52rem and the hours below it do not move.
+ */
+.calendar-column > h2 .avatar { width: 28rem; height: 28rem; font-size: 12rem; }
+
 /* The track the cards are placed on, ruled once per hour. */
 .calendar-grid .calendar-list {
   position: relative;
