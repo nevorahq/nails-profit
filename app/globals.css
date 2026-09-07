@@ -38,7 +38,6 @@
   --neu-light: rgba(255, 255, 255, 0.92);
   --neu-dark: rgba(15, 42, 29, 0.13);
   --neu-dark-soft: rgba(15, 42, 29, 0.07);
-  --neu-raised-sm: -3rem -3rem 8rem var(--neu-light), 3rem 3rem 9rem var(--neu-dark);
   --neu-inset: inset 4rem 4rem 9rem var(--neu-dark-soft), inset -3rem -3rem 8rem var(--neu-light);
   --neu-pressed: inset 3rem 3rem 8rem var(--neu-dark), inset -2rem -2rem 6rem var(--neu-light);
 
@@ -1227,18 +1226,19 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* ==========================================================================
    Soft UI (neumorphism)
    ==========================================================================
-   Controls are extruded from the ground rather than drawn on it: one light
-   source at the top-left, a light edge facing it and a soft shadow away from
-   it. Borders mostly go, because an edge that is already modelled does not
-   need a line as well; the boxes a user types into are pushed *in* instead of
-   out, which is the whole vocabulary of this style — raised means "press me",
-   inset means "fill me".
+   Half of a soft UI, and the half that earns its keep.
 
-   The large surfaces are flat. Panels, auth cards, empty states and a table
-   standing on its own used to be extruded too, and at that size the effect
-   stopped reading as a raised object and started reading as a haze around a
-   rectangle. What is modelled now is the things a hand goes to: buttons,
-   badges, the account chip, a link under the pointer.
+   Nothing is extruded any more: a raised edge is a light one facing a light
+   source at the top-left, and at any size it read as a haze around a rectangle
+   rather than as an object above the page. What stays is the other direction —
+   the boxes a user types into are pushed *in*, and a control being pressed goes
+   *in* further. Inset still means "fill me", and pressed still means "you are
+   pressing this".
+
+   Borders mostly go with it, because a fill against a different fill is already
+   an edge. The elements that lost both an outline and a modelled edge kept
+   their own colour, which is what separates them now: a panel from the page, a
+   badge from the panel, a notice from the form beside it.
 
    Two more things deliberately survive it.
 
@@ -1280,41 +1280,29 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   box-shadow: var(--neu-inset);
 }
 
-/* The accent button keeps its fill — it is the one element that should read as
-   a decision rather than as a surface. It gains the modelling, not a colour. */
-.app-frame .primary-button,
-.auth-card .primary-button,
-.public-booking-shell .primary-button {
-  box-shadow: var(--neu-raised-sm);
-}
-
 .app-frame .primary-button:active:not(:disabled),
 .auth-card .primary-button:active:not(:disabled) {
   box-shadow: var(--neu-pressed);
 }
 
-.app-frame .secondary-button,
-.auth-card .secondary-button,
-.public-booking-shell .secondary-button {
-  border: 0;
-  background: var(--surface);
-  box-shadow: var(--neu-raised-sm);
-}
+/* The quiet button keeps its outline.
 
-.app-frame .secondary-button:hover:not(:disabled),
-.public-booking-shell .secondary-button:hover:not(:disabled) {
-  background: var(--surface-strong);
-}
+   It had lost it here, on the reading that a modelled edge says the same thing
+   — and with the modelling gone it said nothing at all: `--surface` is the
+   panel's own colour, so «Скачать данные» and «Удалить аккаунт» were a line of
+   text where a button had been. The hover fill that paired with that override
+   goes with it, and the base rule's own — a sage wash and a darker rim — comes
+   back. */
 
 .app-frame .secondary-button:active:not(:disabled) {
   box-shadow: var(--neu-pressed);
 }
 
-/* Cards in a list are raised too, so a list reads as a stack of objects. */
+/* An entry keeps the surface it is drawn on and loses the outline; what tells
+   one from the next is the gap between them and the status stripe below. */
 .app-frame .calendar-entry {
   border: 0;
   border-radius: 20rem;
-  box-shadow: var(--neu-raised-sm);
 }
 
 /*
@@ -1335,19 +1323,16 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .app-frame .warning-banner,
 .public-booking-shell .warning-banner {
   border: 0;
-  box-shadow: var(--neu-raised-sm);
 }
 
-/* Cards nested inside a panel are raised a little, never as much as the panel
-   holding them: two identical elevations next to each other read as one flat
-   sheet with a seam. */
+/* Cards nested inside a panel lose their outline and keep their fill: against
+   the panel behind them that is the whole separation they need. */
 .app-frame .metric-card,
 .app-frame .metric,
 .app-frame .checkbox-set,
 .app-frame .empty-state,
 .public-booking-shell .metric-card {
   border: 0;
-  box-shadow: var(--neu-raised-sm);
 }
 
 /* A table that is not inside a panel — the service and client lists are laid
@@ -1368,8 +1353,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Grouping in the sidebar was a rule; here the space does that work. */
 .app-frame .sidebar-group { border: 0; }
 
-/* The badge sits on a surface, so it is pressed into it rather than outlined. */
-.app-frame .badge-accent { border: 0; box-shadow: var(--neu-raised-sm); }
+/* The badge carries its own fill, so the outline around it was a second edge
+   saying the same thing. */
+.app-frame .badge-accent { border: 0; }
 
 /*
  * Checkboxes and radios, everywhere, in one place.
@@ -1416,8 +1402,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-card input[type="radio"],
 .public-booking-shell input[type="radio"] { border-radius: 999rem; }
 
-/* Checked is raised and filled: the one state that has to be readable from
-   across the room, in the accent the product already uses. */
+/* Checked is filled: the one state that has to be readable from across the
+   room, in the accent the product already uses. */
 .app-frame input[type="checkbox"]:checked,
 .auth-card input[type="checkbox"]:checked,
 .public-booking-shell input[type="checkbox"]:checked {
@@ -1426,14 +1412,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   background-repeat: no-repeat;
   background-position: center;
   background-size: 13rem;
-  box-shadow: var(--neu-raised-sm);
 }
 
 .app-frame input[type="radio"]:checked,
 .auth-card input[type="radio"]:checked,
 .public-booking-shell input[type="radio"]:checked {
   background-image: radial-gradient(circle at center, var(--accent) 0 32%, transparent 34%);
-  box-shadow: var(--neu-raised-sm);
 }
 
 .app-frame input[type="checkbox"]:disabled,
@@ -1509,14 +1493,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   border-radius: 14rem;
 }
 
-.app-frame .sidebar-link:hover:not(.active) { box-shadow: var(--neu-raised-sm); border-radius: 14rem; }
-
 .app-frame .bottom-link.active { box-shadow: var(--neu-pressed); border-radius: 14rem; }
 
-/* The account chip in the header is a control, so it is modelled like one. */
-.app-frame .topbar-account { border: 0; box-shadow: var(--neu-raised-sm); }
+/* The chip and the bell are flat until a pointer is on them, and pressed while
+   it is. */
+.app-frame .topbar-account { border: 0; }
 .app-frame .topbar-account:hover { box-shadow: var(--neu-pressed); }
-.app-frame .topbar-notifications { box-shadow: var(--neu-raised-sm); }
 .app-frame .topbar-notifications:hover { box-shadow: var(--neu-pressed); }
 
 /* The bars that frame the app are surfaces as well. */
