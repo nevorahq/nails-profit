@@ -38,7 +38,6 @@
   --neu-light: rgba(255, 255, 255, 0.92);
   --neu-dark: rgba(15, 42, 29, 0.13);
   --neu-dark-soft: rgba(15, 42, 29, 0.07);
-  --neu-raised: -7rem -7rem 16rem var(--neu-light), 7rem 7rem 18rem var(--neu-dark);
   --neu-raised-sm: -3rem -3rem 8rem var(--neu-light), 3rem 3rem 9rem var(--neu-dark);
   --neu-inset: inset 4rem 4rem 9rem var(--neu-dark-soft), inset -3rem -3rem 8rem var(--neu-light);
   --neu-pressed: inset 3rem 3rem 8rem var(--neu-dark), inset -2rem -2rem 6rem var(--neu-light);
@@ -368,7 +367,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* A hover is an input, so it belongs to the standard motion system. The plain
  * cards lift; the featured one is already raised and only deepens its shadow,
  * so its resting offset never moves. */
-.pricing-card:not(.featured):hover { transform: translateY(-6rem); border-color: var(--marketing-accent); box-shadow: var(--neu-raised); }
+.pricing-card:not(.featured):hover { transform: translateY(-6rem); border-color: var(--marketing-accent); }
 .pricing-card.featured { border-color: var(--marketing-ink); background: var(--marketing-ink); color: var(--marketing-on-dark); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); transform: translateY(-14rem); transition: box-shadow var(--duration-base) var(--ease-standard); }
 .pricing-card.featured:hover { box-shadow: 0 34rem 66rem rgba(15, 42, 29, .26); }
 .pricing-badge { position: absolute; top: -11rem; left: 28rem; padding: 4rem 11rem; border-radius: 99rem; background: var(--marketing-profit); color: var(--marketing-ink); font-size: 10rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
@@ -1228,14 +1227,20 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* ==========================================================================
    Soft UI (neumorphism)
    ==========================================================================
-   Surfaces are extruded from the ground rather than drawn on it: one light
+   Controls are extruded from the ground rather than drawn on it: one light
    source at the top-left, a light edge facing it and a soft shadow away from
    it. Borders mostly go, because an edge that is already modelled does not
-   need a line as well; controls the user types into are pushed *in* instead of
+   need a line as well; the boxes a user types into are pushed *in* instead of
    out, which is the whole vocabulary of this style — raised means "press me",
    inset means "fill me".
 
-   Two things deliberately survive it.
+   The large surfaces are flat. Panels, auth cards, empty states and a table
+   standing on its own used to be extruded too, and at that size the effect
+   stopped reading as a raised object and started reading as a haze around a
+   rectangle. What is modelled now is the things a hand goes to: buttons,
+   badges, the account chip, a link under the pointer.
+
+   Two more things deliberately survive it.
 
    `:focus-visible` keeps its solid ring. Soft UI is a low-contrast style and
    its usual failure is a focus state you cannot find; that ring is the one
@@ -1254,12 +1259,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-shell .panel {
   border: 0;
   border-radius: 28rem;
-  box-shadow: var(--neu-raised);
 }
 
 .auth-card {
   border: 0;
-  box-shadow: var(--neu-raised);
 }
 
 /* Fields are pressed into the surface: the same shadows, inverted. */
@@ -1329,8 +1332,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   border-left-width: 4rem;
 }
 
-.app-frame .calendar-entry[open] { box-shadow: var(--neu-raised); }
-
 /* Notices keep their semantic colour and lose the outline. */
 .app-frame .warning-banner,
 .public-booking-shell .warning-banner {
@@ -1350,16 +1351,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   box-shadow: var(--neu-raised-sm);
 }
 
-.app-frame .empty-state { box-shadow: var(--neu-raised); }
-
-/* A table that is not inside a panel — the service and client lists
-   are laid out that way — needs a surface of its own. On a flat design its own
-   row rules were enough to hold it together; extruded surfaces around it leave
-   it looking like it fell out of one. */
+/* A table that is not inside a panel — the service and client lists are laid
+   out that way — needs a surface of its own: its row rules hold the rows to
+   each other, not the table to the page. */
 .app-shell > .data-table {
   background: var(--surface);
   border-radius: 24rem;
-  box-shadow: var(--neu-raised);
   padding: 8rem 14rem;
   border-collapse: separate;
   border-spacing: 0;
