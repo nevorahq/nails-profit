@@ -1,38 +1,33 @@
 import Link from "next/link";
 
 /**
- * One goal, the reason it matters, and one button.
+ * One goal and one button.
  *
  * The shape both guided screens share — the first run on `/app` and the month's
  * own setup below the report — because they make the same promise in different
  * places: a figure the studio cannot read yet, and the single thing that would
  * make it readable.
  *
- * Nothing else is on it. A folded list of what else is outstanding, and a way to
- * skip the whole thing, were both tried here and both removed: this panel asks
- * for one thing, and every extra line on it is an invitation to do something
- * other than that one thing.
+ * Nothing else is on it. A folded list of what else is outstanding, a way to
+ * skip the whole thing, a line of stakes above the goal and a hint below it
+ * were all tried here and all removed: this panel asks for one thing, and every
+ * extra line on it is an invitation to do something other than that one thing.
  */
 export function GoalPanel({
   eyebrow,
-  lead,
   goal,
-  hint,
   action,
   href,
   remaining,
   back,
 }: {
-  eyebrow: string;
   /**
-   * Optional, and the first run passes neither. A screen that says «три
-   * коротких шага» above a goal that already names the step is explaining the
-   * explanation; the month's panel keeps its line, because there the stakes —
-   * a report that reads higher than the truth — are not visible from the goal.
+   * Optional, and the month's panel passes none. «Расчёт месяца» over «Внесите
+   * постоянные затраты» named the section a goal already belongs to; the first
+   * run keeps its eyebrow because there it is the screen's only heading.
    */
-  lead?: string;
+  eyebrow?: string;
   goal: string;
-  hint?: string;
   action: string;
   href: string;
   /** «Осталось 2 шага» — the size of what is left, without listing it. */
@@ -47,13 +42,11 @@ export function GoalPanel({
 }) {
   return (
     <section className="panel goal-panel" aria-labelledby="goal-panel-title">
-      <span className="eyebrow">{eyebrow}</span>
-      {lead && <p className="goal-panel-lead">{lead}</p>}
+      {eyebrow && <span className="eyebrow">{eyebrow}</span>}
 
       <h2 id="goal-panel-title" className="goal-panel-goal">
         {goal}
       </h2>
-      {hint && <p className="goal-panel-hint">{hint}</p>}
 
       <div className="button-row">
         <Link className="primary-button" href={href}>

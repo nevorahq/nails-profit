@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { withTenant } from "@/db/tenant";
 import { recordAuditEvent } from "@/lib/audit";
-import { cancelPendingNotifications, notifyBooking } from "@/lib/booking-notifications";
+import {
+  cancelPendingNotifications,
+  notifyBooking,
+  notifyStaff,
+} from "@/lib/booking-notifications";
 import { transitionBooking } from "@/lib/booking-service";
 import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
@@ -66,6 +70,23 @@ async function handlePost(
       organizationId: access.organizationId,
       bookingId: access.booking.id,
       template: "booking.cancelled",
+      occurrence: String(cancelled.booking.version),
+    });
+    /*
+     * And the studio, for whom this is the most useful of the four: an hour
+     * that was spoken for is free again, and the sooner somebody knows the more
+     * of it is still sellable. Until now the master found out by arriving to an
+     * empty chair.
+     *
+     * Ordered before the sweep below on purpose — that one only drops
+     * reminders, but a message about the cancellation queued after a call named
+     * "cancel pending notifications" would be one refactor away from being
+     * deleted by it.
+     */
+    await notifyStaff(tx, {
+      organizationId: access.organizationId,
+      bookingId: access.booking.id,
+      template: "booking.staff_cancelled",
       occurrence: String(cancelled.booking.version),
     });
     // Nobody is coming, so nobody is reminded.

@@ -44,6 +44,37 @@ export const bookingNotificationTemplates = [
    * account linked yet.
    */
   "booking.staff_requested",
+  /**
+   * The three that follow are the same idea as `booking.staff_requested` — the
+   * studio hearing about something a client did on the public page — for the
+   * events that used to reach nobody.
+   *
+   * A booking taken under instant confirmation asks for no decision, so it was
+   * never a request and never summoned anyone; the studio simply gained an
+   * appointment it would find out about by opening the calendar. And a client
+   * who moves or calls off a visit changes somebody's working day: the chair is
+   * held at a different hour, or freed for another client, and the person whose
+   * chair it is learned neither.
+   */
+  "booking.staff_booked",
+  "booking.staff_rescheduled",
+  "booking.staff_cancelled",
+  /**
+   * The fourth is the odd one, and the only message in the product addressed to
+   * somebody the appointment no longer belongs to.
+   *
+   * A client moving themselves on the public page may land on a different
+   * master's day, and the three above all follow the booking: they reach
+   * whoever holds it now. The person who held it before is the one whose hour
+   * just came free, which is the half of the event with something to do about
+   * it — and until this existed they were the only person in the studio the
+   * move reached in no way at all.
+   *
+   * Everything it says is about a state the booking has left, so it is the one
+   * message whose facts cannot be read off the row it points at: the master and
+   * the hour both come from the queued payload. See `staffFacts`.
+   */
+  "booking.staff_released",
 ] as const;
 
 export type BookingNotificationTemplate = (typeof bookingNotificationTemplates)[number];
@@ -76,12 +107,36 @@ const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.link_reissued": "notify.linkReissued",
   "booking.visit_completed": "notify.visitCompleted",
   "booking.staff_requested": "notify.staffRequested",
+  "booking.staff_booked": "notify.staffBooked",
+  "booking.staff_rescheduled": "notify.staffRescheduled",
+  "booking.staff_cancelled": "notify.staffCancelled",
+  "booking.staff_released": "notify.staffReleased",
 };
 
 /** Templates whose reader is the studio, not the client. */
-export const staffNotificationTemplates: readonly BookingNotificationTemplate[] = [
+export const staffNotificationTemplates = [
   "booking.staff_requested",
-];
+  "booking.staff_booked",
+  "booking.staff_rescheduled",
+  "booking.staff_cancelled",
+  "booking.staff_released",
+] as const satisfies readonly BookingNotificationTemplate[];
+
+export type StaffNotificationTemplate = (typeof staffNotificationTemplates)[number];
+
+/**
+ * Narrows a queued row's template to the studio-facing set.
+ *
+ * A guard rather than a plain `includes`, because both callers need the narrow
+ * type afterwards and not merely the answer: the queue writes one of these per
+ * person, and the dispatcher decides from it whether the message is still true
+ * — and neither should be reachable with a client's template by accident.
+ */
+export function isStaffNotificationTemplate(
+  template: BookingNotificationTemplate,
+): template is StaffNotificationTemplate {
+  return (staffNotificationTemplates as readonly string[]).includes(template);
+}
 
 /**
  * The one message a client hears on their phone. Everything else reaches them
@@ -116,8 +171,10 @@ export type NotificationFacts = Readonly<{
   /** Already formatted in the location's zone; a client reads local time only. */
   when: string;
   /**
-   * The master the appointment is with, by the name on their card. Only one
-   * template names a person; the rest are handed it and ignore it.
+   * The master the appointment is with, by the name on their card. Named by the
+   * client's "заявка принята" and by the three staff messages — where the owner
+   * reads about a chair that is not theirs and the name is the whole point of
+   * the sentence. The rest are handed it and ignore it.
    */
   specialist: string;
   link: string;

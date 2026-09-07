@@ -5,7 +5,10 @@ import {
   asBookingNotificationTemplate,
   bookingNotificationTemplates,
   formatAppointmentTime,
+  isStaffNotificationTemplate,
   renderNotification,
+  smsNotificationTemplates,
+  staffNotificationTemplates,
 } from "@/lib/notification-message";
 
 const base = {
@@ -156,7 +159,7 @@ describe("transactional templates", () => {
     expect(thanks.html).not.toContain("<a ");
   });
 
-  it("names the master in the answer to a request, and only there", () => {
+  it("names the master where the reader needs the name, and nowhere else", () => {
     // The client asked and a person said yes; the message says who, when, and
     // in the language the client chose.
     for (const locale of supportedLocales) {
@@ -165,12 +168,45 @@ describe("transactional templates", () => {
       expect(accepted.body).toContain(base.when);
     }
 
+    /*
+     * And the studio's own messages about what a client did, because the owner
+     * gets a copy of every one of them: they are reading about a chair that is
+     * not theirs, and the name is the difference between the message and a trip
+     * to the calendar to work out whose day just changed.
+     *
+     * `staff_requested` is the exception by age rather than by argument — its
+     * wording predates the other three and is not worth rewriting to prove a
+     * point about consistency.
+     */
+    for (const template of staffNotificationTemplates) {
+      if (template === "booking.staff_requested") continue;
+      for (const locale of supportedLocales) {
+        expect(renderNotification({ ...base, locale, template }).body).toContain("Ирина");
+      }
+    }
+
     // A booking the studio made itself has nobody to name: the wording that
     // announces an acceptance must not leak into it.
     for (const template of bookingNotificationTemplates) {
       if (template === "booking.request_accepted") continue;
+      if (isStaffNotificationTemplate(template)) continue;
       expect(renderNotification({ ...base, template }).body).not.toContain("Ирина");
     }
+  });
+
+  /**
+   * The rule a studio is billed by, in one assertion.
+   *
+   * SMS is the message that arrives into a day which has moved on, and that is
+   * the whole of what it is for. Everything else — a client answered while they
+   * are still looking at the screen that caused it, and every message addressed
+   * to the studio, who have an account with an address and no phone number at
+   * all — travels by email. Written as an equality rather than as four absences
+   * so that adding a template to the paid channel has to be a decision somebody
+   * makes here on purpose.
+   */
+  it("keeps SMS to the one message nobody is expecting", () => {
+    expect([...smsNotificationTemplates]).toEqual(["booking.reminder"]);
   });
 });
 

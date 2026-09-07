@@ -236,8 +236,6 @@ function ExpenseForm({ locale, onAdded }: { locale: AppLocale; onAdded: () => vo
           {pending ? t("common.saving") : t("common.add")}
         </button>
       </form>
-      <p className="muted">{t("expenses.recurringHint")}</p>
-      <p className="muted">{t("expenses.classHint")}</p>
       {error && (
         <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
           {error}

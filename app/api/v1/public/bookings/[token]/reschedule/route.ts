@@ -9,6 +9,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import {
   cancelPendingNotifications,
   notifyBooking,
+  notifyReleasedSpecialist,
+  notifyStaff,
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
 import { loadBooking, rescheduleBooking } from "@/lib/booking-service";
@@ -204,6 +206,41 @@ async function handlePost(
         template: "booking.rescheduled",
         occurrence: String(moved.booking.version),
       });
+      /*
+       * And the studio, whose day this just changed. A client moving their own
+       * appointment is the one booking change nobody in the studio performs, so
+       * it was also the one nobody was told about: the hour was held somewhere
+       * else on a calendar the master had no reason to reopen.
+       *
+       * Keyed on the new version, so a client who moves twice produces two
+       * messages rather than one — the second time is the one that matters, and
+       * a shared key would have silently dropped it as a duplicate.
+       */
+      await notifyStaff(tx, {
+        organizationId: access.organizationId,
+        bookingId: access.booking.id,
+        template: "booking.staff_rescheduled",
+        occurrence: String(moved.booking.version),
+      });
+      /*
+       * And, where the client landed on somebody else's day, the master they
+       * left. The message above follows the booking, so after a move between
+       * cards it reaches the person who gained the hour and says nothing to the
+       * person who lost it — who is the one with a free hour to sell and the
+       * one who would otherwise keep it blocked out.
+       *
+       * Only on a change of card: moving within one master's day is already the
+       * whole of what the message above says.
+       */
+      if (moved.booking.specialistId !== access.booking.specialistId) {
+        await notifyReleasedSpecialist(tx, {
+          organizationId: access.organizationId,
+          bookingId: access.booking.id,
+          specialistId: access.booking.specialistId,
+          startsAt: moved.previous.start,
+          occurrence: String(moved.booking.version),
+        });
+      }
       // The reminder belonged to the old time; it is dropped and re-queued for
       // the new one, so a client is never reminded of an appointment that moved.
       await cancelPendingNotifications(tx, access.booking.id);

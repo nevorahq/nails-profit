@@ -280,33 +280,38 @@ export function SpecialistManager({
           <div className="compose-inner">
             <section className="panel">
               <h2>{t("specialists.add")}</h2>
-              <form className="inline-form" onSubmit={createSpecialist}>
-                <NameCombobox
-                  id="specialist-name"
-                  name="name"
-                  label={t("specialists.name")}
-                  placeholder={t("specialists.namePlaceholder")}
-                  title={t("specialists.memberSearchTitle")}
-                  emptyLabel={t("specialists.noUnlinkedMembers")}
-                  footnote={t("specialists.customNameHint")}
-                  required
-                  maxLength={200}
-                  value={addName}
-                  options={unlinkedMembers.map((member) => ({
-                    key: member.user_id,
-                    label: member.name?.trim() || member.email.split("@")[0],
-                    hint: `${member.email} · ${t(`roles.${member.role}` as MessageKey)}`,
-                  }))}
-                  onChange={setAddName}
-                  onSelect={(option) => setAddName(option.label)}
-                />
-                {!hasOwnCard && (
-                  <label className="checkbox-row">
-                    <input type="checkbox" name="is_me" defaultChecked />
-                    {t("specialists.isMe")}
-                    <span className="field-hint">{t("specialists.isMeHint")}</span>
-                  </label>
-                )}
+              <form className="inline-form specialist-add-form" onSubmit={createSpecialist}>
+                {/*
+                  «Это я» qualifies the name above it rather than standing
+                  beside it, so the two are one column and one item in the row.
+                */}
+                <div className="specialist-name-field">
+                  <NameCombobox
+                    id="specialist-name"
+                    name="name"
+                    label={t("specialists.name")}
+                    placeholder={t("specialists.namePlaceholder")}
+                    title={t("specialists.memberSearchTitle")}
+                    emptyLabel={t("specialists.noUnlinkedMembers")}
+                    footnote={t("specialists.customNameHint")}
+                    required
+                    maxLength={200}
+                    value={addName}
+                    options={unlinkedMembers.map((member) => ({
+                      key: member.user_id,
+                      label: member.name?.trim() || member.email.split("@")[0],
+                      hint: `${member.email} · ${t(`roles.${member.role}` as MessageKey)}`,
+                    }))}
+                    onChange={setAddName}
+                    onSelect={(option) => setAddName(option.label)}
+                  />
+                  {!hasOwnCard && (
+                    <label>
+                      <input type="checkbox" name="is_me" defaultChecked />
+                      {t("specialists.isMe")}
+                    </label>
+                  )}
+                </div>
                 <label>
                   {t("specialists.cooperation")}
                   <select
@@ -387,9 +392,6 @@ export function SpecialistManager({
                   <p className="muted">{t("specialists.coveredServicesHint")}</p>
                 </details>
               )}
-              <p className="muted">
-                {t("specialists.valueHint", { currency })}
-              </p>
             </section>
           </div>
         </div>

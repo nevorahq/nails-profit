@@ -12,7 +12,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { issueManageLink, managePath } from "@/lib/booking-manage-link";
 import {
   notifyBooking,
-  notifyStaffOfRequest,
+  notifyStaff,
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
 import { isContactVerified } from "@/lib/booking-verification";
@@ -326,16 +326,23 @@ async function handlePost(
         template:
           created.status === "confirmed" ? "booking.confirmed" : "booking.pending_confirmation",
       });
-      // The other half of the same event: the client was told the request was
-      // sent, and until now nobody told the studio it had arrived. Written in
-      // this transaction like every other message, so a request that rolls back
-      // never summons anyone.
-      if (created.status === "pending_confirmation") {
-        await notifyStaffOfRequest(tx, {
-          organizationId: organization.id,
-          bookingId: created.bookingId,
-        });
-      }
+      /*
+       * The other half of the same event: the client was told what happened,
+       * and until now nobody told the studio. Written in this transaction like
+       * every other message, so a booking that rolls back summons nobody.
+       *
+       * Which message depends on what the studio's confirmation setting made of
+       * it. A request asks a person to answer it. An instant booking asks for
+       * nothing — which is why it used to reach nobody at all, and why a master
+       * on instant confirmation learned about a filled hour by opening the
+       * calendar, or by the client turning up for it.
+       */
+      await notifyStaff(tx, {
+        organizationId: organization.id,
+        bookingId: created.bookingId,
+        template:
+          created.status === "confirmed" ? "booking.staff_booked" : "booking.staff_requested",
+      });
 
       // A request the studio has not answered is not something to remind about
       // yet; confirming it schedules the reminder.

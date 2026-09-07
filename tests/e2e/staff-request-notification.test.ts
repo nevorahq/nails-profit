@@ -116,10 +116,16 @@ async function bookableCard(name: string, userId?: string) {
   return id;
 }
 
-async function requestAppointment(specialistId: string = "any") {
+/**
+ * `week` exists because the studio works one weekday and a visit is ninety
+ * minutes: six slots to a Wednesday, and this file books more appointments than
+ * that. Tests that care which card takes the booking ask for a week of their
+ * own rather than competing for the same six hours.
+ */
+async function requestAppointment(specialistId: string = "any", week = 1) {
   const slots = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
     await anonymous.get(
-      `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${specialistId}&date=${wednesdayAhead()}`,
+      `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${specialistId}&date=${wednesdayAhead(week)}`,
     ),
   );
   const slot = slots.slots[0];
@@ -135,7 +141,7 @@ async function requestAppointment(specialistId: string = "any") {
     }),
   );
 
-  const created = dataOf<{ id: string; status: string }>(
+  const created = dataOf<{ id: string; status: string; manage_token: string }>(
     await anonymous.post(
       "/api/v1/public/booking/notify-studio/bookings",
       {
@@ -343,5 +349,231 @@ describe("after the visit is closed", () => {
     // Not a manage link: the appointment is over, and there is nothing left on
     // it to move or cancel.
     for (const message of thanks) expect(message.body).not.toContain("/booking/");
+  });
+});
+
+
+/**
+ * The three things a client can do on the public page that the studio used to
+ * find out about only by opening the calendar.
+ *
+ * By this point in the file `studio.specialistId` carries an account, so each
+ * of these is expected to reach two people: the master whose chair it is, and
+ * the owner, who sees everything.
+ */
+describe("what a client does on the public page", () => {
+  /** The studio's other setting: a public booking that needs no answer. */
+  async function withInstantConfirmation<T>(run: () => Promise<T>): Promise<T> {
+    const settings = (mode: "instant" | "manual") =>
+      studio.owner.put(`/api/v1/locations/${locationId}/booking-settings`, {
+        public_status: "published",
+        confirmation_mode: mode,
+        min_lead_minutes: 0,
+        max_advance_days: 90,
+      });
+
+    await settings("instant");
+    try {
+      return await run();
+    } finally {
+      await settings("manual");
+    }
+  }
+
+  /** Everyone in the studio this booking's messages were addressed to. */
+  function studioReadersOf(bookingId: string, subjectContains?: string) {
+    const aboutIt = sent.filter((message) => message.body.includes(`/app/calendar/${bookingId}`));
+    const matching = subjectContains
+      ? aboutIt.filter((message) => message.subject.includes(subjectContains))
+      : aboutIt;
+    // Email and nothing else: the studio side of the product has an account
+    // with an address, never a phone number.
+    for (const message of matching) expect(message.channel).toBe("email");
+    return [...new Set(matching.map((message) => message.destination))].sort();
+  }
+
+  test("an instant booking asks for no answer and still reaches the studio", async () => {
+    const booking = await withInstantConfirmation(() =>
+      requestAppointment(studio.specialistId, 3),
+    );
+    expect(booking.status).toBe("confirmed");
+
+    const queued = await adminDb
+      .select({ template: notificationOutbox.template, channel: notificationOutbox.channel })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.bookingId, booking.id));
+    expect(queued).toContainEqual({ template: "booking.staff_booked", channel: "email" });
+    // Nothing is waiting on anybody, so nothing says it is.
+    expect(queued.map((row) => row.template)).not.toContain("booking.staff_requested");
+
+    capturingProvider();
+    await dispatchDueNotifications({ organizationId: studio.organizationId });
+
+    expect(studioReadersOf(booking.id)).toEqual([
+      "notify-master@studio.example",
+      "staff-notify-owner@studio.example",
+    ]);
+  });
+
+  test("moving the time tells the studio which time it moved to", async () => {
+    const booking = await requestAppointment(studio.specialistId, 4);
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    const current = dataOf<{ version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${booking.manage_token}`),
+    );
+    const available = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
+      await anonymous.get(
+        `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${studio.specialistId}&date=${wednesdayAhead(8)}`,
+      ),
+    );
+    const destination = available.slots[0];
+    expect(destination).toBeDefined();
+
+    const moved = dataOf<{ starts_at: string }>(
+      await anonymous.post(
+        `/api/v1/public/bookings/${booking.manage_token}/reschedule`,
+        {
+          starts_at: destination.starts_at,
+          specialist_id: destination.specialist_id,
+          version: current.version,
+        },
+        { "idempotency-key": `staff-move-${crypto.randomUUID()}` },
+      ),
+    );
+
+    capturingProvider();
+    await dispatchDueNotifications({ organizationId: studio.organizationId });
+
+    expect(studioReadersOf(booking.id, "перенёс")).toEqual([
+      "notify-master@studio.example",
+      "staff-notify-owner@studio.example",
+    ]);
+
+    const moves = sent.filter((message) => message.subject.includes("перенёс"));
+    for (const message of moves) {
+      // The new hour, in the location's zone: a message naming the old one
+      // would send the master to an empty chair.
+      expect(message.body).toContain(
+        formatAppointmentTime(new Date(moved.starts_at), "Europe/Chisinau", "ru"),
+      );
+      // And whose chair it is, which is the whole of what the owner's copy is
+      // worth: they are reading about a day that is not theirs.
+      expect(message.body).toContain("Мастер");
+    }
+  });
+
+  test("calling it off tells the studio the hour is free again", async () => {
+    const booking = await requestAppointment(studio.specialistId, 5);
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    const current = dataOf<{ version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${booking.manage_token}`),
+    );
+    const cancelled = dataOf<{ status: string }>(
+      await anonymous.post(`/api/v1/public/bookings/${booking.manage_token}/cancel`, {
+        version: current.version,
+      }),
+    );
+    expect(cancelled.status).toBe("cancelled");
+
+    capturingProvider();
+    await dispatchDueNotifications({ organizationId: studio.organizationId });
+
+    expect(studioReadersOf(booking.id, "отменил")).toEqual([
+      "notify-master@studio.example",
+      "staff-notify-owner@studio.example",
+    ]);
+  });
+
+  /**
+   * The one move that leaves somebody worse off and told nothing.
+   *
+   * `booking.staff_rescheduled` follows the booking, so when a client lands on
+   * another master's day it reaches the master who gained the hour and says
+   * nothing to the master who lost it — who is the one with an hour to sell and
+   * the one who would otherwise keep it blocked out for a client not coming.
+   */
+  test("moving to another master tells the one whose hour just came free", async () => {
+    const leaving = await inviteMember(studio.owner, "notify-leaving@studio.example", "master");
+    const arriving = await inviteMember(studio.owner, "notify-arriving@studio.example", "master");
+    const leavingCard = await bookableCard("Уходящая", leaving.userId);
+    const arrivingCard = await bookableCard("Принимающая", arriving.userId);
+
+    const booking = await requestAppointment(leavingCard, 9);
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    const current = dataOf<{ version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${booking.manage_token}`),
+    );
+    const available = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
+      await anonymous.get(
+        `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${arrivingCard}&date=${wednesdayAhead(10)}`,
+      ),
+    );
+    const destination = available.slots[0];
+    expect(destination).toBeDefined();
+
+    await anonymous.post(
+      `/api/v1/public/bookings/${booking.manage_token}/reschedule`,
+      {
+        starts_at: destination.starts_at,
+        specialist_id: destination.specialist_id,
+        version: current.version,
+      },
+      { "idempotency-key": `staff-handover-${crypto.randomUUID()}` },
+    );
+
+    capturingProvider();
+    await dispatchDueNotifications({ organizationId: studio.organizationId });
+
+    const released = sent.filter((message) => message.subject.includes("ушёл с вашего времени"));
+    // One reader, and not the owner: they hear about the same move through the
+    // message below, and one event is worth one message to a person.
+    expect(released.map((message) => message.destination)).toEqual([
+      "notify-leaving@studio.example",
+    ]);
+    for (const message of released) {
+      expect(message.channel).toBe("email");
+      // The hour that came free — the one the booking has left, which is why
+      // this is the message that cannot read its facts off the booking.
+      expect(message.body).toContain(
+        formatAppointmentTime(new Date(booking.startsAt), "Europe/Chisinau", "ru"),
+      );
+      // And where the client went, so nobody has to open the calendar to see
+      // that they are still coming to the studio.
+      expect(message.body).toContain("Принимающая");
+    }
+
+    // The move itself still reaches the day it landed on, and the owner.
+    expect(studioReadersOf(booking.id, "перенёс")).toEqual([
+      "notify-arriving@studio.example",
+      "staff-notify-owner@studio.example",
+    ]);
+  });
+
+  /**
+   * The other half of `staffMessageStillHolds`. The queue is drained on a timer,
+   * so a request can be answered in the calendar before its message leaves —
+   * and "запрос ждёт подтверждения" would then send somebody to confirm
+   * something already confirmed.
+   */
+  test("says nothing about a request that was answered before the queue drained", async () => {
+    const booking = await requestAppointment(studio.specialistId, 6);
+    expect(booking.status).toBe("pending_confirmation");
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    capturingProvider();
+    await dispatchDueNotifications({ organizationId: studio.organizationId });
+
+    expect(studioReadersOf(booking.id)).toEqual([]);
+
+    // Not lost quietly: the row carries why it was dropped, so an operator
+    // reading the queue can tell this apart from a provider that refused it.
+    const rows = await adminDb
+      .select({ status: notificationOutbox.status, code: notificationOutbox.lastErrorCode })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.bookingId, booking.id));
+    expect(rows).toContainEqual({ status: "dead_letter", code: "booking_moved_on" });
   });
 });

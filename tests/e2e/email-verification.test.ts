@@ -6,13 +6,18 @@ import { signUp, type Actor } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 
 /**
- * Confirming the address, and what it deliberately does not do.
+ * There is no address confirmation, and this file exists to keep it that way.
  *
- * The letter goes out at sign-up because the address is the only way back into
- * an account — `sendResetPassword` has nowhere else to send a recovery link. It
- * gates nothing: a studio registers and walks straight to its first calculated
- * visit without leaving for an inbox, which is the whole argument for keeping
- * `requireEmailVerification` off.
+ * The letter used to go out at sign-up and a strip across the top of the app
+ * offered to send it again. It gated nothing, and it could not do the one job
+ * it claimed: the reset link goes to whatever address is on file whether or not
+ * `emailVerified` is set, and the product has no way to change that address, so
+ * the button could only re-send the same letter to the same mistyped inbox.
+ *
+ * What the tests below lock down is that registration is one step with no trip
+ * to an inbox in it, and that `users.email_verified` — Better Auth's column,
+ * still in the schema — sits at its `false` default without costing anybody
+ * anything.
  */
 let owner: Actor;
 
@@ -25,24 +30,23 @@ afterAll(async () => {
   await closeTestConnections();
 });
 
-describe("email verification", () => {
-  test("sends the confirmation link at sign-up", async () => {
+describe("sign-up without address confirmation", () => {
+  test("sends no confirmation letter", async () => {
     /*
-     * Caught at the transport rather than in a table: the pending verification
-     * is a signed token, so there is no row to look for, and what matters is
-     * that the letter left. In a test environment `resolveVerificationDelivery`
-     * is the development one, which prints the link.
+     * Caught at the transport rather than in a table: the verification link was
+     * a signed token with no row to look for, and what matters is that no
+     * letter leaves. The development delivery printed it through `console.warn`,
+     * so a `[verify-email]` line here would mean the mailer came back.
      */
     const printed = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
       await signUp("verify-watch@studio.example");
-      const lines = printed.mock.calls.map((call) => String(call[0]));
-      const letter = lines.find((line) => line.includes("[verify-email]"));
+      const letters = printed.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes("[verify-email]"));
 
-      expect(letter).toBeDefined();
-      expect(letter).toContain("verify-watch@studio.example");
-      expect(letter).toContain("/api/auth/verify-email");
+      expect(letters).toEqual([]);
     } finally {
       printed.mockRestore();
     }
@@ -57,9 +61,9 @@ describe("email verification", () => {
     expect(account.verified).toBe(false);
 
     /*
-     * The part that must not regress. An unconfirmed address costs nothing but
-     * a strip across the top: the studio is created, the catalogue is written
-     * and the first visit closes, exactly as for a confirmed one.
+     * The part that must not regress. An unconfirmed address costs nothing at
+     * all now: the studio is created, the catalogue is written and the first
+     * visit closes, with nothing above the app asking for anything.
      */
     expect(
       (await owner.post("/api/v1/organizations", {

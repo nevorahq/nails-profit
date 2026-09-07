@@ -180,11 +180,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* The request id under a refusal: readable when it is needed, quiet when it is not. */
 .error-reference { display: block; margin-top: 6rem; font-size: 12rem; opacity: 0.75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .switch-button { display: block; width: 100%; margin-top: 10rem; border: 0; background: transparent; color: var(--accent); font-size: 16rem; text-align: center; cursor: pointer; }
-/* Unconfirmed address: one line above the app, never a gate across it. */
-.verify-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6rem 14rem; padding: 10rem 16rem; background: var(--surface-strong); border-bottom: 1rem solid var(--line); color: var(--muted); font-size: 13rem; text-align: center; }
-.verify-notice .text-link-button { margin-top: 0; }
-.verify-notice-done { color: var(--accent); font-weight: 700; }
-
 /* The next step offered inside a refusal: registration, from the failed sign-in. */
 .text-link-button { display: block; margin-top: 8rem; padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 4rem; cursor: pointer; }
 .consent-field { display: grid; grid-template-columns: 22rem 1fr; gap: 10rem; align-items: start; }
@@ -697,6 +692,27 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   position: relative;
   min-width: 280rem;
 }
+
+/*
+ * The name and the «это я» tick that qualifies it: one column, one item in the
+ * row. Gaps stay in `rem`, which is `100vw / 1920` here and `100vw / 390` on a
+ * phone — the spacing already scales with the viewport, so a `clamp()` over it
+ * would only fight that scale.
+ */
+.specialist-name-field { display: flex; flex-direction: column; gap: 10rem; }
+/*
+ * Which is also why the row's cross-axis alignment turns to the top here.
+ * Every control in this form is a caption over an input, so top-aligned their
+ * inputs meet on one line and the tick hangs below the name without dragging
+ * the other three fields down to its level. Only above the phone breakpoint:
+ * below it `.inline-form` is a single stretched column and there is nothing to
+ * line up. The button carries no caption, so it keeps the baseline
+ * `align-items: flex-end` used to give it.
+ */
+@media (min-width: 681px) {
+  .specialist-add-form { align-items: flex-start; }
+  .specialist-add-form > button { align-self: flex-end; }
+}
 .name-combobox-search { position: relative; display: block; }
 .name-combobox-search > input { width: 100%; padding-left: 38rem; }
 .name-combobox-search > svg {
@@ -958,8 +974,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * at the weight of a question rather than of a title.
  */
 .modal-card h2.modal-ask { margin-bottom: 24rem; font-size: 20rem; line-height: 1.35; }
-/* What the closed visit earned, shown where the run ends rather than promised. */
-.modal-card .visit-card-metrics { margin: 0 0 22rem; padding-top: 0; border-top: 0; text-align: center; }
 
 /*
  * One goal, on the first run and again for the month.
@@ -976,9 +990,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* One rhythm for the whole panel: every element is 20rem from the one above it. */
 .goal-panel > * { margin: 0; }
 .goal-panel > * + * { margin-top: 20rem; }
-.goal-panel-lead { color: var(--muted); font-size: 15rem; line-height: 1.6; }
 .goal-panel-goal { font-size: 26rem; line-height: 1.25; }
-.goal-panel-hint { color: var(--muted); font-size: 14rem; line-height: 1.6; }
 .goal-panel-remaining { color: var(--muted); font-size: 13rem; }
 
 /* The way out of the product, closed: one button, no panel and no heading. */
@@ -988,10 +1000,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Somebody in the studio with no master card yet, and the button that writes one. */
 .waiting-member { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8rem 12rem; padding: 6rem 0; }
 .waiting-member .unit-hint { display: block; }
-
-/* «Это я» and its kind: a tick, its label, and the consequence underneath. */
-.checkbox-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4rem 10rem; }
-.checkbox-row .field-hint { grid-column: 2; margin-top: 0; }
 
 /* A rule about what may be typed, said under the field it applies to. */
 .field-hint { display: block; margin-top: 6rem; color: var(--muted); font-size: 12rem; }
@@ -1185,15 +1193,44 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   margin-bottom: 0;
 }
 
+/* The rota is a week and the settings are a list of small numbers: both are
+   read as a set of narrow fields, not as a row that has to reach the far edge.
+   So their columns are sized to a field rather than to the panel, and a short
+   last row ends where its last field ends — `0fr` is what refuses the free
+   space that `1fr` would hand out. Scoped to these two: the address forms in
+   the same panels are a name and an address, which do want the width.
+
+   Above the phone breakpoint only. Below it the panel is one stretched column
+   per field and a 180rem track would be narrower than the screen — the mobile
+   block already says `1fr` and wins by order, but stating the width here means
+   the two cannot be separated by somebody moving a rule. */
+@media (min-width: 681px) {
+  .booking-rota .inline-form,
+  .booking-settings .inline-form { grid-template-columns: repeat(auto-fit, minmax(180rem, 0fr)); }
+}
+
 /* Buttons keep the height of a field and end the row rather than stretching
-   across a column of their own width. */
-.booking-panel .inline-form > button { justify-self: start; }
+   across a column of their own width.
+
+   `nowrap` because the two forms above size their columns to a field, and a
+   button is not one: «Сохранить график» does not fit 180rem and broke onto a
+   second line, leaving a tall oval beside a single-line date field. It is the
+   last item in its row in every one of these forms, so the width it takes back
+   comes out of empty tracks. */
+.booking-panel .inline-form > button { justify-self: start; white-space: nowrap; }
 
 /* A note about a form spans it, instead of taking a column of its own and
-   reading as a field with no input. Applies to every paragraph in these forms,
-   not just the one that started it: «Параметры записи» carries four of them
-   between its controls. */
+   reading as a field with no input. «Добавить адрес» is the one that still
+   carries such a line — the rule about what a slug may contain, which belongs
+   under the field rather than beside it. */
 .booking-panel .inline-form > p { grid-column: 1 / -1; margin: 0; }
+
+/* The same box of tick-boxes as on the client's own booking page, but here it
+   holds one short row per address inside a form, not a section of a page — so
+   it keeps the side inset and gives back the top and bottom, where the labels'
+   own `7rem` is already all the air the row needs. Scoped, because the public
+   page still wants the full inset. */
+.booking-panel .public-booking-options { padding: 0 16rem; }
 
 /* Sub-headings start a section, so the space before them has to be bigger than
    any gap inside one — otherwise the panel reads as one flat list of controls.
@@ -1206,6 +1243,63 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .booking-panel details.calendar-entry { margin: 10rem 0 0; }
 .booking-panel details.calendar-entry:first-of-type { margin-top: 30rem; }
 .booking-panel details.calendar-entry[open] { background: var(--surface-strong); }
+
+/*
+ * «tbnails — опубликован» is a control, and until now it did not look like one.
+ * Two rules elsewhere had each taken away one of the things that said so:
+ * `display: flex` on the `<summary>` drops the native disclosure triangle — a
+ * marker only survives `display: list-item` — and the soft UI takes the card's
+ * outline off, leaving the row the same colour as the panel behind it. What was
+ * left was a line of text that happens to open something when clicked.
+ *
+ * Given back quietly rather than loudly, because the address list is a
+ * reference, not a call to action: the row is sized to its own words rather
+ * than to the panel, and carries a chevron in `--muted` that turns when it
+ * opens. It keeps the card's own surface — a pressed-in field was tried here
+ * and taken back out; at rest the row states nothing and the chevron is the
+ * whole of what says «нажми».
+ *
+ * Scoped to this panel, not written on `.calendar-entry summary` itself. The
+ * calendar board shares that class, and there the summary fills a card that is
+ * positioned in a time slot — `width: fit-content` shrank a 938px appointment
+ * to a 95px pill inside its own coloured band. Measured, not guessed.
+ */
+.booking-panel details.calendar-entry > summary {
+  align-items: center;
+  /* Sized to what it says, not to the panel: a row that reaches the far edge
+     reads as a section heading, and one that stops after its own words reads as
+     a thing to press. */
+  width: fit-content;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+/* Drawn rather than typed: a glyph would carry the text's own weight and
+   baseline, and this has to read as a control's edge, not as a character. */
+.booking-panel details.calendar-entry > summary::after {
+  content: "";
+  flex: none;
+  width: 8rem;
+  height: 8rem;
+  margin-left: auto;
+  border: solid var(--muted);
+  border-width: 0 2rem 2rem 0;
+  transform: translateY(-2rem) rotate(45deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.booking-panel details.calendar-entry[open] > summary::after { transform: translateY(2rem) rotate(-135deg); }
+/* Only while closed: an open row already stands on `--surface-strong`, and a
+   hover that repaints it the same colour would say nothing. The card and the
+   panel behind it are the same `--surface`, so at rest the row is a line of
+   text on a flat field — the lift to `--surface-strong` is what draws its edges
+   for the first time, and the chevron darkening is what carries the answer at a
+   glance, since that step is deliberately a small one.
+
+   The radius belongs to the hover rather than to the row, because it is the
+   hover that has a shape at all: nothing is painted until then, and square
+   corners on a surface this soft read as somebody else's rectangle. It applies
+   at once while the colour fades in, which is the right order — the shape is
+   there before there is anything to see it on. */
+.booking-panel details.calendar-entry:not([open]) > summary:hover { background: var(--surface-strong); border-radius: 14rem; }
+.booking-panel details.calendar-entry > summary:hover::after { border-color: var(--ink); }
 
 /* One padding for everything under the summary, so the heading, the fields and
    the actions share the edge the title already sits on. */
@@ -1221,6 +1315,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    paragraph floating above it. */
 .booking-panel > label { display: flex; flex-direction: column; gap: 6rem; margin: 18rem 0 16rem; font-size: 13rem; font-weight: 600; color: var(--muted); max-width: 320rem; }
 .booking-panel > label + label { margin-top: 0; }
+/* These pickers stand outside any `.inline-form`, so nothing had given them a
+   height: they were native selects at the browser's own padding, noticeably
+   shorter than every other field on the page. */
+.booking-panel > label select { padding-block: 10rem; }
 
 
 /* ==========================================================================
@@ -1449,14 +1547,18 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   display: flex;
   flex-direction: row;
   /*
-   * The first line, not the middle of the paragraph.
+   * The middle of the label. Every row this rule catches inside the app is a
+   * single line — a tick beside «Это я», beside a weekday, beside an address —
+   * and there centring is the only thing that looks deliberate.
    *
-   * The consent label on the public booking page runs to two lines, and
-   * centring put the box between them — reading as a mark against the gap
-   * rather than against the sentence. The box is 20rem and a line box is
-   * ~19rem, so top-aligning lands it on the first line in both cases.
+   * It was `flex-start` to protect one label that is not: the consent on the
+   * public booking page, which runs to three lines. That label answers with its
+   * own 44rem box rather than the usual 20rem one, so centring moves the box
+   * 8rem down and it still stands against the sentence rather than in a gap —
+   * measured, not assumed. It is the label to check first if this line is ever
+   * in question again.
    */
-  align-items: flex-start;
+  align-items: center;
   gap: 10rem;
   font-size: 14rem;
   font-weight: 600;

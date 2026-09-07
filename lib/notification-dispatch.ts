@@ -22,10 +22,11 @@ import { logEvent } from "@/lib/logger";
 import {
   asBookingNotificationTemplate,
   formatAppointmentTime,
+  isStaffNotificationTemplate,
   messageCarriesLink,
   renderNotification,
-  staffNotificationTemplates,
   type BookingNotificationTemplate,
+  type StaffNotificationTemplate,
 } from "@/lib/notification-message";
 import { notificationProvider, type OutgoingMessage } from "@/lib/notification-provider";
 import { pollSmsMdDeliveryStatuses } from "@/lib/smsmd-delivery-status";
@@ -344,8 +345,8 @@ async function prepare(
 
   const facts = row.verificationId
     ? await verificationFacts(tx, row.verificationId, now)
-    : staffNotificationTemplates.includes(template)
-      ? await staffFacts(tx, organizationId, row)
+    : isStaffNotificationTemplate(template)
+      ? await staffFacts(tx, organizationId, row, template)
       : await bookingFacts(tx, row, template, organization.slug, now);
   if (!facts.ok) return facts;
 
@@ -430,23 +431,53 @@ async function verificationFacts(
 }
 
 /**
- * Who in the studio hears about a waiting request, and where they answer it.
+ * Whether what the studio is about to be told is still true.
+ *
+ * The queue is drained on a five-minute timer and an appointment can move
+ * underneath it: a request answered in the calendar, a new booking called off
+ * before anybody read about it, a moved time moved again. Each of these
+ * messages asserts something — "ждёт подтверждения", "клиент записался на",
+ * "новое время" — and the assertion that has stopped holding is worth less than
+ * silence: it sends somebody to the calendar to find something else there.
+ *
+ * A cancellation is the one that cannot go stale. Nothing follows `cancelled`,
+ * so a message about one is as true when it is sent as when it was written.
+ */
+function staffMessageStillHolds(template: StaffNotificationTemplate, status: string): boolean {
+  if (template === "booking.staff_requested") return status === "pending_confirmation";
+  if (template === "booking.staff_cancelled") return status === "cancelled";
+  /*
+   * The move off this master's day already happened, and nothing the booking
+   * becomes afterwards gives the hour back — confirmed, moved again or called
+   * off, it is still not theirs. The one thing that would undo it is the
+   * booking coming back to their card, which is a question about the card and
+   * not about the status: `staffFacts` asks it, where the payload is.
+   */
+  if (template === "booking.staff_released") return true;
+  // The other two announce an hour somebody is expected in, which is exactly
+  // what an active status means.
+  return ACTIVE_BOOKING_STATUSES.includes(status as (typeof ACTIVE_BOOKING_STATUSES)[number]);
+}
+
+/**
+ * Who in the studio hears about a booking, and where they open it.
  *
  * The master the appointment was booked with, through the account linked to
  * their card. When no account is linked — an invited master whose card was
  * never created, which is the state this whole message exists to survive — it
- * goes to an owner instead: somebody has to be able to confirm, and an owner
+ * goes to an owner instead: somebody has to be able to answer, and an owner
  * always can.
  *
  * Resolved at delivery rather than written into the queue, so a link made in
  * the minutes after the booking still routes the message to the right person.
  * The address is not a client's, so no manage link is minted: the destination
- * is the appointment inside the application, which is where confirming happens.
+ * is the appointment inside the application, which is where the studio works.
  */
 async function staffFacts(
   tx: TenantTransaction,
   organizationId: string,
   row: ClaimedRow,
+  template: StaffNotificationTemplate,
 ): Promise<Facts> {
   if (!row.bookingId) return { ok: false, code: "booking_missing" };
 
@@ -455,6 +486,8 @@ async function staffFacts(
       startsAt: bookings.startsAt,
       status: bookings.status,
       timezone: locations.timezone,
+      specialistId: bookings.specialistId,
+      specialistName: specialists.name,
       specialistEmail: users.email,
     })
     .from(bookings)
@@ -465,9 +498,9 @@ async function staffFacts(
     .limit(1);
   if (!found) return { ok: false, code: "booking_missing" };
 
-  // Answered while the message waited — by the owner in the calendar, or by the
-  // request expiring. Sending now would ask for a decision already made.
-  if (found.status !== "pending_confirmation") return { ok: false, code: "booking_not_pending" };
+  if (!staffMessageStillHolds(template, found.status)) {
+    return { ok: false, code: "booking_moved_on" };
+  }
 
   /*
    * Which of the studio's people this row is for. Rows written before the
@@ -476,7 +509,14 @@ async function staffFacts(
    */
   const recipient = row.payload?.recipient ?? (found.specialistEmail ? "specialist" : "owner");
 
+  /*
+   * The hour this message is about. Every template but one is about the
+   * appointment as it stands, so the booking answers it; `staff_released` is
+   * about the hour a client moved out of, which the booking no longer knows.
+   */
+  let startsAt = found.startsAt;
   let destination = recipient === "specialist" ? found.specialistEmail : null;
+
   if (recipient === "owner") {
     const [owner] = await tx
       .select({ email: users.email })
@@ -487,6 +527,31 @@ async function staffFacts(
       .limit(1);
     destination = owner?.email ?? null;
   }
+
+  if (recipient === "previous_specialist") {
+    const releasedFrom = row.payload?.specialistId;
+    const releasedAt = row.payload?.startsAt;
+    /*
+     * Not recoverable and not worth retrying: without these two the message has
+     * neither a reader nor a subject. It can only be a row from a build that
+     * wrote the template without the payload, which is a bug to find in a dead
+     * letter rather than a message to guess the contents of.
+     */
+    if (!releasedFrom || !releasedAt) return { ok: false, code: "payload_missing" };
+    // Moved back before the queue came round. Nothing was released after all,
+    // and the master is about to be told their own appointment left them.
+    if (found.specialistId === releasedFrom) return { ok: false, code: "booking_moved_on" };
+
+    const [previous] = await tx
+      .select({ email: users.email })
+      .from(specialists)
+      .innerJoin(users, eq(users.id, specialists.userId))
+      .where(eq(specialists.id, releasedFrom))
+      .limit(1);
+    destination = previous?.email ?? null;
+    startsAt = new Date(releasedAt);
+  }
+
   if (!destination) return { ok: false, code: "no_destination" };
 
   return {
@@ -494,7 +559,11 @@ async function staffFacts(
     destination,
     // Null so the studio's own language is used: here the reader is the studio.
     locale: null,
-    appointment: { startsAt: found.startsAt, timezone: found.timezone },
+    appointment: { startsAt, timezone: found.timezone },
+    // Whoever holds the appointment now — which is the name the owner's copy
+    // needs, since they are reading about a chair that is not theirs, and the
+    // name a released master needs, since it says where the client went.
+    specialist: found.specialistName,
     link: `${getPublicAppUrl()}/app/calendar/${row.bookingId}`,
     linkIsOneTime: false,
   };
