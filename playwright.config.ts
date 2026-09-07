@@ -89,9 +89,10 @@ export default defineConfig({
           // ответа» — the state half these scenarios start from — can only come
           // from the public page.
           PUBLIC_BOOKING_ENABLED: "true",
-          // Sign-up mails a verification link. A production build would hand it
-          // to the real provider; the browser suite has no business sending
-          // mail to anyone, so it is written to the log instead.
+          // Booking notifications and password resets both reach for a mail
+          // provider. A production build would hand them to the real one; the
+          // browser suite has no business sending mail to anyone, so they are
+          // written to the log instead.
           NOTIFICATION_PROVIDER: "log",
         },
       },

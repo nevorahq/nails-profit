@@ -699,7 +699,6 @@ export function BookingSetup({
               >
                 {pending ? t("common.saving") : t("bookingSetup.publish")}
               </button>
-              <span className="muted">{t("bookingSetup.operatorPending")}</span>
             </div>
           )}
 
@@ -749,24 +748,19 @@ export function BookingSetup({
             </>
           )}
 
-          {bookingAccess !== "public" &&
-            (canPublish && published.length > 0 ? (
-              <div style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
-                <p className="muted">{t("bookingSetup.openPublicHint")}</p>
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={pending}
-                  onClick={openPublicBooking}
-                >
-                  {t("bookingSetup.openPublic")}
-                </button>
-              </div>
-            ) : (
-              <p className="muted" style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
-                {t("bookingSetup.operatorPending")}
-              </p>
-            ))}
+          {bookingAccess !== "public" && canPublish && published.length > 0 && (
+            <div style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
+              <p className="muted">{t("bookingSetup.openPublicHint")}</p>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={pending}
+                onClick={openPublicBooking}
+              >
+                {t("bookingSetup.openPublic")}
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -962,9 +956,8 @@ export function BookingSetup({
       </section>}
 
       {!isMaster && !guided && settingsLocation && (
-        <section className="panel booking-panel">
+        <section className="panel booking-panel booking-settings">
           <h2>{t("bookingSetup.settingsTitle")}</h2>
-          <p className="muted">{t("bookingSetup.settingsHint")}</p>
 
           <label>
             {t("bookingSetup.chooseLocation")}
@@ -1064,7 +1057,6 @@ export function BookingSetup({
                 defaultValue={settingsLocation.confirmation_ttl_minutes ?? 120}
               />
             </label>
-            <p className="muted">{t("bookingSetup.confirmationTtlHint")}</p>
 
             <label>
               {t("bookingSetup.verificationMode")}
@@ -1098,7 +1090,6 @@ export function BookingSetup({
                 defaultValue={settingsLocation.reminder_lead_minutes ?? 1440}
               />
             </label>
-            <p className="muted">{t("bookingSetup.reminderHint")}</p>
 
             <button type="submit" className="primary-button" disabled={!canPublish || pending}>
               {t("common.save")}
@@ -1110,7 +1101,6 @@ export function BookingSetup({
       {!isMaster && !guided && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.assignmentTitle")}</h2>
-          <p className="muted">{t("bookingSetup.assignmentHint")}</p>
 
           {specialists.length === 0 && <p className="muted">{t("bookingSetup.noSpecialists")}</p>}
 
@@ -1145,9 +1135,8 @@ export function BookingSetup({
       )}
 
       {specialists.length > 0 && active.length > 0 && !guided && (
-        <section className="panel booking-panel">
+        <section className="panel booking-panel booking-rota">
           <h2>{t("bookingSetup.rotaTitle")}</h2>
-          <p className="muted">{t("bookingSetup.rotaHint")}</p>
 
           {!isMaster && (
             <label>
@@ -1229,7 +1218,6 @@ export function BookingSetup({
                 defaultValue={currentRota[0]?.effective_from ?? today}
               />
             </label>
-            <p className="muted">{t("bookingSetup.effectiveFromHint")}</p>
 
             <button
               type="submit"

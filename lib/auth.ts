@@ -9,7 +9,6 @@ import { getServerEnv } from "@/env";
 import { lazyProxy } from "@/lib/lazy";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { resolvePasswordResetDelivery } from "@/lib/password-reset-delivery";
-import { resolveVerificationDelivery } from "@/lib/verification-delivery";
 
 /**
  * Built on first use, not on import. `next build` loads this module while
@@ -133,29 +132,18 @@ function createAuth() {
       await resolvePasswordResetDelivery().send({ email: user.email, url });
     },
   },
-  /**
-   * Confirming the address, and deliberately not gating anything on it.
+  /*
+   * No `emailVerification` block, and that is the whole feature: nothing here
+   * mails a confirmation link at sign-up and nothing asks for one afterwards.
+   * The address still has one job — `sendResetPassword` above is the only way
+   * back into an account — but confirming it never protected that job. The
+   * reset goes out whether or not `emailVerified` is set, and the product has
+   * no way to change an address anyway, so a link that could only re-send
+   * itself to a mistyped inbox bought nothing for the letter it cost.
    *
-   * `requireEmailVerification` stays off: the path from registration to a
-   * studio's first calculated visit is three steps, and putting a trip to an
-   * inbox in the middle of it would cost activations to protect against a typo.
-   * So the letter goes out at sign-up, the product opens immediately, and the
-   * unconfirmed state is said once in a strip across the top.
-   *
-   * What the confirmation is actually for is recovery: `sendResetPassword`
-   * above is the only way back into an account, and it goes to this address. A
-   * studio that mistyped it finds out months later, locked out of its own
-   * books. Twenty-four hours to click, because somebody registering on a Friday
-   * evening reads their mail on Monday.
+   * `users.email_verified` stays in the schema because Better Auth owns that
+   * column; it simply keeps its `false` default and nothing reads it.
    */
-  emailVerification: {
-    sendOnSignUp: true,
-    autoSignInAfterVerification: true,
-    expiresIn: 60 * 60 * 24,
-    sendVerificationEmail: async ({ user, url }) => {
-      await resolveVerificationDelivery().send({ email: user.email, url });
-    },
-  },
   /**
    * Spec section 15.3 requires rate limits on auth. Storage is in-memory, which
    * is per-instance: correct for the single-instance pilot, but a multi-instance
@@ -172,8 +160,9 @@ function createAuth() {
       // Paths must match Better Auth's own routes exactly — a rule for a path
       // that does not exist silently limits nothing.
       "/request-password-reset": { window: 3600, max: 5 },
-      // Re-sending the confirmation is a button anybody can hold down, and every
-      // press costs a real email.
+      // Nothing in the product calls this any more — see the note on the
+      // missing `emailVerification` block above — but Better Auth still routes
+      // it, so it stays limited rather than left as an unmetered path in.
       "/send-verification-email": { window: 3600, max: 5 },
       "/reset-password": { window: 3600, max: 5 },
     },

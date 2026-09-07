@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -109,8 +109,8 @@ export function useSetupGuide(
  *
  * It names the goal ahead rather than reporting on the list behind, and its
  * main button is that goal's own action — «Добавить услугу», not «Вернуться к
- * шагам». On the last step there is nothing ahead, so it shows what the visit
- * earned and opens the report.
+ * шагам». On the last step there is nothing ahead, so it names what was just
+ * finished and opens the report.
  *
  * Two ways out on purpose. The owner who has just added their first master may
  * well want to add the second one before going anywhere, and a window with a
@@ -123,27 +123,20 @@ export function SetupGuideDialog({
   strings = "setupGuide",
   doneHref = "/app",
   onStay,
-  doneSummary,
 }: {
   guide: SetupGuide;
   locale: AppLocale;
   /**
    * Which checklist's wording to use. The two journeys end in different places
-   * and say different things when they do — «Первый расчёт готов» against
-   * «Расчёт месяца готов» — and one set of strings serving both would have to
-   * be vague enough to fit neither.
+   * and say different things when they do — «Визит закрыт» against «Расчёт
+   * месяца готов» — and one set of strings serving both would have to be vague
+   * enough to fit neither.
    */
   strings?: "setupGuide" | "monthGuide";
   /** Where the last window leads. The month's report is not the dashboard. */
   doneHref?: string;
   /** What closing the window does, when dismissing it is not the whole of it. */
   onStay?: () => void;
-  /**
-   * What the last step produced, shown on the final window. The visit form
-   * passes the figures the close just returned: «Первый расчёт» that ends by
-   * promising a number somewhere else is not a first calculation.
-   */
-  doneSummary?: ReactNode;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
@@ -204,16 +197,23 @@ export function SetupGuideDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="setup-guide-title">{say(reached.complete ? "doneTitle" : "title")}</h2>
-        {reached.complete && <p>{say("doneBody")}</p>}
+        {/*
+          The month's last window still says what its step changed in the
+          report, because that change is somewhere else and out of sight. The
+          first run's says nothing beyond «Визит закрыт»: the screen behind the
+          window is the visit itself, and a window that reported the figures
+          back was reading out what the owner had just typed in.
+        */}
+        {reached.complete && strings === "monthGuide" && <p>{say("doneBody")}</p>}
         {/*
           The goal alone, without a count of what is left in front of it. «До
           первого расчёта осталось 2 шага» measured the distance still to walk
           at the moment somebody had just walked one — the next thing to do says
           everything that line did, and says it as an instruction.
         */}
-        {reached.complete
-          ? doneSummary
-          : next && <p className="modal-goal">{t(`step.goal.${next.key}` as MessageKey)}</p>}
+        {!reached.complete && next && (
+          <p className="modal-goal">{t(`step.goal.${next.key}` as MessageKey)}</p>
+        )}
         <div className="button-row">
           <button className="primary-button" type="button" ref={primary} onClick={onward}>
             {reached.complete
