@@ -88,16 +88,9 @@ const ru = {
 
   "settings.title": "Настройки",
   "settings.language": "Язык интерфейса",
-  "settings.languageHint": "Меняется у всех сотрудников, не только у вас.",
   "settings.currency": "Валюта",
   "currency.rub": "рубль",
-  "settings.currencyHint":
-    "Только для новых цен и расчётов. Сохранённые суммы по курсу не пересчитываются.",
   "settings.saved": "Сохранено",
-  "settings.practicalCapacity": "Практическая мощность, %",
-  "settings.practicalCapacityHint":
-    "Какую долю часов расписания реально удаётся продать; обычно 70–80%. От неё считаются стоимость часа и загрузка.",
-  "settings.practicalCapacitySave": "Сохранить мощность",
   "settings.dataTitle": "Данные организации",
   "settings.dataHint": "Owner может получить переносимую JSON-выгрузку или удалить организацию с анонимизацией PII.",
   "settings.export": "Скачать данные",
@@ -1321,16 +1314,9 @@ const ro: Record<MessageKey, Message> = {
 
   "settings.title": "Setări",
   "settings.language": "Limba interfeței",
-  "settings.languageHint": "Se schimbă pentru toți angajații, nu doar pentru dvs.",
   "settings.currency": "Moneda",
   "currency.rub": "rublă",
-  "settings.currencyHint":
-    "Doar pentru prețurile și calculele noi. Sumele salvate nu se convertesc la curs.",
   "settings.saved": "Salvat",
-  "settings.practicalCapacity": "Capacitate practică, %",
-  "settings.practicalCapacityHint":
-    "Ce parte din orele programului chiar poate fi vândută; de obicei 70–80%. De la ea se calculează costul orei și gradul de ocupare.",
-  "settings.practicalCapacitySave": "Salvează capacitatea",
   "settings.dataTitle": "Datele organizației",
   "settings.dataHint": "Owner poate descărca un export JSON portabil sau poate șterge organizația cu anonimizarea PII.",
   "settings.export": "Descarcă datele",
@@ -2552,16 +2538,9 @@ const en: Record<MessageKey, Message> = {
 
   "settings.title": "Settings",
   "settings.language": "Interface language",
-  "settings.languageHint": "Changes for everyone in the organization, not only for you.",
   "settings.currency": "Currency",
   "currency.rub": "rouble",
-  "settings.currencyHint":
-    "New prices and calculations only. Amounts already saved are not converted at a rate.",
   "settings.saved": "Saved",
-  "settings.practicalCapacity": "Practical capacity, %",
-  "settings.practicalCapacityHint":
-    "How much of the rostered hours can realistically be sold; usually 70–80%. The cost of an hour and the utilization figure are computed from it.",
-  "settings.practicalCapacitySave": "Save capacity",
   "settings.dataTitle": "Organization data",
   "settings.dataHint": "An Owner can download a portable JSON export or delete the organization with PII anonymization.",
   "settings.export": "Download data",
