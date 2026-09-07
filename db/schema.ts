@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   date,
   index,
   integer,
@@ -456,6 +457,81 @@ export const specialists = pgTable(
     uniqueIndex("specialist_org_user_idx")
       .on(table.organizationId, table.userId)
       .where(sql`${table.userId} is not null`),
+  ],
+);
+
+/**
+ * `bytea`, which `drizzle-kit` writes happily and `pg-core` ships no column
+ * for. The driver returns a Buffer either way; this only tells the generator
+ * what type to emit and the query builder what it will get back.
+ */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
+/**
+ * A master's face.
+ *
+ * The bytes live in Postgres because this deployment has no object store: no
+ * bucket, no signed URLs, no second secret to rotate — and a studio of five to
+ * twenty people at a couple of dozen kilobytes each is a rounding error next to
+ * the visits table. The check constraint is what keeps that true.
+ *
+ * It is a table of its own rather than a column on `specialist`, because
+ * `specialist` is read with a bare `select()` in the screen that lists people
+ * and in the organization's JSON export. A column would have put every photo
+ * into both — a page load carrying megabytes it never draws, and an export with
+ * base64 faces in it — for the sake of avoiding a join that only one route
+ * makes.
+ *
+ * The photo belongs to the card, not to the account behind it. `user.image` is
+ * where the calendar and the visits list have been looking, and nothing has
+ * ever written it: there are no social providers, so it has been null for every
+ * user since the first one. Hanging a face off the account would also have left
+ * out exactly the people who need one most — the masters a studio records
+ * without a login, whose `specialist.user_id` is null.
+ *
+ * `restrict` rather than a cascade, like every other row that describes a
+ * master: removing one deletes its leaves explicitly in
+ * `DELETE /api/v1/specialists/[id]`, where the decision can be read.
+ */
+export const specialistAvatars = pgTable(
+  "specialist_avatar",
+  {
+    /* One face per card, stated by the key rather than by an index beside it. */
+    specialistId: uuid("specialist_id")
+      .primaryKey()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    /*
+     * Duplicated from the specialist it belongs to, and deliberately: the
+     * tenant policy on every other table compares this column against the
+     * session's organization, and `scripts/verify-rls.sql` finds the tables to
+     * check by looking for it. A table without it would be unprotected *and*
+     * invisible to the check that finds unprotected tables.
+     */
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    mimeType: text("mime_type").notNull(),
+    bytes: bytea("bytes").notNull(),
+    ...auditColumns,
+  },
+  (table) => [
+    index("specialist_avatar_org_idx").on(table.organizationId),
+    /*
+     * What the route will accept anyway, said again where it cannot be
+     * forgotten. A half-megabyte ceiling is far above the re-encoded square the
+     * browser uploads and far below the size at which keeping images in a row
+     * stops being reasonable.
+     */
+    check(
+      "specialist_avatar_mime",
+      sql`${table.mimeType} in ('image/webp', 'image/jpeg', 'image/png')`,
+    ),
+    check(
+      "specialist_avatar_size",
+      sql`octet_length(${table.bytes}) between 1 and 524288`,
+    ),
   ],
 );
 

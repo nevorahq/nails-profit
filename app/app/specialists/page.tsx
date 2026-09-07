@@ -1,15 +1,15 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { asc, eq, isNull } from "drizzle-orm";
 
 import { ToolIcon } from "@/components/icons";
 import { db } from "@/db";
-import { commissionRules, memberships, services, specialistServices, specialists, users } from "@/db/schema";
+import { memberships, services, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { selectCommissionRule } from "@/domain/commission";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
-import { SpecialistManager, type SpecialistRow } from "@/components/specialist-manager";
+import { SpecialistManager } from "@/components/specialist-manager";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { loadSetupGuide } from "@/lib/onboarding";
+import { loadSpecialistCards } from "@/lib/specialist-cards";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
@@ -30,15 +30,7 @@ export default async function SpecialistsPage() {
   const ownOnly = scopeFor(membership.role, "commissions") === "own";
 
   const { people, catalogue } = await withTenant(membership.organizationId, async (tx) => {
-    const rows = await tx
-      .select()
-      .from(specialists)
-      .where(
-        ownOnly
-          ? and(isNull(specialists.archivedAt), eq(specialists.userId, membership.userId))
-          : isNull(specialists.archivedAt),
-      )
-      .orderBy(asc(specialists.createdAt));
+    const cards = await loadSpecialistCards(tx, ownOnly ? { ownedBy: membership.userId } : {});
 
     const serviceRows = await tx
       .select()
@@ -46,79 +38,8 @@ export default async function SpecialistsPage() {
       .where(isNull(services.archivedAt))
       .orderBy(asc(services.createdAt));
 
-    const assignments = rows.length
-      ? await tx
-          .select({
-            specialistId: specialistServices.specialistId,
-            serviceId: specialistServices.serviceId,
-            durationMinutes: specialistServices.durationOverrideMinutes,
-            requiresWorkplace: specialistServices.requiresWorkplace,
-          })
-          .from(specialistServices)
-          .where(inArray(specialistServices.specialistId, rows.map((person) => person.id)))
-      : [];
-
-    const people: SpecialistRow[] = await Promise.all(
-      rows.map(async (person) => {
-        const rules = await tx
-          .select({
-            id: commissionRules.id,
-            serviceId: commissionRules.serviceId,
-            type: commissionRules.type,
-            basisPoints: commissionRules.basisPoints,
-            fixedAmountMinor: commissionRules.fixedAmountMinor,
-            base: commissionRules.base,
-            activeFrom: commissionRules.activeFrom,
-            activeTo: commissionRules.activeTo,
-          })
-          .from(commissionRules)
-          .where(eq(commissionRules.specialistId, person.id));
-
-        const defaults = rules.filter((rule) => rule.serviceId === null);
-        const defaultRule = selectCommissionRule(defaults, "");
-
-        const now = new Date();
-        const exceptions = rules.filter(
-          (rule) =>
-            rule.serviceId !== null &&
-            rule.activeFrom <= now &&
-            (rule.activeTo === null || rule.activeTo > now),
-        );
-
-        return {
-          id: person.id,
-          name: person.name,
-          cooperation_type: person.cooperationType,
-          user_id: person.userId,
-          is_principal: person.isPrincipal,
-          default_rule: defaultRule
-            ? {
-                type: defaultRule.type,
-                basis_points: defaultRule.basisPoints,
-                fixed_amount_minor: defaultRule.fixedAmountMinor,
-                base: defaultRule.base,
-              }
-            : null,
-          service_exceptions: exceptions.map((rule) => ({
-            service_id: rule.serviceId,
-            type: rule.type,
-            basis_points: rule.basisPoints,
-            fixed_amount_minor: rule.fixedAmountMinor,
-            base: rule.base,
-          })),
-          service_assignments: assignments
-            .filter((assignment) => assignment.specialistId === person.id)
-            .map((assignment) => ({
-              service_id: assignment.serviceId,
-              duration_minutes: assignment.durationMinutes,
-              requires_workplace: assignment.requiresWorkplace,
-            })),
-        };
-      }),
-    );
-
     return {
-      people,
+      people: cards,
       catalogue: serviceRows.map((service) => ({
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),

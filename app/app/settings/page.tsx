@@ -41,7 +41,6 @@ export default async function SettingsPage() {
     locale,
     currency,
     businessType,
-    practicalCapacityBasisPoints,
   } = await requireWorkspace();
 
   const canReadTeam = can(membership.role, "user_management", "read");
@@ -241,7 +240,6 @@ export default async function SettingsPage() {
         <OrganizationSettings
           locale={locale}
           currency={currency}
-          practicalCapacityBasisPoints={practicalCapacityBasisPoints}
           canEdit={can(membership.role, "organization_settings", "write")}
         />
       )}

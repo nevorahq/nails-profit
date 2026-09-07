@@ -6,11 +6,12 @@ import {
   clients,
   expenses,
   externalReferences,
-  laborCostRules,
   importJobs,
   invitations,
+  laborCostRules,
   memberships,
   organizations,
+  specialistAvatars,
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -98,6 +99,20 @@ export async function POST(request: Request) {
       .where(eq(clients.organizationId, actor.organizationId))
       .returning({ id: clients.id });
 
+    /*
+     * A face cannot be anonymized, only erased.
+     *
+     * Every other row here keeps its shape and loses its words — an amount
+     * without a name, a wage without a label. A photograph has no such
+     * separation: it is the person, and the row that holds it exists for no
+     * other purpose, so it goes rather than being renamed. It is deleted before
+     * the cards themselves are anonymized because it belongs to them.
+     */
+    const erasedAvatars = await tx
+      .delete(specialistAvatars)
+      .where(eq(specialistAvatars.organizationId, actor.organizationId))
+      .returning({ id: specialistAvatars.specialistId });
+
     const anonymizedSpecialists = await tx
       .update(specialists)
       .set({
@@ -177,6 +192,7 @@ export async function POST(request: Request) {
         invitations_revoked: revoked.length,
         clients_anonymized: anonymizedClients.length,
         specialists_anonymized: anonymizedSpecialists.length,
+        avatars_erased: erasedAvatars.length,
         expenses_anonymized: anonymizedExpenses.length,
       },
       requestId: id,
@@ -198,6 +214,7 @@ export async function POST(request: Request) {
       invitations_revoked: revoked.length,
       clients_anonymized: anonymizedClients.length,
       specialists_anonymized: anonymizedSpecialists.length,
+      avatars_erased: erasedAvatars.length,
       expenses_anonymized: anonymizedExpenses.length,
     };
   });

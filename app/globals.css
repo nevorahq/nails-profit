@@ -38,8 +38,6 @@
   --neu-light: rgba(255, 255, 255, 0.92);
   --neu-dark: rgba(15, 42, 29, 0.13);
   --neu-dark-soft: rgba(15, 42, 29, 0.07);
-  --neu-raised: -7rem -7rem 16rem var(--neu-light), 7rem 7rem 18rem var(--neu-dark);
-  --neu-raised-sm: -3rem -3rem 8rem var(--neu-light), 3rem 3rem 9rem var(--neu-dark);
   --neu-inset: inset 4rem 4rem 9rem var(--neu-dark-soft), inset -3rem -3rem 8rem var(--neu-light);
   --neu-pressed: inset 3rem 3rem 8rem var(--neu-dark), inset -2rem -2rem 6rem var(--neu-light);
 
@@ -151,8 +149,8 @@ small { font-size: 12rem; }
 h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.045em; margin: 20rem 0; }
 .hero p { color: var(--muted); font-size: clamp(17rem, 2vw, 21rem); line-height: 1.6; max-width: 680rem; margin-bottom: 36rem; }
 
-.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
-.primary-button:hover:not(:disabled) { background: var(--accent-dark); transform: translateY(-1rem); }
+.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard); }
+.primary-button:hover:not(:disabled) { background: var(--accent-dark); }
 .primary-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .metric-preview { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; box-shadow: var(--shadow); overflow: hidden; }
@@ -280,8 +278,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 30rem; }
 .marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color var(--duration-fast) var(--ease-standard); }
 .marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
-.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
-.marketing-cta:hover { background: var(--marketing-accent-dark); transform: translateY(-2rem); }
+.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard); }
+.marketing-cta:hover { background: var(--marketing-accent-dark); }
 .marketing-cta span { font-size: 18rem; font-weight: 400; line-height: 1; }
 .marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 7rem; }
 
@@ -368,7 +366,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* A hover is an input, so it belongs to the standard motion system. The plain
  * cards lift; the featured one is already raised and only deepens its shadow,
  * so its resting offset never moves. */
-.pricing-card:not(.featured):hover { transform: translateY(-6rem); border-color: var(--marketing-accent); box-shadow: var(--neu-raised); }
+.pricing-card:not(.featured):hover { transform: translateY(-6rem); border-color: var(--marketing-accent); }
 .pricing-card.featured { border-color: var(--marketing-ink); background: var(--marketing-ink); color: var(--marketing-on-dark); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); transform: translateY(-14rem); transition: box-shadow var(--duration-base) var(--ease-standard); }
 .pricing-card.featured:hover { box-shadow: 0 34rem 66rem rgba(15, 42, 29, .26); }
 .pricing-badge { position: absolute; top: -11rem; left: 28rem; padding: 4rem 11rem; border-radius: 99rem; background: var(--marketing-profit); color: var(--marketing-ink); font-size: 10rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
@@ -663,6 +661,37 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .data-table tfoot strong { color: var(--ink); font-size: 16rem; letter-spacing: normal; }
 .data-table input { width: 110rem; padding: 8rem 10rem; border-radius: 10rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
 .data-table a { color: var(--accent); font-size: 14rem; font-weight: 600; }
+
+/* A master's face and their name are one cell.
+   The photo is an attribute of the person rather than a column of its own: a
+   column of circles beside a column of names would have added a heading that
+   says nothing and a width the table cannot spare. */
+.specialist-photo { display: flex; align-items: center; gap: 12rem; }
+.specialist-photo-name { display: grid; gap: 2rem; min-width: 0; }
+.specialist-photo-name > span:first-child { font-weight: 600; }
+/* The picture is the control that replaces it, so it has to look like one.
+   The ring is the same one `:focus-visible` draws everywhere else — on hover
+   for a pointer, and on `:focus-within` because what actually holds focus is
+   the file input hidden inside. */
+.specialist-photo-pick { display: inline-flex; flex: none; border-radius: 999rem; cursor: pointer; }
+.specialist-photo-pick:hover .avatar,
+.specialist-photo-pick:focus-within .avatar { outline: 3rem solid var(--accent); outline-offset: 3rem; }
+.specialist-photo .inline-actions { gap: 4rem; }
+.specialist-photo .inline-action { margin-left: 0; font-size: 13rem; }
+/* `.data-table input` sizes the number boxes in these rows and outranks
+   `.sr-only`, which is how a file input meant to be invisible ends up 110rem
+   wide behind its label. */
+.data-table .specialist-photo input[type="file"] { width: 1rem; }
+/* Inline beside the name, not a banner across the row. */
+.specialist-photo .form-error { padding: 4rem 8rem; font-size: 12rem; justify-self: start; }
+
+/* The two facts a master's card states rather than asks about: how they are
+   paid, and at what rate. A definition list because that is what they are, and
+   because a two-column table for two rows would be a table for the sake of one. */
+.specialist-facts { display: grid; gap: 12rem; margin: 16rem 0 0; }
+.specialist-facts > div { display: grid; gap: 2rem; }
+.specialist-facts dt { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.specialist-facts dd { margin: 0; font-size: 15rem; }
 
 .inline-form label.name-combobox {
   position: relative;
@@ -1197,14 +1226,21 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* ==========================================================================
    Soft UI (neumorphism)
    ==========================================================================
-   Surfaces are extruded from the ground rather than drawn on it: one light
-   source at the top-left, a light edge facing it and a soft shadow away from
-   it. Borders mostly go, because an edge that is already modelled does not
-   need a line as well; controls the user types into are pushed *in* instead of
-   out, which is the whole vocabulary of this style — raised means "press me",
-   inset means "fill me".
+   Half of a soft UI, and the half that earns its keep.
 
-   Two things deliberately survive it.
+   Nothing is extruded any more: a raised edge is a light one facing a light
+   source at the top-left, and at any size it read as a haze around a rectangle
+   rather than as an object above the page. What stays is the other direction —
+   the boxes a user types into are pushed *in*, and a control being pressed goes
+   *in* further. Inset still means "fill me", and pressed still means "you are
+   pressing this".
+
+   Borders mostly go with it, because a fill against a different fill is already
+   an edge. The elements that lost both an outline and a modelled edge kept
+   their own colour, which is what separates them now: a panel from the page, a
+   badge from the panel, a notice from the form beside it.
+
+   Two more things deliberately survive it.
 
    `:focus-visible` keeps its solid ring. Soft UI is a low-contrast style and
    its usual failure is a focus state you cannot find; that ring is the one
@@ -1223,12 +1259,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-shell .panel {
   border: 0;
   border-radius: 28rem;
-  box-shadow: var(--neu-raised);
 }
 
 .auth-card {
   border: 0;
-  box-shadow: var(--neu-raised);
 }
 
 /* Fields are pressed into the surface: the same shadows, inverted. */
@@ -1246,42 +1280,29 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   box-shadow: var(--neu-inset);
 }
 
-/* The accent button keeps its fill — it is the one element that should read as
-   a decision rather than as a surface. It gains the modelling, not a colour. */
-.app-frame .primary-button,
-.auth-card .primary-button,
-.public-booking-shell .primary-button {
-  box-shadow: var(--neu-raised-sm);
-}
-
 .app-frame .primary-button:active:not(:disabled),
 .auth-card .primary-button:active:not(:disabled) {
-  transform: none;
   box-shadow: var(--neu-pressed);
 }
 
-.app-frame .secondary-button,
-.auth-card .secondary-button,
-.public-booking-shell .secondary-button {
-  border: 0;
-  background: var(--surface);
-  box-shadow: var(--neu-raised-sm);
-}
+/* The quiet button keeps its outline.
 
-.app-frame .secondary-button:hover:not(:disabled),
-.public-booking-shell .secondary-button:hover:not(:disabled) {
-  background: var(--surface-strong);
-}
+   It had lost it here, on the reading that a modelled edge says the same thing
+   — and with the modelling gone it said nothing at all: `--surface` is the
+   panel's own colour, so «Скачать данные» and «Удалить аккаунт» were a line of
+   text where a button had been. The hover fill that paired with that override
+   goes with it, and the base rule's own — a sage wash and a darker rim — comes
+   back. */
 
 .app-frame .secondary-button:active:not(:disabled) {
   box-shadow: var(--neu-pressed);
 }
 
-/* Cards in a list are raised too, so a list reads as a stack of objects. */
+/* An entry keeps the surface it is drawn on and loses the outline; what tells
+   one from the next is the gap between them and the status stripe below. */
 .app-frame .calendar-entry {
   border: 0;
   border-radius: 20rem;
-  box-shadow: var(--neu-raised-sm);
 }
 
 /*
@@ -1298,37 +1319,28 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   border-left-width: 4rem;
 }
 
-.app-frame .calendar-entry[open] { box-shadow: var(--neu-raised); }
-
 /* Notices keep their semantic colour and lose the outline. */
 .app-frame .warning-banner,
 .public-booking-shell .warning-banner {
   border: 0;
-  box-shadow: var(--neu-raised-sm);
 }
 
-/* Cards nested inside a panel are raised a little, never as much as the panel
-   holding them: two identical elevations next to each other read as one flat
-   sheet with a seam. */
+/* Cards nested inside a panel lose their outline and keep their fill: against
+   the panel behind them that is the whole separation they need. */
 .app-frame .metric-card,
 .app-frame .metric,
 .app-frame .checkbox-set,
 .app-frame .empty-state,
 .public-booking-shell .metric-card {
   border: 0;
-  box-shadow: var(--neu-raised-sm);
 }
 
-.app-frame .empty-state { box-shadow: var(--neu-raised); }
-
-/* A table that is not inside a panel — the service and client lists
-   are laid out that way — needs a surface of its own. On a flat design its own
-   row rules were enough to hold it together; extruded surfaces around it leave
-   it looking like it fell out of one. */
+/* A table that is not inside a panel — the service and client lists are laid
+   out that way — needs a surface of its own: its row rules hold the rows to
+   each other, not the table to the page. */
 .app-shell > .data-table {
   background: var(--surface);
   border-radius: 24rem;
-  box-shadow: var(--neu-raised);
   padding: 8rem 14rem;
   border-collapse: separate;
   border-spacing: 0;
@@ -1341,8 +1353,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Grouping in the sidebar was a rule; here the space does that work. */
 .app-frame .sidebar-group { border: 0; }
 
-/* The badge sits on a surface, so it is pressed into it rather than outlined. */
-.app-frame .badge-accent { border: 0; box-shadow: var(--neu-raised-sm); }
+/* The badge carries its own fill, so the outline around it was a second edge
+   saying the same thing. */
+.app-frame .badge-accent { border: 0; }
 
 /*
  * Checkboxes and radios, everywhere, in one place.
@@ -1389,8 +1402,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-card input[type="radio"],
 .public-booking-shell input[type="radio"] { border-radius: 999rem; }
 
-/* Checked is raised and filled: the one state that has to be readable from
-   across the room, in the accent the product already uses. */
+/* Checked is filled: the one state that has to be readable from across the
+   room, in the accent the product already uses. */
 .app-frame input[type="checkbox"]:checked,
 .auth-card input[type="checkbox"]:checked,
 .public-booking-shell input[type="checkbox"]:checked {
@@ -1399,14 +1412,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   background-repeat: no-repeat;
   background-position: center;
   background-size: 13rem;
-  box-shadow: var(--neu-raised-sm);
 }
 
 .app-frame input[type="radio"]:checked,
 .auth-card input[type="radio"]:checked,
 .public-booking-shell input[type="radio"]:checked {
   background-image: radial-gradient(circle at center, var(--accent) 0 32%, transparent 34%);
-  box-shadow: var(--neu-raised-sm);
 }
 
 .app-frame input[type="checkbox"]:disabled,
@@ -1482,14 +1493,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   border-radius: 14rem;
 }
 
-.app-frame .sidebar-link:hover:not(.active) { box-shadow: var(--neu-raised-sm); border-radius: 14rem; }
-
 .app-frame .bottom-link.active { box-shadow: var(--neu-pressed); border-radius: 14rem; }
 
-/* The account chip in the header is a control, so it is modelled like one. */
-.app-frame .topbar-account { border: 0; box-shadow: var(--neu-raised-sm); }
+/* The chip and the bell are flat until a pointer is on them, and pressed while
+   it is. */
+.app-frame .topbar-account { border: 0; }
 .app-frame .topbar-account:hover { box-shadow: var(--neu-pressed); }
-.app-frame .topbar-notifications { box-shadow: var(--neu-raised-sm); }
 .app-frame .topbar-notifications:hover { box-shadow: var(--neu-pressed); }
 
 /* The bars that frame the app are surfaces as well. */

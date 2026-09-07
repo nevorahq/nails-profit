@@ -60,6 +60,9 @@ const TABLES_IN_DELETE_ORDER = [
   "booking_settings",
   "specialist_service",
   "specialist_location",
+  // Before the master it pictures: the reference is `restrict`, so the photo
+  // has to go first — the same order the delete route takes.
+  "specialist_avatar",
   "workplace",
   "location",
   "service_add_on",

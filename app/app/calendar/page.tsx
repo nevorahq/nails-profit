@@ -7,6 +7,7 @@ import {
   type CalendarView,
 } from "@/components/calendar-board";
 import { ToolIcon } from "@/components/icons";
+import { avatarUrl } from "@/domain/avatar-image";
 import {
   addOns,
   availabilityExceptions,
@@ -15,9 +16,9 @@ import {
   clients,
   locations,
   services,
+  specialistAvatars,
   specialistLocations,
   specialists,
-  users,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, hasConstraint, scopeFor } from "@/domain/rbac";
@@ -167,15 +168,25 @@ export default async function CalendarPage({
               ),
             );
 
-    // The photo comes from the account a specialist card is linked to, the way
-    // `app/app/visits/page.tsx` reads it: a card without an account simply has
-    // none, and the column head falls back to the initial.
-    const people = await tx
-      .select({ id: specialists.id, name: specialists.name, avatar: users.image })
-      .from(specialists)
-      .leftJoin(users, eq(specialists.userId, users.id))
-      .where(isNull(specialists.archivedAt))
-      .orderBy(asc(specialists.name));
+    // The photo comes from the card, the way `app/app/visits/page.tsx` reads
+    // it: a card nobody has given one has none, and the column head falls back
+    // to the initial.
+    const people = (
+      await tx
+        .select({
+          id: specialists.id,
+          name: specialists.name,
+          avatarVersion: specialistAvatars.version,
+        })
+        .from(specialists)
+        .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
+        .where(isNull(specialists.archivedAt))
+        .orderBy(asc(specialists.name))
+    ).map((person) => ({
+      id: person.id,
+      name: person.name,
+      avatar: avatarUrl(person.id, person.avatarVersion),
+    }));
 
     const catalogue = await tx
       .select({ id: services.id, name: services.name, durationMinutes: services.durationMinutes })

@@ -49,12 +49,10 @@ function currencyName(code: Currency, locale: AppLocale, t: Translate): string {
 export function OrganizationSettings({
   locale,
   currency,
-  practicalCapacityBasisPoints,
   canEdit,
 }: {
   locale: AppLocale;
   currency: string;
-  practicalCapacityBasisPoints: number;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -63,13 +61,8 @@ export function OrganizationSettings({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [capacity, setCapacity] = useState(String(practicalCapacityBasisPoints / 100));
 
-  async function change(patch: {
-    locale?: AppLocale;
-    currency?: string;
-    practical_capacity_basis_points?: number;
-  }) {
+  async function change(patch: { locale?: AppLocale; currency?: string }) {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -142,58 +135,26 @@ export function OrganizationSettings({
         </label>
       </div>
 
-      <p className="muted">{t("settings.languageHint")}</p>
-      <p className="muted">{t("settings.currencyHint")}</p>
-
       {/*
-        «Формат работы» is not offered here.
+        Neither «Формат работы» nor the practical capacity rate is offered here,
+        and for the same reason: both are settings an owner is asked to hold an
+        opinion about before they have one.
 
-        It is chosen when the workspace is created and it decides nothing about
-        money — only whether the reports say «оплата труда мастеров» or «оплата
-        вашего труда» (see `i18n/business-labels.ts`). A control that changes
-        wording, sitting between currency and the capacity rate, read as a
-        financial setting and earned a paragraph of reassurance to say it was
-        not one.
+        The format is chosen when the workspace is created and decides nothing
+        about money — only whether the reports say «оплата труда мастеров» or
+        «оплата вашего труда» (see `i18n/business-labels.ts`). Capacity is the
+        share of rostered hours that can actually be sold; it stays at the
+        column's 75% default, which is the middle of the range the removed hint
+        recommended anyway, and the cost of an hour and the utilization figure
+        go on being computed from it.
 
-        The value is still editable through `PATCH /api/v1/organizations/settings`,
-        which is what an owner who really does change shape needs — and how this
-        comes back if it turns out they do so often enough to need a screen.
+        Both are still editable through `PATCH /api/v1/organizations/settings`,
+        which is what an owner who really does need to change one has — and how
+        either comes back if it turns out they do so often enough to earn a
+        control. The paragraphs of reassurance the language and currency pickers
+        carried went with them: a setting that needs a paragraph to say it is
+        harmless is the thing that made this screen feel like a risk.
       */}
-
-      {/*
-        Stored in basis points and shown as a percentage, because 75 is what an
-        owner thinks in and 7500 is what integer arithmetic needs. The bounds
-        match the column's own check constraint: zero capacity would make every
-        rate a division by nothing.
-      */}
-      <form
-        className="inline-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const percent = Number(capacity);
-          if (!Number.isFinite(percent)) return;
-          void change({
-            practical_capacity_basis_points: Math.min(10_000, Math.max(1, Math.round(percent * 100))),
-          });
-        }}
-      >
-        <label>
-          {t("settings.practicalCapacity")}
-          <input
-            value={capacity}
-            type="number"
-            step="1"
-            min="1"
-            max="100"
-            disabled={!canEdit || pending}
-            onChange={(event) => setCapacity(event.target.value)}
-          />
-        </label>
-        <button className="secondary-button" type="submit" disabled={!canEdit || pending}>
-          {t("settings.practicalCapacitySave")}
-        </button>
-      </form>
-      <p className="muted">{t("settings.practicalCapacityHint")}</p>
 
       {/* The booking address moved to «Онлайн-запись», next to the addresses it
           publishes and the switch that publishes them. It answers a question

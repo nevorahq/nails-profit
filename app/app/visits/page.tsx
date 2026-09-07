@@ -2,10 +2,18 @@ import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
 
 import { ToolIcon } from "@/components/icons";
+import { avatarUrl } from "@/domain/avatar-image";
 import { PeriodFilter } from "@/components/period-filter";
 import { type AdjustLine, VisitAdjustForm } from "@/components/visit-adjust-form";
 import { VisitDeleteButton } from "@/components/visit-delete-button";
-import { clients, financialSnapshots, specialists, users, visitLines, visits } from "@/db/schema";
+import {
+  clients,
+  financialSnapshots,
+  specialistAvatars,
+  specialists,
+  visitLines,
+  visits,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
@@ -62,10 +70,22 @@ export default async function VisitsPage({
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(visits.completedAt));
 
+    /*
+     * The photo comes from the card, which is where a studio sets it.
+     *
+     * It used to come from `user.image` through the linked account — a column
+     * nothing has ever written, so this list has drawn letters since it was
+     * built, and would have gone on drawing them for the masters who have no
+     * account to hang a picture off at all.
+     */
     const people = await tx
-      .select({ id: specialists.id, name: specialists.name, avatar: users.image })
+      .select({
+        id: specialists.id,
+        name: specialists.name,
+        avatarVersion: specialistAvatars.version,
+      })
       .from(specialists)
-      .leftJoin(users, eq(specialists.userId, users.id))
+      .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
       .where(isNull(specialists.archivedAt))
       .orderBy(asc(specialists.name));
 
@@ -118,7 +138,12 @@ export default async function VisitsPage({
     for (const person of data.people) {
       const rows = bySpecialist.get(person.id);
       if (rows) {
-        groups.push({ key: person.id, title: person.name, avatar: person.avatar, rows });
+        groups.push({
+          key: person.id,
+          title: person.name,
+          avatar: avatarUrl(person.id, person.avatarVersion),
+          rows,
+        });
         bySpecialist.delete(person.id);
       }
     }
@@ -183,7 +208,7 @@ export default async function VisitsPage({
                 <span className="avatar" aria-hidden="true">
                   {group.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
-                    <img src={group.avatar} alt="" referrerPolicy="no-referrer" />
+                    <img src={group.avatar} alt="" />
                   ) : (
                     group.title.trim().slice(0, 1).toUpperCase() || "?"
                   )}

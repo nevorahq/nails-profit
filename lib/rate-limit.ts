@@ -42,6 +42,12 @@ export type RateLimitDecision = Readonly<{
 /** Ten uploads an hour is far more than an import flow needs and far less than a loop wants. */
 export const IMPORT_UPLOAD_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
 export const IMPORT_CONFIRM_RULE: RateLimitRule = { limit: 20, windowSeconds: 3_600 };
+/**
+ * The same reasoning as the import above, at a smaller size and a higher count:
+ * a photo is half a megabyte read, decoded and written, and an owner setting
+ * faces for a whole studio in one sitting is a normal afternoon.
+ */
+export const AVATAR_UPLOAD_RULE: RateLimitRule = { limit: 60, windowSeconds: 3_600 };
 /** An invitation token is 256 bits, so this is about cost, not about guessing odds. */
 export const INVITATION_ACCEPT_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
 /** Public booking has separate buckets so slot browsing cannot consume create allowance. */
