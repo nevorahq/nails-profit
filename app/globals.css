@@ -150,8 +150,8 @@ small { font-size: 12rem; }
 h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.045em; margin: 20rem 0; }
 .hero p { color: var(--muted); font-size: clamp(17rem, 2vw, 21rem); line-height: 1.6; max-width: 680rem; margin-bottom: 36rem; }
 
-.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
-.primary-button:hover:not(:disabled) { background: var(--accent-dark); transform: translateY(-1rem); }
+.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard); }
+.primary-button:hover:not(:disabled) { background: var(--accent-dark); }
 .primary-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .metric-preview { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; box-shadow: var(--shadow); overflow: hidden; }
@@ -279,8 +279,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 30rem; }
 .marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color var(--duration-fast) var(--ease-standard); }
 .marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
-.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
-.marketing-cta:hover { background: var(--marketing-accent-dark); transform: translateY(-2rem); }
+.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard); }
+.marketing-cta:hover { background: var(--marketing-accent-dark); }
 .marketing-cta span { font-size: 18rem; font-weight: 400; line-height: 1; }
 .marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 7rem; }
 
@@ -1290,7 +1290,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .app-frame .primary-button:active:not(:disabled),
 .auth-card .primary-button:active:not(:disabled) {
-  transform: none;
   box-shadow: var(--neu-pressed);
 }
 
