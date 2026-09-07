@@ -6,6 +6,7 @@ import { memberships } from "@/db/schema";
 import { memberRoles, type MemberRole } from "@/domain/rbac";
 import { anonymous, dataOf, listRoutes, loadRoute, type Actor } from "../helpers/api";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
+import { PNG_PIXEL } from "../helpers/images";
 import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
 /**
@@ -70,6 +71,13 @@ function importForm() {
       type: "text/csv",
     }),
   );
+  return form;
+}
+
+/** A one-pixel PNG: the smallest thing the signature check accepts. */
+function avatarForm() {
+  const form = new FormData();
+  form.set("file", new File([new Uint8Array(PNG_PIXEL)], "face.png", { type: "image/png" }));
   return form;
 }
 
@@ -517,6 +525,29 @@ const cases: readonly Case[] = [
     // depends on, and is the behaviour the endpoint is meant to have.
     note: "Removing a master is the same decision as hiring one",
     request: async (fixture) => ({ path: `/api/v1/specialists/${fixture.studio.specialistId}` }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/avatar",
+    method: "GET",
+    allowed: ALL_ROLES,
+    // The fixture's master has no photo, so a permitted caller gets a 404 —
+    // which is not 401 and not 403, and is the whole claim this row makes.
+    note: "A face is already on every screen that lists people",
+    request: async (fixture) => ({ path: `/api/v1/specialists/${fixture.studio.specialistId}/avatar` }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/avatar",
+    method: "POST",
+    allowed: CATALOGUE_MANAGERS,
+    note: "Setting a photo is editing the card",
+    request: async (fixture) => ({ path: `/api/v1/specialists/${fixture.studio.specialistId}/avatar` }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/avatar",
+    method: "DELETE",
+    allowed: CATALOGUE_MANAGERS,
+    note: "Removing a photo is editing the card",
+    request: async (fixture) => ({ path: `/api/v1/specialists/${fixture.studio.specialistId}/avatar` }),
   },
   {
     route: "/api/v1/specialists/[id]/commission-rules",
@@ -970,8 +1001,9 @@ async function send(
   body?: Record<string, unknown>,
   headers?: Record<string, string>,
 ) {
-  // The import upload is the one multipart endpoint; everything else is JSON.
+  // Import and avatar are the multipart endpoints; everything else is JSON.
   if (path === "/api/v1/imports" && method === "POST") return actor.post(path, importForm());
+  if (path.endsWith("/avatar") && method === "POST") return actor.post(path, avatarForm());
 
   switch (method) {
     case "GET":

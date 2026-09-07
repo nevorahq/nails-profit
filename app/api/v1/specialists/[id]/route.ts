@@ -11,6 +11,7 @@ import {
   laborCostRules,
   memberships,
   scheduleRules,
+  specialistAvatars,
   specialistLocations,
   specialistServices,
   specialists,
@@ -290,6 +291,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     await tx.delete(bookingHolds).where(eq(bookingHolds.specialistId, id));
     await tx.delete(availabilityExceptions).where(eq(availabilityExceptions.specialistId, id));
     await tx.delete(scheduleRules).where(eq(scheduleRules.specialistId, id));
+    await tx.delete(specialistAvatars).where(eq(specialistAvatars.specialistId, id));
     await tx.delete(specialistServices).where(eq(specialistServices.specialistId, id));
     await tx.delete(specialistLocations).where(eq(specialistLocations.specialistId, id));
     await tx.delete(commissionRules).where(eq(commissionRules.specialistId, id));
