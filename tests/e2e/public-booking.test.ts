@@ -10,6 +10,7 @@ import {
   organizations,
   pilotProductEvents,
 } from "@/db/schema";
+import { staffNotificationTemplates } from "@/lib/notification-message";
 import { anonymous, dataOf, errorCodeOf } from "../helpers/api";
 import { wednesdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -240,16 +241,25 @@ describe("public online booking", () => {
      * The reminder that was queued on creation left with the cancellation:
      * nobody is coming, so nobody is reminded.
      *
-     * Nothing is left at all, and for this client that is the whole picture:
-     * they left a phone and no address, SMS carries only the reminder, and the
-     * reminder went with the cancellation. The confirmation, the move and the
-     * cancellation each had no channel to take — which here is the right
-     * silence rather than a gap, because every one of those three was something
-     * this client did themselves on the manage page and watched the answer to.
-     * The studio-side cancellation that reaches nobody is the case with real
-     * cost, and it is pinned in `tests/e2e/notifications.test.ts`.
+     * Nothing is left for the client at all, and that is the whole picture for
+     * this one: they left a phone and no address, SMS carries only the
+     * reminder, and the reminder went with the cancellation. The confirmation,
+     * the move and the cancellation each had no channel to take — which here is
+     * the right silence rather than a gap, because every one of those three was
+     * something this client did themselves on the manage page and watched the
+     * answer to. The studio-side cancellation that reaches nobody is the case
+     * with real cost, and it is pinned in `tests/e2e/notifications.test.ts`.
+     *
+     * The studio's own copies are filtered out rather than counted, because
+     * they are the other half of these same three events and belong to
+     * `tests/e2e/staff-request-notification.test.ts`. What this assertion is
+     * for is the client's side of the queue, and a client with no address has
+     * none.
      */
-    expect(queued.map((row) => row.template).sort()).toEqual([]);
+    const toTheClient = queued
+      .map((row) => row.template)
+      .filter((template) => !(staffNotificationTemplates as readonly string[]).includes(template));
+    expect(toTheClient.sort()).toEqual([]);
   });
 
   test("a confirmed booking is queued a reminder for the day before", async () => {
@@ -709,16 +719,29 @@ describe("public online booking", () => {
         );
         expect(created.status).toBe("confirmed");
 
-        // Verification picked one channel (email, since NOTIFICATION_PROVIDER
-        // is resend). The booking queues two messages behind it — the
-        // confirmation, then the reminder — and the client left both a phone
-        // and an address, so three rows: both messages by email, and the
-        // reminder alone by SMS, which is the only thing SMS carries.
+        /*
+         * Verification picked one channel (email, since NOTIFICATION_PROVIDER
+         * is resend). Everything the booking itself queues is listed by name
+         * rather than counted by channel, because the count alone cannot say
+         * which of these is the paid one.
+         *
+         * The client left both a phone and an address and is written to three
+         * times: confirmed and reminded by email, reminded once more by SMS —
+         * the only thing SMS carries. The fourth row is the studio's, and by
+         * email like every message addressed to a studio: this booking needed
+         * no confirming, so without it nobody working here would have been told
+         * the hour was taken.
+         */
         const rows = await adminDb
-          .select({ channel: notificationOutbox.channel })
+          .select({ channel: notificationOutbox.channel, template: notificationOutbox.template })
           .from(notificationOutbox)
           .where(eq(notificationOutbox.bookingId, created.id));
-        expect(rows.map((row) => row.channel).sort()).toEqual(["email", "email", "sms"]);
+        expect(rows.map((row) => `${row.template}:${row.channel}`).sort()).toEqual([
+          "booking.confirmed:email",
+          "booking.reminder:email",
+          "booking.reminder:sms",
+          "booking.staff_booked:email",
+        ]);
       } finally {
         delete process.env.NOTIFICATION_PROVIDER;
       }

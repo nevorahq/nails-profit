@@ -2064,8 +2064,21 @@ export const notificationOutbox = pgTable(
      * row is for. Two rows about one request — the master it was booked with
      * and the owner's copy — are otherwise identical, and the recipient is
      * resolved at delivery, so it has to be written down here.
+     *
+     * `specialistId` and `startsAt` carry the one message whose subject is a
+     * state the booking has already left: the master a client moved away from,
+     * and the hour they were moved out of. Every other fact in every other
+     * message is read off the booking at delivery, which is what keeps a
+     * renamed master or a re-linked account correct; these two cannot be,
+     * because the booking now says somebody else and some other time.
      */
-    payload: jsonb("payload").$type<{ code?: string; recipient?: "specialist" | "owner" }>(),
+    payload: jsonb("payload").$type<{
+      code?: string;
+      recipient?: "specialist" | "owner" | "previous_specialist";
+      specialistId?: string;
+      /** ISO 8601; a `jsonb` column holds no timestamps of its own. */
+      startsAt?: string;
+    }>(),
     status: notificationStatus("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull().defaultNow(),

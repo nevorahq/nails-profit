@@ -14,6 +14,7 @@ import { reminderTimeFor } from "@/domain/notification-schedule";
 import {
   smsNotificationTemplates,
   type BookingNotificationTemplate,
+  type StaffNotificationTemplate,
 } from "@/lib/notification-message";
 
 export type { BookingNotificationTemplate };
@@ -55,7 +56,7 @@ export async function enqueueBookingNotification(
 }
 
 /**
- * Telling the studio that a request is waiting for an answer.
+ * Telling the studio what a client did on the public page.
  *
  * Until this existed, a public request notified the client and nobody else: the
  * appointment sat in `pending_confirmation` until somebody happened to open the
@@ -63,19 +64,37 @@ export async function enqueueBookingNotification(
  * learned there was anything to confirm, and read the silence as the booking
  * having failed.
  *
+ * The same silence covered three more events, and this now carries all four.
+ * A booking taken under instant confirmation needs no answer but still fills
+ * somebody's hour; a client who moves a visit moves that hour; a client who
+ * calls one off frees it for somebody else. None of them asks the studio for a
+ * decision, which is precisely why none of them was reaching anyone — and why
+ * the person whose chair it is found out by opening the calendar, or didn't.
+ *
  * Two people hear about it: the master the appointment was booked with, and the
- * owner, who asked to see every request whether or not it is theirs to work.
- * One row each, so one can fail or dead-letter without taking the other with
- * it; which person a row is for is written into its payload, and their address
- * is looked up at delivery by `staffFacts` in `notification-dispatch`.
+ * owner, who asked to see everything whether or not it is theirs to work. One
+ * row each, so one can fail or dead-letter without taking the other with it;
+ * which person a row is for is written into its payload, and their address is
+ * looked up at delivery by `staffFacts` in `notification-dispatch`.
+ *
+ * `occurrence` is what keeps a second move from being swallowed as a duplicate
+ * of the first: the idempotency key is built from it, so a caller reacting to a
+ * change passes the booking's new version. The owner's copy carries the same
+ * value with `:owner` on the end — without it the two rows would share a key
+ * and only one person would be written to.
  *
  * Email only, and deliberately: the studio side of the product has an account
  * with an address, never a phone number, so there is no second channel to
  * choose between.
  */
-export async function notifyStaffOfRequest(
+export async function notifyStaff(
   tx: TenantTransaction,
-  input: { organizationId: string; bookingId: string },
+  input: {
+    organizationId: string;
+    bookingId: string;
+    template: StaffNotificationTemplate;
+    occurrence?: string;
+  },
 ) {
   const [target] = await tx
     .select({ specialistUserId: specialists.userId })
@@ -106,7 +125,8 @@ export async function notifyStaffOfRequest(
       bookingId: input.bookingId,
       verificationId: null,
       channel: "email",
-      template: "booking.staff_requested",
+      template: input.template,
+      occurrence: input.occurrence,
       payload: { recipient: "specialist" },
     });
   }
@@ -119,11 +139,62 @@ export async function notifyStaffOfRequest(
       bookingId: input.bookingId,
       verificationId: null,
       channel: "email",
-      template: "booking.staff_requested",
-      occurrence: "owner",
+      template: input.template,
+      occurrence: input.occurrence ? `${input.occurrence}:owner` : "owner",
       payload: { recipient: "owner" },
     });
   }
+}
+
+/**
+ * Telling the master a client just moved off.
+ *
+ * The one message in the product addressed to somebody the appointment no
+ * longer belongs to, and the reason it needs a function of its own: `notifyStaff`
+ * fans out to whoever holds the booking now, which after a move to another
+ * master is precisely the wrong person. This one has a single reader, and their
+ * hour is the thing the message is about.
+ *
+ * Written only where there is somebody to write to. A card with no linked
+ * account has no inbox, and the owner is not offered a copy: they already get
+ * `booking.staff_rescheduled` for the same move, and a second message about one
+ * event is how a studio learns to stop reading them.
+ *
+ * The master and the hour travel in the payload rather than being looked up at
+ * delivery, against the rule every other message here follows. They have to:
+ * the booking has moved on, and by the time the queue comes round it names the
+ * new master and the new time.
+ */
+export async function notifyReleasedSpecialist(
+  tx: TenantTransaction,
+  input: {
+    organizationId: string;
+    bookingId: string;
+    specialistId: string;
+    startsAt: Date;
+    occurrence: string;
+  },
+) {
+  const [previous] = await tx
+    .select({ userId: specialists.userId })
+    .from(specialists)
+    .where(eq(specialists.id, input.specialistId))
+    .limit(1);
+  if (!previous?.userId) return;
+
+  await insertOutbox(tx, {
+    organizationId: input.organizationId,
+    bookingId: input.bookingId,
+    verificationId: null,
+    channel: "email",
+    template: "booking.staff_released",
+    occurrence: input.occurrence,
+    payload: {
+      recipient: "previous_specialist",
+      specialistId: input.specialistId,
+      startsAt: input.startsAt.toISOString(),
+    },
+  });
 }
 
 /**
@@ -191,7 +262,12 @@ async function insertOutbox(
     template: BookingNotificationTemplate;
     occurrence?: string;
     scheduledAt?: Date;
-    payload: { code?: string; recipient?: "specialist" | "owner" } | null;
+    payload: {
+      code?: string;
+      recipient?: "specialist" | "owner" | "previous_specialist";
+      specialistId?: string;
+      startsAt?: string;
+    } | null;
   },
 ) {
   /**

@@ -281,6 +281,21 @@ const ru = {
   "notify.staffRequested.body":
     "Клиент просит записать его на {when}. Запрос ждёт подтверждения.",
   "notify.staffRequested.cta": "Открыть запрос",
+  "notify.staffBooked.subject": "Новая запись — {studio}",
+  "notify.staffBooked.body": "Клиент записался к мастеру {specialist} на {when}.",
+  "notify.staffBooked.cta": "Открыть запись",
+  "notify.staffRescheduled.subject": "Клиент перенёс запись — {studio}",
+  "notify.staffRescheduled.body":
+    "Клиент перенёс визит к мастеру {specialist}. Новое время — {when}.",
+  "notify.staffRescheduled.cta": "Открыть запись",
+  "notify.staffCancelled.subject": "Клиент отменил запись — {studio}",
+  "notify.staffCancelled.body":
+    "Клиент отменил визит к мастеру {specialist} {when}. Окно снова свободно.",
+  "notify.staffCancelled.cta": "Открыть календарь",
+  "notify.staffReleased.subject": "Клиент ушёл с вашего времени — {studio}",
+  "notify.staffReleased.body":
+    "Клиент перенёс визит {when} к мастеру {specialist}. Час снова свободен.",
+  "notify.staffReleased.cta": "Открыть календарь",
   "notify.visitCompleted.subject": "{studio}: спасибо за визит",
   "notify.visitCompleted.body": "Спасибо, что были у нас {when}.",
   "notify.visitCompleted.cta": "Записаться снова",
@@ -371,7 +386,6 @@ const ru = {
   "specialists.name": "Имя",
   "specialists.commissionType": "Тип комиссии",
   "specialists.value": "Значение",
-  "specialists.valueHint": "Для процента укажите 40 — это 40%. Для фиксированной суммы — сумму в {currency}.",
   "specialists.none": "Мастеров пока нет.",
   "specialists.type": "Тип",
   "specialists.exceptionHint":
@@ -383,8 +397,6 @@ const ru = {
 
   "expenses.recurring": "Каждый месяц",
   "expenses.recurringFrom": "С какого дня",
-  "expenses.recurringHint":
-    "Повторяющийся расход вносится один раз и учитывается в каждом месяце, пока вы его не завершите. Когда сумма изменится, завершите старую запись и добавьте новую — прошлые месяцы останутся с той суммой, которая в них была.",
   "expenses.recurringBadge": "ежемесячно",
   "expenses.recurringUntil": "по {date}",
   "expenses.end": "Завершить",
@@ -393,8 +405,6 @@ const ru = {
   "expenses.deleteRecurringWarning": "Удаление уберёт этот расход из всех месяцев, включая прошлые. Чтобы просто прекратить платить — нажмите «Завершить».",
   "expenses.classOverhead": "в прибыли",
   "expenses.classCashOnly": "только движение денег",
-  "expenses.classHint":
-    "Категория «Зарплата» помечена как движение денег: работа уже посчитана в визитах по комиссии мастера. В месячной прибыли она не вычитается второй раз, но видна в отчёте. Остальные категории, включая материалы, вычитаются из прибыли того месяца, в котором были куплены.",
 
   "pl.title": "Отчёт за месяц",
   "pl.eyebrow": "Прибыль и убытки",
@@ -590,8 +600,6 @@ const ru = {
   "specialists.waitingAction": "Добавить как мастера",
   "specialists.defaultRuleOption": "Все услуги — правило по умолчанию",
   "specialists.isMe": "Это я — работаю сам",
-  "specialists.isMeHint":
-    "Свяжет карточку с вашим аккаунтом: вы получите свой календарь, свои визиты и уведомления о записях. Комиссия по вашим визитам вернётся в прибыль месяца.",
   "specialists.principalSet": "Отметить владельцем",
   "specialists.principalUnset": "Снять отметку",
   "specialists.imputedLabour": "вменённая стоимость вашего труда",
@@ -636,14 +644,8 @@ const ru = {
   "onboarding.visit": "Первый закрытый визит",
   "onboarding.visitHint":
     "Закрытый визит — единственный источник фактических цифр. Первый же покажет, сколько вы на нём заработали.",
-  "monthSetup.title": "Расчёт месяца",
-  "monthSetup.progress": "Готово {done} из {total}",
   "monthSetup.overhead": "Постоянные затраты месяца",
-  "monthSetup.overheadHint":
-    "Аренда, подписки, связь. Пока их нет, прибыль месяца равна марже — то есть выше настоящей.",
   "monthSetup.rota": "Рабочие часы в графике",
-  "monthSetup.rotaHint":
-    "Из часов считается точка безубыточности: сколько нужно заработать, чтобы месяц вышел в ноль.",
   "firstRun.title": "С чего начать",
   "step.back": "Назад: {step}",
   "step.remaining": {
@@ -654,23 +656,20 @@ const ru = {
   "step.goal.specialist": "Добавьте мастера и правило комиссии",
   "step.goal.service": "Добавьте услугу с ценой и длительностью",
   "step.goal.visit": "Закройте первый визит",
-  "step.goal.overhead": "Внесите постоянные затраты месяца",
+  "step.goal.overhead": "Внесите постоянные затраты",
   "step.goal.rota": "Заполните рабочие часы в графике",
   "step.action.specialist": "Добавить мастера",
   "step.action.service": "Добавить услугу",
   "step.action.visit": "Закрыть визит",
   "step.action.overhead": "Внести затраты",
   "step.action.rota": "Заполнить график",
-  "monthSetup.lead":
-    "Ещё два числа — и отчёт месяца станет честным: прибыль после постоянных затрат и точка безубыточности.",
   "monthGuide.title": "Шаг выполнен",
   "monthGuide.doneTitle": "Расчёт месяца готов",
   "monthGuide.doneBody":
     "Теперь в отчёте есть прибыль после постоянных затрат и точка безубыточности — до этого он показывал больше, чем есть.",
   "monthGuide.doneAction": "Открыть отчёт месяца",
   "setupGuide.title": "Шаг выполнен",
-  "setupGuide.doneTitle": "Первый расчёт готов",
-  "setupGuide.doneBody": "Визит закрыт и посчитан — вот сколько он принёс.",
+  "setupGuide.doneTitle": "Визит закрыт",
   "setupGuide.doneAction": "Открыть отчёт",
 
 
@@ -822,11 +821,6 @@ const ru = {
   "auth.forgot": "Забыли пароль?",
   "auth.signInFailed": "Не удалось выполнить вход",
   "auth.signInNoMatch": "Аккаунт не найден — нужна регистрация.",
-  "auth.verifyPending":
-    "Адрес почты не подтверждён. Восстановление доступа идёт только на него — убедитесь, что письмо дошло.",
-  "auth.verifyResend": "Отправить письмо ещё раз",
-  "auth.verifyRetry": "Не отправилось — попробовать снова",
-  "auth.verifySent": "Письмо отправлено",
   "auth.activeSession":
     "Сейчас выполнен вход: {email}. Вход в другой аккаунт завершит этот сеанс в текущем браузере. Чтобы работать в двух аккаунтах одновременно, откройте второй в отдельном окне или в приватном режиме.",
   "auth.invitedEmailHint": "Приглашение в «{org}» выдано на этот адрес — аккаунт должен быть на нём.",
@@ -1164,8 +1158,6 @@ const ru = {
   "bookingSetup.openPublic": "Открыть онлайн-запись",
   "bookingSetup.openPublicHint":
     "Адрес опубликован, но страница студии ещё закрыта. Откройте её — и по ссылке ниже клиенты смогут записываться сами.",
-  "bookingSetup.operatorPending":
-    "Публичную страницу включает оператор после проверок безопасности — этот шаг не ваш. Остальную настройку можно закончить, не дожидаясь его.",
 
   "bookingSetup.locationsTitle": "Адреса",
   "bookingSetup.noLocations": "Адресов пока нет.",
@@ -1195,7 +1187,6 @@ const ru = {
   "bookingSetup.statePaused": "на паузе",
 
   "bookingSetup.settingsTitle": "Параметры записи",
-  "bookingSetup.settingsHint": "Каждый параметр сужает то, что движок доступности предложит клиенту.",
   "bookingSetup.chooseLocation": "Адрес",
   "bookingSetup.slotStep": "Шаг сетки",
   "bookingSetup.minutes": "{count} мин",
@@ -1207,27 +1198,21 @@ const ru = {
   "bookingSetup.confirmationInstant": "Сразу подтверждать",
   "bookingSetup.confirmationManual": "Сначала заявка",
   "bookingSetup.confirmationTtl": "Заявка ждёт подтверждения, мин",
-  "bookingSetup.confirmationTtlHint": "Неподтверждённая заявка держит слот и отменяется сама.",
   "bookingSetup.verificationMode": "Проверка контакта",
   "bookingSetup.verificationOff": "Не проверять",
   "bookingSetup.verificationCode": "Код на email",
   "bookingSetup.verificationTtl": "Код действует, мин",
   "bookingSetup.reminderLead": "Напоминание за, мин",
-  "bookingSetup.reminderHint": "Ноль выключает напоминания.",
 
   "bookingSetup.assignmentTitle": "Мастера и адреса",
-  "bookingSetup.assignmentHint": "Клиенту предлагают только тех, кто работает на выбранном адресе.",
   "bookingSetup.noSpecialists": "Мастеров пока нет.",
 
   "bookingSetup.rotaTitle": "График работы",
-  "bookingSetup.rotaHint":
-    "Часы задаются по местному времени адреса. Сохранение заменяет график с указанной даты, прошлые записи остаются как были.",
   "bookingSetup.specialist": "Мастер",
   "bookingSetup.location": "Адрес",
   "bookingSetup.from": "С",
   "bookingSetup.to": "До",
   "bookingSetup.effectiveFrom": "Действует с",
-  "bookingSetup.effectiveFromHint": "Предыдущий график закрывается этой датой, а не удаляется.",
   "bookingSetup.saveRota": "Сохранить график",
   "bookingSetup.rotaInvalidDay": "{day}: время окончания должно быть позже начала.",
 
@@ -1509,6 +1494,21 @@ const ro: Record<MessageKey, Message> = {
   "notify.staffRequested.body":
     "Un client cere o programare pentru {when}. Cererea așteaptă confirmarea.",
   "notify.staffRequested.cta": "Deschideți cererea",
+  "notify.staffBooked.subject": "Programare nouă — {studio}",
+  "notify.staffBooked.body": "Un client s-a programat la {specialist} pentru {when}.",
+  "notify.staffBooked.cta": "Deschideți programarea",
+  "notify.staffRescheduled.subject": "Clientul a reprogramat — {studio}",
+  "notify.staffRescheduled.body":
+    "Un client a mutat vizita la {specialist}. Ora nouă este {when}.",
+  "notify.staffRescheduled.cta": "Deschideți programarea",
+  "notify.staffCancelled.subject": "Clientul a anulat programarea — {studio}",
+  "notify.staffCancelled.body":
+    "Un client a anulat vizita la {specialist} din {when}. Intervalul este din nou liber.",
+  "notify.staffCancelled.cta": "Deschideți calendarul",
+  "notify.staffReleased.subject": "Clientul a plecat de la ora dumneavoastră — {studio}",
+  "notify.staffReleased.body":
+    "Un client a mutat vizita din {when} la {specialist}. Ora este din nou liberă.",
+  "notify.staffReleased.cta": "Deschideți calendarul",
   "notify.visitCompleted.subject": "{studio}: vă mulțumim pentru vizită",
   "notify.visitCompleted.body": "Vă mulțumim că ați fost la noi {when}.",
   "notify.visitCompleted.cta": "Programați-vă din nou",
@@ -1597,7 +1597,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.name": "Nume",
   "specialists.commissionType": "Tipul comisionului",
   "specialists.value": "Valoare",
-  "specialists.valueHint": "Pentru procent indicați 40 — adică 40%. Pentru sumă fixă — suma în {currency}.",
   "specialists.none": "Încă nu există maeștri.",
   "specialists.type": "Tip",
   "specialists.exceptionHint":
@@ -1609,8 +1608,6 @@ const ro: Record<MessageKey, Message> = {
 
   "expenses.recurring": "În fiecare lună",
   "expenses.recurringFrom": "Din ce zi",
-  "expenses.recurringHint":
-    "O cheltuială recurentă se introduce o dată și se ia în calcul în fiecare lună, până o încheiați. Când suma se schimbă, încheiați înregistrarea veche și adăugați una nouă — lunile trecute rămân cu suma care a fost în ele.",
   "expenses.recurringBadge": "lunar",
   "expenses.recurringUntil": "până la {date}",
   "expenses.end": "Încheie",
@@ -1619,8 +1616,6 @@ const ro: Record<MessageKey, Message> = {
   "expenses.deleteRecurringWarning": "Ștergerea scoate cheltuiala din toate lunile, inclusiv cele trecute. Ca să opriți doar plata, folosiți «Încheie».",
   "expenses.classOverhead": "în profit",
   "expenses.classCashOnly": "doar mișcare de bani",
-  "expenses.classHint":
-    "Categoria «Salarii» este marcată ca mișcare de bani: munca este deja numărată în vizite prin comisionul maestrului. În profitul lunar nu se scade a doua oară, dar rămâne vizibilă în raport. Celelalte categorii, materialele incluse, se scad din profitul lunii în care au fost cumpărate.",
 
   "pl.title": "Raport lunar",
   "pl.eyebrow": "Profit și pierdere",
@@ -1816,8 +1811,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.waitingAction": "Adaugă ca maestru",
   "specialists.defaultRuleOption": "Toate serviciile — regula implicită",
   "specialists.isMe": "Sunt eu — lucrez singur",
-  "specialists.isMeHint":
-    "Leagă fișa de contul dumneavoastră: veți avea calendarul, vizitele și notificările proprii. Comisionul vizitelor dumneavoastră revine în profitul lunii.",
   "specialists.principalSet": "Marchează ca proprietar",
   "specialists.principalUnset": "Scoate marcajul",
   "specialists.imputedLabour": "costul imputat al muncii dvs.",
@@ -1862,14 +1855,8 @@ const ro: Record<MessageKey, Message> = {
   "onboarding.visit": "Prima vizită finalizată",
   "onboarding.visitHint":
     "Vizita închisă este singura sursă de cifre reale. Chiar prima arată cât ați câștigat pe ea.",
-  "monthSetup.title": "Calculul lunii",
-  "monthSetup.progress": "Gata {done} din {total}",
   "monthSetup.overhead": "Cheltuielile fixe ale lunii",
-  "monthSetup.overheadHint":
-    "Chiria, abonamentele, comunicațiile. Cât timp lipsesc, profitul lunii este egal cu marja — adică mai mare decât cel real.",
   "monthSetup.rota": "Ore de lucru în program",
-  "monthSetup.rotaHint":
-    "Din ore se calculează pragul de rentabilitate: cât trebuie câștigat pentru ca luna să iasă pe zero.",
   "firstRun.title": "De unde începem",
   "step.back": "Înapoi: {step}",
   "step.remaining": {
@@ -1880,23 +1867,20 @@ const ro: Record<MessageKey, Message> = {
   "step.goal.specialist": "Adăugați un maestru și regula lui de comision",
   "step.goal.service": "Adăugați un serviciu cu preț și durată",
   "step.goal.visit": "Închideți prima vizită",
-  "step.goal.overhead": "Introduceți cheltuielile fixe ale lunii",
+  "step.goal.overhead": "Introduceți cheltuielile fixe",
   "step.goal.rota": "Completați orele de lucru în program",
   "step.action.specialist": "Adaugă maestru",
   "step.action.service": "Adaugă serviciu",
   "step.action.visit": "Închide vizita",
   "step.action.overhead": "Adaugă cheltuieli",
   "step.action.rota": "Completează programul",
-  "monthSetup.lead":
-    "Încă două cifre — și raportul lunii devine corect: profitul după cheltuielile fixe și pragul de rentabilitate.",
   "monthGuide.title": "Pas finalizat",
   "monthGuide.doneTitle": "Calculul lunii este gata",
   "monthGuide.doneBody":
     "Acum raportul are profitul după cheltuielile fixe și pragul de rentabilitate — până acum arăta mai mult decât este.",
   "monthGuide.doneAction": "Deschide raportul lunii",
   "setupGuide.title": "Pas finalizat",
-  "setupGuide.doneTitle": "Primul calcul este gata",
-  "setupGuide.doneBody": "Vizita este finalizată și calculată — iată cât a adus.",
+  "setupGuide.doneTitle": "Vizita este închisă",
   "setupGuide.doneAction": "Deschide raportul",
 
 
@@ -2048,11 +2032,6 @@ const ro: Record<MessageKey, Message> = {
   "auth.forgot": "Ați uitat parola?",
   "auth.signInFailed": "Autentificarea nu a reușit",
   "auth.signInNoMatch": "Cont inexistent — înregistrați-vă.",
-  "auth.verifyPending":
-    "Adresa de e-mail nu este confirmată. Recuperarea accesului merge doar la ea — asigurați-vă că scrisoarea a ajuns.",
-  "auth.verifyResend": "Trimite din nou mesajul",
-  "auth.verifyRetry": "Nu s-a trimis — încercați din nou",
-  "auth.verifySent": "Mesajul a fost trimis",
   "auth.activeSession":
     "Sunteți autentificat ca {email}. Autentificarea într-un alt cont va încheia sesiunea curentă în acest browser. Pentru a lucra în două conturi simultan, deschideți-l pe al doilea într-o fereastră separată sau în mod privat.",
   "auth.invitedEmailHint": "Invitația în „{org}” a fost emisă pentru această adresă — contul trebuie să fie pe ea.",
@@ -2390,8 +2369,6 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.openPublic": "Deschide programarea online",
   "bookingSetup.openPublicHint":
     "Adresa este publicată, dar pagina studioului este încă închisă. Deschideți-o — și clienții se vor putea programa singuri prin linkul de mai jos.",
-  "bookingSetup.operatorPending":
-    "Pagina publică este activată de operator după verificările de securitate — acest pas nu vă aparține. Restul configurării poate fi finalizat fără să îl așteptați.",
 
   "bookingSetup.locationsTitle": "Adrese",
   "bookingSetup.noLocations": "Încă nu există adrese.",
@@ -2421,8 +2398,6 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.statePaused": "în pauză",
 
   "bookingSetup.settingsTitle": "Parametrii programărilor",
-  "bookingSetup.settingsHint":
-    "Fiecare parametru restrânge ceea ce motorul de disponibilitate îi poate oferi clientului.",
   "bookingSetup.chooseLocation": "Adresă",
   "bookingSetup.slotStep": "Pasul grilei",
   "bookingSetup.minutes": "{count} min",
@@ -2434,27 +2409,21 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.confirmationInstant": "Confirmare imediată",
   "bookingSetup.confirmationManual": "Mai întâi cerere",
   "bookingSetup.confirmationTtl": "Cererea așteaptă confirmarea, min",
-  "bookingSetup.confirmationTtlHint": "O cerere neconfirmată ține intervalul și se anulează singură.",
   "bookingSetup.verificationMode": "Verificarea contactului",
   "bookingSetup.verificationOff": "Fără verificare",
   "bookingSetup.verificationCode": "Cod pe email",
   "bookingSetup.verificationTtl": "Codul este valabil, min",
   "bookingSetup.reminderLead": "Reamintire cu, min înainte",
-  "bookingSetup.reminderHint": "Zero dezactivează reamintirile.",
 
   "bookingSetup.assignmentTitle": "Maeștri și adrese",
-  "bookingSetup.assignmentHint": "Clientului îi sunt propuși doar cei care lucrează la adresa aleasă.",
   "bookingSetup.noSpecialists": "Încă nu există maeștri.",
 
   "bookingSetup.rotaTitle": "Programul de lucru",
-  "bookingSetup.rotaHint":
-    "Orele sunt în ora locală a adresei. Salvarea înlocuiește programul începând cu data indicată, iar programările trecute rămân neschimbate.",
   "bookingSetup.specialist": "Maestru",
   "bookingSetup.location": "Adresă",
   "bookingSetup.from": "De la",
   "bookingSetup.to": "Până la",
   "bookingSetup.effectiveFrom": "Valabil din",
-  "bookingSetup.effectiveFromHint": "Programul anterior se închide la această dată, nu se șterge.",
   "bookingSetup.saveRota": "Salvați programul",
   "bookingSetup.rotaInvalidDay": "{day}: ora de sfârșit trebuie să fie după cea de început.",
 
@@ -2733,6 +2702,21 @@ const en: Record<MessageKey, Message> = {
   "notify.staffRequested.body":
     "A client is asking for {when}. The request is waiting to be confirmed.",
   "notify.staffRequested.cta": "Open the request",
+  "notify.staffBooked.subject": "New booking — {studio}",
+  "notify.staffBooked.body": "A client booked {specialist} for {when}.",
+  "notify.staffBooked.cta": "Open the booking",
+  "notify.staffRescheduled.subject": "A client moved a booking — {studio}",
+  "notify.staffRescheduled.body":
+    "A client moved their visit with {specialist}. The new time is {when}.",
+  "notify.staffRescheduled.cta": "Open the booking",
+  "notify.staffCancelled.subject": "A client cancelled — {studio}",
+  "notify.staffCancelled.body":
+    "A client cancelled their visit with {specialist} on {when}. The slot is free again.",
+  "notify.staffCancelled.cta": "Open the calendar",
+  "notify.staffReleased.subject": "A client left your slot — {studio}",
+  "notify.staffReleased.body":
+    "A client moved their visit on {when} to {specialist}. The hour is free again.",
+  "notify.staffReleased.cta": "Open the calendar",
   "notify.visitCompleted.subject": "{studio}: thank you for your visit",
   "notify.visitCompleted.body": "Thank you for visiting us on {when}.",
   "notify.visitCompleted.cta": "Book again",
@@ -2819,7 +2803,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.name": "Name",
   "specialists.commissionType": "Commission type",
   "specialists.value": "Value",
-  "specialists.valueHint": "For a percentage enter 40 — that is 40%. For a fixed amount, the amount in {currency}.",
   "specialists.none": "No specialists yet.",
   "specialists.type": "Type",
   "specialists.exceptionHint":
@@ -2831,8 +2814,6 @@ const en: Record<MessageKey, Message> = {
 
   "expenses.recurring": "Every month",
   "expenses.recurringFrom": "From which day",
-  "expenses.recurringHint":
-    "A recurring expense is entered once and counts in every month until you end it. When the amount changes, end the old record and add a new one — past months keep the amount that was true in them.",
   "expenses.recurringBadge": "monthly",
   "expenses.recurringUntil": "until {date}",
   "expenses.end": "End it",
@@ -2841,8 +2822,6 @@ const en: Record<MessageKey, Message> = {
   "expenses.deleteRecurringWarning": "Deleting removes this expense from every month, past ones included. To simply stop paying it, use «End it».",
   "expenses.classOverhead": "in the profit",
   "expenses.classCashOnly": "cash movement only",
-  "expenses.classHint":
-    "Payroll is marked as cash movement: the labour is already counted in the visits through the master's commission. It is not subtracted a second time in the monthly profit, but it stays visible in the report. Every other category, materials included, is subtracted from the profit of the month it was bought in.",
 
   "pl.title": "Monthly report",
   "pl.eyebrow": "Profit and loss",
@@ -3036,8 +3015,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.waitingAction": "Add as a master",
   "specialists.defaultRuleOption": "All services — the default rule",
   "specialists.isMe": "This is me — I work here myself",
-  "specialists.isMeHint":
-    "Links the card to your account: your own calendar, your own visits and booking notifications. The commission booked to you comes back into the month's profit.",
   "specialists.principalSet": "Mark as owner",
   "specialists.principalUnset": "Remove the mark",
   "specialists.imputedLabour": "imputed cost of your own work",
@@ -3080,14 +3057,8 @@ const en: Record<MessageKey, Message> = {
   "onboarding.visit": "The first closed visit",
   "onboarding.visitHint":
     "A closed visit is the only source of real figures. The first one already shows what you earned on it.",
-  "monthSetup.title": "The month's calculation",
-  "monthSetup.progress": "{done} of {total} done",
   "monthSetup.overhead": "The month's fixed costs",
-  "monthSetup.overheadHint":
-    "Rent, subscriptions, phone. Until they are in, the month's profit equals the margin — that is, higher than the truth.",
   "monthSetup.rota": "Working hours in the rota",
-  "monthSetup.rotaHint":
-    "The hours are what break-even is worked out from: how much has to be earned for the month to come out level.",
   "firstRun.title": "Where to start",
   "step.back": "Back: {step}",
   "step.remaining": {
@@ -3097,23 +3068,20 @@ const en: Record<MessageKey, Message> = {
   "step.goal.specialist": "Add a specialist and their commission rule",
   "step.goal.service": "Add a service with a price and a duration",
   "step.goal.visit": "Close the first visit",
-  "step.goal.overhead": "Enter the month's fixed costs",
+  "step.goal.overhead": "Enter the fixed costs",
   "step.goal.rota": "Fill in the working hours",
   "step.action.specialist": "Add a specialist",
   "step.action.service": "Add a service",
   "step.action.visit": "Close a visit",
   "step.action.overhead": "Add a cost",
   "step.action.rota": "Fill in the rota",
-  "monthSetup.lead":
-    "Two more figures, and the month's report tells the truth: profit after fixed costs, and break-even.",
   "monthGuide.title": "Step done",
   "monthGuide.doneTitle": "The month adds up",
   "monthGuide.doneBody":
     "The report now has profit after fixed costs and a break-even to compare it with — until now it read higher than the truth.",
   "monthGuide.doneAction": "Open the month's report",
   "setupGuide.title": "Step done",
-  "setupGuide.doneTitle": "The first calculation is ready",
-  "setupGuide.doneBody": "The visit is closed and costed — here is what it brought in.",
+  "setupGuide.doneTitle": "The visit is closed",
   "setupGuide.doneAction": "Open the report",
 
 
@@ -3265,11 +3233,6 @@ const en: Record<MessageKey, Message> = {
   "auth.forgot": "Forgot your password?",
   "auth.signInFailed": "Could not sign in",
   "auth.signInNoMatch": "No account found — please register.",
-  "auth.verifyPending":
-    "This address is unconfirmed. Account recovery goes to it and nowhere else — make sure the letter arrived.",
-  "auth.verifyResend": "Send the email again",
-  "auth.verifyRetry": "It did not send — try again",
-  "auth.verifySent": "Email sent",
   "auth.activeSession":
     "You are signed in as {email}. Signing in to another account ends the current session in this browser. To use two accounts at once, open the second one in a separate window or in a private window.",
   "auth.invitedEmailHint": "The invitation to “{org}” was issued for this address — the account has to use it.",
@@ -3603,8 +3566,6 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.openPublic": "Open online booking",
   "bookingSetup.openPublicHint":
     "The address is published, but the studio's page is still closed. Open it and clients can book themselves through the link below.",
-  "bookingSetup.operatorPending":
-    "The public page is switched on by the operator after the security checks — that step is not yours. The rest of the setup can be finished without waiting for it.",
 
   "bookingSetup.locationsTitle": "Addresses",
   "bookingSetup.noLocations": "No addresses yet.",
@@ -3634,7 +3595,6 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.statePaused": "paused",
 
   "bookingSetup.settingsTitle": "Booking settings",
-  "bookingSetup.settingsHint": "Every setting narrows what the availability engine may offer a client.",
   "bookingSetup.chooseLocation": "Address",
   "bookingSetup.slotStep": "Grid step",
   "bookingSetup.minutes": "{count} min",
@@ -3646,27 +3606,21 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.confirmationInstant": "Confirm immediately",
   "bookingSetup.confirmationManual": "Request first",
   "bookingSetup.confirmationTtl": "A request waits for confirmation, min",
-  "bookingSetup.confirmationTtlHint": "An unconfirmed request holds the slot and cancels itself.",
   "bookingSetup.verificationMode": "Contact verification",
   "bookingSetup.verificationOff": "Do not verify",
   "bookingSetup.verificationCode": "Code by email",
   "bookingSetup.verificationTtl": "The code is valid for, min",
   "bookingSetup.reminderLead": "Remind this many minutes ahead",
-  "bookingSetup.reminderHint": "Zero switches reminders off.",
 
   "bookingSetup.assignmentTitle": "Specialists and addresses",
-  "bookingSetup.assignmentHint": "A client is only offered the people who work at the chosen address.",
   "bookingSetup.noSpecialists": "No specialists yet.",
 
   "bookingSetup.rotaTitle": "Working hours",
-  "bookingSetup.rotaHint":
-    "Hours are in the address's own local time. Saving replaces the rota from the given date; bookings already taken stay as they are.",
   "bookingSetup.specialist": "Specialist",
   "bookingSetup.location": "Address",
   "bookingSetup.from": "From",
   "bookingSetup.to": "To",
   "bookingSetup.effectiveFrom": "In force from",
-  "bookingSetup.effectiveFromHint": "The previous rota is closed on this date rather than deleted.",
   "bookingSetup.saveRota": "Save the rota",
   "bookingSetup.rotaInvalidDay": "{day}: the end time has to be after the start.",
 
