@@ -664,6 +664,22 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .data-table input { width: 110rem; padding: 8rem 10rem; border-radius: 10rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
 .data-table a { color: var(--accent); font-size: 14rem; font-weight: 600; }
 
+/* A master's face and their name are one cell.
+   The photo is an attribute of the person rather than a column of its own: a
+   column of circles beside a column of names would have added a heading that
+   says nothing and a width the table cannot spare. */
+.specialist-photo { display: flex; align-items: center; gap: 12rem; }
+.specialist-photo-name { display: grid; gap: 2rem; min-width: 0; }
+.specialist-photo-name > span:first-child { font-weight: 600; }
+.specialist-photo .inline-actions { gap: 4rem; }
+.specialist-photo .inline-action { margin-left: 0; font-size: 13rem; }
+/* `.data-table input` sizes the number boxes in these rows and outranks
+   `.sr-only`, which is how a file input meant to be invisible ends up 110rem
+   wide behind its label. */
+.data-table .specialist-photo input[type="file"] { width: 1rem; }
+/* Inline beside the name, not a banner across the row. */
+.specialist-photo .form-error { padding: 4rem 8rem; font-size: 12rem; justify-self: start; }
+
 .inline-form label.name-combobox {
   position: relative;
   min-width: 280rem;

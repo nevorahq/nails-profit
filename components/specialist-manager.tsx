@@ -7,6 +7,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import { NameCombobox } from "@/components/name-combobox";
+import { SpecialistPhoto } from "@/components/specialist-photo";
 import {
   SetupGuideDialog,
   useSetupGuide,
@@ -28,6 +29,8 @@ export type SpecialistRow = {
   user_id: string | null;
   /** Takes the residual profit rather than a fee — the owner who also works. */
   is_principal: boolean;
+  /** The version of their photo, or null when the card has none. */
+  avatar_version: number | null;
   default_rule: {
     type: string;
     basis_points: number | null;
@@ -633,7 +636,15 @@ export function SpecialistManager({
           )}
           {specialists.map((person) => (
             <tr key={person.id}>
-              <td>{person.name}</td>
+              <td>
+                <SpecialistPhoto
+                  specialistId={person.id}
+                  name={person.name}
+                  version={person.avatar_version}
+                  canManage={canManage}
+                  locale={locale}
+                />
+              </td>
               {/*
                 The principal mark lives beside the cooperation type because it
                 answers the same question — how this person is paid — and not

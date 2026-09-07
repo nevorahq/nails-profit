@@ -2,7 +2,15 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { ToolIcon } from "@/components/icons";
 import { db } from "@/db";
-import { commissionRules, memberships, services, specialistServices, specialists, users } from "@/db/schema";
+import {
+  commissionRules,
+  memberships,
+  services,
+  specialistAvatars,
+  specialistServices,
+  specialists,
+  users,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
@@ -58,6 +66,23 @@ export default async function SpecialistsPage() {
           .where(inArray(specialistServices.specialistId, rows.map((person) => person.id)))
       : [];
 
+    /*
+     * The version of each photo, and never the photo. One row per card at four
+     * columns of metadata, against a `select()` on the avatars themselves that
+     * would carry half a megabyte per master into a page that draws each of
+     * them as a 40rem circle it fetches separately anyway.
+     */
+    const avatars = rows.length
+      ? await tx
+          .select({
+            specialistId: specialistAvatars.specialistId,
+            version: specialistAvatars.version,
+          })
+          .from(specialistAvatars)
+          .where(inArray(specialistAvatars.specialistId, rows.map((person) => person.id)))
+      : [];
+    const avatarVersions = new Map(avatars.map((row) => [row.specialistId, row.version]));
+
     const people: SpecialistRow[] = await Promise.all(
       rows.map(async (person) => {
         const rules = await tx
@@ -91,6 +116,7 @@ export default async function SpecialistsPage() {
           cooperation_type: person.cooperationType,
           user_id: person.userId,
           is_principal: person.isPrincipal,
+          avatar_version: avatarVersions.get(person.id) ?? null,
           default_rule: defaultRule
             ? {
                 type: defaultRule.type,

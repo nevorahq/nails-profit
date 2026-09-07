@@ -38,3 +38,26 @@ export function avatarImageTypeOf(bytes: Uint8Array): AvatarMimeType | null {
   if (isAscii(bytes, "RIFF", 0) && isAscii(bytes, "WEBP", 8)) return "image/webp";
   return null;
 }
+
+/**
+ * The square to take out of a photo before it becomes a face.
+ *
+ * Avatars are drawn in a circle, so a portrait uploaded whole would be shown
+ * with its top and bottom cut off by CSS and stored at a size nobody sees. The
+ * centre square is cropped before the upload instead: the browser sends the
+ * pixels that will be looked at and nothing else.
+ *
+ * Vertically the crop sits above centre. A photograph of a person puts the face
+ * in the upper half, and a centred square through a standing figure is a
+ * portrait of a torso — a third of the way down is where a head actually is.
+ */
+export const AVATAR_EDGE_PIXELS = 256;
+
+export function squareCrop(width: number, height: number): { x: number; y: number; size: number } {
+  const size = Math.min(width, height);
+  return {
+    x: Math.round((width - size) / 2),
+    y: Math.round((height - size) / 3),
+    size,
+  };
+}
