@@ -671,6 +671,13 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .specialist-photo { display: flex; align-items: center; gap: 12rem; }
 .specialist-photo-name { display: grid; gap: 2rem; min-width: 0; }
 .specialist-photo-name > span:first-child { font-weight: 600; }
+/* The picture is the control that replaces it, so it has to look like one.
+   The ring is the same one `:focus-visible` draws everywhere else — on hover
+   for a pointer, and on `:focus-within` because what actually holds focus is
+   the file input hidden inside. */
+.specialist-photo-pick { display: inline-flex; flex: none; border-radius: 999rem; cursor: pointer; }
+.specialist-photo-pick:hover .avatar,
+.specialist-photo-pick:focus-within .avatar { outline: 3rem solid var(--accent); outline-offset: 3rem; }
 .specialist-photo .inline-actions { gap: 4rem; }
 .specialist-photo .inline-action { margin-left: 0; font-size: 13rem; }
 /* `.data-table input` sizes the number boxes in these rows and outranks

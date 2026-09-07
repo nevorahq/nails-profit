@@ -171,8 +171,9 @@ export function SpecialistDetail({
       {error && <div className="form-error" role="alert">{error}</div>}
       {!canManage && <div className="warning-banner">{t("specialists.readOnlyNote")}</div>}
 
+      {/* No heading: the master's name is the one directly above, and a panel
+          titled «Карточка» under it says only that a card is a card. */}
       <section className="panel">
-        <h2>{t("specialists.card")}</h2>
         <SpecialistPhoto
           specialistId={person.id}
           name={person.name}

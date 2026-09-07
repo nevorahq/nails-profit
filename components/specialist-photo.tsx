@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -53,7 +53,6 @@ export function SpecialistPhoto({
 }) {
   const t = getTranslator(locale);
   const router = useRouter();
-  const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,44 +104,58 @@ export function SpecialistPhoto({
     router.refresh();
   }
 
+  const circle = (
+    <span className="avatar" aria-hidden="true">
+      {version === null ? (
+        name.trim().slice(0, 1).toUpperCase() || "?"
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+        <img src={avatarUrl(specialistId, version) as string} alt="" />
+      )}
+    </span>
+  );
+  const pickLabel = version === null ? t("specialists.photoAdd") : t("specialists.photoReplace");
+
   return (
     <div className="specialist-photo">
-      <span className="avatar" aria-hidden="true">
-        {version === null ? (
-          name.trim().slice(0, 1).toUpperCase() || "?"
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
-          <img src={avatarUrl(specialistId, version) as string} alt="" />
-        )}
-      </span>
+      {canManage ? (
+        /*
+          The picture is its own control.
+          
+          A label rather than a button that clicks a hidden input: the file
+          picker is the input's own, so there is no second element to keep in
+          step with it and nothing to do when JavaScript has not arrived yet.
+          The input is taken out of the layout by `sr-only` rather than by
+          `hidden`, which would also take it out of the focus order — it is
+          what a keyboard lands on, and what the ring below is drawn around.
+
+          What a circle cannot do is say what it is. The name is carried by the
+          `sr-only` text a screen reader reads, and by the `title` a pointer
+          finds on the way past; the ring on hover is what tells an eye that
+          the picture is a control at all.
+        */
+        <label className="specialist-photo-pick" title={pickLabel}>
+          {circle}
+          <span className="sr-only">{pickLabel}</span>
+          <input
+            className="sr-only"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={pending}
+            onChange={upload}
+          />
+        </label>
+      ) : (
+        circle
+      )}
 
       <div className="specialist-photo-name">
         {withName && (href ? <Link href={href}>{name}</Link> : <span>{name}</span>)}
-        {canManage && (
+        {canManage && version !== null && (
           <div className="inline-actions">
-            {/*
-              A label rather than a button that clicks a hidden input: the file
-              picker is the input's own, and wrapping it names it for a screen
-              reader without a second element to keep in step. The input is
-              taken out of the layout by `sr-only` rather than by `hidden`,
-              which would also take it out of the focus order.
-            */}
-            <label className="inline-action">
-              {version === null ? t("specialists.photoAdd") : t("specialists.photoReplace")}
-              <input
-                className="sr-only"
-                ref={input}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={!canManage || pending}
-                onChange={upload}
-              />
-            </label>
-            {version !== null && (
-              <button className="inline-action danger" type="button" disabled={pending} onClick={remove}>
-                {t("specialists.photoRemove")}
-              </button>
-            )}
+            <button className="inline-action danger" type="button" disabled={pending} onClick={remove}>
+              {t("specialists.photoRemove")}
+            </button>
           </div>
         )}
         {pending && <span className="muted">{t("common.saving")}</span>}

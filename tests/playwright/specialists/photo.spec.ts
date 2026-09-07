@@ -58,8 +58,12 @@ test.describe("a master's photo", () => {
     // section's name in it, on this page as on every other.
     await expect(page.locator(".app-header h1")).toHaveText(studio.specialistName);
 
-    const circle = page.locator(".specialist-photo .avatar").first();
+    // The label is the control; the circle inside it is what a reader sees.
+    const pick = page.locator(".specialist-photo-pick").first();
+    const circle = pick.locator(".avatar");
     await expect(circle).toHaveText(studio.specialistName.slice(0, 1).toUpperCase());
+    // It carries its own name, because nothing beside it does.
+    await expect(pick).toHaveAccessibleName(/Add a photo/i);
 
     // A 600×200 landscape PNG, so the crop has something to do: what is stored
     // must come back square.
@@ -75,11 +79,20 @@ test.describe("a master's photo", () => {
       return Array.from(bytes);
     });
 
-    await page
-      .locator('input[type="file"]')
-      .setInputFiles({ name: "wide.png", mimeType: "image/png", buffer: Buffer.from(wide) });
+    /*
+     * Through the picture, not through the input behind it. `setInputFiles` on
+     * the hidden control would upload just as well and would prove nothing
+     * about the circle being the way to reach it — which is the whole of what
+     * a reader is given here, there being no other control to press.
+     */
+    const [chooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      pick.click(),
+    ]);
+    await chooser.setFiles({ name: "wide.png", mimeType: "image/png", buffer: Buffer.from(wide) });
 
     const photo = circle.locator("img");
+    await expect(pick).toHaveAccessibleName(/Replace the photo/i);
     await expect(photo).toBeVisible();
     await expect(photo).toHaveAttribute("src", /\/avatar\?v=\d+$/);
 
@@ -90,6 +103,15 @@ test.describe("a master's photo", () => {
     }));
     expect(drawn.width).toBe(256);
     expect(drawn.height).toBe(256);
+
+    /*
+     * The picture is the only control in this panel, so the ring around it on
+     * hover is the only thing that says so — and section 7.8 asks for a visible
+     * focus state by name. Read from the computed style rather than from a
+     * screenshot, which would pass on a ring nobody can see.
+     */
+    await pick.hover();
+    expect(await circle.evaluate((el) => getComputedStyle(el).outlineWidth)).not.toBe("0px");
 
     const address = await photo.getAttribute("src");
 
