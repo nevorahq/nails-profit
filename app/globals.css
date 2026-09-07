@@ -1252,7 +1252,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-card .primary-button,
 .public-booking-shell .primary-button {
   box-shadow: var(--neu-raised-sm);
-  margin-bottom: 20rem;
 }
 
 .app-frame .primary-button:active:not(:disabled),
