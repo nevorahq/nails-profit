@@ -68,7 +68,7 @@ async function loadCatalogue(
 }
 
 export default async function NewVisitPage() {
-  const { membership, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "write")) {
@@ -173,6 +173,7 @@ export default async function NewVisitPage() {
         paymentMethods={data.methods}
         currency={currency}
         locale={locale}
+      businessType={businessType}
         setupGuide={setupGuide}
       />
     </main>

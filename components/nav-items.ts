@@ -1,4 +1,5 @@
 import type { MemberRole } from "@/domain/rbac";
+import type { BusinessType } from "@/i18n/business-labels";
 import type { MessageKey } from "@/i18n/t";
 
 /**
@@ -99,12 +100,40 @@ const MASTER_HIDDEN: ReadonlySet<string> = new Set([
  */
 const OWNER_ONLY: ReadonlySet<string> = new Set(["/app/expenses", "/app/reports/month"]);
 
-export function navFor(role?: MemberRole): readonly NavItem[] {
-  return navItems.filter((item) => {
-    if (OWNER_ONLY.has(item.href) && role !== "owner") return false;
-    if (role === "master" && MASTER_HIDDEN.has(item.href)) return false;
-    return true;
-  });
+/**
+ * The one section whose group depends on the shape of the business.
+ *
+ * «Мастера» under a heading called «Команда» is a team of one for somebody
+ * working alone — and after `POST /api/v1/organizations` writes their card for
+ * them, the page holds exactly one thing: what their own hour is worth, which
+ * is a catalogue fact next to the price of a service, not a fact about staff.
+ * Nothing is hidden and nothing moves page: the heading above the link is the
+ * whole of the difference, and it goes back to «Команда» the day they take
+ * somebody on and switch the format.
+ */
+function groupOf(item: NavItem, businessType: BusinessType): NavGroup {
+  if (businessType === "solo" && item.href === "/app/specialists") return "catalogue";
+  return item.group;
+}
+
+export function navFor(
+  role?: MemberRole,
+  /**
+   * Defaults to the studio shape, which is what every caller meant before
+   * there was a choice — and what a caller that has not been told means now.
+   */
+  businessType: BusinessType = "studio",
+): readonly NavItem[] {
+  return navItems
+    .filter((item) => {
+      if (OWNER_ONLY.has(item.href) && role !== "owner") return false;
+      if (role === "master" && MASTER_HIDDEN.has(item.href)) return false;
+      return true;
+    })
+    .map((item) => {
+      const group = groupOf(item, businessType);
+      return group === item.group ? item : { ...item, group };
+    });
 }
 
 /**
@@ -122,8 +151,11 @@ const BOTTOM_PREFERENCE: readonly string[] = [
   "/app/clients",
 ];
 
-export function bottomNavFor(role?: MemberRole): readonly NavItem[] {
-  const allowed = navFor(role);
+export function bottomNavFor(
+  role?: MemberRole,
+  businessType: BusinessType = "studio",
+): readonly NavItem[] {
+  const allowed = navFor(role, businessType);
   const chosen = BOTTOM_PREFERENCE.map((href) => allowed.find((item) => item.href === href)).filter(
     (item): item is NavItem => item !== undefined,
   );
@@ -135,7 +167,10 @@ export function bottomNavFor(role?: MemberRole): readonly NavItem[] {
 }
 
 /** Everything the bottom bar could not fit — the contents of the «Ещё» screen. */
-export function moreNavFor(role?: MemberRole): readonly NavItem[] {
-  const onBar = new Set(bottomNavFor(role).map((item) => item.href));
-  return navFor(role).filter((item) => !onBar.has(item.href));
+export function moreNavFor(
+  role?: MemberRole,
+  businessType: BusinessType = "studio",
+): readonly NavItem[] {
+  const onBar = new Set(bottomNavFor(role, businessType).map((item) => item.href));
+  return navFor(role, businessType).filter((item) => !onBar.has(item.href));
 }

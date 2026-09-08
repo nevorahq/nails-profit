@@ -136,6 +136,24 @@ export function WorkspaceSetup({
             <legend>{t("workspace.format")}</legend>
             <label className="radio-row"><input type="radio" name="type" value="solo" defaultChecked /> {t("workspace.solo")}</label>
             <label className="radio-row"><input type="radio" name="type" value="studio" /> {t("workspace.studio")}</label>
+            {/*
+              The one field on this form with no consequence anybody could
+              guess, and the only one that used to be asked in silence. It
+              decides a great deal of wording — «оплата вашего труда» against
+              «оплата труда мастеров», and now the first screen after this one
+              — and not one figure, which is exactly the pair of facts somebody
+              choosing in their first minute needs to be told. The last clause
+              is the important one: it says the choice is not final, which is
+              what makes it safe to make quickly.
+            */}
+            {/*
+              The second sentence is only true where it is being read for the
+              first time. Settings carries the same hint and would be telling
+              somebody standing in Настройки that they could go to Настройки.
+            */}
+            <span className="field-hint">
+              {t("workspace.formatHint")} {t("workspace.formatReversible")}
+            </span>
           </fieldset>
           <label>
             {t("workspace.currency")}

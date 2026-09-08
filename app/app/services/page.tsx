@@ -12,7 +12,7 @@ import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ServicesPage() {
-  const { membership, locale } = await requireWorkspace();
+  const { membership, locale, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "services", "read")) {
@@ -113,6 +113,7 @@ export default async function ServicesPage() {
       <ServiceList
         services={rows}
         locale={locale}
+        businessType={businessType}
         canCreate={canCreate}
         canEdit={canEdit}
         setupGuide={setupGuide}

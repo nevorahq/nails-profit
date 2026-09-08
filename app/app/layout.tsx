@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getActiveMembership } from "@/lib/membership";
 import { readPreviewCookie } from "@/lib/preview-request";
 
@@ -27,7 +28,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!caller.session || !caller.membership) return <>{children}</>;
 
   const [organization] = await db
-    .select({ name: organizations.name, locale: organizations.locale })
+    // The type decides which heading «Мастера» sits under, and nothing else
+    // on this screen — see `groupOf` in `components/nav-items.ts`.
+    .select({
+      name: organizations.name,
+      locale: organizations.locale,
+      type: organizations.type,
+    })
     .from(organizations)
     .where(eq(organizations.id, caller.membership.organizationId))
     .limit(1);
@@ -42,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       locale={(organization?.locale ?? "ru") as AppLocale}
       role={caller.membership.role}
+      businessType={(organization?.type ?? "solo") as BusinessType}
       organizationName={organization?.name ?? ""}
       userEmail={caller.membership.userEmail}
       preview={

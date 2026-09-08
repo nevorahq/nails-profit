@@ -11,6 +11,7 @@ import {
 import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { MemberRole } from "@/domain/rbac";
@@ -155,6 +156,7 @@ export function BookingSetup({
   role,
   ownSpecialistId,
   locale,
+  businessType,
 }: {
   /**
    * Where «Расчёт месяца» stood when this page was drawn, or null when there is
@@ -179,6 +181,8 @@ export function BookingSetup({
   bookingAccess: "off" | "calendar" | "public";
   /** The organization's own slug: the public page lives at `/book/<slug>`. */
   organizationSlug: string | null;
+  /** Passed through to the guided window; the month's steps read the same to both. */
+  businessType: BusinessType;
   canManage: boolean;
   canPublish: boolean;
   canSaveRota?: boolean;
@@ -599,6 +603,7 @@ export function BookingSetup({
       <SetupGuideDialog
         guide={guide}
         locale={locale}
+        businessType={businessType}
         strings="monthGuide"
         doneHref="/app/reports/month"
       />
@@ -623,6 +628,16 @@ export function BookingSetup({
                 <li key={step} className={step === setupStep ? undefined : "muted"}>
                   <span aria-hidden="true">{done ? "✓" : step === setupStep ? "→" : "○"}</span>{" "}
                   {t(`bookingSetup.setupStep.${step}` as MessageKey)}
+                  {/*
+                    Said in the list rather than only at the step, because the
+                    expectation is set here: three numbered lines read as three
+                    things that have to be done, and the third one does not.
+                    The rota above it is what «Расчёт месяца» was after, and it
+                    is saved by the time this is reached.
+                  */}
+                  {step === "publish" && (
+                    <span className="unit-hint">{t("bookingSetup.setupOptional")}</span>
+                  )}
                 </li>
               );
             })}
@@ -691,6 +706,17 @@ export function BookingSetup({
 
           {setupStep === "publish" && firstPlace && (
             <div className="inline-actions">
+              {/*
+                What the two steps behind this one already bought, and what
+                this one is actually for.
+
+                «Расчёт месяца» sends people here for the rota, and the rota is
+                what utilization, the cost of an hour and the break-even are
+                computed from — none of which needs a public page. Somebody who
+                books their clients through Instagram was being walked to a
+                «Опубликовать» button with nothing saying they could stop.
+              */}
+              <p className="muted">{t("bookingSetup.publishOptional")}</p>
               <button
                 type="button"
                 className="primary-button"
@@ -959,16 +985,23 @@ export function BookingSetup({
         <section className="panel booking-panel booking-settings">
           <h2>{t("bookingSetup.settingsTitle")}</h2>
 
-          <label>
-            {t("bookingSetup.chooseLocation")}
-            <select value={settingsLocation.id} onChange={(event) => setSettingsFor(event.target.value)}>
-              {locations.map((place) => (
-                <option key={place.id} value={place.id}>
-                  {place.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/*
+            Which address these parameters belong to — a question only a studio
+            with two of them has. The single address is already what
+            `settingsLocation` resolves to.
+          */}
+          {locations.length > 1 && (
+            <label>
+              {t("bookingSetup.chooseLocation")}
+              <select value={settingsLocation.id} onChange={(event) => setSettingsFor(event.target.value)}>
+                {locations.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <form
             key={settingsLocation.id}
@@ -1110,7 +1143,8 @@ export function BookingSetup({
               onSubmit={(event) => saveAssignment(event, person.id)}
               className="inline-form"
             >
-              <h3>{person.name}</h3>
+              {/* Named only when there is somebody to tell them apart from. */}
+              {specialists.length > 1 && <h3>{person.name}</h3>}
               <div className="public-booking-options">
                 {active.map((place) => (
                   <label key={place.id}>
@@ -1138,7 +1172,14 @@ export function BookingSetup({
         <section className="panel booking-panel booking-rota">
           <h2>{t("bookingSetup.rotaTitle")}</h2>
 
-          {!isMaster && (
+          {/*
+            Whose week, and where — asked only where either is a question. The
+            guided setup above already withholds the master picker for a studio
+            of one (`specialists.length > 1`); the week below it went on asking
+            anyway, so the same studio met the choice it had just been spared,
+            twice, one panel apart.
+          */}
+          {!isMaster && specialists.length > 1 && (
             <label>
               {t("bookingSetup.specialist")}
               <select
@@ -1154,7 +1195,7 @@ export function BookingSetup({
             </label>
           )}
 
-          {!isMaster && (
+          {!isMaster && active.length > 1 && (
             <label>
               {t("bookingSetup.location")}
               <select value={currentLocationId} onChange={(event) => setRotaLocation(event.target.value)}>

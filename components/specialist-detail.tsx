@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { describeRule, ruleFromForm } from "@/lib/commission-rule";
 import type { SpecialistRow } from "@/lib/specialist-cards";
@@ -38,6 +39,7 @@ export function SpecialistDetail({
   linkableMembers,
   currency,
   locale,
+  businessType,
   canManage,
 }: {
   person: SpecialistRow;
@@ -46,6 +48,11 @@ export function SpecialistDetail({
   linkableMembers: LinkableMember[];
   currency: string;
   locale: AppLocale;
+  /**
+   * Studio or someone working alone. Wording only, and only under the rate
+   * field — see the comment there for why that field needs it most.
+   */
+  businessType: BusinessType;
   canManage: boolean;
 }) {
   const t = getTranslator(locale);
@@ -313,6 +320,23 @@ export function SpecialistDetail({
               <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
               {person.cooperation_type !== "commission" && (
                 <span className="muted">{t("specialists.zeroRuleHint")}</span>
+              )}
+              {/*
+                The one field on this page a solo studio cannot answer from
+                what the product has told it.
+                
+                This is where somebody working alone is sent by «Первый
+                расчёт» — the card exists from the moment the workspace does,
+                and the rate is all that is missing — so an empty box with a
+                «40» in grey is the whole of the first task the product sets.
+                What it is asking for is not a payment to anybody: it is the
+                price of the hour, which is what makes two services
+                comparable, and which the month's report then hands straight
+                back (`domain/period-pl.ts`). Said here rather than only in
+                that report, which is a fortnight away.
+              */}
+              {businessType === "solo" && person.is_principal && (
+                <span className="muted">{t("specialists.imputedHint")}</span>
               )}
             </label>
             {ruleType !== "fixed" && (

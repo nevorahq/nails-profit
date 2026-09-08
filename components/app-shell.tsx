@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AccountMenu } from "@/components/account-menu";
 import { BrandMark, NavIcon } from "@/components/icons";
 import { bottomNavFor, navFor, navGroups, type NavItem } from "@/components/nav-items";
+import type { BusinessType } from "@/i18n/business-labels";
 import { NavLink } from "@/components/nav-link";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { PreviewBanner, type PreviewBannerContext } from "@/components/preview-banner";
@@ -33,6 +34,7 @@ export function AppShell({
   children,
   locale,
   role,
+  businessType,
   organizationName,
   userEmail,
   preview = null,
@@ -41,6 +43,8 @@ export function AppShell({
   children: React.ReactNode;
   locale: AppLocale;
   role: MemberRole;
+  /** Which heading «Мастера» sits under; see `groupOf` in `nav-items.ts`. */
+  businessType: BusinessType;
   organizationName: string;
   userEmail: string;
   /**
@@ -53,8 +57,8 @@ export function AppShell({
   stalePreview?: boolean;
 }) {
   const t = getTranslator(locale);
-  const items = navFor(role);
-  const bottom = bottomNavFor(role);
+  const items = navFor(role, businessType);
+  const bottom = bottomNavFor(role, businessType);
   const titles = [
     ...items.map((item) => ({ href: item.href, title: t(item.key) })),
     { href: "/app/more", title: t("nav.more") },

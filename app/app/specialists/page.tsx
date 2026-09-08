@@ -13,7 +13,7 @@ import { loadSpecialistCards } from "@/lib/specialist-cards";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
-  const { membership, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "commissions", "read")) {
@@ -115,6 +115,7 @@ export default async function SpecialistsPage() {
         members={members}
         currency={currency}
         locale={locale}
+        businessType={businessType}
         canManage={canManage}
         hasOwnCard={people.some((person) => person.user_id === membership.userId)}
         setupGuide={setupGuide}

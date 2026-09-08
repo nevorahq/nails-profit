@@ -1,4 +1,5 @@
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { renderNotificationHtml } from "@/lib/notification-email";
@@ -113,6 +114,28 @@ const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.staff_released": "notify.staffReleased",
 };
 
+/**
+ * The four staff messages that name the master, and what they say when the
+ * master is the person reading them.
+ *
+ * `booking.staff_requested` is not here: it names nobody, because a request is
+ * not yet assigned to anyone. The other four are, and for a studio of one they
+ * arrived as «Клиент отменил визит к мастеру Ирина» — sent to Ирина. The
+ * dispatcher already collapses the owner's copy when the master is the owner
+ * (`lib/booking-notifications.ts`), which is exactly the case that made the
+ * third person wrong.
+ *
+ * Only the body diverges. The subjects say «Клиент отменил запись — {studio}»
+ * and never mention a name, so the same subject is right for both — four
+ * sentences written twice rather than twelve.
+ */
+const SOLO_BODY = {
+  "booking.staff_booked": "notify.staffBooked.bodySolo",
+  "booking.staff_rescheduled": "notify.staffRescheduled.bodySolo",
+  "booking.staff_cancelled": "notify.staffCancelled.bodySolo",
+  "booking.staff_released": "notify.staffReleased.bodySolo",
+} as const satisfies Partial<Record<BookingNotificationTemplate, MessageKey>>;
+
 /** Templates whose reader is the studio, not the client. */
 export const staffNotificationTemplates = [
   "booking.staff_requested",
@@ -177,6 +200,12 @@ export type NotificationFacts = Readonly<{
    * the sentence. The rest are handed it and ignore it.
    */
   specialist: string;
+  /**
+   * Studio or someone working alone. Read by the four staff messages above and
+   * ignored by everything else: a client is told the name of the person they
+   * are booked with whoever runs the place.
+   */
+  businessType: BusinessType;
   link: string;
   /**
    * Whether losing the link costs the reader their way in.
@@ -246,7 +275,11 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
     code: facts.code,
   };
 
-  const lead = t(`${prefix}.body` as MessageKey, params);
+  const soloBody =
+    facts.businessType === "solo"
+      ? SOLO_BODY[facts.template as keyof typeof SOLO_BODY]
+      : undefined;
+  const lead = t(soloBody ?? (`${prefix}.body` as MessageKey), params);
   const action =
     messageCarriesLink(facts.template, facts.channel) && facts.link !== ""
       ? {

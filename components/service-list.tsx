@@ -17,6 +17,7 @@ import {
 } from "@/domain/service-catalogue";
 import { resolveLocalizedText, type LocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
+import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 
@@ -108,11 +109,14 @@ const cellInput: React.CSSProperties = {
 export function ServiceList({
   services,
   locale,
+  businessType,
   canCreate = true,
   canEdit = true,
   setupGuide = null,
 }: {
   services: ServiceRow[];
+  /** Whose work the «останется» column is counted after. Wording only. */
+  businessType: BusinessType;
   locale: AppLocale;
   /**
    * Where «Первый расчёт» stood when this page was drawn, or null once the
@@ -304,7 +308,7 @@ export function ServiceList({
 
   return (
     <>
-      <SetupGuideDialog guide={guide} locale={locale} />
+      <SetupGuideDialog guide={guide} locale={locale} businessType={businessType} />
 
       {incomplete.length > 0 && (
         <div className="warning-banner">
@@ -390,7 +394,7 @@ export function ServiceList({
             <th>{t("services.service")}</th>
             <th>{t("common.price")}</th>
             <th>{t("common.duration")}</th>
-            <th>{t("services.youKeep")}</th>
+            <th>{t(businessLabel.serviceKept[businessType])}</th>
             <th>{t("services.margin")}</th>
             <th>{t("services.perHour")}</th>
             <th />

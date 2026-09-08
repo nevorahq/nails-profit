@@ -17,6 +17,7 @@ const base = {
   studioName: "Green Nails",
   when: "2 сент. 2026 г., 10:00",
   specialist: "Ирина",
+  businessType: "studio" as const,
   link: "https://example.test/booking/abc",
   linkIsOneTime: true,
   code: "123456",
@@ -32,13 +33,50 @@ describe("transactional templates", () => {
         // renders empty on one channel is as broken as one that renders empty
         // on both.
         for (const channel of ["email", "sms"] as const) {
-          const rendered = renderNotification({ ...base, template, locale, channel });
-          expect(rendered.subject.trim()).not.toBe("");
-          expect(rendered.body.trim()).not.toBe("");
-          expect(rendered.body).not.toMatch(/\{\w+\}/);
+          // And both shapes of business: four of the staff messages are
+          // written twice, and a solo variant nobody translated would reach a
+          // studio's phone as an empty SMS.
+          for (const businessType of ["solo", "studio"] as const) {
+            const rendered = renderNotification({ ...base, template, locale, channel, businessType });
+            expect(rendered.subject.trim()).not.toBe("");
+            expect(rendered.body.trim()).not.toBe("");
+            expect(rendered.body).not.toMatch(/\{\w+\}/);
+          }
         }
       }
     }
+  });
+
+  it("stops telling a woman working alone about a third person", () => {
+    /*
+     * The dispatcher collapses the owner's copy exactly when the master is the
+     * owner, so in a studio of one these four arrive at the person they are
+     * about — and arrived reading «Клиент отменил визит к мастеру Ирина», sent
+     * to Ирина.
+     */
+    const named = ["booking.staff_booked", "booking.staff_rescheduled", "booking.staff_cancelled", "booking.staff_released"] as const;
+
+    for (const template of named) {
+      expect(renderNotification({ ...base, template }).body).toContain("Ирина");
+      expect(renderNotification({ ...base, template, businessType: "solo" }).body).not.toContain(
+        "Ирина",
+      );
+      // The hour is the point of all four, and it survives the rewrite.
+      expect(renderNotification({ ...base, template, businessType: "solo" }).body).toContain(
+        base.when,
+      );
+    }
+  });
+
+  it("leaves the client's own messages alone", () => {
+    // «заявка принята мастером Ирина» is read by the client, who has every
+    // reason to be told whose chair they are booked into.
+    const accepted = renderNotification({
+      ...base,
+      template: "booking.request_accepted",
+      businessType: "solo",
+    });
+    expect(accepted.body).toContain("Ирина");
   });
 
   it("puts the code in the verification message and nowhere else", () => {

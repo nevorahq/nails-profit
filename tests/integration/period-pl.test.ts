@@ -100,6 +100,30 @@ describe("the monthly P&L", () => {
     serviceId = service.id;
   });
 
+  it("moves no figure when the business changes shape", async () => {
+    /*
+     * The claim the whole solo/studio divergence rests on, and the reason the
+     * format is offered as a control in Настройки at all: switching it is safe
+     * because it recomputes nothing.
+     *
+     * `i18n/business-labels.ts` says so in a comment and `organization.type`
+     * reaches no arithmetic, but nothing checked it — and the day it stops
+     * being true, an owner who takes somebody on will find last March's profit
+     * has quietly changed on them.
+     */
+    await closeVisit(new Date("2026-03-04T10:00:00.000Z"));
+    await record({ name: "Аренда", category: "rent", amountMinor: 500_000, spentOn: "2026-03-01" });
+
+    const asSolo = await report("2026-03");
+
+    await adminDb
+      .update(organizations)
+      .set({ type: "studio" })
+      .where(eq(organizations.id, organizationId));
+
+    expect(await report("2026-03")).toEqual(asSolo);
+  });
+
   it("takes its revenue from the visits' own snapshots", async () => {
     const first = await closeVisit(new Date("2026-03-04T10:00:00.000Z"));
     const second = await closeVisit(new Date("2026-03-19T10:00:00.000Z"));

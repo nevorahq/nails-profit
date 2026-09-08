@@ -10,6 +10,7 @@ import {
   type SetupGuideBaseline,
 } from "@/components/setup-guide";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
@@ -62,6 +63,7 @@ export function VisitCloseForm({
   paymentMethods,
   currency,
   locale,
+  businessType,
   setupGuide = null,
 }: {
   services: CloseFormService[];
@@ -74,6 +76,8 @@ export function VisitCloseForm({
   paymentMethods: { id: string; name: string; is_default: boolean }[];
   currency: string;
   locale: AppLocale;
+  /** Passed through to the guided window, which names the step ahead. */
+  businessType: BusinessType;
   /**
    * Where «Первый расчёт» stood when this page was drawn, or null once the
    * studio has closed a visit — which, on this screen, is the state one
@@ -202,6 +206,7 @@ export function VisitCloseForm({
       <SetupGuideDialog
         guide={guide}
         locale={locale}
+        businessType={businessType}
         onStay={() => {
           // «Остаться здесь» would be a lie on this screen: the visit is
           // written and the form behind the window is a spent one.
@@ -229,27 +234,42 @@ export function VisitCloseForm({
               ))}
             </select>
           </label>
-          <label>
-            {t("specialists.specialist")}
-            <select
-              name="specialist_id"
-              value={specialistId}
-              onChange={(event) => setSpecialistId(event.target.value)}
-            >
-              {/*
-                Named rather than hidden. Somebody whose rule does not cover
-                this service is usually the person who did the work, and a list
-                they had disappeared from would read as a bug; what they need is
-                the reason, and the rule is one page away.
-              */}
-              {specialists.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {covers(item, serviceId) ? "" : ` — ${t("closeVisit.noRuleOption")}`}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/*
+            Not asked when there is nobody to choose between. A studio of one —
+            which after `POST /api/v1/organizations` is every solo workspace —
+            was made to pick itself out of a list of itself on every visit it
+            closed. The value still travels: it is state rather than a field,
+            and `specialists[0]` is what it was initialised to.
+
+            The reason a rule does not cover this service travels too. It rode
+            on the option's own label, and below the form `closeVisit.noRule`
+            says the same thing in a sentence and disables the button — so the
+            one who cannot be paid still learns why, from the line that was
+            always the real explanation.
+          */}
+          {specialists.length > 1 && (
+            <label>
+              {t("specialists.specialist")}
+              <select
+                name="specialist_id"
+                value={specialistId}
+                onChange={(event) => setSpecialistId(event.target.value)}
+              >
+                {/*
+                  Named rather than hidden. Somebody whose rule does not cover
+                  this service is usually the person who did the work, and a list
+                  they had disappeared from would read as a bug; what they need is
+                  the reason, and the rule is one page away.
+                */}
+                {specialists.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {covers(item, serviceId) ? "" : ` — ${t("closeVisit.noRuleOption")}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             {t("closeVisit.client")}
             <select name="client_id" defaultValue="">

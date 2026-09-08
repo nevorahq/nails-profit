@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
+import { soloNeedsPrincipal } from "@/domain/principal";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { NameCombobox } from "@/components/name-combobox";
 import { SpecialistPhoto } from "@/components/specialist-photo";
@@ -32,6 +34,7 @@ export function SpecialistManager({
   members,
   currency,
   locale,
+  businessType,
   canManage,
   hasOwnCard = false,
   setupGuide = null,
@@ -41,6 +44,11 @@ export function SpecialistManager({
   members: OrganizationMember[];
   currency: string;
   locale: AppLocale;
+  /**
+   * Studio or someone working alone. Wording and one banner, nothing else:
+   * every figure on this screen is computed the same way for both.
+   */
+  businessType: BusinessType;
   canManage: boolean;
   /**
    * Whether the person on this screen is already catalogued as a master.
@@ -221,6 +229,21 @@ export function SpecialistManager({
    */
   const withoutRule = specialists.filter((person) => person.default_rule === null);
 
+  /*
+   * A solo studio nobody in it is the owner of — the rule itself is
+   * `domain/principal.ts`, shared with the monthly report so the two screens
+   * cannot disagree about whether the mark is missing.
+   *
+   * Not offered to a master: this may be their own card, and they cannot set
+   * the mark either way.
+   */
+  const soloWithoutPrincipal =
+    canManage &&
+    soloNeedsPrincipal(
+      businessType,
+      specialists.map((person) => person.is_principal),
+    );
+
   // One account belongs to one specialist, so an account already linked is not
   // offered again — the database refuses it anyway, and a dropdown that lists
   // choices which cannot work is worse than a shorter one.
@@ -236,7 +259,7 @@ export function SpecialistManager({
 
   return (
     <>
-      <SetupGuideDialog guide={guide} locale={locale} />
+      <SetupGuideDialog guide={guide} locale={locale} businessType={businessType} />
 
       {canManage && waitingForCard.length > 0 && (
         <section className="panel">
@@ -261,6 +284,12 @@ export function SpecialistManager({
             ))}
           </ul>
         </section>
+      )}
+
+      {soloWithoutPrincipal && (
+        <div className="warning-banner">
+          {t("specialists.soloNoPrincipal", { action: t("specialists.principalSet") })}
+        </div>
       )}
 
       {withoutRule.length > 0 && (
@@ -306,10 +335,25 @@ export function SpecialistManager({
                     onSelect={(option) => setAddName(option.label)}
                   />
                   {!hasOwnCard && (
-                    <label>
-                      <input type="checkbox" name="is_me" defaultChecked />
-                      {t("specialists.isMe")}
-                    </label>
+                    <>
+                      <label>
+                        <input type="checkbox" name="is_me" defaultChecked />
+                        {t("specialists.isMe")}
+                      </label>
+                      {/*
+                        What the tick decides, said where it is ticked. Two
+                        facts hang off it and neither is guessable from «Это
+                        я»: the account every "own" scope resolves through, and
+                        the principal mark the month's report adds the
+                        commission back by. Only for a solo studio — in a
+                        studio the owner ticking it is one master among
+                        several, and the sentence about their own report would
+                        be beside the point.
+                      */}
+                      {businessType === "solo" && (
+                        <span className="field-hint">{t("specialists.isMeHint")}</span>
+                      )}
+                    </>
                   )}
                 </div>
                 <label>
@@ -347,6 +391,15 @@ export function SpecialistManager({
                   <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
                   {addCooperation !== "commission" && (
                     <span className="muted">{t("specialists.zeroRuleHint")}</span>
+                  )}
+                  {/*
+                    The same sentence the card carries, for the studios that
+                    predate `POST /organizations` writing the owner's card
+                    itself: they still meet this field here, on the form, with
+                    «Это я» ticked above it.
+                  */}
+                  {businessType === "solo" && !hasOwnCard && (
+                    <span className="muted">{t("specialists.imputedHint")}</span>
                   )}
                 </label>
                 {addRuleType !== "fixed" && (

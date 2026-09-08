@@ -27,7 +27,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
   // one, and before the error a malformed uuid would raise inside the driver.
   if (!z.uuid().safeParse(id).success) notFound();
 
-  const { membership, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "commissions", "read")) {
@@ -104,6 +104,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
       linkableMembers={linkableMembers}
       currency={currency}
       locale={locale}
+      businessType={businessType}
       canManage={canManage}
     />
   );

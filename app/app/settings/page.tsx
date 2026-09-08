@@ -28,9 +28,16 @@ import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 
 /**
- * Temporarily keep advanced labour, acquiring and visit-tax controls off the
- * settings page without deleting their data, APIs or effect on snapshots.
- * Flip this single switch when the product is ready to expose them again.
+ * Temporarily keep acquiring and visit-tax controls off the settings page
+ * without deleting their data, APIs or effect on snapshots. Flip this single
+ * switch when the product is ready to expose them again.
+ *
+ * The labour block is deliberately not behind it any more. The monthly report
+ * declines to compute economic profit without a wage for the owner's own work,
+ * and says so with a link to this page — so while the block was hidden the
+ * product sent people to a screen that could not answer, and «Резерв» and
+ * «Можно вывести» were unreachable with it. A solo studio meets that dead end
+ * first: what its own hour is worth is the question it came here to ask.
  */
 const SHOW_ADVANCED_FINANCIAL_SETTINGS = false;
 
@@ -47,8 +54,7 @@ export default async function SettingsPage() {
   const canReadOrg = can(membership.role, "organization_settings", "read");
   const canReadData = can(membership.role, "data_export", "read");
   const canReadFinancialSettings = can(membership.role, "expenses", "read");
-  const canReadLabour =
-    SHOW_ADVANCED_FINANCIAL_SETTINGS && canReadFinancialSettings;
+  const canReadLabour = canReadFinancialSettings;
 
   /*
    * The labour rules, whom they are for, and what the owner has already booked
@@ -240,6 +246,7 @@ export default async function SettingsPage() {
         <OrganizationSettings
           locale={locale}
           currency={currency}
+          businessType={businessType}
           canEdit={can(membership.role, "organization_settings", "write")}
         />
       )}

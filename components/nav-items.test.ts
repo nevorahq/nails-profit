@@ -28,6 +28,30 @@ describe("navigation", () => {
     ]);
   });
 
+  it("keeps «Мастера» out of a team of one", () => {
+    /*
+     * Same link, same page, different heading above it. For somebody working
+     * alone the section holds one fact — what their own hour is worth — and a
+     * «Команда» over it is a team of one; beside «Услуги» and «Затраты» it is
+     * what it actually is. Nothing is hidden by this and nothing is added.
+     */
+    const solo = navFor("owner", "solo");
+    const studio = navFor("owner", "studio");
+
+    expect(solo.map((item) => item.href)).toEqual(studio.map((item) => item.href));
+    expect(solo.find((item) => item.href === "/app/specialists")?.group).toBe("catalogue");
+    expect(studio.find((item) => item.href === "/app/specialists")?.group).toBe("team");
+    // The heading itself then has nothing under it, and the sidebar prints no
+    // empty groups.
+    expect(solo.filter((item) => item.group === "team")).toEqual([]);
+  });
+
+  it("means the studio shape when nobody says otherwise", () => {
+    expect(navFor("owner")).toEqual(navFor("owner", "studio"));
+    expect(bottomNavFor("master")).toEqual(bottomNavFor("master", "studio"));
+    expect(moreNavFor("owner")).toEqual(moreNavFor("owner", "studio"));
+  });
+
   it("gives every item a group the sidebar prints", () => {
     const printed = new Set(navGroups.map((group) => group.group));
     expect(navItems.filter((item) => !printed.has(item.group))).toEqual([]);

@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
+import { stepMessageKey } from "@/i18n/step-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 
 /**
@@ -120,12 +122,19 @@ export function useSetupGuide(
 export function SetupGuideDialog({
   guide,
   locale,
+  businessType,
   strings = "setupGuide",
   doneHref = "/app",
   onStay,
 }: {
   guide: SetupGuide;
   locale: AppLocale;
+  /**
+   * Whose run this is. The window names the goal ahead, and one of the goals —
+   * the first — is written twice; the month's two steps read the same to
+   * everybody, so this changes nothing there.
+   */
+  businessType: BusinessType;
   /**
    * Which checklist's wording to use. The two journeys end in different places
    * and say different things when they do — «Визит закрыт» against «Расчёт
@@ -212,14 +221,14 @@ export function SetupGuideDialog({
           everything that line did, and says it as an instruction.
         */}
         {!reached.complete && next && (
-          <p className="modal-goal">{t(`step.goal.${next.key}` as MessageKey)}</p>
+          <p className="modal-goal">{t(stepMessageKey(`step.goal.${next.key}`, businessType))}</p>
         )}
         <div className="button-row">
           <button className="primary-button" type="button" ref={primary} onClick={onward}>
             {reached.complete
               ? say("doneAction")
               : next
-                ? t(`step.action.${next.key}` as MessageKey)
+                ? t(stepMessageKey(`step.action.${next.key}`, businessType))
                 : t("common.return")}
           </button>
           {/*

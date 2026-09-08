@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
+import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { roundRatio } from "@/domain/money";
@@ -68,6 +69,7 @@ export function ServiceDetail({
   currency,
   canManage,
   locale,
+  businessType,
 }: {
   service: ServiceDetailData;
   displayName: string;
@@ -80,6 +82,11 @@ export function ServiceDetail({
   /** Writing to the shared catalogue, which a master may not do. */
   canManage: boolean;
   locale: AppLocale;
+  /**
+   * Whose work the commission line is describing. Wording only — the costing
+   * arrives already computed and is the same for both.
+   */
+  businessType: BusinessType;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
@@ -411,7 +418,7 @@ export function ServiceDetail({
             )}
             <div className="metric-grid">
               <Metric label={t("services.servicePrice")} value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
-              <Metric label={t("services.commission")} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
+              <Metric label={t(businessLabel.serviceCommission[businessType])} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
               {fixedShareMinor !== null && (
                 <Metric
                   label={t("services.fixedShare")}
@@ -419,7 +426,11 @@ export function ServiceDetail({
                 />
               )}
               <Metric
-                label={fixedShareMinor === null ? t("services.youKeep") : t("services.afterFixed")}
+                label={
+                  fixedShareMinor === null
+                    ? t(businessLabel.serviceKept[businessType])
+                    : t("services.afterFixed")
+                }
                 value={formatMoneyMinor(keptMinor, service.costing.currency)}
                 strong
                 negative={keptMinor < 0}
@@ -452,6 +463,19 @@ export function ServiceDetail({
                 })}
               </p>
             )}
+            {/*
+              Why a cost that never leaves the business is subtracted here.
+              Without the line, the two screens contradict each other: this one
+              takes the owner's own pay out of the margin, and the month's
+              report puts it back below it. Both are right, and the reason is
+              one sentence — a service has to be comparable against another
+              service, and it is not comparable if the hour that made it is
+              free.
+            */}
+            {businessType === "solo" && service.costing.commission_minor > 0 && (
+              <p className="muted">{t("services.principalNote")}</p>
+            )}
+
             {service.costing.contribution_margin_minor < 0 && (
               <div className="warning-banner">
                 {t("services.lossWarning")}
@@ -461,7 +485,7 @@ export function ServiceDetail({
               <summary>{t("services.howCounted")}</summary>
               <p>
                 {formatMoneyMinor(service.costing.price_minor, service.costing.currency)} −{" "}
-                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t("services.commissionWord")}) ={" "}
+                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t(businessLabel.serviceCommissionWord[businessType])}) ={" "}
                 {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
               </p>
               {fullyLoaded && fixedShareMinor !== null && (
