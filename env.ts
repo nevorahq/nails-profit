@@ -242,6 +242,29 @@ export function isPaddleWebhookIpAllowlistEnabled() {
   throw new Error("PADDLE_WEBHOOK_IP_ALLOWLIST must be true or false");
 }
 
+/**
+ * Where a newly registered studio is announced, so that a sign-up is a lead
+ * somebody answers rather than a row nobody sees.
+ *
+ * Unset means nobody is told, the same fail-closed shape as the webhook
+ * secrets above: an unconfigured channel that is visibly off beats one that
+ * mails a placeholder address for months. Nothing about access depends on it —
+ * see `lib/studio-lead-notice.ts` for why the notice never gates the studio it
+ * announces.
+ *
+ * One plain mailbox, not a header: a display name here would be pasted
+ * straight into `to`, and a comma or a newline in it turns one recipient into
+ * several.
+ */
+export function getSupportEmail() {
+  const value = process.env.SUPPORT_EMAIL?.trim();
+  if (!value) return null;
+  if (!/^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/.test(value)) {
+    throw new Error("SUPPORT_EMAIL must be a single plain address, without a display name");
+  }
+  return value;
+}
+
 /** The token the notification dispatch job authenticates with; unset disables the route. */
 export function getOpsApiToken() {
   const value = process.env.OPS_API_TOKEN?.trim();

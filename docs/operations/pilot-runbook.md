@@ -20,6 +20,14 @@ PILOT_DATABASE_URL=<privileged operator connection; never expose to the app/brow
 
 With access enforcement enabled, an organization without an `active` enrollment sees a waiting screen and its tenant API calls fail closed. Local development and automated tests keep enforcement off unless they are explicitly testing rollout access.
 
+A registration is also announced, so a new studio reaches a person rather than only a table:
+
+```text
+SUPPORT_EMAIL=<mailbox that reads new-studio notices; unset means nobody is told>
+```
+
+The notice is sent once, when an **organization** is created — not when an account is. An invited master creates a user and no organization, and is deliberately not announced. It is delivered only with `NOTIFICATION_PROVIDER=resend`; outside production the same summary is printed to the server log instead. It gates nothing in either direction: a studio is registered and working whether or not the letter leaves, and a failed send is one `studio_lead.announce_failed` line, never an error the registrant sees. See `lib/studio-lead-notice.ts`.
+
 Operator writes require a second safety switch for each command:
 
 ```bash

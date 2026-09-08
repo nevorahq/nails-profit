@@ -14,6 +14,7 @@ import {
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
+import { announceStudioLead } from "@/lib/studio-lead-notice";
 
 const createOrganizationSchema = z.object({
   // Latin script, the same rule the workspace form states under its own field
@@ -180,6 +181,29 @@ export async function POST(request: Request) {
   if (!organization) {
     return apiError(409, "MEMBERSHIP_EXISTS", "User already belongs to an organization", id);
   }
+
+  /*
+   * The studio is registered; now somebody is told about it.
+   *
+   * Awaited rather than left running after the response, because a serverless
+   * instance is free to freeze the moment it answers and a promise nobody holds
+   * is a letter that arrives only sometimes. It costs one provider round trip on
+   * the single request in a studio's life that creates it — and it cannot fail
+   * the registration: `announceStudioLead` resolves whatever happens.
+   */
+  await announceStudioLead(
+    {
+      organizationId: organization.id,
+      organizationName: organization.name,
+      slug: organization.slug,
+      type: organization.type,
+      currency: organization.currency,
+      locale: organization.locale,
+      ownerName: session.user.name,
+      ownerEmail: session.user.email,
+    },
+    id,
+  );
 
   return apiSuccess(organization, id, 201);
 }
