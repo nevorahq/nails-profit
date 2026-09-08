@@ -67,6 +67,13 @@ describe("resolveStudioLeadNotice", () => {
       expect(resolveStudioLeadNotice(env, "resend", "support@nevorahq.example")).toBe(
         consoleStudioLeadNotice,
       );
+      /*
+       * With or without a recipient, because outside production there is no
+       * letter for one to receive. This is what a `.env` carrying
+       * `SUPPORT_EMAIL` used to hide: the suite passed on the machine that had
+       * one and failed in CI, which has none.
+       */
+      expect(resolveStudioLeadNotice(env, "resend", null)).toBe(consoleStudioLeadNotice);
     }
   });
 

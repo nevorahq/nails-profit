@@ -127,8 +127,16 @@ export function resolveStudioLeadNotice(
   provider: "log" | "resend" = getNotificationProviderName(),
   to: string | null = getSupportEmail(),
 ): StudioLeadNotice {
-  if (to === null) return silentNotice("no_recipient");
+  /*
+   * Development first, and before the recipient is looked at, because outside
+   * production the recipient is never used: the summary is printed either way.
+   * Ordered the other way round, whether a developer — or CI — saw anything at
+   * all depended on a variable that changes nothing about what is printed, and
+   * a machine with `SUPPORT_EMAIL` in its `.env` behaved differently from one
+   * without it.
+   */
   if (nodeEnv !== "production") return consoleStudioLeadNotice;
+  if (to === null) return silentNotice("no_recipient");
   return provider === "resend" ? createResendStudioLeadNotice(to) : silentNotice("no_transport");
 }
 
