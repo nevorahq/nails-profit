@@ -27,7 +27,7 @@ export default async function ExpensesPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; category?: string }>;
 }) {
-  const { membership, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
 
   // Owner alone, reading included: the ledger holds rent and payroll. Everyone
@@ -157,7 +157,12 @@ export default async function ExpensesPage({
         </details>
       </nav>
 
-      <ExpenseLedger expenses={rows} locale={locale} monthGuide={monthGuide} />
+      <ExpenseLedger
+        expenses={rows}
+        locale={locale}
+        businessType={businessType}
+        monthGuide={monthGuide}
+      />
       <OwnerDrawLedger
         draws={draws}
         currency={currency}

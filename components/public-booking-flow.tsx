@@ -175,6 +175,17 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const money = (amount: number) =>
     formatMoneyMinor(amount, profile.currency, localeTag(profile.locale));
 
+  /*
+   * Whether the person is worth naming to the client.
+   *
+   * A studio of one publishes a page that offered a choice between «Любой
+   * доступный» and the only name on it, printed that name under every slot,
+   * and headed the confirmed time with it — three ways of telling somebody
+   * what they already knew from the studio's own name at the top. Where there
+   * is more than one pair of hands the choice is real and all three stay.
+   */
+  const namesSpecialist = (service?.specialists.length ?? 0) > 1;
+
   useEffect(() => {
     let active = true;
     fetch(`/api/v1/public/booking/${profile.slug}/catalog?location_id=${locationId}`, {
@@ -567,14 +578,16 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         {!held ? (
           <form onSubmit={findTimes} noValidate>
             <div className="public-booking-grid">
-              <label>
-                {t("publicBooking.location")}
-                <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); clearError(); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
-                  {profile.locations.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </select>
-              </label>
+              {profile.locations.length > 1 && (
+                <label>
+                  {t("publicBooking.location")}
+                  <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); clearError(); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
+                    {profile.locations.map((entry) => (
+                      <option key={entry.id} value={entry.id}>{entry.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
                 {t("publicBooking.service")}
                 <select
@@ -594,15 +607,17 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                   ))}
                 </select>
               </label>
-              <label>
-                {t("publicBooking.specialist")}
-                <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }}>
-                  <option value="any">{t("publicBooking.anySpecialist")}</option>
-                  {service?.specialists.map((person) => (
-                    <option key={person.id} value={person.id}>{person.name}</option>
-                  ))}
-                </select>
-              </label>
+              {namesSpecialist && (
+                <label>
+                  {t("publicBooking.specialist")}
+                  <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }}>
+                    <option value="any">{t("publicBooking.anySpecialist")}</option>
+                    {service?.specialists.map((person) => (
+                      <option key={person.id} value={person.id}>{person.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
                 {t("publicBooking.date")}
                 <input type="date" value={date} min={dateInZone(location.timezone)} disabled={pending} onChange={(event) => { setDate(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }} required />
@@ -657,7 +672,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <strong>{service?.name}</strong>
               </div>
               <div>
-                <span>{held.slot.specialist_name}</span>
+                <span>{namesSpecialist ? held.slot.specialist_name : t("publicBooking.when")}</span>
                 <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(held.slot.starts_at))}</strong>
               </div>
             </div>
@@ -717,7 +732,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <strong>{service?.name}</strong>
               </div>
               <div>
-                <span>{held.slot.specialist_name}</span>
+                <span>{namesSpecialist ? held.slot.specialist_name : t("publicBooking.when")}</span>
                 <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(held.slot.starts_at))}</strong>
               </div>
               <p>{t("publicBooking.heldUntil", { time: new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, timeStyle: "short" }).format(new Date(held.expiresAt)) })}</p>
@@ -804,7 +819,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               {slots.map((slot) => (
                 <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
                   <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
-                  <span>{slot.specialist_name}</span>
+                  {namesSpecialist && <span>{slot.specialist_name}</span>}
                 </button>
               ))}
             </div>

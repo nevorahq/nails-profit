@@ -155,6 +155,16 @@ export function LoginForm({
         <label>
           {t("auth.password")}
           <input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={10} />
+          {/*
+            The rule the field enforces, on the screen that enforces it. Ten
+            characters is not a guessable number, and the only way anybody
+            learned it was by being refused — by the browser, in the browser's
+            language, which on a Romanian pilot's laptop is not the one the
+            rest of this card is in. Only while registering: somebody signing
+            in already has a password and does not need to be told what it must
+            look like.
+          */}
+          {mode === "signup" && <span className="field-hint">{t("auth.passwordHint")}</span>}
         </label>
         {mode === "signup" && (
           <div className="consent-field">

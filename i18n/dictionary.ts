@@ -283,18 +283,22 @@ const ru = {
   "notify.staffRequested.cta": "Открыть запрос",
   "notify.staffBooked.subject": "Новая запись — {studio}",
   "notify.staffBooked.body": "Клиент записался к мастеру {specialist} на {when}.",
+  "notify.staffBooked.bodySolo": "Клиент записался на {when}.",
   "notify.staffBooked.cta": "Открыть запись",
   "notify.staffRescheduled.subject": "Клиент перенёс запись — {studio}",
   "notify.staffRescheduled.body":
     "Клиент перенёс визит к мастеру {specialist}. Новое время — {when}.",
+  "notify.staffRescheduled.bodySolo": "Клиент перенёс визит. Новое время — {when}.",
   "notify.staffRescheduled.cta": "Открыть запись",
   "notify.staffCancelled.subject": "Клиент отменил запись — {studio}",
   "notify.staffCancelled.body":
     "Клиент отменил визит к мастеру {specialist} {when}. Окно снова свободно.",
+  "notify.staffCancelled.bodySolo": "Клиент отменил визит {when}. Окно снова свободно.",
   "notify.staffCancelled.cta": "Открыть календарь",
   "notify.staffReleased.subject": "Клиент ушёл с вашего времени — {studio}",
   "notify.staffReleased.body":
     "Клиент перенёс визит {when} к мастеру {specialist}. Час снова свободен.",
+  "notify.staffReleased.bodySolo": "Клиент перенёс визит {when}. Час снова свободен.",
   "notify.staffReleased.cta": "Открыть календарь",
   "notify.visitCompleted.subject": "{studio}: спасибо за визит",
   "notify.visitCompleted.body": "Спасибо, что были у нас {when}.",
@@ -362,7 +366,8 @@ const ru = {
   },
   "services.saveList": "Сохранить список",
   "services.lossWarning": "Услуга работает в минус: комиссия и налоги стоят больше, чем цена.",
-  "services.commissionWord": "комиссия",
+  "services.commissionWord.studio": "комиссия",
+  "services.commissionWord.solo": "ваш труд",
   "services.perHourFormula": "Прибыль в час =",
   "services.formulaVersion": "Версия формулы: {version}",
   "services.viewMode": "Что вычитаем",
@@ -603,6 +608,10 @@ const ru = {
   "specialists.principalSet": "Отметить владельцем",
   "specialists.principalUnset": "Снять отметку",
   "specialists.imputedLabour": "вменённая стоимость вашего труда",
+  "specialists.isMeHint":
+    "Отметит карточку вашей: визиты и уведомления пойдут на ваш аккаунт, а комиссия по этим визитам вернётся в прибыль месяца — из бизнеса она не уходит.",
+  "specialists.soloNoPrincipal":
+    "Формат — «Solo-мастер», но ни одна карточка не отмечена владельцем. Пока это так, каждый закрываемый визит считает вашу комиссию деньгами, ушедшими из бизнеса, — и уходит в отчёт месяца с заниженной прибылью. Откройте свою карточку и нажмите «{action}».",
   "specialists.withoutRuleBanner": {
     one: "У {count} мастера нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
     few: "У {count} мастеров нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
@@ -635,9 +644,12 @@ const ru = {
 
   "onboarding.title": "Первый расчёт",
   "onboarding.progress": "Шаг {done} из {total}",
-  "onboarding.specialist": "Мастер с правилом комиссии",
-  "onboarding.specialistHint":
+  "onboarding.specialist.studio": "Мастер с правилом комиссии",
+  "onboarding.specialist.solo": "Оценка вашего труда",
+  "onboarding.specialistHint.studio":
     "Правило комиссии — то, из чего считается себестоимость визита. Без него визит не закрыть.",
+  "onboarding.specialistHint.solo":
+    "Из этой оценки считается себестоимость визита. Деньги никуда не уходят — в отчёте месяца они возвращаются в прибыль, — но без неё визит не закрыть.",
   "onboarding.service": "Услуга с ценой и длительностью",
   "onboarding.serviceHint":
     "Из цены и длительности считаются маржа и прибыль в час. Услуга без одной из них в расчёт не попадёт.",
@@ -653,12 +665,14 @@ const ru = {
     few: "Осталось {count} шага",
     other: "Осталось {count} шагов",
   },
-  "step.goal.specialist": "Добавьте мастера и правило комиссии",
+  "step.goal.specialist.studio": "Добавьте мастера и правило комиссии",
+  "step.goal.specialist.solo": "Оцените свой труд: сколько вы платили бы мастеру за эту работу",
   "step.goal.service": "Добавьте услугу с ценой и длительностью",
   "step.goal.visit": "Закройте первый визит",
   "step.goal.overhead": "Внесите постоянные затраты",
   "step.goal.rota": "Заполните рабочие часы в графике",
-  "step.action.specialist": "Добавить мастера",
+  "step.action.specialist.studio": "Добавить мастера",
+  "step.action.specialist.solo": "Задать оценку",
   "step.action.service": "Добавить услугу",
   "step.action.visit": "Закрыть визит",
   "step.action.overhead": "Внести затраты",
@@ -724,7 +738,8 @@ const ru = {
   "services.deleteFailed": "Не удалось удалить услугу",
   "services.deleteConfirm": "Подтвердить",
   "services.service": "Услуга",
-  "services.youKeep": "Останется вам",
+  "services.youKeep.studio": "Останется вам",
+  "services.youKeep.solo": "Остаётся бизнесу",
   "services.margin": "Маржа",
   "services.perHour": "Прибыль в час",
   "services.priceAndDuration": "Цена и длительность",
@@ -734,7 +749,10 @@ const ru = {
   "services.calculateWithAddOns": "Посчитать с опциями",
   "services.incomplete": "Расчёт неполный.",
   "services.servicePrice": "Цена услуги",
-  "services.commission": "Комиссия мастера",
+  "services.commission.studio": "Комиссия мастера",
+  "services.commission.solo": "Стоимость вашего труда",
+  "services.principalNote":
+    "«Стоимость вашего труда» из бизнеса не уходит: в отчёте месяца она возвращается в прибыль. Здесь она вычтена нарочно — иначе услуги не с чем сравнивать между собой.",
   "services.howCounted": "Как это посчитано",
 
   "addOns.namePlaceholder": "Френч",
@@ -762,6 +780,8 @@ const ru = {
   "specialists.valueRequired": "Укажите значение комиссии",
   "specialists.zeroRuleHint":
     "Для аренды и оклада укажите 0: с визита не удерживается ничего. Правило нужно всё равно — без него визит не закроется.",
+  "specialists.imputedHint":
+    "Это не выплата: столько вы платили бы мастеру за ту же работу. Из этой цифры считается себестоимость визита — без неё услуги не сравнить между собой, — а в отчёте месяца она возвращается в прибыль, потому что из бизнеса не ушла.",
   "specialists.account": "Аккаунт",
   "specialists.linkHint":
     "Пока мастер не связан с аккаунтом, он не видит своих визитов и не может закрыть визит: права «только свои» опираются на эту связь.",
@@ -812,7 +832,8 @@ const ru = {
   "auth.name": "Ваше имя",
   "auth.welcomeBack": "С возвращением",
   "auth.signUpTitle": "Создать аккаунт",
-  "auth.subtitle": "Ваш profit layer поверх существующей системы записи.",
+  "auth.subtitle": "Считает себестоимость визита, маржу услуги и то, что осталось за месяц. С календарём и записью клиентов.",
+  "auth.passwordHint": "Не короче 10 символов.",
   "auth.signIn": "Войти",
   "auth.signUp": "Создать аккаунт",
   "auth.wait": "Подождите…",
@@ -848,6 +869,9 @@ const ru = {
   "workspace.addressHint": "По адресу строится график работы и запись клиентов. Он не виден никому, пока вы не откроете онлайн-запись.",
   "workspace.nameLatin": "Только латиница: A–Z, цифры, пробел и дефис.",
   "workspace.format": "Формат",
+  "workspace.formatHint":
+    "Меняет только формулировки в отчётах — «оплата вашего труда» или «оплата труда мастеров». Ни на одну цифру не влияет.",
+  "workspace.formatReversible": "Переключается потом в настройках.",
   "workspace.solo": "Solo-мастер",
   "workspace.studio": "Студия",
   "workspace.creating": "Создаём…",
@@ -934,7 +958,8 @@ const ru = {
   "visits.estimate": "оценка",
   "visits.adjustFailed": "Не удалось сохранить исправление",
   "visits.total": "Итого",
-  "visits.masterEarnings": "Заработок мастера",
+  "visits.masterEarnings.studio": "Заработок мастера",
+  "visits.masterEarnings.solo": "Ваш заработок",
 
   "reason.missing_price": "не указана цена услуги",
   "reason.missing_duration": "не указана длительность",
@@ -1136,6 +1161,9 @@ const ru = {
   "bookingSetup.setupStep.location": "Адрес студии",
   "bookingSetup.setupStep.rota": "Кто работает и когда",
   "bookingSetup.setupStep.publish": "Публикация",
+  "bookingSetup.setupOptional": "необязательно",
+  "bookingSetup.publishOptional":
+    "Часы уже сохранены, и отчёт месяца считает по ним загрузку и точку безубыточности. Публикация нужна только затем, чтобы клиенты записывались сами: если вы записываете их сами, этот шаг можно пропустить и вернуться к нему когда угодно.",
   "bookingSetup.setupDerived":
     "Ссылку для адреса подберём из названия, часовой пояс — {zone}. И то, и другое можно изменить позже.",
   "bookingSetup.setupNext": "Дальше",
@@ -1496,18 +1524,24 @@ const ro: Record<MessageKey, Message> = {
   "notify.staffRequested.cta": "Deschideți cererea",
   "notify.staffBooked.subject": "Programare nouă — {studio}",
   "notify.staffBooked.body": "Un client s-a programat la {specialist} pentru {when}.",
+  "notify.staffBooked.bodySolo": "Un client s-a programat pentru {when}.",
   "notify.staffBooked.cta": "Deschideți programarea",
   "notify.staffRescheduled.subject": "Clientul a reprogramat — {studio}",
   "notify.staffRescheduled.body":
     "Un client a mutat vizita la {specialist}. Ora nouă este {when}.",
+  "notify.staffRescheduled.bodySolo": "Un client a mutat vizita. Ora nouă este {when}.",
   "notify.staffRescheduled.cta": "Deschideți programarea",
   "notify.staffCancelled.subject": "Clientul a anulat programarea — {studio}",
   "notify.staffCancelled.body":
     "Un client a anulat vizita la {specialist} din {when}. Intervalul este din nou liber.",
+  "notify.staffCancelled.bodySolo":
+    "Un client a anulat vizita din {when}. Intervalul este din nou liber.",
   "notify.staffCancelled.cta": "Deschideți calendarul",
   "notify.staffReleased.subject": "Clientul a plecat de la ora dumneavoastră — {studio}",
   "notify.staffReleased.body":
     "Un client a mutat vizita din {when} la {specialist}. Ora este din nou liberă.",
+  "notify.staffReleased.bodySolo":
+    "Un client a mutat vizita din {when}. Ora este din nou liberă.",
   "notify.staffReleased.cta": "Deschideți calendarul",
   "notify.visitCompleted.subject": "{studio}: vă mulțumim pentru vizită",
   "notify.visitCompleted.body": "Vă mulțumim că ați fost la noi {when}.",
@@ -1576,7 +1610,8 @@ const ro: Record<MessageKey, Message> = {
   },
   "services.saveList": "Salvează lista",
   "services.lossWarning": "Serviciul lucrează în pierdere: comisionul și taxele costă mai mult decât prețul.",
-  "services.commissionWord": "comision",
+  "services.commissionWord.studio": "comision",
+  "services.commissionWord.solo": "munca dvs.",
   "services.perHourFormula": "Profit pe oră =",
   "services.formulaVersion": "Versiunea formulei: {version}",
   "services.viewMode": "Ce scădem",
@@ -1814,6 +1849,10 @@ const ro: Record<MessageKey, Message> = {
   "specialists.principalSet": "Marchează ca proprietar",
   "specialists.principalUnset": "Scoate marcajul",
   "specialists.imputedLabour": "costul imputat al muncii dvs.",
+  "specialists.isMeHint":
+    "Marchează fișa ca fiind a dvs.: vizitele și notificările merg către contul dvs., iar comisionul acestor vizite se întoarce în profitul lunii — din afacere el nu pleacă.",
+  "specialists.soloNoPrincipal":
+    "Formatul este «Maestru solo», dar nicio fișă nu este marcată ca proprietar. Până atunci fiecare vizită închisă consideră comisionul dvs. bani ieșiți din afacere și intră în raportul lunar cu un profit mai mic. Deschideți fișa dvs. și apăsați «{action}».",
   "specialists.withoutRuleBanner": {
     one: "{count} maestru nu are regulă de comision. Serviciile nu pot fi calculate: comisionul nu se consideră zero până nu este definită regula.",
     few: "{count} maeștri nu au regulă de comision. Serviciile nu pot fi calculate: comisionul nu se consideră zero până nu este definită regula.",
@@ -1846,9 +1885,12 @@ const ro: Record<MessageKey, Message> = {
 
   "onboarding.title": "Primul calcul",
   "onboarding.progress": "Pasul {done} din {total}",
-  "onboarding.specialist": "Maestru cu regulă de comision",
-  "onboarding.specialistHint":
+  "onboarding.specialist.studio": "Maestru cu regulă de comision",
+  "onboarding.specialist.solo": "Evaluarea muncii dvs.",
+  "onboarding.specialistHint.studio":
     "Regula de comision este baza costului unei vizite. Fără ea vizita nu poate fi închisă.",
+  "onboarding.specialistHint.solo":
+    "Din această evaluare se calculează costul vizitei. Banii nu pleacă nicăieri — în raportul lunar ei se întorc în profit — dar fără ea vizita nu poate fi închisă.",
   "onboarding.service": "Serviciu cu preț și durată",
   "onboarding.serviceHint":
     "Din preț și durată se calculează marja și profitul pe oră. Un serviciu fără una dintre ele nu intră în calcul.",
@@ -1864,12 +1906,14 @@ const ro: Record<MessageKey, Message> = {
     few: "Au mai rămas {count} pași",
     other: "Au mai rămas {count} de pași",
   },
-  "step.goal.specialist": "Adăugați un maestru și regula lui de comision",
+  "step.goal.specialist.studio": "Adăugați un maestru și regula lui de comision",
+  "step.goal.specialist.solo": "Evaluați-vă munca: cât ați plăti unui maestru pentru ea",
   "step.goal.service": "Adăugați un serviciu cu preț și durată",
   "step.goal.visit": "Închideți prima vizită",
   "step.goal.overhead": "Introduceți cheltuielile fixe",
   "step.goal.rota": "Completați orele de lucru în program",
-  "step.action.specialist": "Adaugă maestru",
+  "step.action.specialist.studio": "Adaugă maestru",
+  "step.action.specialist.solo": "Setează evaluarea",
   "step.action.service": "Adaugă serviciu",
   "step.action.visit": "Închide vizita",
   "step.action.overhead": "Adaugă cheltuieli",
@@ -1935,7 +1979,8 @@ const ro: Record<MessageKey, Message> = {
   "services.deleteFailed": "Serviciul nu a putut fi șters",
   "services.deleteConfirm": "Confirmare",
   "services.service": "Serviciu",
-  "services.youKeep": "Vă rămâne",
+  "services.youKeep.studio": "Vă rămâne",
+  "services.youKeep.solo": "Rămâne afacerii",
   "services.margin": "Marjă",
   "services.perHour": "Profit pe oră",
   "services.priceAndDuration": "Preț și durată",
@@ -1945,7 +1990,10 @@ const ro: Record<MessageKey, Message> = {
   "services.calculateWithAddOns": "Calculează cu opțiuni",
   "services.incomplete": "Calculul este incomplet.",
   "services.servicePrice": "Prețul serviciului",
-  "services.commission": "Comisionul maestrului",
+  "services.commission.studio": "Comisionul maestrului",
+  "services.commission.solo": "Costul muncii dvs.",
+  "services.principalNote":
+    "„Costul muncii dvs.” nu pleacă din afacere: în raportul lunar el se întoarce în profit. Aici este scăzut intenționat — altfel serviciile nu pot fi comparate între ele.",
   "services.howCounted": "Cum este calculat",
 
   "addOns.namePlaceholder": "French",
@@ -1973,6 +2021,8 @@ const ro: Record<MessageKey, Message> = {
   "specialists.valueRequired": "Indicați valoarea comisionului",
   "specialists.zeroRuleHint":
     "Pentru chirie și salariu indicați 0: din vizită nu se reține nimic. Regula este oricum necesară — fără ea vizita nu poate fi finalizată.",
+  "specialists.imputedHint":
+    "Nu este o plată: atât ați plăti unui maestru pentru aceeași muncă. Din această cifră se calculează costul vizitei — fără ea serviciile nu pot fi comparate între ele — iar în raportul lunar ea se întoarce în profit, pentru că nu a plecat din afacere.",
   "specialists.account": "Cont",
   "specialists.linkHint":
     "Până când maestrul nu este legat de un cont, nu își vede vizitele și nu poate închide una: drepturile „doar ale mele” se sprijină pe această legătură.",
@@ -2023,7 +2073,8 @@ const ro: Record<MessageKey, Message> = {
   "auth.name": "Numele dvs.",
   "auth.welcomeBack": "Bine ați revenit",
   "auth.signUpTitle": "Creați un cont",
-  "auth.subtitle": "Stratul dvs. de profit peste sistemul de programări existent.",
+  "auth.subtitle": "Calculează costul unei vizite, marja unui serviciu și ce a rămas pe lună. Cu calendar și programări.",
+  "auth.passwordHint": "Cel puțin 10 caractere.",
   "auth.signIn": "Autentificare",
   "auth.signUp": "Creează cont",
   "auth.wait": "Așteptați…",
@@ -2059,6 +2110,9 @@ const ro: Record<MessageKey, Message> = {
   "workspace.addressHint": "Pe adresă se construiesc programul de lucru și programările. Nu o vede nimeni până nu deschideți programarea online.",
   "workspace.nameLatin": "Doar litere latine: A–Z, cifre, spațiu și cratimă.",
   "workspace.format": "Format",
+  "workspace.formatHint":
+    "Schimbă doar formulările din rapoarte — „plata muncii dvs.” sau „plata muncii maeștrilor”. Nu afectează nicio cifră.",
+  "workspace.formatReversible": "Poate fi comutat mai târziu în setări.",
   "workspace.solo": "Maestru solo",
   "workspace.studio": "Salon",
   "workspace.creating": "Se creează…",
@@ -2145,7 +2199,8 @@ const ro: Record<MessageKey, Message> = {
   "visits.noCalculation": "fără calcul",
   "visits.estimate": "estimare",
   "visits.total": "Total",
-  "visits.masterEarnings": "Câștigul maestrului",
+  "visits.masterEarnings.studio": "Câștigul maestrului",
+  "visits.masterEarnings.solo": "Câștigul dvs.",
 
   "reason.missing_price": "prețul serviciului nu este indicat",
   "reason.missing_duration": "durata nu este indicată",
@@ -2347,6 +2402,9 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.setupStep.location": "Adresa studioului",
   "bookingSetup.setupStep.rota": "Cine lucrează și când",
   "bookingSetup.setupStep.publish": "Publicare",
+  "bookingSetup.setupOptional": "opțional",
+  "bookingSetup.publishOptional":
+    "Orele sunt deja salvate, iar raportul lunar calculează pe baza lor gradul de ocupare și pragul de rentabilitate. Publicarea este necesară doar pentru ca clienții să se programeze singuri: dacă îi programați dvs., pasul poate fi sărit și reluat oricând.",
   "bookingSetup.setupDerived":
     "Linkul adresei îl compunem din denumire, fusul orar — {zone}. Ambele pot fi schimbate mai târziu.",
   "bookingSetup.setupNext": "Mai departe",
@@ -2704,18 +2762,24 @@ const en: Record<MessageKey, Message> = {
   "notify.staffRequested.cta": "Open the request",
   "notify.staffBooked.subject": "New booking — {studio}",
   "notify.staffBooked.body": "A client booked {specialist} for {when}.",
+  "notify.staffBooked.bodySolo": "A client booked {when}.",
   "notify.staffBooked.cta": "Open the booking",
   "notify.staffRescheduled.subject": "A client moved a booking — {studio}",
   "notify.staffRescheduled.body":
     "A client moved their visit with {specialist}. The new time is {when}.",
+  "notify.staffRescheduled.bodySolo": "A client moved their visit. The new time is {when}.",
   "notify.staffRescheduled.cta": "Open the booking",
   "notify.staffCancelled.subject": "A client cancelled — {studio}",
   "notify.staffCancelled.body":
     "A client cancelled their visit with {specialist} on {when}. The slot is free again.",
+  "notify.staffCancelled.bodySolo":
+    "A client cancelled their visit on {when}. The slot is free again.",
   "notify.staffCancelled.cta": "Open the calendar",
   "notify.staffReleased.subject": "A client left your slot — {studio}",
   "notify.staffReleased.body":
     "A client moved their visit on {when} to {specialist}. The hour is free again.",
+  "notify.staffReleased.bodySolo":
+    "A client moved their visit on {when}. The hour is free again.",
   "notify.staffReleased.cta": "Open the calendar",
   "notify.visitCompleted.subject": "{studio}: thank you for your visit",
   "notify.visitCompleted.body": "Thank you for visiting us on {when}.",
@@ -2782,7 +2846,8 @@ const en: Record<MessageKey, Message> = {
   },
   "services.saveList": "Save the list",
   "services.lossWarning": "This service runs at a loss: commission and taxes cost more than the price.",
-  "services.commissionWord": "commission",
+  "services.commissionWord.studio": "commission",
+  "services.commissionWord.solo": "your own work",
   "services.perHourFormula": "Profit per hour =",
   "services.formulaVersion": "Formula version: {version}",
   "services.viewMode": "What to subtract",
@@ -3018,6 +3083,10 @@ const en: Record<MessageKey, Message> = {
   "specialists.principalSet": "Mark as owner",
   "specialists.principalUnset": "Remove the mark",
   "specialists.imputedLabour": "imputed cost of your own work",
+  "specialists.isMeHint":
+    "Marks the card as yours: visits and notifications go to your account, and the commission on those visits comes back into the month's profit — it never leaves the business.",
+  "specialists.soloNoPrincipal":
+    "The format is “Solo technician”, but no card is marked as the owner. Until one is, every visit you close counts your commission as money that left the business, and reaches the month report with the profit understated. Open your own card and press “{action}”.",
   "specialists.withoutRuleBanner": {
     one: "{count} specialist has no commission rule. Services cannot be costed: commission is not treated as zero until a rule is set.",
     other:
@@ -3048,9 +3117,12 @@ const en: Record<MessageKey, Message> = {
 
   "onboarding.title": "The first calculation",
   "onboarding.progress": "Step {done} of {total}",
-  "onboarding.specialist": "A specialist with a commission rule",
-  "onboarding.specialistHint":
+  "onboarding.specialist.studio": "A specialist with a commission rule",
+  "onboarding.specialist.solo": "What your own work is worth",
+  "onboarding.specialistHint.studio":
     "The commission rule is what a visit's cost is worked out from. Without one the visit cannot be closed.",
+  "onboarding.specialistHint.solo":
+    "A visit's cost is worked out from this figure. The money goes nowhere — the month report adds it back into profit — but without it a visit cannot be closed.",
   "onboarding.service": "A service with a price and a duration",
   "onboarding.serviceHint":
     "The price and the duration are what the margin and the profit per hour come from. A service missing either stays out of the costing.",
@@ -3065,12 +3137,14 @@ const en: Record<MessageKey, Message> = {
     one: "{count} step left",
     other: "{count} steps left",
   },
-  "step.goal.specialist": "Add a specialist and their commission rule",
+  "step.goal.specialist.studio": "Add a specialist and their commission rule",
+  "step.goal.specialist.solo": "Price your own work: what you would pay a specialist for it",
   "step.goal.service": "Add a service with a price and a duration",
   "step.goal.visit": "Close the first visit",
   "step.goal.overhead": "Enter the fixed costs",
   "step.goal.rota": "Fill in the working hours",
-  "step.action.specialist": "Add a specialist",
+  "step.action.specialist.studio": "Add a specialist",
+  "step.action.specialist.solo": "Set the figure",
   "step.action.service": "Add a service",
   "step.action.visit": "Close a visit",
   "step.action.overhead": "Add a cost",
@@ -3136,7 +3210,8 @@ const en: Record<MessageKey, Message> = {
   "services.deleteFailed": "Could not delete the service",
   "services.deleteConfirm": "Confirm",
   "services.service": "Service",
-  "services.youKeep": "You keep",
+  "services.youKeep.studio": "You keep",
+  "services.youKeep.solo": "The business keeps",
   "services.margin": "Margin",
   "services.perHour": "Profit per hour",
   "services.priceAndDuration": "Price and duration",
@@ -3146,7 +3221,10 @@ const en: Record<MessageKey, Message> = {
   "services.calculateWithAddOns": "Calculate with add-ons",
   "services.incomplete": "The calculation is incomplete.",
   "services.servicePrice": "Service price",
-  "services.commission": "Specialist commission",
+  "services.commission.studio": "Specialist commission",
+  "services.commission.solo": "Cost of your own work",
+  "services.principalNote":
+    "“Cost of your own work” never leaves the business: the month report adds it back into profit. It is subtracted here on purpose — without it there is no comparing one service against another.",
   "services.howCounted": "How this was calculated",
 
   "addOns.namePlaceholder": "French",
@@ -3174,6 +3252,8 @@ const en: Record<MessageKey, Message> = {
   "specialists.valueRequired": "Enter the commission value",
   "specialists.zeroRuleHint":
     "For a rented chair or a salary, enter 0: nothing is taken from the visit. The rule is still needed — without one the visit cannot be closed.",
+  "specialists.imputedHint":
+    "Not a payment: it is what you would pay a specialist for the same work. A visit's cost is worked out from this figure — without it there is no comparing one service against another — and the month report adds it back into profit, because it never left the business.",
   "specialists.account": "Account",
   "specialists.linkHint":
     "Until a specialist is linked to an account they see none of their visits and cannot close one: every “own” permission resolves through this link.",
@@ -3224,7 +3304,8 @@ const en: Record<MessageKey, Message> = {
   "auth.name": "Your name",
   "auth.welcomeBack": "Welcome back",
   "auth.signUpTitle": "Create an account",
-  "auth.subtitle": "Your profit layer on top of the booking system you already use.",
+  "auth.subtitle": "Works out what a visit costs, what a service earns and what the month left. With a calendar and client bookings.",
+  "auth.passwordHint": "At least 10 characters.",
   "auth.signIn": "Sign in",
   "auth.signUp": "Create account",
   "auth.wait": "Please wait…",
@@ -3259,6 +3340,9 @@ const en: Record<MessageKey, Message> = {
   "workspace.addressHint": "The rota and client bookings are built on this address. Nobody sees it until you open online booking.",
   "workspace.nameLatin": "Latin letters only: A–Z, digits, space and hyphen.",
   "workspace.format": "Format",
+  "workspace.formatHint":
+    "Changes only the wording in the reports — “your own pay” or “the specialists’ pay”. It moves no figure.",
+  "workspace.formatReversible": "It can be switched later in settings.",
   "workspace.solo": "Solo technician",
   "workspace.studio": "Studio",
   "workspace.creating": "Creating…",
@@ -3344,7 +3428,8 @@ const en: Record<MessageKey, Message> = {
   "visits.noCalculation": "no calculation",
   "visits.estimate": "estimate",
   "visits.total": "Total",
-  "visits.masterEarnings": "Master earnings",
+  "visits.masterEarnings.studio": "Master earnings",
+  "visits.masterEarnings.solo": "What you earn",
 
   "reason.missing_price": "the service price is not set",
   "reason.missing_duration": "the duration is not set",
@@ -3544,6 +3629,9 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.setupStep.location": "The studio's address",
   "bookingSetup.setupStep.rota": "Who works, and when",
   "bookingSetup.setupStep.publish": "Publishing",
+  "bookingSetup.setupOptional": "optional",
+  "bookingSetup.publishOptional":
+    "The hours are saved already, and the month report works out utilization and the break-even from them. Publishing is only for letting clients book themselves: if you book them yourself, this step can be skipped and come back to at any time.",
   "bookingSetup.setupDerived":
     "The address link is taken from the name, the timezone is {zone}. Both stay editable afterwards.",
   "bookingSetup.setupNext": "Next",

@@ -42,6 +42,37 @@ describe("onboarding progress over real data", () => {
     await createCommissionRule(organizationId, specialistId, { basisPoints: 4_000 });
   });
 
+  describe("where the first step sends somebody", () => {
+    /*
+     * The rule can be written in two places, and the panel has to pick one. A
+     * solo workspace is created with the owner's card already in it, so
+     * `#add-specialist` — a form for taking somebody on — would be the wrong
+     * door for the one studio that most needs the right one.
+     */
+    it("points at the only card when it is the only card without a rule", async () => {
+      await adminDb.delete(commissionRules).where(eq(commissionRules.specialistId, specialistId));
+
+      expect((await step("specialist")).href).toBe(`/app/specialists/${specialistId}`);
+    });
+
+    it("falls back to the form when there is no obvious card to mean", async () => {
+      await adminDb.delete(commissionRules).where(eq(commissionRules.specialistId, specialistId));
+      await createSpecialist(organizationId);
+
+      // Two masters and no rules: guessing would send the owner to the wrong
+      // colleague, so the panel offers the page instead of choosing.
+      expect((await step("specialist")).href).toBe("/app/specialists#add-specialist");
+    });
+
+    it("stops pointing at a card once the step is finished", async () => {
+      // The href of a ✓ step is still a link on the panel — every row is one,
+      // so somebody who knows what they are missing can go straight there —
+      // and the page is the honest destination once nothing is missing.
+      expect((await step("specialist")).done).toBe(true);
+      expect((await step("specialist")).href).toBe("/app/specialists#add-specialist");
+    });
+  });
+
   it("completes once a service and a closed visit exist", async () => {
     const service = await createService(organizationId);
     await createVisit(organizationId, { specialistId, serviceId: service.id });

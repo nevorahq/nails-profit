@@ -73,7 +73,7 @@ export default async function CalendarPage({
     status?: string;
   }>;
 }) {
-  const { membership, bookingAccess, locale, currency } = await requireWorkspace();
+  const { membership, bookingAccess, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "read")) {
@@ -382,6 +382,7 @@ export default async function CalendarPage({
         exceptions={exceptions}
         canWrite={canWrite}
         canFilterBySpecialist={scopeFor(membership.role, "bookings") !== "own"}
+        businessType={businessType}
         currency={currency}
         localeTag={localeTag(locale)}
         locale={locale}

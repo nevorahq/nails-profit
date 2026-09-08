@@ -176,7 +176,14 @@ export default async function ClientCardPage({
               <tr>
                 <th>{t("visits.when")}</th>
                 <th>{t("visits.service")}</th>
-                <th>{t("clients.specialist")}</th>
+                {/*
+                  Only when this client has actually been to more than one.
+                  Measured on their own history rather than on the size of the
+                  catalogue: a studio of five where one master does all of
+                  Marina's nails has the same column of one repeated name that
+                  a studio of one does.
+                */}
+                {specialistMap.size > 1 && <th>{t("clients.specialist")}</th>}
                 <th>{t("visits.revenue")}</th>
                 <th>{t("common.duration")}</th>
               </tr>
@@ -198,7 +205,9 @@ export default async function ClientCardPage({
                         <span className="unit-hint">+{lines.length - 1}</span>
                       )}
                     </td>
-                    <td className="muted">{specialistMap.get(visit.specialistId) ?? "—"}</td>
+                    {specialistMap.size > 1 && (
+                      <td className="muted">{specialistMap.get(visit.specialistId) ?? "—"}</td>
+                    )}
                     <td>{snapshot ? money(snapshot.revenueMinor) : <span className="muted">—</span>}</td>
                     <td className="muted">{duration} {t("common.minutes")}</td>
                   </tr>

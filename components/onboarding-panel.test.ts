@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { businessTypes } from "@/i18n/business-labels";
 import { dictionaries } from "@/i18n/dictionary";
 import { supportedLocales } from "@/i18n/messages";
+import { stepMessageKey } from "@/i18n/step-labels";
 
 /**
  * These screens name their strings by building the key — `onboarding.` or
@@ -25,6 +27,13 @@ import { supportedLocales } from "@/i18n/messages";
  * The step keys are repeated below rather than imported: importing them from
  * the module under test would let a rename pass unnoticed, which is the whole
  * of what this checks.
+ *
+ * `stepMessageKey` is imported, because it is not a step name — it is the
+ * lookup that decides which of a step's two wordings a reader gets, and what
+ * has to hold is that *every* key it can hand back exists. A step that reads
+ * the same to a studio and to somebody working alone passes straight through
+ * it, so the sweep is unchanged for those; the first one now has to be found
+ * twice, once in each shape of business.
  */
 const STEPS: Readonly<Record<"onboarding" | "monthSetup", readonly string[]>> = {
   onboarding: ["specialist", "service", "visit"],
@@ -32,6 +41,15 @@ const STEPS: Readonly<Record<"onboarding" | "monthSetup", readonly string[]>> = 
 };
 
 describe("checklist strings", () => {
+  /** Every key the three screens assemble, before the wording is chosen. */
+  const built = [
+    ...Object.values(STEPS)
+      .flat()
+      .flatMap((step) => [`step.goal.${step}`, `step.action.${step}`]),
+    ...STEPS.onboarding.flatMap((step) => [`onboarding.${step}`, `onboarding.${step}Hint`]),
+    ...STEPS.monthSetup.map((step) => `monthSetup.${step}`),
+  ];
+
   const required = [
     // The guided-setup window, which names its strings the same way and is the
     // other half of the same journey. It ends on a title alone.
@@ -48,17 +66,13 @@ describe("checklist strings", () => {
     "firstRun.title",
     "step.remaining",
     "step.back",
-    // Every step of both checklists is named twice more — as a goal and as the
-    // button that goes and does it.
-    ...Object.values(STEPS)
-      .flat()
-      .flatMap((step) => [`step.goal.${step}`, `step.action.${step}`]),
     // The dashboard checklist, which is the first run only.
     "onboarding.title",
     "onboarding.progress",
-    ...STEPS.onboarding.flatMap((step) => [`onboarding.${step}`, `onboarding.${step}Hint`]),
-    // The month, whose step names survive as the label on «назад».
-    ...STEPS.monthSetup.map((step) => `monthSetup.${step}`),
+    // Every step of both checklists, named as a goal, as the button that goes
+    // and does it, and — for the first run — as a row with a reason under it;
+    // each of those resolved for both shapes of business.
+    ...built.flatMap((key) => businessTypes.map((type) => stepMessageKey(key, type))),
   ];
 
   for (const locale of supportedLocales) {

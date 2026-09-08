@@ -17,6 +17,7 @@ import {
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
+import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
@@ -27,7 +28,7 @@ export default async function VisitsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; specialist?: string }>;
 }) {
-  const { membership, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
 
@@ -328,7 +329,7 @@ export default async function VisitsPage({
             {t("visits.total")}: <strong>{money(totalRevenue)}</strong>
           </span>
           <span>
-            {t("visits.masterEarnings")}: <strong>{money(totalCommission)}</strong>
+            {t(businessLabel.visitEarnings[businessType])}: <strong>{money(totalCommission)}</strong>
           </span>
         </div>
       )}

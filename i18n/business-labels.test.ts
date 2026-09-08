@@ -39,10 +39,20 @@ describe("business labels", () => {
 
   it("keeps the divergence small enough to read in one sitting", () => {
     // Not a style rule: every entry is a sentence written twice and translated
-    // three times, forever. Growth past a dozen means the two shapes of
-    // business have become two products, which is a decision to take on
-    // purpose rather than to arrive at.
-    expect(entries.length).toBeLessThanOrEqual(12);
+    // three times, forever. Growth means the two shapes of business are
+    // becoming two products, which is a decision to take on purpose rather
+    // than to arrive at.
+    //
+    // Taken on purpose at twelve, in September 2026. The monthly report was
+    // the whole of the divergence until then; what pushed past it was the
+    // finding that a solo studio meets studio wording long before it ever
+    // opens that report — on the service card where it sets prices, and on the
+    // first screen after registration, which asked a woman working alone to
+    // hire somebody. Both are the same sentence the report already makes, said
+    // where the decision is actually taken. Sixteen is the new ceiling and it
+    // is not a target: the next entry should have to argue for itself the same
+    // way these did.
+    expect(entries.length).toBeLessThanOrEqual(16);
   });
 
   it("recognises the two types and nothing else", () => {

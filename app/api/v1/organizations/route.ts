@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { memberships, organizations } from "@/db/schema";
+import { memberships, organizations, specialists } from "@/db/schema";
 import { currencies } from "@/domain/money";
 import { SLUG_MAX_LENGTH, slugCandidatesFor } from "@/domain/slug";
 import { auth } from "@/lib/auth";
@@ -145,9 +145,48 @@ export async function POST(request: Request) {
         updatedBy: session.user.id,
       });
 
-      // Pilot telemetry is tenant-protected, so establish the tenant only after
-      // the organization and its first membership exist in this transaction.
+      // Pilot telemetry and the specialist card below are both tenant-protected,
+      // so establish the tenant only after the organization and its first
+      // membership exist in this transaction.
       await tx.execute(sql`select set_config('app.current_organization_id', ${created.id}::text, true)`);
+
+      /*
+       * Somebody working alone, catalogued as the master they are.
+       *
+       * The first thing a solo studio used to be asked for was «Добавьте
+       * мастера»: a woman who works by herself, greeted by a form for hiring
+       * somebody who does not exist. Every fact that form collected is already
+       * known here — the name is on the account, the account is the one signing
+       * up, and in a studio of one the master and the owner are the same
+       * person. So the card is written rather than requested, and «Первый
+       * расчёт» starts at the one thing nobody else can answer: what that work
+       * is worth.
+       *
+       * `isPrincipal` is the half that cannot be recovered later by guessing.
+       * It is what tells the monthly report that the commission booked here
+       * never left the business (`domain/period-pl.ts`), and it used to depend
+       * on a tickbox the owner could quietly clear — see
+       * `domain/principal.ts` for what noticed afterwards.
+       *
+       * Not done for a studio: which of its masters is the owner, or whether
+       * the owner stands at a table at all, is exactly what `organization.type`
+       * cannot answer (`db/schema.ts` says so on the column itself).
+       */
+      if (created.type === "solo") {
+        await tx.insert(specialists).values({
+          organizationId: created.id,
+          userId: session.user.id,
+          // The address is a poor name for a person, but it is a name; an
+          // account with a blank one still has to appear somewhere in the
+          // calendar. `POST /specialists` falls back the same way.
+          name: session.user.name?.trim() || session.user.email.split("@")[0],
+          cooperationType: "commission",
+          isPrincipal: true,
+          createdBy: session.user.id,
+          updatedBy: session.user.id,
+        });
+      }
+
       await recordPilotProductEvent(tx, {
         organizationId: created.id,
         eventName: "onboarding_started",

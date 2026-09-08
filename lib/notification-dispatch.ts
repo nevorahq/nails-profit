@@ -337,7 +337,14 @@ async function prepare(
   }
 
   const [organization] = await tx
-    .select({ name: organizations.name, slug: organizations.slug, locale: organizations.locale })
+    .select({
+      name: organizations.name,
+      slug: organizations.slug,
+      locale: organizations.locale,
+      // Read for the four staff messages that name the master; see `SOLO_BODY`
+      // in `lib/notification-message.ts`.
+      type: organizations.type,
+    })
     .from(organizations)
     .where(eq(organizations.id, organizationId))
     .limit(1);
@@ -363,6 +370,7 @@ async function prepare(
       ? formatAppointmentTime(facts.appointment.startsAt, facts.appointment.timezone, locale)
       : "",
     specialist: facts.specialist ?? "",
+    businessType: organization.type,
     link: facts.link,
     linkIsOneTime: facts.linkIsOneTime,
     code: row.payload?.code ?? "",

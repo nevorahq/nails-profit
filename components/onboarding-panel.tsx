@@ -3,6 +3,8 @@ import Link from "next/link";
 import { GoalPanel } from "@/components/goal-panel";
 import type { ChecklistProgress } from "@/lib/onboarding";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
+import { stepMessageKey } from "@/i18n/step-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 
 /**
@@ -27,10 +29,12 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
 function ChecklistPanel<Key extends string>({
   progress,
   locale,
+  businessType,
   prefix,
 }: {
   progress: ChecklistProgress<Key>;
   locale: AppLocale;
+  businessType: BusinessType;
   /**
    * Which family of strings names the steps: `<prefix>.<step key>`. Only the
    * first run is a list — the month asks for one thing at a time and is drawn
@@ -39,7 +43,7 @@ function ChecklistPanel<Key extends string>({
   prefix: "onboarding";
 }) {
   const t = getTranslator(locale);
-  const label = (step: string) => t(`${prefix}.${step}` as MessageKey);
+  const label = (step: string) => t(stepMessageKey(`${prefix}.${step}`, businessType));
 
   return (
     <section className="panel">
@@ -80,11 +84,20 @@ function ChecklistPanel<Key extends string>({
 export function OnboardingPanel({
   progress,
   locale,
+  businessType,
 }: {
   progress: ChecklistProgress<"specialist" | "service" | "visit">;
   locale: AppLocale;
+  businessType: BusinessType;
 }) {
-  return <ChecklistPanel progress={progress} locale={locale} prefix="onboarding" />;
+  return (
+    <ChecklistPanel
+      progress={progress}
+      locale={locale}
+      businessType={businessType}
+      prefix="onboarding"
+    />
+  );
 }
 
 /**

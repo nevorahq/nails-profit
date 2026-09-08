@@ -50,18 +50,34 @@ afterAll(async () => {
 
 describe("the guided setup", () => {
   test("walks a new studio one step at a time to its first calculation", async () => {
+    /*
+     * A solo workspace arrives with its owner already catalogued, so the first
+     * step is no longer «Добавьте мастера» — there is a master, and what is
+     * missing is the one fact nobody else can supply: what that work is worth.
+     */
+    const cards = dataOf<{ id: string; user_id: string | null; is_principal: boolean }[]>(
+      await owner.get("/api/v1/specialists"),
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ user_id: owner.userId, is_principal: true });
+    specialistId = cards[0].id;
+
     const empty = await progress();
     expect(empty).toMatchObject({ done: 0, total: 3, complete: false, next: "specialist" });
-    // The step the window links to, and the reason the panel's first link was
-    // wrong for as long as it pointed at «Настройки».
-    expect(empty.steps[0].href).toBe("/app/specialists#add-specialist");
+    // The card, not the hiring form. The panel's first link pointed at
+    // «Настройки» for as long as the panel existed, then at `#add-specialist`
+    // — which is a form for taking somebody on, and the studio of one has
+    // nobody left to take on.
+    expect(empty.steps[0].href).toBe(`/app/specialists/${specialistId}`);
 
-    specialistId = dataOf<{ id: string }>(
-      await owner.post("/api/v1/specialists", {
-        name: "Мастер",
-        default_rule: { type: "percentage", basis_points: 4_000 },
-      }),
-    ).id;
+    expect(
+      (
+        await owner.post(`/api/v1/specialists/${specialistId}/commission-rules`, {
+          type: "percentage",
+          basis_points: 4_000,
+        })
+      ).status,
+    ).toBe(201);
 
     expect(await progress()).toMatchObject({ done: 1, complete: false, next: "service" });
 
@@ -83,36 +99,16 @@ describe("the guided setup", () => {
     expect(await progress()).toMatchObject({ done: 3, total: 3, complete: true, next: null });
   });
 
-  test("catalogues the owner as their own master when they say so", async () => {
+  test("has nothing left for «это я» to say in a studio of one", async () => {
     /*
-     * A solo studio is one person wearing both hats, and until «это я» the
-     * product could not be told: `specialist.user_id` is what every "own" scope
+     * The two facts «это я» exists to write are already true of the card the
+     * workspace came with: `specialist.user_id`, which every "own" scope
      * resolves through — the calendar, the visits, the notification that a
-     * client just booked them — and `is_principal` is what returns their
-     * commission to the month's profit. Both were set afterwards, from two
-     * different screens, or not at all.
+     * client just booked them — and `is_principal`, which returns the
+     * commission to the month's profit. Asked a second time, the product
+     * refuses by name rather than with a unique-index 500, and the form stops
+     * offering the tick at all once the account has a card.
      */
-    const rows = dataOf<{ id: string; user_id: string | null; is_principal: boolean }[]>(
-      await owner.get("/api/v1/specialists"),
-    );
-    const mine = rows.find((row) => row.id === specialistId);
-    expect(mine).toMatchObject({ user_id: null, is_principal: false });
-
-    const linked = dataOf<{ id: string }>(
-      await owner.post("/api/v1/specialists", {
-        name: "Владелец",
-        default_rule: { type: "percentage", basis_points: 5_000 },
-        is_me: true,
-      }),
-    );
-
-    const after = dataOf<{ id: string; user_id: string | null; is_principal: boolean }[]>(
-      await owner.get("/api/v1/specialists"),
-    ).find((row) => row.id === linked.id);
-    expect(after).toMatchObject({ user_id: owner.userId, is_principal: true });
-
-    // One account, one card: saying it twice is refused by name rather than by
-    // a unique-index 500.
     const again = await owner.post("/api/v1/specialists", {
       name: "Владелец снова",
       default_rule: { type: "percentage", basis_points: 5_000 },
@@ -120,6 +116,37 @@ describe("the guided setup", () => {
     });
     expect(again.status).toBe(409);
     expect(errorCodeOf(again)).toBe("SPECIALIST_ALREADY_LINKED");
+  });
+
+  test("still lets a studio's owner catalogue themselves by hand", async () => {
+    /*
+     * A studio is not given a card, because which of its masters is the owner
+     * — or whether the owner stands at a table at all — is exactly what
+     * `organization.type` cannot answer. So «это я» is still the way that is
+     * said, and it still writes both facts at once.
+     */
+    const hybrid = await signUp("guide-hybrid-owner@studio.example");
+    await hybrid.post("/api/v1/organizations", {
+      name: "Hybrid Studio",
+      type: "studio",
+      currency: "MDL",
+      locale: "ru",
+    });
+
+    expect(dataOf<unknown[]>(await hybrid.get("/api/v1/specialists"))).toHaveLength(0);
+
+    const linked = dataOf<{ id: string }>(
+      await hybrid.post("/api/v1/specialists", {
+        name: "Владелец",
+        default_rule: { type: "percentage", basis_points: 5_000 },
+        is_me: true,
+      }),
+    );
+
+    const after = dataOf<{ id: string; user_id: string | null; is_principal: boolean }[]>(
+      await hybrid.get("/api/v1/specialists"),
+    ).find((row) => row.id === linked.id);
+    expect(after).toMatchObject({ user_id: hybrid.userId, is_principal: true });
   });
 
   test("refuses a studio name that is not in Latin script", async () => {

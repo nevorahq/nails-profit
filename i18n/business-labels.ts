@@ -48,6 +48,55 @@ export const businessLabel = {
     solo: "dashboard.masterEarnings.solo",
     studio: "dashboard.masterEarnings.studio",
   },
+  /*
+   * The service card's three lines, which are one sentence: price, minus what
+   * the work costs, equals what is left.
+   *
+   * «Комиссия мастера» and «Останется вам» are both wrong for a woman working
+   * alone, and wrong in opposite directions — the first calls her own pay
+   * somebody else's, the second calls what is left after it hers, when it is
+   * the business's share above her hour. The month's report already adds the
+   * commission of a principal back below the margin; this is the same fact
+   * said on the screen where prices are actually set.
+   */
+  serviceCommission: { solo: "services.commission.solo", studio: "services.commission.studio" },
+  /** The same word again, lowercase, inside «Как это посчитано». */
+  serviceCommissionWord: {
+    solo: "services.commissionWord.solo",
+    studio: "services.commissionWord.studio",
+  },
+  serviceKept: { solo: "services.youKeep.solo", studio: "services.youKeep.studio" },
+  /*
+   * The first step of «Первый расчёт», in all four places it is written.
+   *
+   * It is the only step of the three that diverges, and it is the first screen
+   * an account ever sees: «Добавьте мастера» greets a woman who works alone
+   * with a form for hiring somebody who does not exist. The other two steps —
+   * a priced service, a closed visit — are the same job whoever is reading.
+   */
+  stepGoalSpecialist: {
+    solo: "step.goal.specialist.solo",
+    studio: "step.goal.specialist.studio",
+  },
+  stepActionSpecialist: {
+    solo: "step.action.specialist.solo",
+    studio: "step.action.specialist.studio",
+  },
+  onboardingSpecialist: {
+    solo: "onboarding.specialist.solo",
+    studio: "onboarding.specialist.studio",
+  },
+  onboardingSpecialistHint: {
+    solo: "onboarding.specialistHint.solo",
+    studio: "onboarding.specialistHint.studio",
+  },
+  /**
+   * What the commission on a visit adds up to, in the totals under the list of
+   * visits and in the preview before one is closed. «Заработок мастера» is the
+   * money leaving the business in a studio and the money staying in it for
+   * somebody working alone — the same sum, read the opposite way round.
+   */
+  visitEarnings: { solo: "visits.masterEarnings.solo", studio: "visits.masterEarnings.studio" },
 } as const satisfies Readonly<Record<string, Readonly<Record<BusinessType, MessageKey>>>>;
 
 export type BusinessLabel = keyof typeof businessLabel;

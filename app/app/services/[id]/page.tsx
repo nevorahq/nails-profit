@@ -19,7 +19,7 @@ export default async function ServicePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ add_ons?: string }>;
 }) {
-  const { membership, locale, currency } = await requireWorkspace();
+  const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
   const { id } = await params;
   // The chosen add-on set comes from the URL so the server can compute the
@@ -152,6 +152,7 @@ export default async function ServicePage({
       currency={currency}
       canManage={canManageCatalogue(membership.role, "services")}
       locale={locale}
+      businessType={businessType}
     />
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { currencies, type Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 
@@ -49,10 +50,13 @@ function currencyName(code: Currency, locale: AppLocale, t: Translate): string {
 export function OrganizationSettings({
   locale,
   currency,
+  businessType,
   canEdit,
 }: {
   locale: AppLocale;
   currency: string;
+  /** Which of the two the reports address. Wording only; see `business-labels.ts`. */
+  businessType: BusinessType;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -62,7 +66,7 @@ export function OrganizationSettings({
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  async function change(patch: { locale?: AppLocale; currency?: string }) {
+  async function change(patch: { locale?: AppLocale; currency?: string; type?: BusinessType }) {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -133,27 +137,48 @@ export function OrganizationSettings({
             ))}
           </select>
         </label>
+
+        {/*
+          «Формат работы», back — this is the "if it turns out they need it
+          often enough to earn a control" the note here used to promise.
+
+          It was removed as a setting an owner is asked to hold an opinion
+          about before they have one, and for the first minute of an account
+          that is still true; the signup form is where it is chosen and it now
+          says there what it decides. What changed is everything after that
+          minute. The type reaches far more of the product than it did — the
+          first screen after registration, the service card, the four staff
+          notifications, the heading «Мастера» sits under — so a woman who
+          takes somebody on, or who picked «Студия» in a hurry, is now stuck
+          with a product addressing the wrong person, and had nowhere at all to
+          say so.
+
+          One line under it and no paragraph of reassurance, which is what made
+          this screen feel like a risk. The practical capacity rate stays away
+          for the original reason: it is a number nobody has an opinion about,
+          and it has a working default.
+        */}
+        <label>
+          {t("workspace.format")}
+          <select
+            value={businessType}
+            disabled={!canEdit || pending}
+            onChange={(event) => change({ type: event.target.value as BusinessType })}
+          >
+            <option value="solo">{t("workspace.solo")}</option>
+            <option value="studio">{t("workspace.studio")}</option>
+          </select>
+          <span className="field-hint">{t("workspace.formatHint")}</span>
+        </label>
       </div>
 
-      {/*
-        Neither «Формат работы» nor the practical capacity rate is offered here,
-        and for the same reason: both are settings an owner is asked to hold an
-        opinion about before they have one.
 
-        The format is chosen when the workspace is created and decides nothing
-        about money — only whether the reports say «оплата труда мастеров» or
-        «оплата вашего труда» (see `i18n/business-labels.ts`). Capacity is the
-        share of rostered hours that can actually be sold; it stays at the
+      {/*
+        The practical capacity rate is still not offered: it stays at the
         column's 75% default, which is the middle of the range the removed hint
         recommended anyway, and the cost of an hour and the utilization figure
-        go on being computed from it.
-
-        Both are still editable through `PATCH /api/v1/organizations/settings`,
-        which is what an owner who really does need to change one has — and how
-        either comes back if it turns out they do so often enough to earn a
-        control. The paragraphs of reassurance the language and currency pickers
-        carried went with them: a setting that needs a paragraph to say it is
-        harmless is the thing that made this screen feel like a risk.
+        go on being computed from it. It remains editable through
+        `PATCH /api/v1/organizations/settings`.
       */}
 
       {/* The booking address moved to «Онлайн-запись», next to the addresses it

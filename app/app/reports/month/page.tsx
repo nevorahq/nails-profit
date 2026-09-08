@@ -1,6 +1,9 @@
+import { isNull } from "drizzle-orm";
 import Link from "next/link";
 
+import { specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { soloNeedsPrincipal } from "@/domain/principal";
 import { can } from "@/domain/rbac";
 import type { ExpenseCategory } from "@/domain/expense-categories";
 import { businessLabel } from "@/i18n/business-labels";
@@ -49,8 +52,42 @@ export default async function MonthReportPage({
   // follows, so a hand-edited query string cannot decide what is queried.
   const month = isMonth(filters.month) ? filters.month : monthOf(new Date());
 
-  const report = await withTenant(membership.organizationId, (tx) =>
-    loadPeriodPL(tx, { month, currency, organizationId: membership.organizationId }, locale),
+  /*
+   * The report, and the one fact that decides whether it can be believed.
+   *
+   * Every commission booked to a principal is added back below the margin,
+   * because it never left the business — so a solo studio with nobody marked
+   * as the principal reads an operating profit understated by the whole cost
+   * of its own work. That is not a rounding difference and it repeats every
+   * month, so it is said here rather than left to be noticed.
+   *
+   * One extra row read in the same transaction: the catalogue of a studio is a
+   * handful of people, and the mark cannot be counted from the P&L itself —
+   * `principalLabourMinor` is zero both for a studio that has no principal and
+   * for one whose principal worked no visits this month.
+   */
+  const { report, soloWithoutPrincipal } = await withTenant(
+    membership.organizationId,
+    async (tx) => {
+      const report = await loadPeriodPL(
+        tx,
+        { month, currency, organizationId: membership.organizationId },
+        locale,
+      );
+
+      const people = await tx
+        .select({ isPrincipal: specialists.isPrincipal })
+        .from(specialists)
+        .where(isNull(specialists.archivedAt));
+
+      return {
+        report,
+        soloWithoutPrincipal: soloNeedsPrincipal(
+          businessType,
+          people.map((person) => person.isPrincipal),
+        ),
+      };
+    },
   );
   const pl = report.pl;
   const capacity = report.capacity;
@@ -121,6 +158,15 @@ export default async function MonthReportPage({
           <span className="month-nav-word">{t("pl.nextMonth")}</span> →
         </Link>
       </nav>
+
+      {soloWithoutPrincipal && (
+        <div className="warning-banner">
+          {t("specialists.soloNoPrincipal", { action: t("specialists.principalSet") })}{" "}
+          <Link className="text-link" href="/app/specialists">
+            {t("nav.specialists")}
+          </Link>
+        </div>
+      )}
 
       {report.excludedRows > 0 && (
         <p className="pl-note">{t("pl.otherCurrency", { count: report.excludedRows })}</p>

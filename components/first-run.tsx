@@ -1,7 +1,9 @@
 import { GoalPanel } from "@/components/goal-panel";
 import type { OnboardingProgress, OnboardingStep } from "@/lib/onboarding";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import type { BusinessType } from "@/i18n/business-labels";
+import { stepMessageKey } from "@/i18n/step-labels";
+import { getTranslator } from "@/i18n/t";
 
 /**
  * What a studio sees on `/app` before it has closed a single visit.
@@ -18,11 +20,18 @@ export function FirstRun({
   progress,
   next,
   locale,
+  businessType,
 }: {
   progress: OnboardingProgress;
   /** The step to point at. Resolved by the caller, so this cannot render goal-less. */
   next: OnboardingStep;
   locale: AppLocale;
+  /**
+   * Whose first run this is. The first step is written twice — a studio hires
+   * a master, somebody working alone prices their own hour — and this is the
+   * screen where the difference is loudest, since it is the whole screen.
+   */
+  businessType: BusinessType;
 }) {
   const t = getTranslator(locale);
   /*
@@ -37,13 +46,15 @@ export function FirstRun({
     <main className="app-shell">
       <GoalPanel
         eyebrow={t("firstRun.title")}
-        goal={t(`step.goal.${next.key}` as MessageKey)}
-        action={t(`step.action.${next.key}` as MessageKey)}
+        goal={t(stepMessageKey(`step.goal.${next.key}`, businessType))}
+        action={t(stepMessageKey(`step.action.${next.key}`, businessType))}
         href={next.href}
         remaining={t("step.remaining", { count: progress.total - progress.done })}
         back={
           previous && {
-            label: t("step.back", { step: t(`onboarding.${previous.key}` as MessageKey) }),
+            label: t("step.back", {
+              step: t(stepMessageKey(`onboarding.${previous.key}`, businessType)),
+            }),
             href: previous.href,
           }
         }

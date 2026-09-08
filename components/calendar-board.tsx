@@ -15,6 +15,7 @@ import {
   resolveLocal,
 } from "@/domain/timezone";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -147,6 +148,7 @@ export function CalendarBoard({
   exceptions,
   canWrite,
   canFilterBySpecialist,
+  businessType,
   currency,
   localeTag,
   locale,
@@ -166,6 +168,8 @@ export function CalendarBoard({
   exceptions: readonly CalendarException[];
   canWrite: boolean;
   canFilterBySpecialist: boolean;
+  /** Whose earnings the preview under an appointment is naming. */
+  businessType: BusinessType;
   currency: string;
   localeTag: string;
   locale: AppLocale;
@@ -501,6 +505,14 @@ export function CalendarBoard({
     };
   }, []);
 
+  /**
+   * Whose time this screen may block out. A master blocks only their own; for
+   * everybody else it is the whole catalogue.
+   */
+  const blockable = specialists.filter(
+    (person) => ownSpecialistId === null || person.id === ownSpecialistId,
+  );
+
   const bookable = specialists.filter((person) => {
     if (ownSpecialistId !== null && person.id !== ownSpecialistId) return false;
     const theirs = assignments.filter((link) => link.specialistId === person.id);
@@ -677,18 +689,31 @@ export function CalendarBoard({
             <form className="inline-form" method="get">
               <input type="hidden" name="view" value={view} />
               <input type="hidden" name="date" value={days[0]} />
-              <label>
-                {t("calendar.location")}
-                <select name="location" defaultValue={filters.location}>
-                  <option value="">{t("calendar.allLocations")}</option>
-                  {locations.map((place) => (
-                    <option key={place.id} value={place.id}>
-                      {place.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {canFilterBySpecialist && (
+              {/*
+                A filter is offered only where there is something to filter
+                out. «Все адреса / Центр» over one address, and «Все мастера /
+                Ирина» over one master, are two controls that cannot change
+                what is on screen — and they were the first two things a solo
+                studio met on opening its own calendar.
+
+                The value is still honoured when it arrives in the query
+                string: the page reads `filters` before this form is drawn, so
+                a link somebody kept from a wider week still narrows the day.
+              */}
+              {locations.length > 1 && (
+                <label>
+                  {t("calendar.location")}
+                  <select name="location" defaultValue={filters.location}>
+                    <option value="">{t("calendar.allLocations")}</option>
+                    {locations.map((place) => (
+                      <option key={place.id} value={place.id}>
+                        {place.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {canFilterBySpecialist && specialists.length > 1 && (
                 <label>
                   {t("calendar.specialist")}
                   <select name="specialist" defaultValue={filters.specialist}>
@@ -965,7 +990,7 @@ export function CalendarBoard({
                                       {preview.status === "complete" ? (
                                         <>
                                           <div>
-                                            <span>{t("visits.masterEarnings")}</span>
+                                            <span>{t(businessLabel.visitEarnings[businessType])}</span>
                                             <strong>−{money(preview.commission_minor)}</strong>
                                           </div>
                                           <div>
@@ -1141,31 +1166,46 @@ export function CalendarBoard({
           </summary>
           <p className="muted">{t("calendar.newBookingHint")}</p>
           <form className="inline-form" onSubmit={createBooking}>
-            <label>
-              {t("calendar.location")}
-              <select
-                name="location_id"
-                required
-                value={composeLocation}
-                onChange={(event) => setComposeLocation(event.target.value)}
-              >
-                {locations.map((place) => (
-                  <option key={place.id} value={place.id}>
-                    {place.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("calendar.specialist")}
-              <select name="specialist_id" required>
-                {bookable.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/*
+              The address and the master are asked for only where there is a
+              choice; with one of each the two selects were four taps of
+              ceremony in front of every appointment a studio of one wrote by
+              hand. Hidden rather than dropped, because the endpoint still
+              needs both and this form is read from `FormData`.
+            */}
+            {locations.length > 1 ? (
+              <label>
+                {t("calendar.location")}
+                <select
+                  name="location_id"
+                  required
+                  value={composeLocation}
+                  onChange={(event) => setComposeLocation(event.target.value)}
+                >
+                  {locations.map((place) => (
+                    <option key={place.id} value={place.id}>
+                      {place.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <input type="hidden" name="location_id" value={composeLocation} />
+            )}
+            {bookable.length > 1 ? (
+              <label>
+                {t("calendar.specialist")}
+                <select name="specialist_id" required>
+                  {bookable.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <input type="hidden" name="specialist_id" value={bookable[0]?.id ?? ""} />
+            )}
             <label>
               {t("calendar.service")}
               <select name="service_id" required>
@@ -1228,29 +1268,46 @@ export function CalendarBoard({
           </summary>
           <p className="muted">{t("calendar.blockHint")}</p>
           <form className="inline-form" onSubmit={blockTime}>
-            <label>
-              {t("calendar.specialist")}
-              <select name="specialist_id" required defaultValue={ownSpecialistId ?? undefined}>
-                {specialists
-                  .filter((person) => ownSpecialistId === null || person.id === ownSpecialistId)
-                  .map((person) => (
+            {/*
+              The same rule as the appointment form above. A master's list is
+              already narrowed to themselves, so for them there was never a
+              choice here either — one branch covers both.
+            */}
+            {blockable.length > 1 ? (
+              <label>
+                {t("calendar.specialist")}
+                <select name="specialist_id" required defaultValue={ownSpecialistId ?? undefined}>
+                  {blockable.map((person) => (
                     <option key={person.id} value={person.id}>
                       {person.name}
                     </option>
                   ))}
-              </select>
-            </label>
-            <label>
-              {t("calendar.location")}
-              <select name="location_id" defaultValue="">
-                <option value="">{t("calendar.everyLocation")}</option>
-                {locations.map((place) => (
-                  <option key={place.id} value={place.id}>
-                    {place.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                </select>
+              </label>
+            ) : (
+              <input type="hidden" name="specialist_id" value={blockable[0]?.id ?? ""} />
+            )}
+            {/*
+              «Все адреса» and the only address are the same block written two
+              ways, so with one address the choice is offered as two answers to
+              one question. The wider of the two is what an empty value means,
+              and it is what a studio of one wants either way.
+            */}
+            {locations.length > 1 ? (
+              <label>
+                {t("calendar.location")}
+                <select name="location_id" defaultValue="">
+                  <option value="">{t("calendar.everyLocation")}</option>
+                  {locations.map((place) => (
+                    <option key={place.id} value={place.id}>
+                      {place.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <input type="hidden" name="location_id" value="" />
+            )}
             <label>
               {t("calendar.date")}
               <input type="date" name="date" defaultValue={days[0]} required />

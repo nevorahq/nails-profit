@@ -10,6 +10,19 @@ import { dataOf, signUp, type Actor } from "./api";
  * is checked against are written down once. They moved when the material engine
  * was removed: the same visit now keeps the 35 MDL of material it used to
  * subtract, so the margin is higher and the two figures derived from it follow.
+ *
+ * `type: "studio"`, and it has to be. It used to say `solo` with no consequence
+ * — the type decided wording and nothing else — but a solo workspace is now
+ * created with its owner's card already in it (`POST /api/v1/organizations`),
+ * which is the right thing for the product and the wrong thing for this
+ * fixture: «Мастер» below would become the *second* specialist, the first
+ * would sit there without a commission rule, and every figure in `CANONICAL`
+ * would be describing a hired master while the studio's oldest card decided
+ * the costing. A studio with one employed master is also what these numbers
+ * have always meant: the commission is money that leaves the business, which
+ * for somebody working alone it is not.
+ *
+ * The solo path is covered where it belongs, in `tests/e2e/setup-guide.test.ts`.
  */
 export const CANONICAL = {
   servicePriceMinor: 60_000,
@@ -35,7 +48,7 @@ export async function createCanonicalStudio(email: string, organizationName = "C
   const organizationId = dataOf<{ id: string }>(
     await owner.post("/api/v1/organizations", {
       name: organizationName,
-      type: "solo",
+      type: "studio",
       currency: "MDL",
       locale: "ru",
     }),

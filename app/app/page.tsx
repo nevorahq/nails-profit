@@ -164,7 +164,14 @@ export default async function AppPage({
   if (canManageCatalogue(membership.role, "services")) {
     const firstRun = await withTenant(membership.organization.id, (tx) => loadFirstRun(tx));
     if (firstRun?.next) {
-      return <FirstRun progress={firstRun} next={firstRun.next} locale={locale} />;
+      return (
+        <FirstRun
+          progress={firstRun}
+          next={firstRun.next}
+          locale={locale}
+          businessType={businessType}
+        />
+      );
     }
   }
 
@@ -411,7 +418,12 @@ export default async function AppPage({
           to={filters.to}
           specialistId={filters.specialist}
           people={data.people}
-          showSpecialist={data.canFilterBySpecialist}
+          /*
+            A picker over one person narrows nothing. The capability is still
+            what decides whether the report *may* be narrowed — a master may
+            not — and the count decides whether there is anything to narrow to.
+          */
+          showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
         />
       </details>
 
@@ -424,7 +436,11 @@ export default async function AppPage({
         and have nowhere else to be told why.
       */}
       {data.onboarding && !data.onboarding.complete && (
-        <OnboardingPanel progress={data.onboarding} locale={locale} />
+        <OnboardingPanel
+          progress={data.onboarding}
+          locale={locale}
+          businessType={businessType}
+        />
       )}
 
       {data.monthSetup && !data.monthSetup.complete && (

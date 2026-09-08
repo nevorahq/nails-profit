@@ -45,7 +45,7 @@ import type { MemberRole } from "@/domain/rbac";
 const SLOT_HORIZON_DAYS = 14;
 
 export default async function BookingSetupPage() {
-  const { membership, bookingAccess, locale, organizationSlug, organizationName, currency } =
+  const { membership, bookingAccess, locale, organizationSlug, organizationName, currency, businessType } =
     await requireWorkspace();
   const t = getTranslator(locale);
 
@@ -243,6 +243,7 @@ export default async function BookingSetupPage() {
         role={membership.role as MemberRole}
         ownSpecialistId={ownSpecialistId}
         locale={locale}
+      businessType={businessType}
       />
     </main>
   );

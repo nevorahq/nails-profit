@@ -181,16 +181,36 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
   const [closedVisits] = await tx.select({ value: count() }).from(visits);
 
   /*
-   * `#add-specialist` rather than the bare page, and not `/app/settings`, which
-   * is where this pointed for as long as the panel existed. The commission rule
-   * is written in the add-specialist form on `/app/specialists`; Настройки hold
-   * the organization, the subscription and the team, and offer no way to finish
-   * this step at all. A solo owner — the studio this panel is for — found
-   * nothing there but their own name in «Команда», because the bridge to the
-   * specialist card is only drawn for an invited master.
+   * Where this step is actually finished, which is not one address.
+   *
+   * The rule can be written in two places — the add-specialist form on
+   * `/app/specialists`, and the card of somebody who already exists. Which one
+   * to send a studio to depends on whether there is anybody to write a rule
+   * for, and a solo workspace now always has somebody: the owner's card is
+   * created with the organization, so `#add-specialist` would open a form for
+   * hiring a second person when the only thing missing is a rate for the
+   * first.
+   *
+   * Exactly one, or the bare form. With two masters and no rules there is no
+   * card that is the obvious one, and a guess would send the owner to the
+   * wrong colleague.
+   *
+   * Neither is `/app/settings`, which is where this pointed for as long as the
+   * panel existed: Настройки hold the organization, the subscription and the
+   * team, and offer no way to finish this step at all.
    */
+  let specialistHref = "/app/specialists#add-specialist";
+  if (withRule.value === 0) {
+    const waiting = await tx
+      .select({ id: specialists.id })
+      .from(specialists)
+      .where(isNull(specialists.archivedAt))
+      .limit(2);
+    if (waiting.length === 1) specialistHref = `/app/specialists/${waiting[0].id}`;
+  }
+
   const steps: OnboardingStep[] = [
-    { key: "specialist", done: withRule.value > 0, href: "/app/specialists#add-specialist" },
+    { key: "specialist", done: withRule.value > 0, href: specialistHref },
     { key: "service", done: usableServices.value > 0, href: "/app/services#add-service" },
     { key: "visit", done: closedVisits.value > 0, href: "/app/visits/new" },
   ];

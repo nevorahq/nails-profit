@@ -11,6 +11,7 @@ import {
 import { expenseClassOf } from "@/domain/expense-classes";
 import type { ExpenseRow } from "@/lib/expenses";
 import type { AppLocale } from "@/i18n/messages";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator } from "@/i18n/t";
 import {
   SetupGuideDialog,
@@ -31,10 +32,13 @@ import { formatDay, formatMoneyMinor } from "@/lib/format";
 export function ExpenseLedger({
   expenses,
   locale,
+  businessType,
   monthGuide = null,
 }: {
   expenses: ExpenseRow[];
   locale: AppLocale;
+  /** Passed through to the guided window; the month's steps read the same to both. */
+  businessType: BusinessType;
   /**
    * Where «Расчёт месяца» stood when this page was drawn, or null once the
    * month is set up — the ledger is used every week, and an owner recording
@@ -85,6 +89,7 @@ export function ExpenseLedger({
       <SetupGuideDialog
         guide={guide}
         locale={locale}
+        businessType={businessType}
         strings="monthGuide"
         doneHref="/app/reports/month"
       />
