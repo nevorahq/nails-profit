@@ -10,6 +10,8 @@ export type GroupableBooking = Readonly<{
   id: string;
   localDate: string;
   specialistId: string;
+  /** Whose it is, for the day a column has to be drawn for somebody archived. */
+  specialistName?: string;
 }>;
 
 export type CalendarGroup<T> = Readonly<{ key: string; title: string; bookings: T[] }>;
@@ -46,14 +48,47 @@ export function groupBookings<T extends GroupableBooking>(
     onThisDay.some((booking) => booking.specialistId === person.id),
   );
 
-  // Nobody has anything today: one empty section, not a row of empty columns.
-  if (present.length === 0) return [{ key: days[0], title: days[0], bookings: [] }];
+  /*
+   * And whoever else this day is booked with, even when they no longer work
+   * here.
+   *
+   * The roster the columns are drawn from is the live one, and it has to be —
+   * a column for every master who ever left would grow forever. The
+   * appointments are deliberately not filtered that way, because a client's
+   * Tuesday does not disappear because the studio parted with somebody. Read
+   * together, those two right answers made a third, wrong one: an archived
+   * master's appointments were in the data and had no column to sit in, so the
+   * day a studio looks at after letting somebody go was the one day that did
+   * not show what still had to be moved.
+   *
+   * Named from the booking, which carries the name precisely because the
+   * catalogue may no longer answer for it.
+   */
+  const orphaned = [
+    ...new Map(
+      onThisDay
+        .filter((booking) => !specialists.some((person) => person.id === booking.specialistId))
+        .map((booking) => [booking.specialistId, booking]),
+    ).values(),
+  ];
 
-  return present.map((person) => ({
-    key: person.id,
-    title: person.name,
-    bookings: onThisDay.filter((booking) => booking.specialistId === person.id),
-  }));
+  // Nobody has anything today: one empty section, not a row of empty columns.
+  if (present.length === 0 && orphaned.length === 0) {
+    return [{ key: days[0], title: days[0], bookings: [] }];
+  }
+
+  return [
+    ...present.map((person) => ({
+      key: person.id,
+      title: person.name,
+      bookings: onThisDay.filter((booking) => booking.specialistId === person.id),
+    })),
+    ...orphaned.map((booking) => ({
+      key: booking.specialistId,
+      title: booking.specialistName ?? "",
+      bookings: onThisDay.filter((other) => other.specialistId === booking.specialistId),
+    })),
+  ];
 }
 
 /**

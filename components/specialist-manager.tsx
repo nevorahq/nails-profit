@@ -324,9 +324,17 @@ export function SpecialistManager({
         </div>
       )}
 
+      {/*
+        Two roles read this page without managing it, and they are refused
+        different things. «Только собственный результат» is a master's line —
+        their scope is «own». An analyst's scope is the whole studio; what they
+        are refused is the breakdown by person, and telling them their view is
+        narrowed to themselves described neither the rows they can see nor the
+        columns they cannot.
+      */}
       {!canManage && (
         <div className="warning-banner">
-          {t("specialists.readOnlyNote")}
+          {t(showsPay ? "specialists.readOnlyNote" : "specialists.aggregatesNote")}
         </div>
       )}
 
