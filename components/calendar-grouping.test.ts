@@ -65,4 +65,42 @@ describe("reading an instant at a location", () => {
     expect(clockAt(instant, "Europe/Chisinau")).toBe("09:00");
     expect(clockAt(instant, "Europe/Lisbon")).toBe("07:00");
   });
+
+  test("keeps a day's appointments when their master has left the studio", () => {
+    /*
+     * Two right answers made a wrong one. The columns are drawn from the live
+     * roster, because a column for everybody who ever left would grow forever;
+     * the appointments are not filtered that way, because a client's Tuesday
+     * does not disappear when the studio parts with somebody. Together they
+     * dropped the appointment off the one day it most needed to be seen — the
+     * day after the owner let somebody go and was told to move their clients.
+     */
+    const groups = groupBookings(
+      "day",
+      ["2026-09-12"],
+      [
+        { id: "a", localDate: "2026-09-12", specialistId: "gone", specialistName: "Маша" },
+        { id: "b", localDate: "2026-09-12", specialistId: "here" },
+      ],
+      [{ id: "here", name: "Ирина" }],
+    );
+
+    expect(groups.map((group) => group.title)).toEqual(["Ирина", "Маша"]);
+    expect(groups.find((group) => group.key === "gone")?.bookings.map((b) => b.id)).toEqual(["a"]);
+  });
+
+  test("draws one column for a departed master however many appointments they left", () => {
+    const groups = groupBookings(
+      "day",
+      ["2026-09-12"],
+      [
+        { id: "a", localDate: "2026-09-12", specialistId: "gone", specialistName: "Маша" },
+        { id: "b", localDate: "2026-09-12", specialistId: "gone", specialistName: "Маша" },
+      ],
+      [],
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].bookings.map((b) => b.id)).toEqual(["a", "b"]);
+  });
 });

@@ -408,6 +408,8 @@ const ru = {
   "specialists.exceptionHint":
     "Правило для конкретной услуги имеет приоритет над комиссией по умолчанию. Прошлые расчёты не меняются — создаётся новая версия правила.",
   "specialists.readOnlyNote": "Ваша роль видит только собственный результат и не может менять правила комиссии.",
+  "specialists.aggregatesNote":
+    "Ваша роль читает цифры студии целиком, но без разбивки по людям: ставка каждого мастера и аккаунт за карточкой скрыты.",
   "nav.monthReport": "Отчёт за месяц",
   "dashboard.profitMoved":
     "Прибыль за период считается помесячно — там из маржи вычитаются только те расходы, которые ещё не учтены в визитах:",
@@ -1683,6 +1685,8 @@ const ro: Record<MessageKey, Message> = {
   "specialists.exceptionHint":
     "Regula pentru un serviciu anume are prioritate față de comisionul implicit. Calculele anterioare nu se schimbă — se creează o nouă versiune a regulii.",
   "specialists.readOnlyNote": "Rolul dvs. vede doar rezultatul propriu și nu poate schimba regulile de comision.",
+  "specialists.aggregatesNote":
+    "Rolul dvs. citește cifrele studioului în ansamblu, dar fără defalcare pe persoane: tariful fiecărui maestru și contul din spatele fișei sunt ascunse.",
   "nav.monthReport": "Raport lunar",
   "dashboard.profitMoved":
     "Profitul se calculează pe luni — acolo din marjă se scad doar cheltuielile care nu sunt deja luate în calcul în vizite:",
@@ -2952,6 +2956,8 @@ const en: Record<MessageKey, Message> = {
   "specialists.exceptionHint":
     "A rule for a specific service takes precedence over the default commission. Past calculations do not change — a new version of the rule is created.",
   "specialists.readOnlyNote": "Your role sees only its own result and cannot change commission rules.",
+  "specialists.aggregatesNote":
+    "Your role reads the studio's figures as a whole, but not broken down by person: each master's rate and the account behind the card are hidden.",
   "nav.monthReport": "Monthly report",
   "dashboard.profitMoved":
     "Profit is worked out a month at a time — there the margin loses only the costs the visits have not already taken out:",
