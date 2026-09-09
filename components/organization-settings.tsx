@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 import { currencies, type Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
-import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 
@@ -47,16 +46,19 @@ function currencyName(code: Currency, locale: AppLocale, t: Translate): string {
   return `${code} — ${names.of(code) ?? code}`;
 }
 
+/** The two audiences `staffNoticeAudience` allows. */
+type StaffNotices = "owner" | "owner_and_managers";
+
 export function OrganizationSettings({
   locale,
   currency,
-  businessType,
+  staffNotices,
   canEdit,
 }: {
   locale: AppLocale;
   currency: string;
-  /** Which of the two the reports address. Wording only; see `business-labels.ts`. */
-  businessType: BusinessType;
+  /** Who besides the working master hears about a booking. */
+  staffNotices: StaffNotices;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -66,7 +68,11 @@ export function OrganizationSettings({
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  async function change(patch: { locale?: AppLocale; currency?: string; type?: BusinessType }) {
+  async function change(patch: {
+    locale?: AppLocale;
+    currency?: string;
+    staff_notices?: StaffNotices;
+  }) {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -139,37 +145,47 @@ export function OrganizationSettings({
         </label>
 
         {/*
-          «Формат работы», back — this is the "if it turns out they need it
-          often enough to earn a control" the note here used to promise.
+          Who hears about a booking, decided by the studio rather than by us.
 
-          It was removed as a setting an owner is asked to hold an opinion
-          about before they have one, and for the first minute of an account
-          that is still true; the signup form is where it is chosen and it now
-          says there what it decides. What changed is everything after that
-          minute. The type reaches far more of the product than it did — the
-          first screen after registration, the service card, the four staff
-          notifications, the heading «Мастера» sits under — so a woman who
-          takes somebody on, or who picked «Студия» in a hurry, is now stuck
-          with a product addressing the wrong person, and had nowhere at all to
-          say so.
-
-          One line under it and no paragraph of reassurance, which is what made
-          this screen feel like a risk. The practical capacity rate stays away
-          for the original reason: it is a number nobody has an opinion about,
-          and it has a working default.
+          The master whose chair it is always hears; this is about everybody
+          else, and it was the owner and nobody but the owner — leaving out the
+          one role whose whole job is to answer, since a manager runs the front
+          desk and holds `bookings` at «Да». Making it a rule instead would
+          have been wrong in the other direction: one message goes per
+          recipient, so a studio with two administrators would get four emails
+          for one request. Whoever knows how the shift actually works is the
+          one who should be weighing that.
         */}
         <label>
-          {t("workspace.format")}
+          {t("settings.staffNotices")}
           <select
-            value={businessType}
+            value={staffNotices}
             disabled={!canEdit || pending}
-            onChange={(event) => change({ type: event.target.value as BusinessType })}
+            onChange={(event) => change({ staff_notices: event.target.value as StaffNotices })}
           >
-            <option value="solo">{t("workspace.solo")}</option>
-            <option value="studio">{t("workspace.studio")}</option>
+            <option value="owner">{t("settings.staffNotices.owner")}</option>
+            <option value="owner_and_managers">
+              {t("settings.staffNotices.owner_and_managers")}
+            </option>
           </select>
-          <span className="field-hint">{t("workspace.formatHint")}</span>
+          <span className="field-hint">{t("settings.staffNoticesHint")}</span>
         </label>
+
+        {/*
+          «Формат работы» is not offered here any more, and nothing replaced it
+          on the screen: the product now works the answer out for itself.
+
+          It was a control asking an owner to hold an opinion about a word. The
+          two events that make «оплата труда мастеров» true are events the
+          product already witnesses — a second master catalogued, or a master
+          accepting an invitation — and `lib/solo-mode.ts` acts on either. A
+          woman who takes somebody on is addressed correctly the same day,
+          without having to know this screen exists.
+
+          The type is still a column and still writable through
+          `PATCH /api/v1/organizations/settings`, which is the way back for a
+          studio that shrank, or for one that was picked in a hurry at signup.
+        */}
       </div>
 
 

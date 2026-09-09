@@ -344,6 +344,13 @@
       "when": 1788768134563,
       "tag": "0048_a_master_card_carries_a_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1788939366407,
+      "tag": "0049_last_valkyrie",
+      "breakpoints": true
     }
   ]
 }

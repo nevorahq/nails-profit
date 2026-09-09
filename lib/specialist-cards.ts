@@ -46,7 +46,23 @@ export type SpecialistRow = {
  */
 export async function loadSpecialistCards(
   tx: TenantTransaction,
-  filter: Readonly<{ id?: string; ownedBy?: string }> = {},
+  filter: Readonly<{
+    id?: string;
+    ownedBy?: string;
+    /**
+     * Strip what one named person is paid, for a role that reads aggregates —
+     * `seesIndividualPay` in `domain/rbac.ts` decides who. The rate, the
+     * per-service exceptions and the account behind the card come out; the
+     * name, the cooperation type and the photograph stay, because an analyst
+     * meets those in the calendar anyway.
+     *
+     * Redacted here rather than only hidden on screen, so the answer is the
+     * same whether it is read by a page or by `GET /api/v1/specialists`. The
+     * screens are told separately: a rule that was withheld and a rule that
+     * was never written are the same `null`, and «не задана» would be a lie.
+     */
+    withoutPay?: boolean;
+  }> = {},
 ): Promise<SpecialistRow[]> {
   const conditions: SQL[] = [isNull(specialists.archivedAt)];
   if (filter.id) conditions.push(eq(specialists.id, filter.id));
@@ -103,7 +119,7 @@ export async function loadSpecialistCards(
   const now = new Date();
 
   return rows.map((person) => {
-    const theirs = rules.filter((rule) => rule.specialistId === person.id);
+    const theirs = filter.withoutPay ? [] : rules.filter((rule) => rule.specialistId === person.id);
     const defaultRule = selectCommissionRule(
       theirs.filter((rule) => rule.serviceId === null),
       "",
@@ -119,7 +135,7 @@ export async function loadSpecialistCards(
       id: person.id,
       name: person.name,
       cooperation_type: person.cooperationType,
-      user_id: person.userId,
+      user_id: filter.withoutPay ? null : person.userId,
       is_principal: person.isPrincipal,
       avatar_version: avatarVersions.get(person.id) ?? null,
       default_rule: defaultRule

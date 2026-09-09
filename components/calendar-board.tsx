@@ -16,6 +16,7 @@ import {
 } from "@/domain/timezone";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
+import { specialistOptions } from "@/lib/specialist-options";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -1087,17 +1088,33 @@ export function CalendarBoard({
                               </label>
                               <label>
                                 {t("calendar.specialist")}
+                                {/*
+                                  The person this appointment is already with,
+                                  even when they no longer work here.
+
+                                  The list is live masters; the appointments
+                                  above are not filtered by the archive, and
+                                  they must not be — a client's Tuesday does
+                                  not disappear because the studio parted with
+                                  somebody. So a booking whose master was
+                                  archived had a `defaultValue` matching no
+                                  option, and a browser answers that by
+                                  selecting the first one: moving the time
+                                  moved the appointment to whoever happened to
+                                  head the list. Naming them keeps «не трогал
+                                  это поле» meaning «ничего не поменялось».
+                                */}
                                 <select name="specialist_id" defaultValue={booking.specialistId}>
-                                  {specialists
-                                    .filter(
-                                      (person) =>
-                                        ownSpecialistId === null || person.id === ownSpecialistId,
-                                    )
-                                    .map((person) => (
-                                      <option key={person.id} value={person.id}>
-                                        {person.name}
-                                      </option>
-                                    ))}
+                                  {specialistOptions(blockable, {
+                                    id: booking.specialistId,
+                                    name: booking.specialistName,
+                                  }).map((person) => (
+                                    <option key={person.id} value={person.id}>
+                                      {person.archived
+                                        ? t("specialists.archivedOption", { name: person.name })
+                                        : person.name}
+                                    </option>
+                                  ))}
                                 </select>
                               </label>
                               <button className="primary-button" type="submit" disabled={pending}>
@@ -1152,7 +1169,7 @@ export function CalendarBoard({
         )}
       </div>
 
-      {canWrite && locations.length > 0 && services.length > 0 && (
+      {canWrite && bookable.length > 0 && locations.length > 0 && services.length > 0 && (
         /*
          * Closed by default. The form was open on the page at all times, which
          * on a phone put an eleven-field form between the day and the next
@@ -1261,7 +1278,15 @@ export function CalendarBoard({
         </details>
       )}
 
-      {canWrite && specialists.length > 0 && (
+      {/*
+        `blockable`, not the whole catalogue. They differ for exactly one
+        person: a master whose account has no specialist card — a studio-only
+        state, since a solo workspace is created with its owner's card. Gated
+        on the roster, this drew a form whose only field had nothing to put in
+        it, and the visible-but-dead select that used to make that obvious is
+        now a hidden input that would post an empty id.
+      */}
+      {canWrite && blockable.length > 0 && (
         <details className="panel calendar-compose calendar-block-time">
           <summary>
             <h2>{t("calendar.blockTime")}</h2>

@@ -35,6 +35,8 @@ export function SpecialistManager({
   currency,
   locale,
   businessType,
+  showsPay,
+  unbookable,
   canManage,
   hasOwnCard = false,
   setupGuide = null,
@@ -49,6 +51,20 @@ export function SpecialistManager({
    * every figure on this screen is computed the same way for both.
    */
   businessType: BusinessType;
+  /**
+   * Whether this reader is owed what one named person is paid. False for an
+   * analyst, whose rows arrive already stripped by `loadSpecialistCards` — so
+   * the columns are dropped rather than rendered as «не задана», which would
+   * describe the studio instead of describing what was withheld.
+   */
+  showsPay: boolean;
+  /**
+   * Ids a client cannot reach on the studio's page — no published address of
+   * their own, or an address with no hours in it. Empty while the studio has
+   * published nothing, where «опубликуйте адрес» is already the instruction
+   * and this would restate it as an accusation about each person.
+   */
+  unbookable: ReadonlySet<string>;
   canManage: boolean;
   /**
    * Whether the person on this screen is already catalogued as a master.
@@ -227,7 +243,17 @@ export function SpecialistManager({
    * is a statement that nothing is taken per visit rather than an unanswered
    * question.
    */
-  const withoutRule = specialists.filter((person) => person.default_rule === null);
+  /*
+   * Anybody without a rule — and only for a reader who can tell.
+   *
+   * `showsPay` is what an analyst is refused, and their rows arrive with every
+   * rule redacted to null. Counted without that guard, this banner would tell
+   * them the whole studio is unpaid: a sentence about the studio, invented by
+   * the redaction that was supposed to say nothing about it.
+   */
+  const withoutRule = showsPay
+    ? specialists.filter((person) => person.default_rule === null)
+    : [];
 
   /*
    * A solo studio nobody in it is the owner of — the rule itself is
@@ -457,14 +483,14 @@ export function SpecialistManager({
           <tr>
             <th>{t("specialists.specialist")}</th>
             <th>{t("specialists.cooperation")}</th>
-            <th>{t("specialists.defaultRule")}</th>
-            <th>{t("specialists.account")}</th>
+            {showsPay && <th>{t("specialists.defaultRule")}</th>}
+            {showsPay && <th>{t("specialists.account")}</th>}
           </tr>
         </thead>
         <tbody>
           {specialists.length === 0 && (
             <tr>
-              <td colSpan={4} className="muted">
+              <td colSpan={showsPay ? 4 : 2} className="muted">
                 {t("specialists.none")}
               </td>
             </tr>
@@ -487,6 +513,14 @@ export function SpecialistManager({
                   href={`/app/specialists/${person.id}`}
                   locale={locale}
                 />
+                {/*
+                  Said in the row that lists them, because this is the screen a
+                  studio opens after hiring somebody — and «Онлайн-запись», the
+                  only page that knew, is not.
+                */}
+                {unbookable.has(person.id) && (
+                  <span className="badge-warning">{t("specialists.notBookable")}</span>
+                )}
               </td>
               {/*
                 The principal mark reads beside the cooperation type because it
@@ -498,6 +532,7 @@ export function SpecialistManager({
                 {t(`cooperation.${person.cooperation_type}` as MessageKey)}
                 {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
               </td>
+              {showsPay && (
               <td>
                 {person.default_rule ? (
                   <>
@@ -515,6 +550,8 @@ export function SpecialistManager({
                   <span className="badge-warning">{t("specialists.notSet")}</span>
                 )}
               </td>
+              )}
+              {showsPay && (
               <td>
                 {person.user_id ? (
                   members.find((member) => member.user_id === person.user_id)?.email ?? person.user_id
@@ -522,6 +559,7 @@ export function SpecialistManager({
                   <span className="badge-warning">{t("specialists.notLinked")}</span>
                 )}
               </td>
+              )}
             </tr>
           ))}
         </tbody>

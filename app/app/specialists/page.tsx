@@ -4,12 +4,14 @@ import { ToolIcon } from "@/components/icons";
 import { db } from "@/db";
 import { memberships, services, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { bookabilityOf } from "@/domain/bookability";
+import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { SpecialistManager } from "@/components/specialist-manager";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { loadSetupGuide } from "@/lib/onboarding";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
+import { factsFor, loadBookabilityFacts } from "@/lib/specialist-bookability";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
@@ -29,8 +31,19 @@ export default async function SpecialistsPage() {
   // than merely declared.
   const ownOnly = scopeFor(membership.role, "commissions") === "own";
 
-  const { people, catalogue } = await withTenant(membership.organizationId, async (tx) => {
-    const cards = await loadSpecialistCards(tx, ownOnly ? { ownedBy: membership.userId } : {});
+  /*
+   * Whether this reader is owed what one named person is paid. An analyst is
+   * not: section 6.1 gives them «Агрегаты», and until now they opened this
+   * page to a table of every master's rate beside the address of their
+   * account.
+   */
+  const showsPay = seesIndividualPay(membership.role);
+
+  const { people, catalogue, unbookable } = await withTenant(membership.organizationId, async (tx) => {
+    const cards = await loadSpecialistCards(tx, {
+      ...(ownOnly ? { ownedBy: membership.userId } : {}),
+      withoutPay: !showsPay,
+    });
 
     const serviceRows = await tx
       .select()
@@ -38,8 +51,28 @@ export default async function SpecialistsPage() {
       .where(isNull(services.archivedAt))
       .orderBy(asc(services.createdAt));
 
+    /*
+     * Who a client cannot reach yet. The two rows that decide it are written
+     * on «Онлайн-запись»; this list is where the studio looks after hiring
+     * somebody, and it answered four questions about a person without ever
+     * answering that one.
+     */
+    const bookability = await loadBookabilityFacts(tx);
+    const cannot = new Set(
+      cards
+        .filter(
+          (person) =>
+            bookabilityOf({
+              publishedLocationIds: bookability.publishedLocationIds,
+              ...factsFor(bookability.places.get(person.id)),
+            }) !== "bookable",
+        )
+        .map((person) => person.id),
+    );
+
     return {
       people: cards,
+      unbookable: bookability.publishedLocationIds.length > 0 ? cannot : new Set<string>(),
       catalogue: serviceRows.map((service) => ({
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
@@ -116,6 +149,8 @@ export default async function SpecialistsPage() {
         currency={currency}
         locale={locale}
         businessType={businessType}
+        showsPay={showsPay}
+        unbookable={unbookable}
         canManage={canManage}
         hasOwnCard={people.some((person) => person.user_id === membership.userId)}
         setupGuide={setupGuide}

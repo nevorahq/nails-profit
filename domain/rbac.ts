@@ -182,6 +182,31 @@ export function canManageCatalogue(role: MemberRole, capability: Capability): bo
   );
 }
 
+/**
+ * Whether this role may see what one named person is paid.
+ *
+ * Section 6.1 gives an Analyst «Агрегаты» on commissions and «Все агрегаты» on
+ * the dashboard, and `aggregates_only` was the encoding of it — declared here
+ * and read nowhere, so for as long as the constraint existed an analyst opened
+ * «Мастера» to a table of every master's rate beside the address of their
+ * account. Of the four constraints only `exclude_pii` was ever wired up.
+ *
+ * "Aggregate" is read here as *not about one person*: totals and a ranking by
+ * service are what the role is for, and a rate, a per-service exception, the
+ * account behind a card, and a report narrowed to one master are not. What a
+ * master earns is between them and the owner.
+ *
+ * Named rather than spelled out at each call site, because the four places that
+ * ask — the list, the card, the endpoint behind them, and the dashboard's
+ * filter — have to agree, and a constraint that is checked in three of them is
+ * the state this function exists to end.
+ */
+export function seesIndividualPay(role: MemberRole): boolean {
+  return (
+    can(role, "commissions", "read") && !hasConstraint(role, "commissions", "aggregates_only")
+  );
+}
+
 /** True when `actor` may administer a member holding `target`'s role. */
 export function canManageRole(actor: MemberRole, target: MemberRole): boolean {
   if (!can(actor, "user_management", "write")) return false;

@@ -97,6 +97,18 @@ export const businessLabel = {
    * somebody working alone — the same sum, read the opposite way round.
    */
   visitEarnings: { solo: "visits.masterEarnings.solo", studio: "visits.masterEarnings.studio" },
+  /*
+   * The paragraph over «Оплата труда за месяц», which opens by naming the two
+   * arrangements the form collects.
+   *
+   * For a studio that is right: a salaried master and the owner's own hour are
+   * the same mechanism seen from two sides, and the sentence is what stops an
+   * owner paying for the same work twice. For a woman working alone there is
+   * no salaried master, and the paragraph spends its first clause explaining a
+   * distinction against something that does not exist — before the form below
+   * it, which for her has one arrangement in it and no «Кому» to choose.
+   */
+  laborHint: { solo: "labor.hint.solo", studio: "labor.hint.studio" },
 } as const satisfies Readonly<Record<string, Readonly<Record<BusinessType, MessageKey>>>>;
 
 export type BusinessLabel = keyof typeof businessLabel;

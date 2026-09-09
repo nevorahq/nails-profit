@@ -17,6 +17,14 @@ import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
  * which side of the operating profit the answer lands on, and the report says
  * that — this screen just collects the numbers.
  *
+ * For a studio of one it is one arrangement, and the form says so: no «Кому»,
+ * no picker, and a paragraph that does not open by distinguishing her wage
+ * from a salary nobody draws. What it collects is the same rule, and it is the
+ * one this whole screen exists for — `ownerWageMinor` is the line under the
+ * operating profit in `domain/period-pl.ts` and the second break-even in
+ * `domain/capacity.ts`, which is the question «заплатила ли я себе» in a
+ * number. Without a rule here that number does not exist.
+ *
  * There is no edit. A rule is closed and a new one written, because a month
  * already reported has to keep the salary that was true in it; the API works
  * the same way, so «изменить» here would be a lie about what the button does.
@@ -70,6 +78,7 @@ export function LaborCostManager({
   const [recipient, setRecipient] = useState<"owner" | "specialist">("owner");
   const [basis, setBasis] = useState<"fixed_monthly" | "percent_revenue">("fixed_monthly");
   const [reserve, setReserve] = useState(String(reserveMinor / 100));
+  const isSolo = businessType === "solo";
 
   async function send(url: string, payload: unknown, method = "POST", form?: HTMLFormElement) {
     setPending(true);
@@ -132,6 +141,24 @@ export function LaborCostManager({
   const live = rules.filter((rule) => rule.active_to === null);
   const closed = rules.filter((rule) => rule.active_to !== null);
 
+  /*
+   * «Кому» over a column with one possible answer.
+   *
+   * For a studio the column carries the name of a salaried master, and without
+   * it two salaries are two indistinguishable rows. For a woman working alone
+   * every row says «Оплата вашего труда» and carries the same «Владелец»
+   * badge, and what tells her rules apart is the arrangement and the date the
+   * two remaining columns already give her.
+   *
+   * Read from the rows rather than from the type alone, because the two can
+   * disagree: the type only ever moves solo → studio by itself
+   * (`lib/solo-mode.ts`), so a workspace put back to solo through
+   * `PATCH /organizations/settings` may still hold a master's salary. The
+   * column comes back the moment there is a name in it worth reading, and an
+   * empty table is the same one answer as a table of her own.
+   */
+  const ownerOnlyRules = isSolo && live.every((rule) => rule.recipient === "owner");
+
   return (
     <>
       <div className="add-form-toggle">
@@ -152,7 +179,7 @@ export function LaborCostManager({
         <div className="add-form-inner">
           <section className="panel">
             <h2>{t("labor.title")}</h2>
-            <p className="muted">{t("labor.hint")}</p>
+            <p className="muted">{t(businessLabel.laborHint[businessType])}</p>
 
             {error && (
               <div className="form-error" role="alert">
@@ -163,7 +190,7 @@ export function LaborCostManager({
             <table className="data-table pl-table labor-table">
               <thead>
                 <tr>
-                  <th>{t("labor.who")}</th>
+                  {!ownerOnlyRules && <th>{t("labor.who")}</th>}
                   <th>{t("labor.arrangement")}</th>
                   <th className="labor-since">{t("labor.since")}</th>
                   <th />
@@ -172,17 +199,19 @@ export function LaborCostManager({
               <tbody>
                 {live.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="muted">
+                    <td colSpan={ownerOnlyRules ? 3 : 4} className="muted">
                       {t("labor.none")}
                     </td>
                   </tr>
                 )}
                 {live.map((rule) => (
                   <tr key={rule.id}>
-                    <td>
-                      {nameOf(rule)}
-                      {rule.recipient === "owner" && <span className="badge-accent">{t("specialists.principal")}</span>}
-                    </td>
+                    {!ownerOnlyRules && (
+                      <td>
+                        {nameOf(rule)}
+                        {rule.recipient === "owner" && <span className="badge-accent">{t("specialists.principal")}</span>}
+                      </td>
+                    )}
                     <td>{describe(rule)}</td>
                     <td className="labor-since">{new Date(rule.active_from).toLocaleDateString(localeCode)}</td>
                     <td>
@@ -225,29 +254,42 @@ export function LaborCostManager({
 
             {canEdit && (
               <form className="inline-form" onSubmit={addRule}>
-                <label>
-                  {t("labor.who")}
-                  <select
-                    name="recipient"
-                    value={recipient}
-                    onChange={(event) => setRecipient(event.target.value as "owner" | "specialist")}
-                  >
-                    <option value="owner">{t(businessLabel.ownerWage[businessType])}</option>
-                    <option value="specialist">{t("labor.recipientSpecialist")}</option>
-                  </select>
-                </label>
+                {/*
+                  Somebody working alone is not asked whose wage this is.
+                  There is one arrangement available to her — her own hour —
+                  and «Кому» offering a choice between herself and «Оклад
+                  мастера» is a question with one real answer and one that
+                  leads to an empty picker. `recipient` stays "owner", which is
+                  what it already defaults to, so the form posts the same body
+                  it would have posted after she chose.
+                */}
+                {isSolo ? null : (
+                  <>
+                    <label>
+                      {t("labor.who")}
+                      <select
+                        name="recipient"
+                        value={recipient}
+                        onChange={(event) => setRecipient(event.target.value as "owner" | "specialist")}
+                      >
+                        <option value="owner">{t(businessLabel.ownerWage[businessType])}</option>
+                        <option value="specialist">{t("labor.recipientSpecialist")}</option>
+                      </select>
+                    </label>
 
-                {recipient === "specialist" && (
-                  <label>
-                    {t("specialists.specialist")}
-                    <select name="specialist_id" required>
-                      {specialists.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    {recipient === "specialist" && (
+                      <label>
+                        {t("specialists.specialist")}
+                        <select name="specialist_id" required>
+                          {specialists.map((person) => (
+                            <option key={person.id} value={person.id}>
+                              {person.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </>
                 )}
 
                 <label>

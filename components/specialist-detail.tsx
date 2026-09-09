@@ -8,6 +8,10 @@ import { SpecialistPhoto } from "@/components/specialist-photo";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { WEEKDAY_KEYS } from "@/components/booking-setup";
+import { bookabilityOf } from "@/domain/bookability";
+import type { Weekday } from "@/domain/timezone";
+import { factsFor, type SpecialistPlace } from "@/lib/specialist-bookability";
 import { describeRule, ruleFromForm } from "@/lib/commission-rule";
 import type { SpecialistRow } from "@/lib/specialist-cards";
 
@@ -40,6 +44,9 @@ export function SpecialistDetail({
   currency,
   locale,
   businessType,
+  showsPay,
+  places,
+  publishedLocationIds,
   canManage,
 }: {
   person: SpecialistRow;
@@ -53,6 +60,18 @@ export function SpecialistDetail({
    * field — see the comment there for why that field needs it most.
    */
   businessType: BusinessType;
+  /**
+   * Whether this reader is owed what this person is paid — false for an
+   * analyst, whose card arrives already stripped by `loadSpecialistCards`.
+   * Three blocks come off with it: the rate in the facts, the account behind
+   * the card, and the whole commission panel, which is a form rather than a
+   * reading and would be refused anyway.
+   */
+  showsPay: boolean;
+  /** Where this master is assigned and on which days — see the panel below. */
+  places: readonly SpecialistPlace[];
+  /** Addresses a client can actually open, for the verdict on those places. */
+  publishedLocationIds: readonly string[];
   canManage: boolean;
 }) {
   const t = getTranslator(locale);
@@ -163,6 +182,10 @@ export function SpecialistDetail({
   }
 
   const rule = describeRule(person.default_rule, currency, t);
+  const verdict = bookabilityOf({
+    publishedLocationIds,
+    ...factsFor(places),
+  });
 
   return (
     <main className="app-shell">
@@ -197,10 +220,12 @@ export function SpecialistDetail({
               {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
             </dd>
           </div>
-          <div>
-            <dt>{t("specialists.defaultRule")}</dt>
-            <dd>{rule ?? <span className="badge-warning">{t("specialists.notSet")}</span>}</dd>
-          </div>
+          {showsPay && (
+            <div>
+              <dt>{t("specialists.defaultRule")}</dt>
+              <dd>{rule ?? <span className="badge-warning">{t("specialists.notSet")}</span>}</dd>
+            </div>
+          )}
         </dl>
         {/*
           The principal mark sits beside the cooperation type because it answers
@@ -220,6 +245,7 @@ export function SpecialistDetail({
         )}
       </section>
 
+      {showsPay && (
       <section className="panel">
         <h2>{t("specialists.account")}</h2>
         {person.user_id ? (
@@ -263,7 +289,50 @@ export function SpecialistDetail({
           </>
         )}
       </section>
+      )}
 
+      {/*
+        The question the studio actually asks the day after hiring somebody,
+        and the one this page could not answer: can a client book them yet.
+
+        Read here and changed on «Онлайн-запись» — the two rows that decide it
+        are written there, two selects deep, and duplicating that editor would
+        give a studio two places to set one thing. What was missing was the
+        statement, not another form.
+      */}
+      <section className="panel">
+        <h2>{t("specialists.whereTitle")}</h2>
+        {verdict !== "bookable" && (
+          <p className="warning-banner">
+            {verdict === "no_address" ? t("specialists.whereEmpty") : t("specialists.whereNoHours")}
+          </p>
+        )}
+        {places.length > 0 && (
+          <ul className="compact-list">
+            {places.map((place) => (
+              <li key={place.locationId}>
+                {place.name}
+                {place.weekdays.length > 0 ? (
+                  <span className="unit-hint">
+                    {place.weekdays.map((day) => t(WEEKDAY_KEYS[day as Weekday])).join(" · ")}
+                  </span>
+                ) : (
+                  <span className="badge-warning">{t("specialists.whereNoHours")}</span>
+                )}
+                {!place.published && (
+                  <span className="unit-hint">{t("specialists.whereDraft")}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="muted">{t("specialists.whereHint")}</p>
+        <Link className="text-link" href="/app/booking">
+          {t("specialists.openRota")}
+        </Link>
+      </section>
+
+      {showsPay && (
       <section className="panel">
         <h2>{t("specialists.commission")}</h2>
         <p className="muted">{t("specialists.exceptionHint")}</p>
@@ -354,6 +423,7 @@ export function SpecialistDetail({
           </form>
         )}
       </section>
+      )}
 
       <section className="panel">
         <h2>{t("specialists.offeredServices")}</h2>

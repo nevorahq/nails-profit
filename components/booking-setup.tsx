@@ -12,6 +12,7 @@ import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
+import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { MemberRole } from "@/domain/rbac";
@@ -65,7 +66,8 @@ function deleteBlockerOf(place: LocationRow): MessageKey | null {
   return null;
 }
 
-const WEEKDAY_KEYS: Record<Weekday, MessageKey> = {
+/** Shared with the master's own card, which names the days they work. */
+export const WEEKDAY_KEYS: Record<Weekday, MessageKey> = {
   1: "weekday.monday",
   2: "weekday.tuesday",
   3: "weekday.wednesday",
@@ -334,6 +336,43 @@ export function BookingSetup({
       ? "bookingSetup.blockerRota"
       : null,
   ].filter((key): key is MessageKey => key !== null);
+
+  /*
+   * Who a client cannot reach, once the page itself is working.
+   *
+   * The two blockers above ask «хоть кто-то»: one published address with
+   * somebody on it, one master anywhere with hours. That is the right question
+   * for «страница вообще открылась» and the wrong one for a studio, where the
+   * second and third master can be invisible while the checklist says ready.
+   *
+   * Listed rather than blocked — see `domain/bookability.ts`. A studio may
+   * hold somebody out of online booking on purpose, and the difference between
+   * naming that and refusing to work is the difference between a note and an
+   * argument.
+   */
+  const unbookable = unbookableAmong(
+    specialists,
+    published.map((place) => place.id),
+    (person) => ({
+      assignedLocationIds: assignments
+        .filter((row) => row.specialist_id === person.id)
+        .map((row) => row.location_id),
+      rotaLocationIds: rota
+        .filter((rule) => rule.specialist_id === person.id)
+        .map((rule) => rule.location_id),
+    }),
+  ).map((person) => ({
+    ...person,
+    reason: bookabilityOf({
+      publishedLocationIds: published.map((place) => place.id),
+      assignedLocationIds: assignments
+        .filter((row) => row.specialist_id === person.id)
+        .map((row) => row.location_id),
+      rotaLocationIds: rota
+        .filter((rule) => rule.specialist_id === person.id)
+        .map((rule) => rule.location_id),
+    }),
+  }));
 
   /**
    * @param translated Refusals this caller has a written answer for, by API
@@ -787,6 +826,33 @@ export function BookingSetup({
               </button>
             </div>
           )}
+        </section>
+      )}
+
+      {/*
+        Its own section, and not a line inside «Что осталось сделать».
+
+        That panel disappears the moment nothing is left to do — which is
+        exactly the studio this is for: the page is published, it works, and
+        two of its three masters are still invisible on it. Folded in above,
+        the sentence would be shown only to studios it does not apply to.
+      */}
+      {!isMaster && !guided && unbookable.length > 0 && (
+        <section className="panel booking-panel">
+          <h2>{t("bookingSetup.unbookableTitle")}</h2>
+          <ul className="compact-list">
+            {unbookable.map((person) => (
+              <li key={person.id}>
+                {t(
+                  person.reason === "no_address"
+                    ? "bookingSetup.unbookableNoAddress"
+                    : "bookingSetup.unbookableNoHours",
+                  { name: person.name },
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="muted">{t("bookingSetup.unbookableHint")}</p>
         </section>
       )}
 

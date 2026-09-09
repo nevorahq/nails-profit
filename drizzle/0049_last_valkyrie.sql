@@ -1,0 +1,2 @@
+CREATE TYPE "public"."staff_notice_audience" AS ENUM('owner', 'owner_and_managers');--> statement-breakpoint
+ALTER TABLE "organization" ADD COLUMN "staff_notices" "staff_notice_audience" DEFAULT 'owner' NOT NULL;
