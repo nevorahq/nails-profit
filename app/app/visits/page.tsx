@@ -308,11 +308,7 @@ export default async function VisitsPage({
                       happened.
                     */}
                     {canDeleteVisit && (
-                      <VisitDeleteButton
-                        visitId={visit.id}
-                        fromBooking={visit.bookingId !== null}
-                        locale={locale}
-                      />
+                      <VisitDeleteButton visitId={visit.id} locale={locale} />
                     )}
                     </details>
                   </li>

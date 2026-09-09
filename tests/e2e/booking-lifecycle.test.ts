@@ -388,20 +388,49 @@ describe("booking lifecycle", () => {
     );
   });
 
-  test("the visit an appointment became cannot be deleted", async () => {
+  test("deleting the visit an appointment became puts the appointment back", async () => {
     const created = await book();
     await alreadyHappened(created.id);
     const closed = dataOf<{ visit: { id: string } }>(
       await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {}),
     );
 
-    // `completed` is terminal, so the appointment cannot go back to be closed
-    // again — deleting the visit under it would leave the booking marked
-    // completed with nothing behind it. Wrong figures are corrected with
-    // `adjust`; only a hand-recorded visit is deletable.
-    const refused = await studio.owner.delete(`/api/v1/visits/${closed.visit.id}`);
-    expect(refused.status).toBe(409);
-    expect(errorCodeOf(refused)).toBe("VISIT_FROM_BOOKING");
+    expect((await studio.owner.delete(`/api/v1/visits/${closed.visit.id}`)).status).toBe(200);
+
+    /*
+     * The half that used to make this a refusal. An appointment left
+     * `completed` with no visit behind it is the state `complete` itself
+     * reports as broken, so the deletion has to undo the completion rather
+     * than orphan it.
+     */
+    const [row] = await adminDb
+      .select({ status: bookings.status, completedAt: bookings.completedAt })
+      .from(bookings)
+      .where(eq(bookings.id, created.id));
+    expect(row.status).toBe("confirmed");
+    expect(row.completedAt).toBeNull();
+
+    // And back where it was is somewhere it can be closed from: the partial
+    // unique index on `visit.booking_id` freed with the row, so the appointment
+    // takes a second, correct visit rather than staying unfinishable.
+    const again = await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {});
+    expect(again.status).toBe(201);
+    expect(dataOf<{ visit: { id: string } }>(again).visit.id).not.toBe(closed.visit.id);
+  });
+
+  test("un-completing an appointment is not offered on its own", async () => {
+    const created = await book();
+    await alreadyHappened(created.id);
+    await studio.owner.post(`/api/v1/bookings/${created.id}/complete`, {});
+
+    /*
+     * `completed` stays terminal in `BOOKING_TRANSITIONS`. Only removing what
+     * the completion produced may reverse it, and that is atomic with the
+     * removal; a `confirm` on a closed appointment would reverse it while the
+     * visit still stood — the same broken pair, mirrored.
+     */
+    const reopened = await studio.owner.post(`/api/v1/bookings/${created.id}/confirm`, {});
+    expect(reopened.status).toBe(409);
   });
 
   test("an appointment cannot be closed twice", async () => {

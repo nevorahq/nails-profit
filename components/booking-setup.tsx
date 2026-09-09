@@ -109,7 +109,7 @@ const SLOT_STEPS = [60, 90, 120, 150] as const;
 const DEFAULT_WORKWEEK = { weekdays: [1, 2, 3, 4, 5] as const, start: "08:00", end: "18:00" };
 
 /** The order of the first address's steps, and the order they are drawn in. */
-const SETUP_STEPS = ["location", "rota", "publish"] as const;
+const SETUP_STEPS = ["location", "rota"] as const;
 
 /**
  * The zone the owner is sitting in, which for a studio setting up its own
@@ -235,7 +235,6 @@ export function BookingSetup({
   /** Which address is one click from being removed. Null while nothing is. */
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   /** Whether the owner asked for every panel while the guided setup is showing. */
-  const [manualSetup, setManualSetup] = useState(false);
   /** Whose week the guided step writes. Empty means the only master there is. */
   const [setupSpecialist, setSetupSpecialist] = useState("");
   const publicPageHref = organizationSlug === null ? null : `/book/${organizationSlug}`;
@@ -299,7 +298,7 @@ export function BookingSetup({
               rota.some((rule) => rule.location_id === firstPlace.id)
             )
           ? "rota"
-          : "publish";
+          : null;
 
   /**
    * What is still missing before a client could book anything. Every studio
@@ -629,7 +628,7 @@ export function BookingSetup({
    * corridor — "an owner who already knows the piece they are missing should
    * not be walked through a wizard to reach it".
    */
-  const guided = setupStep !== null && !manualSetup;
+  const guided = setupStep !== null;
 
   const currentRota = rota.filter(
     (rule) => rule.specialist_id === currentSpecialistId && rule.location_id === currentLocationId,
@@ -667,16 +666,6 @@ export function BookingSetup({
                 <li key={step} className={step === setupStep ? undefined : "muted"}>
                   <span aria-hidden="true">{done ? "✓" : step === setupStep ? "→" : "○"}</span>{" "}
                   {t(`bookingSetup.setupStep.${step}` as MessageKey)}
-                  {/*
-                    Said in the list rather than only at the step, because the
-                    expectation is set here: three numbered lines read as three
-                    things that have to be done, and the third one does not.
-                    The rota above it is what «Расчёт месяца» was after, and it
-                    is saved by the time this is reached.
-                  */}
-                  {step === "publish" && (
-                    <span className="unit-hint">{t("bookingSetup.setupOptional")}</span>
-                  )}
                 </li>
               );
             })}
@@ -743,35 +732,24 @@ export function BookingSetup({
             </form>
           )}
 
-          {setupStep === "publish" && firstPlace && (
-            <div className="inline-actions">
-              {/*
-                What the two steps behind this one already bought, and what
-                this one is actually for.
+          {/*
+            Two steps, and no third. Publishing was one, and it is not: the
+            guided run ends when the rota is written, which is what «Расчёт
+            месяца» sends people here for and what utilization, the cost of an
+            hour and the break-even are computed from.
 
-                «Расчёт месяца» sends people here for the rota, and the rota is
-                what utilization, the cost of an hour and the break-even are
-                computed from — none of which needs a public page. Somebody who
-                books their clients through Instagram was being walked to a
-                «Опубликовать» button with nothing saying they could stop.
-              */}
-              <p className="muted">{t("bookingSetup.publishOptional")}</p>
-              <button
-                type="button"
-                className="primary-button"
-                disabled={pending}
-                onClick={() => setPublicStatus(firstPlace.id, "published")}
-              >
-                {pending ? t("common.saving") : t("bookingSetup.publish")}
-              </button>
-            </div>
-          )}
+            Publishing itself did not become automatic — `public_status` starts
+            at `draft` (`db/schema.ts`) and only «Опубликовать» on the address
+            row below writes `published`. What changed is where it is asked
+            for: `bookingSetup.blockerPublish` names it in «Что осталось
+            сделать», beside the button that does it, instead of standing in
+            the way of a run that is otherwise finished.
 
-          <p className="muted" style={{ marginTop: "16rem" }}>
-            <button type="button" className="inline-action" onClick={() => setManualSetup(true)}>
-              {t("bookingSetup.setupManual")}
-            </button>
-          </p>
+            «Настроить вручную» is gone from under this too. It was a way out of
+            the guided run into the full panels, and with two steps left there
+            is little to escape — the panels arrive on their own the moment the
+            rota is saved.
+          */}
         </section>
       )}
 

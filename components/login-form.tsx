@@ -7,6 +7,7 @@ import { FormEvent, useState } from "react";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
+import { authRefusal } from "@/domain/auth-refusal";
 import { invitationTokenFromNext } from "@/domain/invitation-link";
 
 export function LoginForm({
@@ -65,16 +66,23 @@ export function LoginForm({
 
     if (result.error) {
       /*
-       * A refused sign-in is answered in the interface's own language and with
-       * somewhere to go. Better Auth replies «Invalid email or password» — an
-       * English sentence, and a dead end for the one person who most needs a
-       * next step: somebody with no account at all, who cannot tell that from a
-       * mistyped password. What is deliberately not said is which of the two
-       * was wrong; that answer would let anybody discover, address by address,
-       * who has an account here.
+       * A refused attempt is answered in the interface's own language and with
+       * somewhere to go. Which of the three answers it gets — and why the
+       * interface refuses to say what was wrong — is in `domain/auth-refusal.ts`.
+       *
+       * Carrying the address over to registration belongs to `no_match` alone:
+       * it is the only refusal where creating an account is the plausible next
+       * step, and a rate-limited attempt says nothing about whether one exists.
        */
-      setError(mode === "signin" ? t("auth.signInNoMatch") : (result.error.message ?? t("auth.signInFailed")));
-      setRefusedEmail(mode === "signin" ? email : null);
+      const refusal = authRefusal(mode, result.error.status);
+      setError(
+        refusal === "rate_limited"
+          ? t("auth.tooManyAttempts")
+          : refusal === "no_match"
+            ? t("auth.signInNoMatch")
+            : (result.error.message ?? t("auth.signInFailed")),
+      );
+      setRefusedEmail(refusal === "no_match" ? email : null);
       setPending(false);
       return;
     }

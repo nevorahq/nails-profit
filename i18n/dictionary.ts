@@ -92,8 +92,6 @@ const ru = {
   "settings.staffNotices": "Письма о заявках",
   "settings.staffNotices.owner": "Только владельцу",
   "settings.staffNotices.owner_and_managers": "Владельцу и управляющим",
-  "settings.staffNoticesHint":
-    "Мастер, к которому записались, получает письмо всегда. Здесь — кто ещё. Письмо уходит каждому получателю отдельно, так что двое управляющих — это два письма на одну заявку.",
   "currency.rub": "рубль",
   "settings.saved": "Сохранено",
   "settings.dataTitle": "Данные организации",
@@ -496,10 +494,9 @@ const ru = {
   "pl.safeToWithdraw": "Можно вывести",
   "pl.safeToWithdrawHint": "Экономическая прибыль за вычетом резерва {reserve}, который вы оставляете в деле.",
   "pl.ownerWageMissing":
-    "Экономическая прибыль не посчитана: не задано, сколько стоит ваш труд. По вашим визитам за месяц начислено {suggested} — это и есть рыночная оценка, её можно взять как есть или назначить свою.",
+    "Экономическая прибыль не посчитана: не задано, сколько стоит ваш труд. По вашим визитам за месяц начислено {suggested} — это рыночная оценка того же труда.",
   "pl.ownerWageMissingIdle":
-    "Экономическая прибыль не посчитана: не задано, сколько стоит труд владельца. Задайте вменённую зарплату в настройках.",
-  "pl.setOwnerWage": "Задать в настройках",
+    "Экономическая прибыль не посчитана: не задано, сколько стоит труд владельца.",
   "pl.marginFloor":
     "{count} визитов пока без посчитанной маржи (на {revenue}), поэтому прибыль показана по нижней границе — она не меньше указанной.",
   "pl.overheadTitle": "Постоянные расходы по категориям",
@@ -873,7 +870,8 @@ const ru = {
   "auth.noAccount": "Нет аккаунта? Создать",
   "auth.forgot": "Забыли пароль?",
   "auth.signInFailed": "Не удалось выполнить вход",
-  "auth.signInNoMatch": "Аккаунт не найден — нужна регистрация.",
+  "auth.signInNoMatch": "Адрес или пароль не подошли. Если аккаунта ещё нет — создайте его ниже.",
+  "auth.tooManyAttempts": "Слишком много попыток. Подождите несколько минут и попробуйте снова.",
   "auth.activeSession":
     "Сейчас выполнен вход: {email}. Вход в другой аккаунт завершит этот сеанс в текущем браузере. Чтобы работать в двух аккаунтах одновременно, откройте второй в отдельном окне или в приватном режиме.",
   "auth.invitedEmailHint": "Приглашение в «{org}» выдано на этот адрес — аккаунт должен быть на нём.",
@@ -898,12 +896,8 @@ const ru = {
   "workspace.namePlaceholder": "Например, Studio Belle",
   "workspace.address": "Адрес",
   "workspace.addressPlaceholder": "Улица, дом, город",
-  "workspace.addressHint": "По адресу строится график работы и запись клиентов. Он не виден никому, пока вы не откроете онлайн-запись.",
   "workspace.nameLatin": "Только латиница: A–Z, цифры, пробел и дефис.",
   "workspace.format": "Формат",
-  "workspace.formatHint":
-    "Меняет только формулировки в отчётах — «оплата вашего труда» или «оплата труда мастеров». Ни на одну цифру не влияет.",
-  "workspace.formatReversible": "Переключается потом в настройках.",
   "workspace.solo": "Solo-мастер",
   "workspace.studio": "Студия",
   "workspace.creating": "Создаём…",
@@ -978,10 +972,6 @@ const ru = {
   "visits.adjusted": "скорректирован",
   "visits.delete": "Удалить визит",
   "visits.deleteConfirm": "Подтвердить удаление",
-  "visits.deleteFromBooking":
-    "Визит закрыт из записи — удалить его нельзя, ошибку в нём исправляют пересчётом.",
-  "visits.deleteHint":
-    "Визит удаляется вместе со своим расчётом: выручка, маржа и комиссия по нему уходят из месячных итогов. Восстановить нельзя. Визит, закрытый из записи, удалить нельзя — его исправляют пересчётом.",
   "visits.deleteFailed": "Не удалось удалить визит",
   "visits.line": "Позиция",
   "visits.charged": "Начислено",
@@ -1192,16 +1182,11 @@ const ru = {
     "Три шага до страницы, на которой клиент сможет записаться. Остальные параметры уже заданы разумно — их можно не трогать.",
   "bookingSetup.setupStep.location": "Адрес студии",
   "bookingSetup.setupStep.rota": "Кто работает и когда",
-  "bookingSetup.setupStep.publish": "Публикация",
-  "bookingSetup.setupOptional": "необязательно",
-  "bookingSetup.publishOptional":
-    "Часы уже сохранены, и отчёт месяца считает по ним загрузку и точку безубыточности. Публикация нужна только затем, чтобы клиенты записывались сами: если вы записываете их сами, этот шаг можно пропустить и вернуться к нему когда угодно.",
   "bookingSetup.setupDerived":
     "Ссылку для адреса подберём из названия, часовой пояс — {zone}. И то, и другое можно изменить позже.",
   "bookingSetup.setupNext": "Дальше",
   "bookingSetup.setupWorkweek": "Поставим рабочую неделю: понедельник–пятница, {from}–{to}. Дни и часы правятся дальше в графике.",
   "bookingSetup.setupWorkweekAction": "Задать рабочую неделю",
-  "bookingSetup.setupManual": "Настроить вручную",
   "bookingSetup.noAccess": "У вашей роли нет доступа к настройке записи.",
   "bookingSetup.checklistTitle": "Что осталось сделать",
   "bookingSetup.checklistDone": "Всё готово: клиент может открыть страницу и записаться.",
@@ -1368,8 +1353,6 @@ const ro: Record<MessageKey, Message> = {
   "settings.staffNotices": "E-mailuri despre programări",
   "settings.staffNotices.owner": "Doar proprietarului",
   "settings.staffNotices.owner_and_managers": "Proprietarului și managerilor",
-  "settings.staffNoticesHint":
-    "Maestrul la care s-a programat clientul primește întotdeauna un e-mail. Aici se alege cine altcineva. Mesajul pleacă separat către fiecare destinatar, deci doi manageri înseamnă două e-mailuri pentru o programare.",
   "currency.rub": "rublă",
   "settings.saved": "Salvat",
   "settings.dataTitle": "Datele organizației",
@@ -1773,10 +1756,9 @@ const ro: Record<MessageKey, Message> = {
   "pl.safeToWithdraw": "Se poate retrage",
   "pl.safeToWithdrawHint": "Profitul economic minus rezerva de {reserve} pe care o lăsați în afacere.",
   "pl.ownerWageMissing":
-    "Profitul economic nu este calculat: nu ați spus cât valorează munca dvs. Pe vizitele dvs. din lună s-au calculat {suggested} — aceasta este evaluarea de piață, o puteți lua ca atare sau stabili alta.",
+    "Profitul economic nu este calculat: nu ați spus cât valorează munca dvs. Pe vizitele dvs. din lună s-au calculat {suggested} — aceasta este evaluarea de piață a aceleiași munci.",
   "pl.ownerWageMissingIdle":
-    "Profitul economic nu este calculat: nu este stabilit cât valorează munca proprietarului. Definiți salariul imputat în setări.",
-  "pl.setOwnerWage": "Stabiliți în setări",
+    "Profitul economic nu este calculat: nu este stabilit cât valorează munca proprietarului.",
   "pl.marginFloor":
     "{count} vizite încă fără marjă calculată (de {revenue}), deci profitul este arătat la limita de jos — nu este mai mic decât atât.",
   "pl.overheadTitle": "Cheltuieli fixe pe categorii",
@@ -2150,7 +2132,8 @@ const ro: Record<MessageKey, Message> = {
   "auth.noAccount": "Nu aveți cont? Creați unul",
   "auth.forgot": "Ați uitat parola?",
   "auth.signInFailed": "Autentificarea nu a reușit",
-  "auth.signInNoMatch": "Cont inexistent — înregistrați-vă.",
+  "auth.signInNoMatch": "Adresa sau parola nu se potrivesc. Dacă încă nu aveți cont, creați-l mai jos.",
+  "auth.tooManyAttempts": "Prea multe încercări. Așteptați câteva minute și încercați din nou.",
   "auth.activeSession":
     "Sunteți autentificat ca {email}. Autentificarea într-un alt cont va încheia sesiunea curentă în acest browser. Pentru a lucra în două conturi simultan, deschideți-l pe al doilea într-o fereastră separată sau în mod privat.",
   "auth.invitedEmailHint": "Invitația în „{org}” a fost emisă pentru această adresă — contul trebuie să fie pe ea.",
@@ -2175,12 +2158,8 @@ const ro: Record<MessageKey, Message> = {
   "workspace.namePlaceholder": "De exemplu, Studio Belle",
   "workspace.address": "Adresa",
   "workspace.addressPlaceholder": "Strada, numărul, orașul",
-  "workspace.addressHint": "Pe adresă se construiesc programul de lucru și programările. Nu o vede nimeni până nu deschideți programarea online.",
   "workspace.nameLatin": "Doar litere latine: A–Z, cifre, spațiu și cratimă.",
   "workspace.format": "Format",
-  "workspace.formatHint":
-    "Schimbă doar formulările din rapoarte — „plata muncii dvs.” sau „plata muncii maeștrilor”. Nu afectează nicio cifră.",
-  "workspace.formatReversible": "Poate fi comutat mai târziu în setări.",
   "workspace.solo": "Maestru solo",
   "workspace.studio": "Salon",
   "workspace.creating": "Se creează…",
@@ -2255,10 +2234,6 @@ const ro: Record<MessageKey, Message> = {
   "visits.adjusted": "corectată",
   "visits.delete": "Ștergeți vizita",
   "visits.deleteConfirm": "Confirmați ștergerea",
-  "visits.deleteFromBooking":
-    "Vizita a fost închisă dintr-o programare — nu poate fi ștearsă; o greșeală în ea se corectează prin recalculare.",
-  "visits.deleteHint":
-    "Vizita se șterge împreună cu calculul ei: încasarea, marja și comisionul dispar din totalurile lunii. Nu poate fi restabilită. O vizită închisă dintr-o programare nu se șterge — se corectează prin recalculare.",
   "visits.deleteFailed": "Nu s-a putut șterge vizita",
   "visits.line": "Poziție",
   "visits.charged": "Facturat",
@@ -2469,16 +2444,11 @@ const ro: Record<MessageKey, Message> = {
     "Trei pași până la pagina pe care clientul se poate programa. Restul parametrilor au deja valori rezonabile — nu trebuie atinși.",
   "bookingSetup.setupStep.location": "Adresa studioului",
   "bookingSetup.setupStep.rota": "Cine lucrează și când",
-  "bookingSetup.setupStep.publish": "Publicare",
-  "bookingSetup.setupOptional": "opțional",
-  "bookingSetup.publishOptional":
-    "Orele sunt deja salvate, iar raportul lunar calculează pe baza lor gradul de ocupare și pragul de rentabilitate. Publicarea este necesară doar pentru ca clienții să se programeze singuri: dacă îi programați dvs., pasul poate fi sărit și reluat oricând.",
   "bookingSetup.setupDerived":
     "Linkul adresei îl compunem din denumire, fusul orar — {zone}. Ambele pot fi schimbate mai târziu.",
   "bookingSetup.setupNext": "Mai departe",
   "bookingSetup.setupWorkweek": "Setăm săptămâna de lucru: luni–vineri, {from}–{to}. Zilele și orele se ajustează mai jos, în program.",
   "bookingSetup.setupWorkweekAction": "Setați săptămâna de lucru",
-  "bookingSetup.setupManual": "Configurați manual",
   "bookingSetup.noAccess": "Rolul dumneavoastră nu are acces la configurarea programărilor.",
   "bookingSetup.checklistTitle": "Ce a mai rămas de făcut",
   "bookingSetup.checklistDone": "Totul este gata: clientul poate deschide pagina și se poate programa.",
@@ -2643,8 +2613,6 @@ const en: Record<MessageKey, Message> = {
   "settings.staffNotices": "Emails about bookings",
   "settings.staffNotices.owner": "The owner only",
   "settings.staffNotices.owner_and_managers": "The owner and the managers",
-  "settings.staffNoticesHint":
-    "The master a client booked always gets an email. This chooses who else. One message goes to each recipient, so two managers means two emails for one request.",
   "currency.rub": "rouble",
   "settings.saved": "Saved",
   "settings.dataTitle": "Organization data",
@@ -3043,10 +3011,9 @@ const en: Record<MessageKey, Message> = {
   "pl.safeToWithdraw": "Safe to withdraw",
   "pl.safeToWithdrawHint": "Economic profit less the {reserve} reserve you keep in the business.",
   "pl.ownerWageMissing":
-    "Economic profit is not computed: you have not said what your work is worth. Your own visits this month booked {suggested} — that is the market rate, and you can take it as it stands or set your own.",
+    "Economic profit is not computed: you have not said what your work is worth. Your own visits this month booked {suggested} — that is the market rate for the same work.",
   "pl.ownerWageMissingIdle":
-    "Economic profit is not computed: nobody has said what the owner's work is worth. Set the imputed wage in settings.",
-  "pl.setOwnerWage": "Set it in settings",
+    "Economic profit is not computed: nobody has said what the owner's work is worth.",
   "pl.marginFloor":
     "{count} visits have no margin computed yet (on {revenue}), so the profit shown is a floor — it is not lower than this.",
   "pl.overheadTitle": "Fixed costs by category",
@@ -3416,7 +3383,8 @@ const en: Record<MessageKey, Message> = {
   "auth.noAccount": "No account? Create one",
   "auth.forgot": "Forgot your password?",
   "auth.signInFailed": "Could not sign in",
-  "auth.signInNoMatch": "No account found — please register.",
+  "auth.signInNoMatch": "That address and password do not match. If you have no account yet, create one below.",
+  "auth.tooManyAttempts": "Too many attempts. Wait a few minutes and try again.",
   "auth.activeSession":
     "You are signed in as {email}. Signing in to another account ends the current session in this browser. To use two accounts at once, open the second one in a separate window or in a private window.",
   "auth.invitedEmailHint": "The invitation to “{org}” was issued for this address — the account has to use it.",
@@ -3440,12 +3408,8 @@ const en: Record<MessageKey, Message> = {
   "workspace.namePlaceholder": "For example, Studio Belle",
   "workspace.address": "Address",
   "workspace.addressPlaceholder": "Street, number, city",
-  "workspace.addressHint": "The rota and client bookings are built on this address. Nobody sees it until you open online booking.",
   "workspace.nameLatin": "Latin letters only: A–Z, digits, space and hyphen.",
   "workspace.format": "Format",
-  "workspace.formatHint":
-    "Changes only the wording in the reports — “your own pay” or “the specialists’ pay”. It moves no figure.",
-  "workspace.formatReversible": "It can be switched later in settings.",
   "workspace.solo": "Solo technician",
   "workspace.studio": "Studio",
   "workspace.creating": "Creating…",
@@ -3519,10 +3483,6 @@ const en: Record<MessageKey, Message> = {
   "visits.adjusted": "adjusted",
   "visits.delete": "Delete visit",
   "visits.deleteConfirm": "Confirm deletion",
-  "visits.deleteFromBooking":
-    "The visit closed an appointment — it cannot be deleted; a mistake in it is corrected by adjusting it.",
-  "visits.deleteHint":
-    "The visit goes with its calculation: its revenue, margin and commission leave the month's totals. This cannot be undone. A visit that closed an appointment cannot be deleted — it is corrected by adjusting it.",
   "visits.deleteFailed": "Could not delete the visit",
   "visits.line": "Line",
   "visits.charged": "Charged",
@@ -3731,16 +3691,11 @@ const en: Record<MessageKey, Message> = {
     "Three steps to a page a client can book on. Everything else already has a sensible value and can be left alone.",
   "bookingSetup.setupStep.location": "The studio's address",
   "bookingSetup.setupStep.rota": "Who works, and when",
-  "bookingSetup.setupStep.publish": "Publishing",
-  "bookingSetup.setupOptional": "optional",
-  "bookingSetup.publishOptional":
-    "The hours are saved already, and the month report works out utilization and the break-even from them. Publishing is only for letting clients book themselves: if you book them yourself, this step can be skipped and come back to at any time.",
   "bookingSetup.setupDerived":
     "The address link is taken from the name, the timezone is {zone}. Both stay editable afterwards.",
   "bookingSetup.setupNext": "Next",
   "bookingSetup.setupWorkweek": "We will set a working week: Monday–Friday, {from}–{to}. Days and hours are adjusted in the rota below.",
   "bookingSetup.setupWorkweekAction": "Set the working week",
-  "bookingSetup.setupManual": "Set it up manually",
   "bookingSetup.noAccess": "Your role cannot configure booking.",
   "bookingSetup.checklistTitle": "What is still missing",
   "bookingSetup.checklistDone": "Everything is ready: a client can open the page and book.",

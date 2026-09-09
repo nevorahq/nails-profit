@@ -6,43 +6,47 @@ import { describe, expect, it } from "vitest";
  * The one instruction the monthly report gives that used to lead nowhere.
  *
  * Economic profit is not computed until the owner says what their own work is
- * worth, and the report says so with a link to `/app/settings` — while
+ * worth. The report used to say so with a link to `/app/settings` while
  * `SHOW_ADVANCED_FINANCIAL_SETTINGS` kept the control that answers it off that
- * page. So the product asked for a number, offered a door, and put nothing
- * behind it; «Резерв» and «Можно вывести», which live in the same block, were
- * unreachable with it. A solo studio meets this first, because what its own
- * hour is worth is the question it came to ask.
+ * page: the product asked for a number, offered a door, and put nothing behind
+ * it. «Оплата труда за месяц» is hidden again now — and this time the report
+ * asks for nothing, which is the other way to close the same gap.
  *
  * Read from the source rather than rendered: there is no renderer in this
  * repository — see `tests/accessibility.test.ts` for why — and "the screen this
  * link points at offers the control it names" is a property of the source.
  *
- * The two halves are asserted together on purpose. Removing the report's
- * instruction is a perfectly good way to fix the dead end; quietly re-hiding
- * the block while the instruction stands is not, and that is the only thing
- * this refuses.
+ * So what is asserted is the pairing, not either half. Bringing the block back
+ * is free; putting the instruction back without it is what this refuses, in
+ * either order.
  */
 const report = readFileSync("app/app/reports/month/page.tsx", "utf8");
 const settings = readFileSync("app/app/settings/page.tsx", "utf8");
 
-describe("the owner's wage is reachable from the report that asks for it", () => {
+describe("the owner's wage is never asked for through a door onto nothing", () => {
   const sendsPeopleToSettings =
-    report.includes("pl.setOwnerWage") && report.includes('href="/app/settings"');
+    report.includes("pl.setOwnerWage") || report.includes('href="/app/settings"');
 
-  it("still points at the settings page", () => {
-    // Guards the premise of the test below. If this goes false the report has
-    // stopped asking, and the assertion after it stops applying — say so out
-    // loud rather than letting the file quietly test nothing.
-    expect(sendsPeopleToSettings).toBe(true);
-  });
-
-  it("does not hide the control behind the advanced-settings flag", () => {
+  const settingsOfferTheControl = (() => {
+    if (!settings.includes("<LaborCostManager")) return false;
     const assignment = /const\s+canReadLabour\s*=([\s\S]*?);/.exec(settings);
-    expect(assignment).not.toBeNull();
-    expect(assignment![1]).not.toContain("SHOW_ADVANCED_FINANCIAL_SETTINGS");
+    if (assignment === null) return false;
+    return !assignment[1].includes("SHOW_ADVANCED_FINANCIAL_SETTINGS");
+  })();
+
+  it("keeps the instruction and the control together", () => {
+    expect(sendsPeopleToSettings && !settingsOfferTheControl).toBe(false);
   });
 
-  it("renders the block the link promises", () => {
-    expect(settings).toContain("<LaborCostManager");
+  /*
+   * Both halves, stated out loud, so that flipping one of them fails here and
+   * says which way round the product currently stands — rather than leaving the
+   * implication above quietly satisfied by two absences nobody chose.
+   */
+  it("is where the two of them were last left", () => {
+    expect({ sendsPeopleToSettings, settingsOfferTheControl }).toEqual({
+      sendsPeopleToSettings: false,
+      settingsOfferTheControl: false,
+    });
   });
 });
