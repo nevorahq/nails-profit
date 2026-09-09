@@ -6,10 +6,11 @@ import { SpecialistDetail } from "@/components/specialist-detail";
 import { db } from "@/db";
 import { memberships, services, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
+import { loadBookabilityFacts } from "@/lib/specialist-bookability";
 import { requireWorkspace } from "@/lib/workspace";
 
 /**
@@ -40,11 +41,14 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
 
   const ownOnly = scopeFor(membership.role, "commissions") === "own";
   const canManage = canManageCatalogue(membership.role, "commissions");
+  // The same question the list asks, answered the same way — see its comment.
+  const showsPay = seesIndividualPay(membership.role);
 
   const loaded = await withTenant(membership.organizationId, async (tx) => {
     const [person] = await loadSpecialistCards(tx, {
       id,
       ...(ownOnly ? { ownedBy: membership.userId } : {}),
+      withoutPay: !showsPay,
     });
     if (!person) return null;
 
@@ -54,8 +58,12 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
       .where(isNull(services.archivedAt))
       .orderBy(asc(services.createdAt));
 
+    const bookability = await loadBookabilityFacts(tx);
+
     return {
       person,
+      places: bookability.places.get(person.id) ?? [],
+      publishedLocationIds: bookability.publishedLocationIds,
       catalogue: serviceRows.map((service) => ({
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
@@ -105,6 +113,9 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
       currency={currency}
       locale={locale}
       businessType={businessType}
+      showsPay={showsPay}
+      places={loaded.places}
+      publishedLocationIds={loaded.publishedLocationIds}
       canManage={canManage}
     />
   );

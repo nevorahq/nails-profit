@@ -22,6 +22,7 @@ import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
+import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { monthBounds, monthOf } from "@/lib/period";
 import { AccountDeletion } from "@/components/account-deletion";
@@ -48,6 +49,7 @@ export default async function SettingsPage() {
     locale,
     currency,
     businessType,
+    staffNotices,
   } = await requireWorkspace();
 
   const canReadTeam = can(membership.role, "user_management", "read");
@@ -235,9 +237,19 @@ export default async function SettingsPage() {
       )
     : new Set<string>();
 
+  /*
+   * What removing somebody would leave behind — see `loadUpcomingByUser` for
+   * why the number belongs in the confirmation rather than in the response
+   * that reports what was already done.
+   */
+  const upcomingByUser = canReadTeam
+    ? await withTenant(membership.organizationId, (tx) => loadUpcomingByUser(tx))
+    : new Map<string, number>();
+
   const members: TeamMember[] = memberRows.map((row) => ({
     ...row,
     has_specialist_card: linkedAccounts.has(row.user_id),
+    upcoming_bookings: upcomingByUser.get(row.user_id) ?? 0,
   }));
 
   return (
@@ -246,7 +258,7 @@ export default async function SettingsPage() {
         <OrganizationSettings
           locale={locale}
           currency={currency}
-          businessType={businessType}
+          staffNotices={staffNotices}
           canEdit={can(membership.role, "organization_settings", "write")}
         />
       )}
@@ -290,6 +302,7 @@ export default async function SettingsPage() {
           members={members}
           canManage={can(membership.role, "user_management", "write")}
           locale={locale}
+          businessType={businessType}
           /*
            * Owner only, and never from inside a preview — an owner two levels
            * deep would be choosing a colleague to watch while wearing another

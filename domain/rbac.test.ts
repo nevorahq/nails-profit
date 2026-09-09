@@ -10,6 +10,7 @@ import {
   permissionFor,
   roleCapabilities,
   scopeFor,
+  seesIndividualPay,
   type Capability,
   type MemberRole,
 } from "@/domain/rbac";
@@ -128,6 +129,20 @@ describe("rbac helpers", () => {
     }
     expect(can("owner", "organization_settings", "write")).toBe(true);
     expect(can("owner", "data_export", "write")).toBe(true);
+  });
+
+  it("keeps one person's pay away from the role that reads aggregates", () => {
+    /*
+     * `aggregates_only` was declared in the matrix and read by nothing for as
+     * long as it existed, so an analyst opened «Мастера» to every master's
+     * rate. This is the predicate the four screens that could leak it now
+     * share; the matrix above already pins which roles carry the constraint.
+     */
+    expect(seesIndividualPay("owner")).toBe(true);
+    expect(seesIndividualPay("manager")).toBe(true);
+    // A master reads commissions at scope "own" — their own pay is theirs.
+    expect(seesIndividualPay("master")).toBe(true);
+    expect(seesIndividualPay("analyst")).toBe(false);
   });
 
   it("returns a null scope for a denied capability", () => {

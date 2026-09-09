@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef, type FormEvent } from "react";
 
 import { canManageRole, type MemberRole } from "@/domain/rbac";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { INVITABLE_ROLES, ROLE_HINTS } from "@/i18n/role-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 
 export type TeamMember = {
@@ -20,6 +23,13 @@ export type TeamMember = {
    * control that closes it.
    */
   has_specialist_card?: boolean;
+  /**
+   * Clients booked with them from now on. Removing somebody archives their
+   * card without touching those appointments, so this is the cost of the
+   * button — read for the whole team on the server, because a confirmation
+   * that waits on a request is one people click through.
+   */
+  upcoming_bookings?: number;
 };
 
 type InvitationRow = {
@@ -50,6 +60,7 @@ export function TeamManager({
   members,
   canManage,
   locale,
+  businessType,
   canPreview = false,
   canSendEmail = true,
   currentUserId,
@@ -58,6 +69,8 @@ export function TeamManager({
   members: TeamMember[];
   canManage: boolean;
   locale: AppLocale;
+  /** Which shape of business is reading. See `i18n/business-labels.ts`. */
+  businessType: BusinessType;
   /** Whether to offer "посмотреть как" beside each colleague. Owners only. */
   canPreview?: boolean;
   /**
@@ -326,120 +339,182 @@ export function TeamManager({
   // preview, an owner gets both, and everyone else gets no column at all.
   const showActions = canPreview || canManage;
 
+  /*
+   * «Участники» for a studio of one is a table with a single row in it, and
+   * that row is the reader's own address next to the word «Владелец». It
+   * answers nothing, and it is the first thing on the screen somebody opens in
+   * order to invite their first colleague — the form is below it.
+   *
+   * Both conditions, not just the type: a solo studio that has taken on an
+   * administrator has two members and a table worth reading, and only a master
+   * joining moves the type (`lib/solo-mode.ts`). A studio is left alone
+   * whatever its size — an empty-looking team is information there, because a
+   * studio is a thing somebody expects to have colleagues in.
+   */
+  const soloTeamOfOne = businessType === "solo" && members.length === 1;
+
   return (
     <section className="panel">
-      <h2>{t("team.membersTitle")}</h2>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Email</th>
-            <th>{t("team.inviteRole")}</th>
-            {showActions && <th>{t("team.invitationActions")}</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {members.map((m) => {
-            /*
-             * Nobody removes themselves, and a manager may not remove an owner
-             * — section 6.1's «кроме Owner», read here from the same function
-             * the endpoint reads it from. Both are refused server-side too;
-             * this only keeps the screen from offering what would be refused.
-             */
-            const removable =
-              canManage &&
-              m.user_id !== currentUserId &&
-              canManageRole(currentRole, m.role as MemberRole);
+      {!soloTeamOfOne && (
+        <>
+        <h2>{t("team.membersTitle")}</h2>
+        {/*
+          The reference, once, where the question is asked: the table beside it
+          says «управляющий» and nothing else, and «а что он вообще видит» is
+          not a question anybody could answer from that word. Folded, because
+          it is read on the day somebody is invited and not again.
+        */}
+        <details className="pl-history">
+          <summary>{t("team.rolesTitle")}</summary>
+          <ul className="compact-list">
+            {INVITABLE_ROLES.map((option) => (
+              <li key={option}>
+                {t(`roles.${option}` as MessageKey)}
+                <span className="unit-hint">{t(ROLE_HINTS[option])}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>{t("team.inviteRole")}</th>
+              {showActions && <th>{t("team.invitationActions")}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m) => {
+              /*
+               * Nobody removes themselves, and a manager may not remove an owner
+               * — section 6.1's «кроме Owner», read here from the same function
+               * the endpoint reads it from. Both are refused server-side too;
+               * this only keeps the screen from offering what would be refused.
+               */
+              const removable =
+                canManage &&
+                m.user_id !== currentUserId &&
+                canManageRole(currentRole, m.role as MemberRole);
 
-            return (
-              <tr key={m.user_id}>
-                <td>{m.email}</td>
-                <td>
-                  {t(`roles.${m.role}` as MessageKey)}
-                  {/*
-                    Stated in words, not by colour alone: a master with no card
-                    in the catalogue signs in to an empty calendar and cannot be
-                    booked, and nothing else on this screen would say so.
-                  */}
-                  {m.role === "master" && m.has_specialist_card === false && (
-                    <button
-                      type="button"
-                      className="badge-warning"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => router.push("/app/specialists")}
-                    >
-                      {t("team.noSpecialistCard")}
-                    </button>
-                  )}
-                </td>
-                {showActions && (
+              return (
+                <tr key={m.user_id}>
+                  <td>{m.email}</td>
                   <td>
+                    {t(`roles.${m.role}` as MessageKey)}
                     {/*
-                      No preview beside another owner: preview may only ever
-                      narrow what a request can do, and one owner wearing
-                      another's view would be the single case that does not.
-                      `POST /api/v1/preview` refuses it too.
+                      Stated in words, not by colour alone: a master with no card
+                      in the catalogue signs in to an empty calendar and cannot be
+                      booked, and nothing else on this screen would say so.
                     */}
-                    {canPreview && m.role !== "owner" && (
+                    {m.role === "master" && m.has_specialist_card === false && (
                       <button
-                        className="inline-action"
                         type="button"
-                        disabled={previewing !== null || pending}
-                        onClick={() => enterPreview(m.user_id)}
+                        className="badge-warning"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => router.push("/app/specialists")}
                       >
-                        {previewing === m.user_id ? t("preview.entering") : t("team.previewAction")}
+                        {t("team.noSpecialistCard")}
                       </button>
                     )}
-                    {removable &&
-                      (confirmRemove === m.id ? (
-                        <>
+                  </td>
+                  {showActions && (
+                    <td>
+                      {/*
+                        No preview beside another owner: preview may only ever
+                        narrow what a request can do, and one owner wearing
+                        another's view would be the single case that does not.
+                        `POST /api/v1/preview` refuses it too.
+                      */}
+                      {canPreview && m.role !== "owner" && (
+                        <button
+                          className="inline-action"
+                          type="button"
+                          disabled={previewing !== null || pending}
+                          onClick={() => enterPreview(m.user_id)}
+                        >
+                          {previewing === m.user_id ? t("preview.entering") : t("team.previewAction")}
+                        </button>
+                      )}
+                      {removable &&
+                        (confirmRemove === m.id ? (
+                          <>
+                            {/*
+                              What the press does, beside how much it costs.
+
+                              «Точно удалить?» stood alone in front of an
+                              archived card, an unlinked account and every
+                              session of that person ending — while the
+                              neighbouring `specialists.deleteHint` spelled the
+                              same consequences out in full for the other door
+                              to the same place. And the appointments survive:
+                              a client's Tuesday does not disappear because the
+                              studio parted with somebody, it survives with
+                              nobody to work it, which is why the count comes
+                              first and the calendar is one link away.
+                            */}
+                            <span className="warning-banner">
+                              {(m.upcoming_bookings ?? 0) > 0 && (
+                                <>
+                                  {t("team.removeUpcoming", { count: m.upcoming_bookings! })}{" "}
+                                  <Link className="text-link" href="/app/calendar">
+                                    {t("team.openCalendar")}
+                                  </Link>{" "}
+                                </>
+                              )}
+                              {t("team.removeHint")}
+                            </span>
+                            <button
+                              className="inline-action danger"
+                              type="button"
+                              disabled={pending}
+                              onClick={() => removeMember(m.id)}
+                            >
+                              {t("team.removeConfirm")}
+                            </button>
+                            <button
+                              className="inline-action"
+                              type="button"
+                              disabled={pending}
+                              onClick={() => setConfirmRemove(null)}
+                            >
+                              {t("common.cancel")}
+                            </button>
+                          </>
+                        ) : (
                           <button
                             className="inline-action danger"
                             type="button"
                             disabled={pending}
-                            onClick={() => removeMember(m.id)}
+                            onClick={() => setConfirmRemove(m.id)}
                           >
-                            {t("team.removeConfirm")}
+                            {t("team.remove")}
                           </button>
-                          <button
-                            className="inline-action"
-                            type="button"
-                            disabled={pending}
-                            onClick={() => setConfirmRemove(null)}
-                          >
-                            {t("common.cancel")}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className="inline-action danger"
-                          type="button"
-                          disabled={pending}
-                          onClick={() => setConfirmRemove(m.id)}
-                        >
-                          {t("team.remove")}
-                        </button>
-                      ))}
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                        ))}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        </>
+      )}
 
       {canManage && members.some((m) => m.role === "master" && m.has_specialist_card === false) && (
         <p className="warning-banner">{t("team.noSpecialistCardHint")}</p>
       )}
 
-      {!canManage && (
-        <p className="muted" style={{ marginTop: "16rem" }}>
-          {t("team.noAccess")}
-        </p>
-      )}
+      {/*
+        There was a «только владелец может управлять командой» here, and it was
+        wrong twice over: the matrix gives a manager `user_management` on write
+        as well, and the branch could not be reached at all — this screen is
+        rendered only for a role that may *read* team management, and the two
+        roles that may read it are the two that may write it.
+      */}
 
       {canManage && (
         <>
-          <h2 style={{ marginTop: "28rem" }}>{t("team.pendingTitle")}</h2>
+          <h2 style={soloTeamOfOne ? undefined : { marginTop: "28rem" }}>{t("team.pendingTitle")}</h2>
           {invitationsLoading ? (
             <p className="muted">{t("team.pendingLoading")}</p>
           ) : visibleInvitations.length === 0 ? (
@@ -519,12 +594,19 @@ export function TeamManager({
                 name="email"
                 type="email"
                 required
-                placeholder="master@example.com"
+                placeholder="colleague@example.com"
                 readOnly={step === "link-ready"}
               />
             </label>
             <label>
               {t("team.inviteRole")}
+              {/*
+                No description under the select. The four of them live in one
+                folded block above the members table instead: repeated here
+                they made the invitation form — four fields and a button — read
+                as a page of advice, and the owner asking «кого позвать» is not
+                the owner asking «что он увидит».
+              */}
               <select name="role" defaultValue="master" disabled={step === "link-ready"}>
                 <option value="master">{t("roles.master")}</option>
                 <option value="manager">{t("roles.manager")}</option>

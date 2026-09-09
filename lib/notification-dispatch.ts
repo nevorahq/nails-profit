@@ -536,6 +536,30 @@ async function staffFacts(
     destination = owner?.email ?? null;
   }
 
+  if (recipient === "member") {
+    /*
+     * The one recipient the studio picked rather than the product deriving —
+     * a manager, when `staff_notices` says the front desk should hear. Read by
+     * account id at delivery like every other address here, so somebody who
+     * changed their email between the booking and the send is written to at
+     * the address they have now.
+     */
+    const forUser = row.payload?.userId;
+    if (!forUser) return { ok: false, code: "payload_missing" };
+
+    const [member] = await tx
+      .select({ email: users.email })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .where(
+        and(eq(memberships.organizationId, organizationId), eq(memberships.userId, forUser)),
+      )
+      .limit(1);
+    // Gone from the team between the booking and the send: not an error, just
+    // nobody to write to any more.
+    destination = member?.email ?? null;
+  }
+
   if (recipient === "previous_specialist") {
     const releasedFrom = row.payload?.specialistId;
     const releasedAt = row.payload?.startsAt;

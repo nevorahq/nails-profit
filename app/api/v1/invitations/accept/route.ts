@@ -14,6 +14,7 @@ import { auth } from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, rateLimited, requestId, toFieldErrors } from "@/lib/http";
 import { callerKey, checkRateLimit, INVITATION_ACCEPT_RULE } from "@/lib/rate-limit";
+import { leaveSoloMode } from "@/lib/solo-mode";
 
 // The token travels in the body, not the path: URLs end up in access logs,
 // browser history and Referer headers, and this one is a bearer credential.
@@ -110,6 +111,27 @@ export async function POST(request: Request) {
       createdBy: session.user.id,
       updatedBy: session.user.id,
     });
+
+    /*
+     * A studio of one that somebody has just joined is not one any more.
+     *
+     * Only a master counts. An administrator or a second owner shares the
+     * books, not the table, and «оплата труда мастеров» is still the wrong
+     * sentence for a woman who is the only person holding a brush — see
+     * `i18n/business-labels.ts` on what the type is actually for. The
+     * catalogue side of the same question is in `POST /api/v1/specialists`.
+     *
+     * The acceptor is the actor: they are the one whose arrival is the fact
+     * being recorded, and the owner who sent the invitation may be asleep.
+     */
+    if (invitation.role === "master") {
+      await leaveSoloMode(tx, {
+        organizationId: invitation.organizationId,
+        actorUserId: session.user.id,
+        requestId: id,
+        because: "invitation_accepted",
+      });
+    }
 
     // Guarded on status so two concurrent accepts cannot both consume the row.
     const consumed = await tx

@@ -14,7 +14,7 @@ import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
-import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { isPilotAccessEnforced } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
@@ -312,7 +312,16 @@ export default async function AppPage({
       onboarding,
       monthSetup,
       people,
-      canFilterBySpecialist: scopeFor(membership.role, "dashboard") === "all",
+      /*
+       * Whose report this may be narrowed to. Reading the whole studio is not
+       * the same permission as reading one person out of it: an analyst holds
+       * «Все агрегаты», and a filter that leaves one master standing turns the
+       * aggregate into that master's month. The scope decides whether the
+       * report is the studio's; `seesIndividualPay` decides whether it can be
+       * pointed at somebody.
+       */
+      canFilterBySpecialist:
+        scopeFor(membership.role, "dashboard") === "all" && seesIndividualPay(membership.role),
       expenseTotal,
       previousExpenseTotal,
     };

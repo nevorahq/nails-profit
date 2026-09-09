@@ -35,6 +35,8 @@ const settingsSchema = z
      * than the rota is a claim this figure does not make.
      */
     practical_capacity_basis_points: z.int().min(1).max(10_000).optional(),
+    /** Who besides the working master is written to — see `staffNoticeAudience`. */
+    staff_notices: z.enum(["owner", "owner_and_managers"]).optional(),
     // Renaming goes through the same rule as naming: a studio must not be able
     // to arrive in Cyrillic by the back door of its own settings.
     name: z
@@ -119,6 +121,7 @@ export async function PATCH(request: Request) {
           // belongs in the trail rather than only in the row.
           withdrawal_reserve_minor: organizations.withdrawalReserveMinor,
           practical_capacity_basis_points: organizations.practicalCapacityBasisPoints,
+          staff_notices: organizations.staffNotices,
         })
         .from(organizations)
         .where(eq(organizations.id, actor.organizationId))
@@ -128,6 +131,7 @@ export async function PATCH(request: Request) {
         booking_access: bookingAccess,
         withdrawal_reserve_minor: reserve,
         practical_capacity_basis_points: practicalCapacity,
+        staff_notices: staffNotices,
         ...columns
       } = parsed.data;
       const [row] = await tx
@@ -139,6 +143,7 @@ export async function PATCH(request: Request) {
           ...(practicalCapacity !== undefined
             ? { practicalCapacityBasisPoints: practicalCapacity }
             : {}),
+          ...(staffNotices !== undefined ? { staffNotices } : {}),
           updatedBy: actor.userId,
           updatedAt: new Date(),
           version: sql`${organizations.version} + 1`,
@@ -153,6 +158,7 @@ export async function PATCH(request: Request) {
           booking_access: organizations.bookingAccess,
           withdrawal_reserve_minor: organizations.withdrawalReserveMinor,
           practical_capacity_basis_points: organizations.practicalCapacityBasisPoints,
+          staff_notices: organizations.staffNotices,
         });
 
       await recordAuditEvent(tx, {

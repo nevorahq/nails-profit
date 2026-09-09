@@ -6,12 +6,13 @@ import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
 import { commissionBases, commissionTypes } from "@/domain/costing";
-import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
+import { leaveSoloMode } from "@/lib/solo-mode";
 
 /**
  * Specialists and their commission rules, spec RES-001, RES-004 and RES-005.
@@ -102,6 +103,15 @@ export async function GET(request: Request) {
   // to their own. Section 6.1: "Только собственный результат".
   const ownOnly = scopeFor(actor.role, "commissions") === "own";
 
+  /*
+   * And the second thing the scope alone does not say: whether this caller is
+   * owed what one named person is paid. An analyst reads «Агрегаты» at scope
+   * "all", so the filter above lets every row through and the rate has to be
+   * withheld from the row itself. Same decision as the two screens make, taken
+   * from the same function — see `seesIndividualPay`.
+   */
+  const withPay = seesIndividualPay(actor.role);
+
   const rows = await withTenant(actor.organizationId, async (tx) => {
     const people = await tx
       .select()
@@ -141,24 +151,27 @@ export async function GET(request: Request) {
           id: person.id,
           name: person.name,
           cooperation_type: person.cooperationType,
-          user_id: person.userId,
+          user_id: withPay ? person.userId : null,
           is_principal: person.isPrincipal,
-          default_rule: defaultRule
-            ? {
-                type: defaultRule.type,
-                basis_points: defaultRule.basisPoints,
-                fixed_amount_minor: defaultRule.fixedAmountMinor,
-                base: defaultRule.base,
-                active_from: defaultRule.activeFrom,
-              }
-            : null,
-          service_exceptions: exceptions.map((rule) => ({
-            service_id: rule.serviceId,
-            type: rule.type,
-            basis_points: rule.basisPoints,
-            fixed_amount_minor: rule.fixedAmountMinor,
-            base: rule.base,
-          })),
+          default_rule:
+            withPay && defaultRule
+              ? {
+                  type: defaultRule.type,
+                  basis_points: defaultRule.basisPoints,
+                  fixed_amount_minor: defaultRule.fixedAmountMinor,
+                  base: defaultRule.base,
+                  active_from: defaultRule.activeFrom,
+                }
+              : null,
+          service_exceptions: withPay
+            ? exceptions.map((rule) => ({
+                service_id: rule.serviceId,
+                type: rule.type,
+                basis_points: rule.basisPoints,
+                fixed_amount_minor: rule.fixedAmountMinor,
+                base: rule.base,
+              }))
+            : [],
         };
       }),
     );
@@ -298,6 +311,31 @@ export async function POST(request: Request) {
       after: { name: created.name, cooperation_type: created.cooperationType },
       requestId: id,
     });
+
+    /*
+     * Two masters in the catalogue is a studio, whatever the account said when
+     * it was opened, and it is the catalogue rather than the invitation that
+     * settles it: a small studio where the owner books everybody herself never
+     * hands out a second login at all. `POST /api/v1/organizations` writes the
+     * solo owner their own card, so «two» here really is one more than her.
+     *
+     * Counted rather than assumed from a flag: archiving a master takes the row
+     * out of the count, and a studio that has shrunk back to one is still a
+     * studio — `lib/solo-mode.ts` says why that is deliberate.
+     */
+    const live = await tx
+      .select({ id: specialists.id })
+      .from(specialists)
+      .where(isNull(specialists.archivedAt))
+      .limit(2);
+    if (live.length > 1) {
+      await leaveSoloMode(tx, {
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        requestId: id,
+        because: "second_specialist",
+      });
+    }
 
     await recordCompletedServiceCostEvents(tx, actor);
 

@@ -129,6 +129,21 @@ const auditColumns = {
 /** The rollout ladder of section 7.11: nothing, the staff calendar, the public page. */
 export const bookingAccessLevel = pgEnum("booking_access_level", ["off", "calendar", "public"]);
 
+/**
+ * Who in the studio is written to when a client books, cancels or moves.
+ *
+ * The master whose chair it is always hears; this decides who else. It was the
+ * owner and nobody but the owner, which leaves out the one role whose whole job
+ * is to answer — a manager runs the front desk, holds `bookings` at «Да», and
+ * learned about a request only by opening the app.
+ *
+ * A studio setting rather than a rule, because the cost of being wrong runs the
+ * other way too: every message is one per recipient, so a studio with two
+ * administrators would get four emails for one request. Whoever knows how the
+ * shift actually works decides.
+ */
+export const staffNoticeAudience = pgEnum("staff_notice_audience", ["owner", "owner_and_managers"]);
+
 export const organizations = pgTable(
   "organization",
   {
@@ -160,6 +175,13 @@ export const organizations = pgTable(
      * the calendar, and a default of `off` would take it from them on deploy.
      */
     bookingAccess: bookingAccessLevel("booking_access").notNull().default("calendar"),
+    /**
+     * Who besides the working master hears about a booking — see
+     * `staffNoticeAudience`. `owner` by default: it is what every studio has
+     * today, and starting to mail the managers of studios that never asked
+     * would be a change they discover in their inbox.
+     */
+    staffNotices: staffNoticeAudience("staff_notices").notNull().default("owner"),
     /**
      * What the owner keeps in the business before anything counts as safe to
      * take out. Zero by default — a reserve nobody chose is not a reserve, and
@@ -2074,8 +2096,14 @@ export const notificationOutbox = pgTable(
      */
     payload: jsonb("payload").$type<{
       code?: string;
-      recipient?: "specialist" | "owner" | "previous_specialist";
+      recipient?: "specialist" | "owner" | "previous_specialist" | "member";
       specialistId?: string;
+      /**
+       * Which account a `member` row is for — the one recipient the studio
+       * chooses rather than the product, so it cannot be derived at delivery
+       * the way «мастер» and «владелец» can. See `staffNoticeAudience`.
+       */
+      userId?: string;
       /** ISO 8601; a `jsonb` column holds no timestamps of its own. */
       startsAt?: string;
     }>(),

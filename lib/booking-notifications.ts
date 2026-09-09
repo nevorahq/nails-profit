@@ -110,6 +110,35 @@ export async function notifyStaff(
     .orderBy(asc(memberships.createdAt))
     .limit(1);
 
+  /*
+   * The front desk, when the studio has asked for it.
+   *
+   * A manager holds `bookings` at «Да» and their whole job is answering a
+   * request — and they were told about one only by opening the app. Not made a
+   * rule, because one message is written per recipient and a studio with two
+   * administrators would get four emails for one request; `staff_notices` is
+   * where that is decided by whoever knows the shift (`db/schema.ts`).
+   */
+  const [organization] = await tx
+    .select({ audience: organizations.staffNotices })
+    .from(organizations)
+    .where(eq(organizations.id, input.organizationId))
+    .limit(1);
+
+  const managers =
+    organization?.audience === "owner_and_managers"
+      ? await tx
+          .select({ userId: memberships.userId })
+          .from(memberships)
+          .where(
+            and(
+              eq(memberships.organizationId, input.organizationId),
+              eq(memberships.role, "manager"),
+            ),
+          )
+          .orderBy(asc(memberships.createdAt))
+      : [];
+
   const specialistUserId = target?.specialistUserId ?? null;
 
   /*
@@ -131,8 +160,26 @@ export async function notifyStaff(
     });
   }
 
-  // The owner already heard about it if the master is them: one address, one
-  // message, however many roles the person happens to hold.
+  /*
+   * One address, one message, however many roles the person happens to hold.
+   * The owner is skipped when they are the master; a manager is skipped when
+   * they are the master, and again when they are somehow the owner too.
+   */
+  for (const manager of managers) {
+    if (manager.userId === specialistUserId || manager.userId === owner?.userId) continue;
+    await insertOutbox(tx, {
+      organizationId: input.organizationId,
+      bookingId: input.bookingId,
+      verificationId: null,
+      channel: "email",
+      template: input.template,
+      occurrence: input.occurrence
+        ? `${input.occurrence}:manager:${manager.userId}`
+        : `manager:${manager.userId}`,
+      payload: { recipient: "member", userId: manager.userId },
+    });
+  }
+
   if (owner && owner.userId !== specialistUserId) {
     await insertOutbox(tx, {
       organizationId: input.organizationId,
@@ -264,8 +311,10 @@ async function insertOutbox(
     scheduledAt?: Date;
     payload: {
       code?: string;
-      recipient?: "specialist" | "owner" | "previous_specialist";
+      recipient?: "specialist" | "owner" | "previous_specialist" | "member";
       specialistId?: string;
+      /** Which account a `member` row is for — see `staffNoticeAudience`. */
+      userId?: string;
       startsAt?: string;
     } | null;
   },

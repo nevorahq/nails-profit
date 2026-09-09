@@ -29,6 +29,12 @@ export type Workspace = Readonly<{
    * computed from it is built in `domain/capacity.ts`.
    */
   practicalCapacityBasisPoints: number;
+  /**
+   * Who besides the working master is written to when a client books. Read
+   * here because the control that changes it sits on the settings page beside
+   * language, currency and format; the rule itself is `staffNoticeAudience`.
+   */
+  staffNotices: "owner" | "owner_and_managers";
 }>;
 
 /**
@@ -53,6 +59,7 @@ async function loadWorkspace(): Promise<Workspace> {
       currency: organizations.currency,
       type: organizations.type,
       practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
+      staffNotices: organizations.staffNotices,
     })
     .from(organizations)
     .where(eq(organizations.id, caller.membership.organizationId))
@@ -67,6 +74,7 @@ async function loadWorkspace(): Promise<Workspace> {
     currency: organization?.currency ?? "MDL",
     businessType: organization?.type ?? "solo",
     practicalCapacityBasisPoints: organization?.practicalCapacityBasisPoints ?? 7500,
+    staffNotices: organization?.staffNotices ?? "owner",
   };
 }
 
