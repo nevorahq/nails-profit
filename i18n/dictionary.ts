@@ -92,8 +92,6 @@ const ru = {
   "settings.staffNotices": "Письма о заявках",
   "settings.staffNotices.owner": "Только владельцу",
   "settings.staffNotices.owner_and_managers": "Владельцу и управляющим",
-  "settings.staffNoticesHint":
-    "Мастер, к которому записались, получает письмо всегда. Здесь — кто ещё. Письмо уходит каждому получателю отдельно, так что двое управляющих — это два письма на одну заявку.",
   "currency.rub": "рубль",
   "settings.saved": "Сохранено",
   "settings.dataTitle": "Данные организации",
@@ -496,10 +494,9 @@ const ru = {
   "pl.safeToWithdraw": "Можно вывести",
   "pl.safeToWithdrawHint": "Экономическая прибыль за вычетом резерва {reserve}, который вы оставляете в деле.",
   "pl.ownerWageMissing":
-    "Экономическая прибыль не посчитана: не задано, сколько стоит ваш труд. По вашим визитам за месяц начислено {suggested} — это и есть рыночная оценка, её можно взять как есть или назначить свою.",
+    "Экономическая прибыль не посчитана: не задано, сколько стоит ваш труд. По вашим визитам за месяц начислено {suggested} — это рыночная оценка того же труда.",
   "pl.ownerWageMissingIdle":
-    "Экономическая прибыль не посчитана: не задано, сколько стоит труд владельца. Задайте вменённую зарплату в настройках.",
-  "pl.setOwnerWage": "Задать в настройках",
+    "Экономическая прибыль не посчитана: не задано, сколько стоит труд владельца.",
   "pl.marginFloor":
     "{count} визитов пока без посчитанной маржи (на {revenue}), поэтому прибыль показана по нижней границе — она не меньше указанной.",
   "pl.overheadTitle": "Постоянные расходы по категориям",
@@ -898,12 +895,8 @@ const ru = {
   "workspace.namePlaceholder": "Например, Studio Belle",
   "workspace.address": "Адрес",
   "workspace.addressPlaceholder": "Улица, дом, город",
-  "workspace.addressHint": "По адресу строится график работы и запись клиентов. Он не виден никому, пока вы не откроете онлайн-запись.",
   "workspace.nameLatin": "Только латиница: A–Z, цифры, пробел и дефис.",
   "workspace.format": "Формат",
-  "workspace.formatHint":
-    "Меняет только формулировки в отчётах — «оплата вашего труда» или «оплата труда мастеров». Ни на одну цифру не влияет.",
-  "workspace.formatReversible": "Переключается потом в настройках.",
   "workspace.solo": "Solo-мастер",
   "workspace.studio": "Студия",
   "workspace.creating": "Создаём…",
@@ -1368,8 +1361,6 @@ const ro: Record<MessageKey, Message> = {
   "settings.staffNotices": "E-mailuri despre programări",
   "settings.staffNotices.owner": "Doar proprietarului",
   "settings.staffNotices.owner_and_managers": "Proprietarului și managerilor",
-  "settings.staffNoticesHint":
-    "Maestrul la care s-a programat clientul primește întotdeauna un e-mail. Aici se alege cine altcineva. Mesajul pleacă separat către fiecare destinatar, deci doi manageri înseamnă două e-mailuri pentru o programare.",
   "currency.rub": "rublă",
   "settings.saved": "Salvat",
   "settings.dataTitle": "Datele organizației",
@@ -1773,10 +1764,9 @@ const ro: Record<MessageKey, Message> = {
   "pl.safeToWithdraw": "Se poate retrage",
   "pl.safeToWithdrawHint": "Profitul economic minus rezerva de {reserve} pe care o lăsați în afacere.",
   "pl.ownerWageMissing":
-    "Profitul economic nu este calculat: nu ați spus cât valorează munca dvs. Pe vizitele dvs. din lună s-au calculat {suggested} — aceasta este evaluarea de piață, o puteți lua ca atare sau stabili alta.",
+    "Profitul economic nu este calculat: nu ați spus cât valorează munca dvs. Pe vizitele dvs. din lună s-au calculat {suggested} — aceasta este evaluarea de piață a aceleiași munci.",
   "pl.ownerWageMissingIdle":
-    "Profitul economic nu este calculat: nu este stabilit cât valorează munca proprietarului. Definiți salariul imputat în setări.",
-  "pl.setOwnerWage": "Stabiliți în setări",
+    "Profitul economic nu este calculat: nu este stabilit cât valorează munca proprietarului.",
   "pl.marginFloor":
     "{count} vizite încă fără marjă calculată (de {revenue}), deci profitul este arătat la limita de jos — nu este mai mic decât atât.",
   "pl.overheadTitle": "Cheltuieli fixe pe categorii",
@@ -2175,12 +2165,8 @@ const ro: Record<MessageKey, Message> = {
   "workspace.namePlaceholder": "De exemplu, Studio Belle",
   "workspace.address": "Adresa",
   "workspace.addressPlaceholder": "Strada, numărul, orașul",
-  "workspace.addressHint": "Pe adresă se construiesc programul de lucru și programările. Nu o vede nimeni până nu deschideți programarea online.",
   "workspace.nameLatin": "Doar litere latine: A–Z, cifre, spațiu și cratimă.",
   "workspace.format": "Format",
-  "workspace.formatHint":
-    "Schimbă doar formulările din rapoarte — „plata muncii dvs.” sau „plata muncii maeștrilor”. Nu afectează nicio cifră.",
-  "workspace.formatReversible": "Poate fi comutat mai târziu în setări.",
   "workspace.solo": "Maestru solo",
   "workspace.studio": "Salon",
   "workspace.creating": "Se creează…",
@@ -2643,8 +2629,6 @@ const en: Record<MessageKey, Message> = {
   "settings.staffNotices": "Emails about bookings",
   "settings.staffNotices.owner": "The owner only",
   "settings.staffNotices.owner_and_managers": "The owner and the managers",
-  "settings.staffNoticesHint":
-    "The master a client booked always gets an email. This chooses who else. One message goes to each recipient, so two managers means two emails for one request.",
   "currency.rub": "rouble",
   "settings.saved": "Saved",
   "settings.dataTitle": "Organization data",
@@ -3043,10 +3027,9 @@ const en: Record<MessageKey, Message> = {
   "pl.safeToWithdraw": "Safe to withdraw",
   "pl.safeToWithdrawHint": "Economic profit less the {reserve} reserve you keep in the business.",
   "pl.ownerWageMissing":
-    "Economic profit is not computed: you have not said what your work is worth. Your own visits this month booked {suggested} — that is the market rate, and you can take it as it stands or set your own.",
+    "Economic profit is not computed: you have not said what your work is worth. Your own visits this month booked {suggested} — that is the market rate for the same work.",
   "pl.ownerWageMissingIdle":
-    "Economic profit is not computed: nobody has said what the owner's work is worth. Set the imputed wage in settings.",
-  "pl.setOwnerWage": "Set it in settings",
+    "Economic profit is not computed: nobody has said what the owner's work is worth.",
   "pl.marginFloor":
     "{count} visits have no margin computed yet (on {revenue}), so the profit shown is a floor — it is not lower than this.",
   "pl.overheadTitle": "Fixed costs by category",
@@ -3440,12 +3423,8 @@ const en: Record<MessageKey, Message> = {
   "workspace.namePlaceholder": "For example, Studio Belle",
   "workspace.address": "Address",
   "workspace.addressPlaceholder": "Street, number, city",
-  "workspace.addressHint": "The rota and client bookings are built on this address. Nobody sees it until you open online booking.",
   "workspace.nameLatin": "Latin letters only: A–Z, digits, space and hyphen.",
   "workspace.format": "Format",
-  "workspace.formatHint":
-    "Changes only the wording in the reports — “your own pay” or “the specialists’ pay”. It moves no figure.",
-  "workspace.formatReversible": "It can be switched later in settings.",
   "workspace.solo": "Solo technician",
   "workspace.studio": "Studio",
   "workspace.creating": "Creating…",

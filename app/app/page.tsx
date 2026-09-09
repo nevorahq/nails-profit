@@ -106,7 +106,7 @@ export default async function AppPage({
   if (!membership) {
     // No organization yet, so its language does not exist to ask: the browser's
     // preference is the only signal, and it becomes the new workspace's locale.
-    return <WorkspaceSetup email={session.user.email} locale={await resolveLocale()} />;
+    return <WorkspaceSetup locale={await resolveLocale()} />;
   }
 
   const locale = membership.organization.locale as AppLocale;

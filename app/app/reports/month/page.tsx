@@ -289,18 +289,19 @@ export default async function MonthReportPage({
             {pl.economicProfitMinor !== null && <p className="pl-note">{t("pl.economicProfitHint")}</p>}
 
             {/*
-              Not computed, and the reason plus the way out. The suggestion is
+              Not computed, and the reason — but no way out offered any more.
+              «Оплата труда за месяц» is off the settings page (see the switch
+              at the top of `app/app/settings/page.tsx`), so a link to it would
+              be a door onto nothing; `tests/owner-wage-reachable.test.ts` holds
+              the two together. The suggestion still stands on its own: it is
               what the owner already booked themselves at the market rate this
-              month — the number they would otherwise have to work out by hand.
+              month, which is the number this line exists to name.
             */}
             {pl.ownerWageMinor === null && (
               <p className="pl-note">
                 {pl.principalLabourMinor > 0
                   ? t("pl.ownerWageMissing", { suggested: money(pl.principalLabourMinor) })
-                  : t("pl.ownerWageMissingIdle")}{" "}
-                <Link className="text-link" href="/app/settings">
-                  {t("pl.setOwnerWage")}
-                </Link>
+                  : t("pl.ownerWageMissingIdle")}
               </p>
             )}
 

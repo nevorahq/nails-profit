@@ -168,7 +168,6 @@ export function OrganizationSettings({
               {t("settings.staffNotices.owner_and_managers")}
             </option>
           </select>
-          <span className="field-hint">{t("settings.staffNoticesHint")}</span>
         </label>
 
         {/*

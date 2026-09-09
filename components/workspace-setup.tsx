@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { currencies } from "@/domain/money";
 import { slugify } from "@/domain/slug";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
-import { AccountDeletion } from "@/components/account-deletion";
 import { getTranslator } from "@/i18n/t";
 
 /**
@@ -17,16 +16,9 @@ import { getTranslator } from "@/i18n/t";
  * something on a screen that is the middle of it, and an explanation of what
  * happened to the previous studio is news to nobody — the person reading it is
  * the person who deleted it, one screen ago. What the screen owes them is the
- * path, the form, and a way out.
+ * path and the form.
  */
-export function WorkspaceSetup({
-  email,
-  locale,
-}: {
-  /** The account's own address, for the deletion form's confirmation. */
-  email: string;
-  locale: AppLocale;
-}) {
+export function WorkspaceSetup({ locale }: { locale: AppLocale }) {
   const router = useRouter();
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
@@ -130,30 +122,21 @@ export function WorkspaceSetup({
               maxLength={300}
               placeholder={t("workspace.addressPlaceholder")}
             />
-            <span className="field-hint">{t("workspace.addressHint")}</span>
           </label>
           <fieldset>
             <legend>{t("workspace.format")}</legend>
             <label className="radio-row"><input type="radio" name="type" value="solo" defaultChecked /> {t("workspace.solo")}</label>
             <label className="radio-row"><input type="radio" name="type" value="studio" /> {t("workspace.studio")}</label>
             {/*
-              The one field on this form with no consequence anybody could
-              guess, and the only one that used to be asked in silence. It
-              decides a great deal of wording — «оплата вашего труда» against
-              «оплата труда мастеров», and now the first screen after this one
-              — and not one figure, which is exactly the pair of facts somebody
-              choosing in their first minute needs to be told. The last clause
-              is the important one: it says the choice is not final, which is
-              what makes it safe to make quickly.
+              No prose under the choice any more. What it explained was true —
+              the format moves wording, «оплата вашего труда» against «оплата
+              труда мастеров», and not one figure — but the clause that made it
+              safe to answer quickly, «переключается потом в настройках», had
+              already stopped being: settings does not offer the control. The
+              silence costs nothing, because nothing now depends on this answer
+              being right on the first minute — `lib/solo-mode.ts` corrects it
+              the day a second master appears.
             */}
-            {/*
-              The second sentence is only true where it is being read for the
-              first time. Settings carries the same hint and would be telling
-              somebody standing in Настройки that they could go to Настройки.
-            */}
-            <span className="field-hint">
-              {t("workspace.formatHint")} {t("workspace.formatReversible")}
-            </span>
           </fieldset>
           <label>
             {t("workspace.currency")}
@@ -177,14 +160,16 @@ export function WorkspaceSetup({
         </form>
       </section>
       {/*
-        The only way out of this screen that is not «create a studio». An
-        account with no organization has no Настройки to reach — the whole
-        settings page requires a workspace — so without this, somebody who has
-        just erased their studio cannot delete their account, and cannot
-        register again either: the address is still taken by the account they
-        are locked inside.
+        «Удалить аккаунт» is not offered here any more, and nothing replaced it.
+        Worth knowing what that closes: an account with no organization has no
+        Настройки to reach — that page requires a workspace — so this screen was
+        the only exit from the product that was not «create a studio». Somebody
+        who has just erased their studio now cannot delete the account either,
+        and cannot register afresh on the same address, because that address is
+        still held by the account they are inside. `DELETE /api/v1/account` is
+        untouched and still refuses an owner with a live studio, so the way back
+        is to call it directly or to put this control back.
       */}
-      <AccountDeletion locale={locale} email={email} variant="link" />
     </main>
   );
 }
