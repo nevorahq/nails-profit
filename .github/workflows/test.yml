@@ -90,6 +90,20 @@ jobs:
           psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO nail_profit_app"
           psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nail_profit_app"
           psql -h 127.0.0.1 -p 55432 -U nail_profit -d nail_profit_test -v ON_ERROR_STOP=1 -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nail_profit_app"
+      # As the application role, because the question is the one the
+      # application asks: can I read this table, and only my own rows of it?
+      # After the grants for that reason, and before the suites because a table
+      # shipped without a policy should fail by name here rather than as
+      # whichever test happens to read it first.
+      #
+      # This guards the half a test run can see. The other half is the
+      # environment: production was found on 09.09.2026 with RLS disabled on
+      # all forty-two tenant tables while every suite was green, because the
+      # databases CI builds are correct and the one nobody queries was not.
+      # `scripts/repair-rls.sql` fixed it; running this script against a
+      # deployed database is what would have found it.
+      - name: Verify tenant isolation
+        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/verify-rls.sql
       - run: npm run test:integration
       - run: npm run test:e2e
       - run: npx playwright install --with-deps chromium
