@@ -971,10 +971,6 @@ const ru = {
   "visits.adjusted": "скорректирован",
   "visits.delete": "Удалить визит",
   "visits.deleteConfirm": "Подтвердить удаление",
-  "visits.deleteFromBooking":
-    "Визит закрыт из записи — удалить его нельзя, ошибку в нём исправляют пересчётом.",
-  "visits.deleteHint":
-    "Визит удаляется вместе со своим расчётом: выручка, маржа и комиссия по нему уходят из месячных итогов. Восстановить нельзя. Визит, закрытый из записи, удалить нельзя — его исправляют пересчётом.",
   "visits.deleteFailed": "Не удалось удалить визит",
   "visits.line": "Позиция",
   "visits.charged": "Начислено",
@@ -2241,10 +2237,6 @@ const ro: Record<MessageKey, Message> = {
   "visits.adjusted": "corectată",
   "visits.delete": "Ștergeți vizita",
   "visits.deleteConfirm": "Confirmați ștergerea",
-  "visits.deleteFromBooking":
-    "Vizita a fost închisă dintr-o programare — nu poate fi ștearsă; o greșeală în ea se corectează prin recalculare.",
-  "visits.deleteHint":
-    "Vizita se șterge împreună cu calculul ei: încasarea, marja și comisionul dispar din totalurile lunii. Nu poate fi restabilită. O vizită închisă dintr-o programare nu se șterge — se corectează prin recalculare.",
   "visits.deleteFailed": "Nu s-a putut șterge vizita",
   "visits.line": "Poziție",
   "visits.charged": "Facturat",
@@ -3498,10 +3490,6 @@ const en: Record<MessageKey, Message> = {
   "visits.adjusted": "adjusted",
   "visits.delete": "Delete visit",
   "visits.deleteConfirm": "Confirm deletion",
-  "visits.deleteFromBooking":
-    "The visit closed an appointment — it cannot be deleted; a mistake in it is corrected by adjusting it.",
-  "visits.deleteHint":
-    "The visit goes with its calculation: its revenue, margin and commission leave the month's totals. This cannot be undone. A visit that closed an appointment cannot be deleted — it is corrected by adjusting it.",
   "visits.deleteFailed": "Could not delete the visit",
   "visits.line": "Line",
   "visits.charged": "Charged",

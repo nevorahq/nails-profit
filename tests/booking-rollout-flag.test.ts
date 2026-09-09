@@ -97,6 +97,19 @@ const OUTSIDE_THE_FLAG = [
    * route has to name them rather than leave it to a cascade.
    */
   join(API_ROOT, "specialists", "[id]", "route.ts"),
+  /*
+   * Deleting a visit is a books operation. A visit recorded by hand has nothing
+   * to do with the booking module, and gating its removal would leave a studio
+   * with the module off unable to take a mistyped visit out of its month — the
+   * same wrong switch again.
+   *
+   * It reaches `booking` for one row and one reason: a visit that closed an
+   * appointment takes the completion with it, so the appointment goes back to
+   * `confirmed` rather than being left marked completed with nothing behind it.
+   * That row exists only where the module was in use, and where it was not,
+   * `visit.booking_id` is null and the route never touches the table.
+   */
+  join(API_ROOT, "visits", "[id]", "route.ts"),
 ];
 
 function routeFiles(directory: string, found: string[] = []): string[] {

@@ -1,9 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
-import { financialSnapshots, visits } from "@/db/schema";
+import { bookings, financialSnapshots, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { loadBooking } from "@/lib/booking-service";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
@@ -24,12 +25,23 @@ import { getActiveMembership } from "@/lib/membership";
  * is the organization-wide scope and not a Master's own — a figure disappearing
  * from the studio's report is the owner's decision.
  *
- * A visit that closed an appointment is refused. `completed` is terminal in
- * `BOOKING_TRANSITIONS`, so the booking cannot go back to `confirmed` to be
- * closed again, and deleting the visit under it would leave an appointment
- * marked completed with nothing behind it — the state
- * `POST /bookings/{id}/complete` already reports as broken. Those are corrected
- * with `adjust`, not removed.
+ * A visit that closed an appointment goes too, and the appointment goes back to
+ * `confirmed` in the same transaction. Leaving it `completed` is what used to
+ * make this case a refusal: an appointment marked completed with nothing behind
+ * it is the state `POST /bookings/{id}/complete` itself reports as broken. So
+ * the completion is undone rather than orphaned, and the booking can be closed
+ * again — the partial unique index on `visit.booking_id` frees with the row.
+ *
+ * That reversal is written here, directly, and `BOOKING_TRANSITIONS` still says
+ * `completed` is terminal. The distinction is deliberate: `canTransition` is
+ * consulted by `transitionBooking`, which serves `POST /bookings/{id}/confirm`
+ * among others, so admitting `completed → confirmed` to the table would let
+ * staff un-complete an appointment while its visit still stands — the same
+ * broken pair, mirrored. The only thing that may reverse a completion is the
+ * removal of what the completion produced, and that is atomic with it here.
+ *
+ * `adjust` remains the usual answer. Correcting the figures in a visit that did
+ * happen is not this: this is for one that did not.
  */
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const id = requestId(request);
@@ -46,10 +58,48 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
 
   const { id: visitId } = await context.params;
 
+  const now = new Date();
+
   const outcome = await withTenant(actor.organizationId, async (tx) => {
     const [visit] = await tx.select().from(visits).where(eq(visits.id, visitId)).limit(1);
     if (!visit) return { failure: "not_found" as const };
-    if (visit.bookingId) return { failure: "from_booking" as const };
+
+    /*
+     * The appointment first, while nothing has been destroyed yet.
+     *
+     * A returned failure commits the transaction — only a thrown one rolls it
+     * back — so a booking this cannot reopen has to be found before the visit
+     * is gone, not after. The version is matched in the `WHERE` clause for the
+     * reason `transitionBooking` matches it there: a colleague acting on the
+     * same appointment in the same moment read the same row, and only the
+     * update that matched may claim to have changed anything.
+     */
+    const booking = visit.bookingId ? await loadBooking(tx, visit.bookingId) : null;
+    if (booking && booking.status === "completed") {
+      const [reopened] = await tx
+        .update(bookings)
+        .set({
+          status: "confirmed",
+          completedAt: null,
+          updatedAt: now,
+          updatedBy: actor.userId,
+          version: booking.version + 1,
+        })
+        .where(and(eq(bookings.id, booking.id), eq(bookings.version, booking.version)))
+        .returning();
+      if (!reopened) return { failure: "booking_conflict" as const };
+
+      await recordAuditEvent(tx, {
+        organizationId: actor.organizationId,
+        actorUserId: actor.userId,
+        eventType: "booking.completion_reversed",
+        entityType: "booking",
+        entityId: booking.id,
+        before: { status: booking.status, visit_id: visit.id },
+        after: { status: "confirmed", visit_id: null },
+        requestId: id,
+      });
+    }
 
     /*
      * Read before the delete, and kept whole: the audit event is the only place
@@ -95,8 +145,8 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     }
     return apiError(
       409,
-      "VISIT_FROM_BOOKING",
-      "This visit closed an appointment and can only be adjusted",
+      "VERSION_CONFLICT",
+      "The appointment behind this visit changed while it was open",
       id,
     );
   }

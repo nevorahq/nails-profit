@@ -11,26 +11,15 @@ import { getTranslator } from "@/i18n/t";
  *
  * Two steps for the same reason every other destructive control in the product
  * has two: what leaves with the row is not visible on the row. The revenue, the
- * margin and the commission behind it come out of the month's totals, and the
- * confirmation is where that is said out loud rather than discovered in a
- * report later. The server decides all of it again — see
- * `app/api/v1/visits/[id]/route.ts`.
+ * margin and the commission behind it come out of the month's totals and do not
+ * come back. The confirmation used to say that out loud; it no longer does, so
+ * the second click is now the whole of the warning.
+ *
+ * Every visit is deletable, including one that closed an appointment: that used
+ * to be refused, and now the appointment returns to `confirmed` along with it.
+ * The server decides all of it again — see `app/api/v1/visits/[id]/route.ts`.
  */
-export function VisitDeleteButton({
-  visitId,
-  fromBooking,
-  locale,
-}: {
-  visitId: string;
-  /**
-   * Whether this visit closed an appointment. The endpoint refuses those, and
-   * the control stays on the card saying so rather than vanishing from it — a
-   * button that is missing from some cards and not others is a question the
-   * screen leaves the owner to answer alone.
-   */
-  fromBooking: boolean;
-  locale: AppLocale;
-}) {
+export function VisitDeleteButton({ visitId, locale }: { visitId: string; locale: AppLocale }) {
   const router = useRouter();
   const t = getTranslator(locale);
   const [confirming, setConfirming] = useState(false);
@@ -76,24 +65,19 @@ export function VisitDeleteButton({
           >
             {t("common.cancel")}
           </button>
-          <span className="muted">{t("visits.deleteHint")}</span>
         </>
       ) : (
-        <>
-          <button
-            className="inline-action danger"
-            type="button"
-            disabled={pending || fromBooking}
-            title={fromBooking ? t("visits.deleteFromBooking") : undefined}
-            onClick={() => {
-              setError(null);
-              setConfirming(true);
-            }}
-          >
-            {t("visits.delete")}
-          </button>
-          {fromBooking && <span className="muted">{t("visits.deleteFromBooking")}</span>}
-        </>
+        <button
+          className="inline-action danger"
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setError(null);
+            setConfirming(true);
+          }}
+        >
+          {t("visits.delete")}
+        </button>
       )}
     </div>
   );
