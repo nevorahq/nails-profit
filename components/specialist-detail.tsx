@@ -84,6 +84,7 @@ export function SpecialistDetail({
   const [selected, setSelected] = useState<string[]>(
     person.service_assignments.map((assignment) => assignment.service_id),
   );
+  const [order, setOrder] = useState(String(person.sort_order));
   const [durationByService, setDurationByService] = useState<Record<string, string>>(
     Object.fromEntries(
       person.service_assignments.map((assignment) => [
@@ -120,6 +121,19 @@ export function SpecialistDetail({
     setPending(false);
     router.refresh();
     return true;
+  }
+
+  /**
+   * The order, saved on its own rather than folded into the rota screen.
+   *
+   * Not passed to `send` as a form, because the reset would put the field back
+   * to the number that was there before the save while the refresh is still in
+   * flight — a control that flickers back to the old answer reads as a save
+   * that did not take.
+   */
+  async function saveOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await send(`/api/v1/specialists/${person.id}`, { sort_order: Number(order) }, undefined, "PATCH");
   }
 
   async function saveRule(event: FormEvent<HTMLFormElement>) {
@@ -331,6 +345,42 @@ export function SpecialistDetail({
           {t("specialists.openRota")}
         </Link>
       </section>
+
+      {/*
+        Where this card stands among the others.
+
+        Its own panel rather than a field on the one above, which states the
+        rota and deliberately does not edit it. The order is the opposite case:
+        `specialist.sort_order` was read in three places from the day it was
+        added — the public list, the assignment under «Любой доступный», and
+        «Онлайн-запись» — and written by nothing at all, so every card kept the
+        default and the tie between two equally free masters fell through to
+        comparing UUIDs. This is the control that was missing, not a second one.
+      */}
+      {canManage && (
+        <section className="panel">
+          <h2>{t("specialists.orderTitle")}</h2>
+          <form className="inline-form" onSubmit={saveOrder}>
+            <label>
+              {t("specialists.order")}
+              <input
+                name="sort_order"
+                type="number"
+                min="0"
+                max="1000"
+                step="1"
+                required
+                value={order}
+                onChange={(event) => setOrder(event.target.value)}
+              />
+            </label>
+            <button className="primary-button" type="submit" disabled={pending}>
+              {pending ? t("common.saving") : t("common.save")}
+            </button>
+          </form>
+          <p className="muted">{t("specialists.orderHint")}</p>
+        </section>
+      )}
 
       {showsPay && (
       <section className="panel">

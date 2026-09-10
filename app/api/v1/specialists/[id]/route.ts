@@ -46,6 +46,12 @@ const patchSpecialistSchema = z.object({
   user_id: z.string().min(1).nullable().optional(),
   /** The owner who also works. See the column's comment in `db/schema.ts`. */
   is_principal: z.boolean().optional(),
+  /**
+   * Where this card stands, and who «Любой доступный» prefers between two
+   * equally free masters. Lower is first; `POST /api/v1/specialists` carries
+   * the same field and says what it decides.
+   */
+  sort_order: z.int().min(0).max(1_000).optional(),
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -120,6 +126,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           ...(parsed.data.cooperation_type ? { cooperationType: parsed.data.cooperation_type } : {}),
           ...(link !== undefined ? { userId: link } : {}),
           ...(parsed.data.is_principal !== undefined ? { isPrincipal: parsed.data.is_principal } : {}),
+          ...(parsed.data.sort_order !== undefined ? { sortOrder: parsed.data.sort_order } : {}),
           updatedBy: actor.userId,
           updatedAt: new Date(),
           version: sql`${specialists.version} + 1`,
@@ -146,12 +153,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           user_id: existing.userId,
           cooperation_type: existing.cooperationType,
           is_principal: existing.isPrincipal,
+          sort_order: existing.sortOrder,
         },
         after: {
           name: specialist.name,
           user_id: specialist.userId,
           cooperation_type: specialist.cooperationType,
           is_principal: specialist.isPrincipal,
+          sort_order: specialist.sortOrder,
         },
         requestId: requestIdentifier,
       });
@@ -177,6 +186,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         id: updated.id,
         name: updated.name,
         cooperation_type: updated.cooperationType,
+        sort_order: updated.sortOrder,
         user_id: updated.userId,
         is_principal: updated.isPrincipal,
         version: updated.version,

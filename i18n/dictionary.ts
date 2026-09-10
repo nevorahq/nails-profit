@@ -808,6 +808,10 @@ const ru = {
   "specialists.whereNoHours": "часов нет",
   "specialists.whereDraft": "адрес не опубликован",
   "specialists.openRota": "Открыть график",
+  "specialists.orderTitle": "Очерёдность",
+  "specialists.order": "Порядок в списке",
+  "specialists.orderHint":
+    "Меньше — выше. Решает, в каком порядке мастера стоят в онлайн-записи и кому «Любой доступный» отдаёт время, когда оба одинаково свободны. Как только у одного появляется запись, время уходит более свободному — очерёдность важна только при равной загрузке.",
   "specialists.notBookable": "нельзя записать",
   "specialists.unlink": "Отвязать",
   "specialists.deleteConfirm": "Подтвердить удаление",
@@ -2070,6 +2074,10 @@ const ro: Record<MessageKey, Message> = {
   "specialists.whereNoHours": "fără ore",
   "specialists.whereDraft": "adresa nu este publicată",
   "specialists.openRota": "Deschideți programul",
+  "specialists.orderTitle": "Ordinea",
+  "specialists.order": "Poziția în listă",
+  "specialists.orderHint":
+    "Mai mic — mai sus. Decide în ce ordine apar maeștrii în programarea online și cui îi dă «Oricare disponibil» ora, când ambii sunt la fel de liberi. De îndată ce unul are o programare, ora merge la cel mai liber — ordinea contează doar la încărcare egală.",
   "specialists.notBookable": "nu poate fi programat",
   "specialists.unlink": "Dezleagă",
   "specialists.deleteConfirm": "Confirmă ștergerea",
@@ -3321,6 +3329,10 @@ const en: Record<MessageKey, Message> = {
   "specialists.whereNoHours": "no hours",
   "specialists.whereDraft": "address not published",
   "specialists.openRota": "Open the rota",
+  "specialists.orderTitle": "Order",
+  "specialists.order": "Position in the list",
+  "specialists.orderHint":
+    "Lower is first. It decides the order masters appear in online booking, and who «Any available» gives the hour to when both are equally free. As soon as one has a booking the hour goes to the freer of the two — the order only matters at equal load.",
   "specialists.notBookable": "cannot be booked",
   "specialists.unlink": "Unlink",
   "specialists.deleteConfirm": "Confirm deletion",
