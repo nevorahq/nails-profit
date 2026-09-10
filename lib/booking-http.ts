@@ -117,6 +117,16 @@ export async function bookingModuleRefusal(
 export function bookingPayload(
   booking: BookingRow,
   lines: readonly (typeof bookingLines.$inferSelect)[] = [],
+  /**
+   * How the client was told, where the caller knows.
+   *
+   * Omitted by the endpoints that only read: the list and the card describe an
+   * appointment, not the sending of a message about it. Passed by the ones that
+   * change something the client has to hear, so the desk can be shown the one
+   * case the product cannot solve on its own — a client with neither an address
+   * nor a number, whose only channel is the receptionist reaching for a phone.
+   */
+  notifiedChannels?: readonly ("email" | "sms")[] | null,
 ) {
   return {
     id: booking.id,
@@ -135,6 +145,7 @@ export function bookingPayload(
     cancellation_reason: booking.cancellationReason,
     completed_at: booking.completedAt,
     version: booking.version,
+    ...(notifiedChannels === undefined ? {} : { client_notified: notifiedChannels }),
     price_minor: lines.reduce((total, line) => total + line.priceMinor, 0),
     lines: lines.map((line) => ({
       kind: line.kind,

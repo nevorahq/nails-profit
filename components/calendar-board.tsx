@@ -207,7 +207,7 @@ export function CalendarBoard({
     url: string,
     body: unknown,
     options: { method?: string; key?: string; zone?: string } = {},
-  ) {
+  ): Promise<Record<string, unknown> | false> {
     setPending(true);
     setError(null);
     setNotice(null);
@@ -226,8 +226,16 @@ export function CalendarBoard({
 
     if (response.ok) {
       idempotency.current = null;
+      /*
+       * The body, not just the fact of success: a cancellation answers with
+       * `client_notified`, and an empty list there is the one outcome the desk
+       * has to act on rather than read about later.
+       */
+      const body = (await response.json().catch(() => null)) as {
+        data?: Record<string, unknown>;
+      } | null;
       router.refresh();
-      return true;
+      return body?.data ?? {};
     }
 
     const failure = (await response.json().catch(() => null)) as {
@@ -366,11 +374,20 @@ export function CalendarBoard({
   async function cancel(booking: CalendarBooking, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    await send(`/api/v1/bookings/${booking.id}/cancel`, {
+    const result = await send(`/api/v1/bookings/${booking.id}/cancel`, {
       reason: String(data.get("reason")),
       cancelled_by: String(data.get("cancelled_by")),
       version: booking.version,
     });
+    /*
+     * The appointment is off either way — this is about whether the client
+     * knows. An address is written to, and a client with only a phone now gets
+     * an SMS; an empty list means the card carries neither, and the only thing
+     * left that can reach them is the person reading this.
+     */
+    if (result && Array.isArray(result.client_notified) && result.client_notified.length === 0) {
+      setNotice(t("calendar.clientNotReached"));
+    }
   }
 
   async function resendManageLink(bookingId: string) {

@@ -6,8 +6,11 @@ import {
   bookingNotificationTemplates,
   formatAppointmentTime,
   isStaffNotificationTemplate,
+  messageCarriesLink,
   renderNotification,
+  smsFallbackTemplates,
   smsNotificationTemplates,
+  smsReplacesEmail,
   staffNotificationTemplates,
 } from "@/lib/notification-message";
 
@@ -142,20 +145,35 @@ describe("transactional templates", () => {
     expect(email.html).toContain(base.link);
   });
 
-  it("keeps every other client message the same on both channels", () => {
-    // Only the reminder was singled out. A rule that quietly stripped links
-    // from the confirmation too would take away the one thing a client needs
-    // when they want to move an appointment they have already been promised.
+  /**
+   * The reminder used to be the only message SMS stripped the link from, and
+   * this test used to assert that every other one kept it on both channels.
+   *
+   * That held while the reminder was the only thing SMS ever carried. It is
+   * not any more: a client with no email address now gets a cancellation or a
+   * move by SMS, and those are exactly the messages where paying four segments
+   * to carry a 120-character one-time token would matter most. So the rule is
+   * about the channel now, not about one template — see `messageCarriesLink`.
+   *
+   * Nothing is lost. The email still carries the link for everyone who has an
+   * inbox; a cancelled appointment has nothing left to manage; and a move
+   * states its new time in the sentence itself.
+   */
+  it("keeps the link in the email and never in the SMS", () => {
     for (const template of [
       "booking.confirmed",
       "booking.request_accepted",
       "booking.rescheduled",
       "booking.link_reissued",
+      "booking.cancelled",
     ] as const) {
       const sms = renderNotification({ ...base, template, channel: "sms" });
       const email = renderNotification({ ...base, template, channel: "email" });
-      expect(sms.body).toContain(base.link);
-      expect(sms.body).toBe(email.body);
+
+      expect(sms.body, template).not.toContain(base.link);
+      expect(email.body, template).toContain(base.link);
+      // And the SMS is still a whole sentence rather than a truncated email.
+      expect(sms.body.endsWith("."), template).toBe(true);
     }
   });
 
@@ -270,5 +288,98 @@ describe("appointment time", () => {
     // client to the studio three hours early.
     expect(formatAppointmentTime(at, "Europe/Chisinau", "en")).toContain("10:00");
     expect(formatAppointmentTime(at, "UTC", "en")).toContain("7:00");
+  });
+
+  const at = new Date("2026-09-11T11:00:00.000Z");
+
+  it("keeps the year in an email and drops it from an SMS", () => {
+    expect(formatAppointmentTime(at, "Europe/Chisinau", "ru", "email")).toContain("2026");
+    expect(formatAppointmentTime(at, "Europe/Chisinau", "ru", "sms")).not.toContain("2026");
+  });
+
+  it("still names the day and the hour without it", () => {
+    const sms = formatAppointmentTime(at, "Europe/Chisinau", "ru", "sms");
+    expect(sms).toContain("11");
+    expect(sms).toContain("14:00");
+  });
+
+  /**
+   * `Intl` throws on a format that mixes `dateStyle`/`timeStyle` with the
+   * individual components, which inside the dispatcher would fail the send
+   * rather than shorten it. Every language, because the options are shared and
+   * a throw here would take the whole channel down.
+   */
+  it.each(supportedLocales)("builds without throwing for %s", (locale) => {
+    expect(() => formatAppointmentTime(at, "Europe/Chisinau", locale, "sms")).not.toThrow();
+  });
+
+  /**
+   * The arithmetic the short format exists for. Cyrillic is UCS-2: 70
+   * characters while the message fits in one segment, 67 apiece once it does
+   * not. With the year, this studio's cancellation is 69 of those 70 — inside
+   * the limit by a single character, so a name two letters longer doubles what
+   * the studio pays. Nine characters of margin is the difference.
+   */
+  it("leaves a cancellation room to grow inside one segment", () => {
+    const when = formatAppointmentTime(at, "Europe/Chisinau", "ru", "sms");
+    const body = `Студия красоты Анастасии: запись на ${when} отменена.`;
+
+    expect(body.length).toBeLessThanOrEqual(70);
+    // Not merely inside it — far enough inside that a longer studio name is not
+    // an invoice. The same sentence with the year is 69.
+    expect(body.length).toBeLessThanOrEqual(62);
+  });
+});
+
+describe("SMS as a replacement for an inbox", () => {
+  /**
+   * The list is short on purpose and the reason is money: a studio pays per
+   * message, and these two are the only ones whose absence puts a client
+   * outside a locked door or in a chair nobody is expecting them in.
+   */
+  it("carries only what a client cannot afford to miss", () => {
+    expect([...smsFallbackTemplates].sort()).toEqual(["booking.cancelled", "booking.rescheduled"]);
+  });
+
+  it("sends a cancellation the studio decided on", () => {
+    expect(smsReplacesEmail("booking.cancelled", "staff")).toBe(true);
+  });
+
+  /**
+   * The maintenance job's cancellation of a request nobody answered — the case
+   * with no human on either end, and the one the client has heard nothing about
+   * since «студия подтвердит».
+   */
+  it("sends a request that lapsed on its own", () => {
+    expect(smsReplacesEmail("booking.cancelled", "system")).toBe(true);
+  });
+
+  it("says nothing to a client about their own decision", () => {
+    expect(smsReplacesEmail("booking.cancelled", "client")).toBe(false);
+  });
+
+  it("sends a move whoever made it, there being no record of who did", () => {
+    expect(smsReplacesEmail("booking.rescheduled", null)).toBe(true);
+  });
+
+  it.each([
+    "booking.confirmed",
+    "booking.pending_confirmation",
+    "booking.request_accepted",
+    "booking.visit_completed",
+    "booking.link_reissued",
+  ] as const)("leaves %s to email alone", (template) => {
+    expect(smsReplacesEmail(template, null)).toBe(false);
+  });
+
+  /**
+   * A manage link is a one-time token on a long domain — around 120 characters
+   * against 67 a segment — so carrying one would cost four segments to say what
+   * the message already says in one.
+   */
+  it("carries no link on any of them", () => {
+    for (const template of bookingNotificationTemplates) {
+      expect(messageCarriesLink(template, "sms"), template).toBe(false);
+    }
   });
 });

@@ -205,6 +205,8 @@ async function handlePost(
         bookingId: access.booking.id,
         template: "booking.rescheduled",
         occurrence: String(moved.booking.version),
+        // Their own move, made on the page they are looking at: no SMS.
+        causedBy: "client",
       });
       /*
        * And the studio, whose day this just changed. A client moving their own

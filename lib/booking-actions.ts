@@ -43,6 +43,17 @@ export type TransitionOutcome =
       ok: true;
       booking: BookingRow;
       lines: readonly (typeof bookingLines.$inferSelect)[];
+      /**
+       * How the client was told, for the transitions that tell them.
+       *
+       * Null where the transition says nothing to a client at all — closing a
+       * visit, marking a no-show. An empty array is the case worth surfacing:
+       * there was a message to send and no way to send it, because the person
+       * has neither an address nor a number on their card. SMS now covers the
+       * client who has only a phone, so what is left here is the client who has
+       * neither, and for them the only channel is somebody picking one up.
+       */
+      notifiedChannels: readonly ("email" | "sms")[] | null;
     }>
   | MutationFailure;
 
@@ -68,9 +79,9 @@ async function notifyTransition(
   organizationId: string,
   booking: BookingRow,
   now: Date,
-) {
+): Promise<readonly ("email" | "sms")[] | null> {
   if (booking.status === "confirmed") {
-    await notifyBooking(tx, {
+    const channels = await notifyBooking(tx, {
       organizationId,
       bookingId: booking.id,
       template: "booking.request_accepted",
@@ -83,19 +94,25 @@ async function notifyTransition(
       startsAt: booking.startsAt,
       now,
     });
-    return;
+    return channels;
   }
 
   if (booking.status === "cancelled") {
-    await notifyBooking(tx, {
+    const channels = await notifyBooking(tx, {
       organizationId,
       bookingId: booking.id,
       template: "booking.cancelled",
       occurrence: String(booking.version),
     });
+    await cancelPendingNotifications(tx, booking.id);
+    return channels;
   }
 
   await cancelPendingNotifications(tx, booking.id);
+  // Null rather than an empty list, and the difference is what the desk needs
+  // to know: a completion has no message to fail to send, while a cancellation
+  // with no channels is a client who has not been told their visit is off.
+  return null;
 }
 
 export async function applyStaffTransition(
@@ -147,9 +164,14 @@ export async function applyStaffTransition(
       entityId: moved.booking.id,
     });
 
-    await notifyTransition(tx, actor.organizationId, moved.booking, now);
+    const notifiedChannels = await notifyTransition(tx, actor.organizationId, moved.booking, now);
 
-    return { ok: true, booking: moved.booking, lines: await bookingLinesOf(tx, moved.booking.id) };
+    return {
+      ok: true,
+      booking: moved.booking,
+      lines: await bookingLinesOf(tx, moved.booking.id),
+      notifiedChannels,
+    };
   });
 
   if (outcome.ok) {

@@ -181,6 +181,58 @@ export const smsNotificationTemplates: readonly BookingNotificationTemplate[] = 
   "booking.reminder",
 ];
 
+/**
+ * The messages SMS carries when there is no inbox to send them to.
+ *
+ * The list above is "SMS as well"; this is "SMS instead", and the difference is
+ * what keeps the channel cheap. A client with an address gets these by email
+ * exactly as before and costs the studio nothing.
+ *
+ * The reasoning above says every message but the reminder "answers something
+ * the client just did… and arrives while they are still looking at the screen
+ * that caused it". That holds for the four a client causes. It does not hold
+ * for the two a studio causes: a receptionist moving an appointment or calling
+ * it off is not something the client is watching, and it reaches them exactly
+ * the way the reminder does — out of nowhere, into a day that has moved on.
+ *
+ * Two, not more. Both are the same failure — the client arrives when nobody is
+ * expecting them, or does not arrive when somebody is — and both are worth
+ * 0,30 MDL to prevent. A confirmation is not: the client is standing at the
+ * desk or on the phone while it is made, and has already been told.
+ *
+ * Nobody has to opt in. This is transactional notice about an appointment the
+ * client made, not marketing, and it goes only to a number they gave for it.
+ */
+export const smsFallbackTemplates: readonly BookingNotificationTemplate[] = [
+  "booking.cancelled",
+  "booking.rescheduled",
+];
+
+/**
+ * Whether this message should reach a client who has no email address.
+ *
+ * The actor decides, and it is not a formality. A client without an address
+ * still holds a manage link: the token comes back in the response that creates
+ * the booking and the public page shows it as «Открыть запись», so they can
+ * move or cancel their own appointment while watching the screen that does it.
+ * Texting them about that would be paying 0,30 MDL to tell somebody what they
+ * just did — which is the same reasoning that keeps `booking.confirmed` off
+ * the list, and it applies to whoever pressed the button rather than to which
+ * template it was.
+ *
+ * `staff` is the case this exists for: a receptionist moving or cancelling an
+ * appointment the client is not watching. `system` is the maintenance job
+ * cancelling a request nobody answered — no human on either end, and news to
+ * the client either way. Both send.
+ */
+export function smsReplacesEmail(
+  template: BookingNotificationTemplate,
+  causedBy: "client" | "staff" | "system" | null,
+): boolean {
+  if (!smsFallbackTemplates.includes(template)) return false;
+  return causedBy !== "client";
+}
+
 export type NotificationFacts = Readonly<{
   template: BookingNotificationTemplate;
   /**
@@ -239,7 +291,19 @@ export function messageCarriesLink(
   channel: "email" | "sms",
 ): boolean {
   if (template === "booking.verification_code") return false;
-  return !(channel === "sms" && template === "booking.reminder");
+  /*
+   * No SMS carries one, which used to be a statement about the reminder and is
+   * now a rule about the channel. The arithmetic that made it true for the
+   * reminder — a 120-character one-time token against 67 characters a segment
+   * — is a property of links and Cyrillic, not of that one message, and the
+   * two that SMS now carries when there is no inbox are the ones where paying
+   * four segments would matter most.
+   *
+   * Nothing is lost by it. A cancelled appointment has nothing left to manage,
+   * and a client who wants to rebook has the studio's page on its own
+   * materials; a rescheduled one states the new time in the message itself.
+   */
+  return channel === "email";
 }
 
 export type RenderedNotification = Readonly<{
@@ -312,7 +376,42 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
  * to someone whose appointment is at 15:00 local time is worse than no message,
  * and it is exactly what formatting on the server's default produces.
  */
-export function formatAppointmentTime(at: Date, timezone: string, locale: AppLocale): string {
+export function formatAppointmentTime(
+  at: Date,
+  timezone: string,
+  locale: AppLocale,
+  channel: "email" | "sms" = "email",
+): string {
+  /*
+   * The year, dropped for SMS, and the reason is arithmetic rather than taste.
+   *
+   * Cyrillic makes a message UCS-2: 70 characters while it fits in one, and 67
+   * apiece the moment it does not. «Студия красоты Анастасии: запись на
+   * 11 сент. 2026 г., 14:00 отменена.» is 69 of those 70 — inside the limit,
+   * with one character of room. A studio named two letters longer pays for two
+   * segments, and what the second one buys is a year nobody was in doubt about:
+   * bookings run at most 60 days ahead (`max_advance_days`), so the year never
+   * disambiguates anything. Without it the same sentence is 61, which leaves
+   * nine characters of margin instead of one.
+   *
+   * Email keeps it. There is no cost there, and a message read out of an inbox
+   * is read further from the moment it was sent.
+   */
+  /*
+   * Spelled out rather than `dateStyle` plus a narrower date: `Intl` refuses a
+   * format that mixes the two vocabularies, and does it by throwing — which
+   * inside the dispatcher would have failed the send rather than shortened it.
+   */
+  if (channel === "sms") {
+    return new Intl.DateTimeFormat(localeTag(locale), {
+      timeZone: timezone,
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(at);
+  }
+
   return new Intl.DateTimeFormat(localeTag(locale), {
     timeZone: timezone,
     dateStyle: "medium",

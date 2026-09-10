@@ -241,14 +241,16 @@ describe("public online booking", () => {
      * The reminder that was queued on creation left with the cancellation:
      * nobody is coming, so nobody is reminded.
      *
-     * Nothing is left for the client at all, and that is the whole picture for
-     * this one: they left a phone and no address, SMS carries only the
-     * reminder, and the reminder went with the cancellation. The confirmation,
-     * the move and the cancellation each had no channel to take — which here is
-     * the right silence rather than a gap, because every one of those three was
-     * something this client did themselves on the manage page and watched the
-     * answer to. The studio-side cancellation that reaches nobody is the case
-     * with real cost, and it is pinned in `tests/e2e/notifications.test.ts`.
+     * Nothing is left for the client at all, and that is still the whole
+     * picture for this one — but the rule producing it has changed, so it is
+     * worth restating. They left a phone and no address. SMS now also carries
+     * a cancellation and a move, which would put two rows here; it carries
+     * neither, because `smsReplacesEmail` asks who caused the event and every
+     * one of these three was this client, on the manage page, watching the
+     * answer. Texting them would be paying to report their own decision.
+     *
+     * The studio-side cancellation that used to reach nobody is the case with
+     * real cost, and it now sends: see `tests/e2e/notifications.test.ts`.
      *
      * The studio's own copies are filtered out rather than counted, because
      * they are the other half of these same three events and belong to

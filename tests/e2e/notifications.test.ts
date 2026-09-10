@@ -238,12 +238,15 @@ describe("transactional notifications", () => {
    * The cost of the rule, written down where it can be read rather than
    * discovered by a studio.
    *
-   * SMS carries the reminder and nothing else, so a client the studio typed in
-   * from a phone call — a number, no address — is reminded of the appointment
-   * and hears nothing else about it whatsoever. Not that it was booked, and not
-   * that it was called off. Every test here is that sentence made concrete, so
-   * that changing it means changing a test rather than noticing a silence in
-   * production.
+   * A client the studio typed in from a phone call — a number, no address —
+   * used to be reminded of the appointment and told nothing else whatsoever.
+   * Not that it was booked, and not that it was called off: they learned of a
+   * cancellation by turning up to a locked door.
+   *
+   * SMS now carries the two messages that decide whether they make a wasted
+   * journey, and only when somebody other than they caused it. Everything else
+   * is still email-or-nothing, because the studio pays per message and a
+   * confirmation is made while the client is on the phone.
    */
   describe("a client reachable only by phone", () => {
     let phoneOnlyId: string;
@@ -262,17 +265,26 @@ describe("transactional notifications", () => {
       expect(await templatesFor(created.id)).toEqual(["booking.reminder"]);
     });
 
-    test("is left with nothing at all when the studio calls the appointment off", async () => {
+    test("is texted when the studio calls the appointment off", async () => {
       const created = await book(phoneOnlyId);
-      await owner.post(`/api/v1/bookings/${created.id}/cancel`, {
+      const response = await owner.post(`/api/v1/bookings/${created.id}/cancel`, {
         reason: "studio_request",
         cancelled_by: "staff",
       });
 
-      // Cancelling drops the pending reminder, and the cancellation itself has
-      // no channel to travel on. This client learns of it by ringing the
-      // studio, or by turning up.
-      expect(await templatesFor(created.id)).toEqual([]);
+      // Cancelling drops the pending reminder; the cancellation itself now has
+      // somewhere to go. This is the journey the client no longer makes for
+      // nothing.
+      expect(await templatesFor(created.id)).toEqual(["booking.cancelled"]);
+      const [queued] = await adminDb
+        .select({ channel: notificationOutbox.channel })
+        .from(notificationOutbox)
+        .where(eq(notificationOutbox.bookingId, created.id));
+      expect(queued.channel).toBe("sms");
+
+      // And the desk is told it worked, so «позвоните ему» is shown only when
+      // there is genuinely nobody to write to.
+      expect(dataOf<{ client_notified: string[] }>(response).client_notified).toEqual(["sms"]);
     });
 
     test("cannot be handed a reissued link, and is told so", async () => {

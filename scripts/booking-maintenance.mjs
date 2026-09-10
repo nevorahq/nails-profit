@@ -94,7 +94,25 @@ try {
                ${booking.id}::text || ':booking.cancelled:' || channel.name || ':' || ${String(booking.version)},
                now(), now()
           from client
-          cross join lateral (values ('sms', client.normalized_phone), ('email', client.email))
+          /*
+           * The application's own rule, restated in SQL: the address when there
+           * is one, the phone only when there is not.
+           *
+           * This used to queue both, which made it the one place in the product
+           * that sent a cancellation by SMS — to every client with a phone,
+           * including the ones about to read the same words in their inbox. The
+           * comment above promises a message "indistinguishable from one queued
+           * by a route", and it was not. See smsReplacesEmail in
+           * lib/notification-message.ts for the half of the rule that matters:
+           * the client who has no inbox to read anything in.
+           *
+           * The actor is not checked here because this job is the only writer
+           * of cancelled_by = system, and a request nobody answered is news to
+           * the client by definition.
+           */
+          cross join lateral (values
+                 ('email', client.email),
+                 ('sms', case when client.email is null then client.normalized_phone end))
                as channel(name, destination)
          where client.id = ${booking.client_id}
            and channel.destination is not null
