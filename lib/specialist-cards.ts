@@ -8,6 +8,8 @@ export type SpecialistRow = {
   id: string;
   name: string;
   cooperation_type: string;
+  /** Lower is first. What it decides: `lib/public-booking-availability.ts`. */
+  sort_order: number;
   user_id: string | null;
   /** Takes the residual profit rather than a fee — the owner who also works. */
   is_principal: boolean;
@@ -74,7 +76,11 @@ export async function loadSpecialistCards(
     .select()
     .from(specialists)
     .where(and(...conditions))
-    .orderBy(asc(specialists.createdAt));
+    // The studio's own order first, then the order they were hired in. The
+    // public page and «Онлайн-запись» already read `sortOrder`; a list that
+    // ignored it would show one order on the screen where it is set and
+    // another everywhere it is used.
+    .orderBy(asc(specialists.sortOrder), asc(specialists.createdAt));
 
   if (rows.length === 0) return [];
   const ids = rows.map((person) => person.id);
@@ -135,6 +141,7 @@ export async function loadSpecialistCards(
       id: person.id,
       name: person.name,
       cooperation_type: person.cooperationType,
+      sort_order: person.sortOrder,
       user_id: filter.withoutPay ? null : person.userId,
       is_principal: person.isPrincipal,
       avatar_version: avatarVersions.get(person.id) ?? null,

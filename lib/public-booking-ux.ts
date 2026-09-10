@@ -145,6 +145,62 @@ export function retryAfterMinutes(error: PublicApiError): number {
   return Math.max(1, Math.ceil((error.retryAfterSeconds ?? 60) / 60));
 }
 
+export type BookingStateForClient = Readonly<{
+  status: "pending_confirmation" | "confirmed" | "cancelled" | "completed" | "no_show";
+  cancelledBy: "client" | "staff" | "system" | null;
+  /** A code from `STAFF_CANCELLATION_REASONS`, or the job's `confirmation_expired`. */
+  cancellationReason: string | null;
+  /** Whether `confirmation_due_at` is set — only manual confirmation has one. */
+  hasConfirmationDeadline: boolean;
+}>;
+
+/**
+ * The sentence under the status badge: what this state means for the client.
+ *
+ * The badge names the state and stops there, which for four of the five is
+ * nearly enough and for the fifth is nothing at all. "Отменена" is one word
+ * covering four different events — the client called it off themselves, the
+ * studio did, nobody could reach them, or a request ran out of time unanswered
+ * — and they need different words and different next steps. Only the client's
+ * own cancellation is a thing they already know about.
+ *
+ * Here rather than in the component for the same reason `publicBookingErrorKey`
+ * is: choosing which sentence is true is logic with branches, and it should be
+ * testable without rendering anything. The wording itself stays in the
+ * dictionary, in all three languages.
+ */
+export function bookingNextStepKey(state: BookingStateForClient): MessageKey {
+  if (state.status === "pending_confirmation") {
+    // Without a deadline there is nothing honest to promise: an instant-
+    // confirmation studio leaves `confirmation_due_at` null, and naming an hour
+    // the request will not lapse at would be inventing one.
+    return state.hasConfirmationDeadline
+      ? "publicBooking.next.pending"
+      : "publicBooking.next.pendingSoon";
+  }
+  if (state.status === "confirmed") return "publicBooking.next.confirmed";
+  if (state.status === "completed") return "publicBooking.next.completed";
+  if (state.status === "no_show") return "publicBooking.next.noShow";
+
+  if (state.cancellationReason === "confirmation_expired") {
+    return "publicBooking.next.cancelledExpired";
+  }
+  if (state.cancellationReason === "no_contact") {
+    return "publicBooking.next.cancelledNoContact";
+  }
+  if (state.cancellationReason === "duplicate") {
+    return "publicBooking.next.cancelledDuplicate";
+  }
+  /*
+   * `client_request` is the studio recording that a client asked them to cancel
+   * — a phone call, not a click — so the actor is what separates "you did this"
+   * from "we did this at your request", and the actor is `staff` for both.
+   */
+  return state.cancelledBy === "client"
+    ? "publicBooking.next.cancelledByClient"
+    : "publicBooking.next.cancelledByStudio";
+}
+
 /**
  * The API's `field_errors` placed back on the fields of this form.
  *

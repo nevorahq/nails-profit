@@ -158,11 +158,14 @@ async function handlePost(request: Request, context: { params: Promise<{ id: str
       // Section 7.7's "дата, время, мастер или услуга изменены": the client
       // agreed to a time, and the studio changing it is precisely the case
       // where they must not find out on arrival.
-      await notifyBooking(tx, {
+      const notifiedChannels = await notifyBooking(tx, {
         organizationId: actor.organizationId,
         bookingId: moved.booking.id,
         template: "booking.rescheduled",
         occurrence: String(moved.booking.version),
+        // The studio moved it. This is the case the fallback exists for: the
+        // client agreed to one hour and is expected at another.
+        causedBy: "staff",
       });
       await cancelPendingNotifications(tx, moved.booking.id);
       await scheduleBookingReminder(tx, {
@@ -173,7 +176,12 @@ async function handlePost(request: Request, context: { params: Promise<{ id: str
         now,
       });
 
-      return { ok: true as const, booking: moved.booking, lines: await bookingLinesOf(tx, moved.booking.id) };
+      return {
+        ok: true as const,
+        booking: moved.booking,
+        lines: await bookingLinesOf(tx, moved.booking.id),
+        notifiedChannels,
+      };
     });
 
     if (!outcome.ok) {
@@ -204,7 +212,7 @@ async function handlePost(request: Request, context: { params: Promise<{ id: str
       }
     }
 
-    return apiSuccess(bookingPayload(outcome.booking, outcome.lines), id);
+    return apiSuccess(bookingPayload(outcome.booking, outcome.lines, outcome.notifiedChannels), id);
   } catch (error) {
     // Two moves onto one slot at the same instant: the constraint decides, and
     // the loser sees what it would have seen from the check.

@@ -51,6 +51,22 @@ const defaultRuleInput = z
 const createSpecialistSchema = z.object({
   name: z.string().trim().min(1).max(200),
   cooperation_type: z.enum(["commission", "rent", "staff"]).default("commission"),
+  /**
+   * Who a client meets first, and who «Любой доступный» prefers.
+   *
+   * The column existed from the start as the tie-breaker for the public
+   * assignment, and nothing could ever write it: every card kept the default
+   * `0`, the tie-break fell through to comparing UUIDs, and one master
+   * silently took every shared slot until somebody booked her. A studio that
+   * wanted the other answer had no way to say so — see
+   * `lib/public-booking-availability.ts` for what the order actually decides.
+   *
+   * Lower is first, the same direction and the same range as `location`'s.
+   * Optional here because a studio that has never thought about the order
+   * should not have to: the default keeps the cards in the order they were
+   * created, which is the order they were hired in.
+   */
+  sort_order: z.int().min(0).max(1_000).optional(),
   // RES-005: a commission specialist needs a default rule. Optional here so the
   // record can be created first, but the costing then reports the gap rather
   // than treating the commission as zero.
@@ -121,7 +137,12 @@ export async function GET(request: Request) {
           ? and(isNull(specialists.archivedAt), eq(specialists.userId, actor.userId))
           : isNull(specialists.archivedAt),
       )
-      .orderBy(asc(specialists.createdAt));
+      // The order the studio set, then the order they were hired in. Reading
+      // by `createdAt` alone would answer a different list from the public
+      // page and from «Онлайн-запись», which both order by `sortOrder` — and
+      // the screen where the order is set is the last one that may disagree
+      // with it.
+      .orderBy(asc(specialists.sortOrder), asc(specialists.createdAt));
 
     return Promise.all(
       people.map(async (person) => {
@@ -151,6 +172,7 @@ export async function GET(request: Request) {
           id: person.id,
           name: person.name,
           cooperation_type: person.cooperationType,
+          sort_order: person.sortOrder,
           user_id: withPay ? person.userId : null,
           is_principal: person.isPrincipal,
           default_rule:
@@ -253,6 +275,7 @@ export async function POST(request: Request) {
         organizationId: actor.organizationId,
         name: parsed.data.name,
         cooperationType: parsed.data.cooperation_type,
+        ...(parsed.data.sort_order !== undefined ? { sortOrder: parsed.data.sort_order } : {}),
         ...(parsed.data.is_me
           ? { userId: actor.userId, isPrincipal: !(await hasPrincipal(tx)) }
           : parsed.data.user_id
@@ -308,7 +331,11 @@ export async function POST(request: Request) {
       eventType: "specialist.created",
       entityType: "specialist",
       entityId: created.id,
-      after: { name: created.name, cooperation_type: created.cooperationType },
+      after: {
+        name: created.name,
+        cooperation_type: created.cooperationType,
+        sort_order: created.sortOrder,
+      },
       requestId: id,
     });
 
@@ -357,5 +384,9 @@ export async function POST(request: Request) {
     );
   }
 
-  return apiSuccess({ id: specialist.id, name: specialist.name }, id, 201);
+  return apiSuccess(
+    { id: specialist.id, name: specialist.name, sort_order: specialist.sortOrder },
+    id,
+    201,
+  );
 }

@@ -367,7 +367,14 @@ async function prepare(
     locale,
     studioName: organization.name,
     when: facts.appointment
-      ? formatAppointmentTime(facts.appointment.startsAt, facts.appointment.timezone, locale)
+      ? formatAppointmentTime(
+          facts.appointment.startsAt,
+          facts.appointment.timezone,
+          locale,
+          // Shorter on SMS, where the year costs a second segment: see
+          // `formatAppointmentTime`.
+          row.channel,
+        )
       : "",
     specialist: facts.specialist ?? "",
     businessType: organization.type,

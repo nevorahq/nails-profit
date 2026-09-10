@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { notificationOutbox, notificationProviderEvents } from "@/db/schema";
+import { bookings, notificationOutbox, notificationProviderEvents } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { MAX_DELIVERY_ATTEMPTS } from "@/domain/notification-schedule";
 import {
@@ -191,11 +191,16 @@ describe("notification outbox", () => {
 
   /**
    * The client the studio typed in from a phone call: a number and nothing
-   * else. The reminder reaches them; every other message has no channel left
-   * and queues nothing at all, which is the part a caller has to be able to
-   * see — `notifyBooking` returns the channels it used for exactly that.
+   * else. `client.email` is nullable and for them it is null, so every message
+   * but the reminder used to have no channel left and queue nothing at all —
+   * including the one saying their appointment was called off. They arrived to
+   * a locked door, and the studio looked like the one who had failed.
+   *
+   * SMS now covers the two that cost them the visit. Everything else still
+   * goes nowhere, and deliberately: a confirmation is made while the client is
+   * at the desk or on the phone, and the studio pays per message.
    */
-  test("a client with only a phone is reminded, and hears nothing else", async () => {
+  test("a client with only a phone hears the two messages that matter", async () => {
     const phoneOnly = await createClient(organizationId, {
       normalizedPhone: "+37369555444",
       email: null,
@@ -223,15 +228,106 @@ describe("notification outbox", () => {
     const reminder = await withTenant(organizationId, (tx) =>
       notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.reminder" }),
     );
+    const cancelled = await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.cancelled" }),
+    );
+    const moved = await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.rescheduled" }),
+    );
     const confirmed = await withTenant(organizationId, (tx) =>
       notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.confirmed" }),
     );
+
+    expect(reminder).toEqual(["sms"]);
+    // The two that decide whether they turn up, and whether anybody is waiting.
+    expect(cancelled).toEqual(["sms"]);
+    expect(moved).toEqual(["sms"]);
+    // Not this one: they were standing there when it was made.
+    expect(confirmed).toEqual([]);
+  });
+
+  /**
+   * The same client, cancelling their own appointment — nearly a theoretical
+   * case, because the manage link arrives by email and they have none, but the
+   * rule is one comparison and the alternative is texting somebody news of a
+   * decision they just made.
+   */
+  test("says nothing to a client who cancelled it themselves", async () => {
+    const phoneOnly = await createClient(organizationId, {
+      normalizedPhone: "+37369555333",
+      email: null,
+    });
+    const theirBooking = await withTenant(organizationId, async (tx) => {
+      const created = await createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId: (await createSpecialist(organizationId)).id,
+        clientId: phoneOnly.id,
+        interval: {
+          start: new Date("2026-09-06T07:00:00.000Z"),
+          end: new Date("2026-09-06T08:30:00.000Z"),
+        },
+        source: "public_booking",
+        confirmationMode: "instant",
+        lines: LINES,
+        actorUserId: null,
+        now,
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+
+    await adminDb
+      .update(bookings)
+      .set({
+        status: "cancelled",
+        cancelledAt: now,
+        cancelledBy: "client",
+        cancellationReason: "client_request",
+      })
+      .where(eq(bookings.id, theirBooking));
+
     const cancelled = await withTenant(organizationId, (tx) =>
       notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.cancelled" }),
     );
 
-    expect(reminder).toEqual(["sms"]);
-    expect(confirmed).toEqual([]);
+    expect(cancelled).toEqual([]);
+  });
+
+  /**
+   * And the client SMS cannot help: no address, no number. The empty list is
+   * what the calendar shows the desk as «позвоните ему» — the one case the
+   * product cannot solve without a person.
+   */
+  test("reports no channel at all for a client with no contacts", async () => {
+    const unreachable = await createClient(organizationId, {
+      normalizedPhone: null,
+      email: null,
+    });
+    const theirBooking = await withTenant(organizationId, async (tx) => {
+      const created = await createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId: (await createSpecialist(organizationId)).id,
+        clientId: unreachable.id,
+        interval: {
+          start: new Date("2026-09-07T07:00:00.000Z"),
+          end: new Date("2026-09-07T08:30:00.000Z"),
+        },
+        source: "staff",
+        confirmationMode: "instant",
+        lines: LINES,
+        actorUserId: null,
+        now,
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+
+    const cancelled = await withTenant(organizationId, (tx) =>
+      notifyBooking(tx, { organizationId, bookingId: theirBooking, template: "booking.cancelled" }),
+    );
+
     expect(cancelled).toEqual([]);
   });
 

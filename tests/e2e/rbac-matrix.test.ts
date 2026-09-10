@@ -221,6 +221,14 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/public/bookings/invalid-token" }),
   },
   {
+    route: "/api/v1/public/bookings/[token]/status",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "The same token, answering only whether the booking has changed",
+    request: async () => ({ path: "/api/v1/public/bookings/invalid-token/status" }),
+  },
+  {
     route: "/api/v1/public/bookings/[token]/cancel",
     method: "POST",
     allowed: ALL_ROLES,

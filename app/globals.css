@@ -24,6 +24,22 @@
   --warning: #6f5018;
   --warning-border: #d4bd83;
   --warning-soft: #f8f0dc;
+  /*
+   * An hour nobody has taken yet, and its edge.
+   *
+   * Two values because one could not do both jobs. The fill has to stay quieter
+   * than every card on top of it — a free day is most of the column, and paint
+   * that strong makes the emptiness shout louder than the appointments, which
+   * are what the day is actually about. The edge is where the yellow is allowed
+   * to be a yellow, so an opening still announces itself at a glance.
+   *
+   * Both sit apart from `--warning-soft`, which an appointment awaiting
+   * confirmation is painted: the two stand side by side here, and telling a
+   * column of pending appointments from a column of openings is the comparison
+   * this view exists for.
+   */
+  --free-hour: #fcf6e3;
+  --free-hour-edge: #dcc07a;
   --shadow: 0 2rem 8rem rgba(15, 42, 29, 0.4);
 
   /*
@@ -1065,6 +1081,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-entry summary { display: flex; flex-wrap: wrap; gap: 6rem 14rem; align-items: baseline; padding: 14rem 16rem; cursor: pointer; min-height: 44rem; }
 .calendar-entry summary::marker { color: var(--muted); }
 .calendar-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15rem; }
+/* The date a list entry falls on, ahead of its hours. Quieter than the time
+   beside it: the hour is what the reader is scanning for, the day is what tells
+   them which run of hours they are in. */
+.calendar-day { margin-right: 8rem; color: var(--muted); font-weight: 650; }
 .calendar-what { font-size: 15rem; }
 .calendar-who { color: var(--muted); font-size: 14rem; }
 .calendar-status { margin-left: auto; font-size: 12rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
@@ -1092,7 +1112,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-header { max-width: 960rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16rem; padding-bottom: 20rem; border-bottom: 1rem solid var(--line); }
 .public-booking-intro { max-width: 760rem; margin: 72rem auto 32rem; text-align: center; }
 .public-booking-intro h1, .public-booking-success h1 { font-size: clamp(38rem, 6vw, 64rem); }
-.public-booking-intro p { max-width: 580rem; margin: 0 auto; color: var(--muted); font-size: 18rem; }
 .public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 30rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
 .public-booking-card form { display: grid; gap: 24rem; }
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
@@ -1148,6 +1167,50 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-empty strong { font-size: 18rem; }
 .public-booking-success { margin-top: 14vh; text-align: center; }
 .public-booking-success p { color: var(--muted); margin-bottom: 26rem; }
+/*
+ * The badge said the status and showed it in one colour.
+ *
+ * `.role-badge booking-status-<status>` has been on this element from the
+ * start, but nothing ever defined the second class: every appointment wore the
+ * same sage pill, so a cancellation looked exactly like a confirmation and the
+ * only difference was the word inside. A client glancing at the page read the
+ * shape first and the word second, which is the wrong way round for the one
+ * fact the page exists to tell them.
+ *
+ * `no_show` is deliberately the quietest of the five. It is the only status
+ * that describes something the client did, and a red badge for it would be the
+ * page telling somebody off.
+ */
+.booking-status-pending_confirmation { background: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1rem var(--warning-border); }
+.booking-status-confirmed { background: var(--sage-300); color: var(--forest-950); }
+.booking-status-cancelled { background: var(--danger-soft); color: var(--danger); }
+.booking-status-completed { background: var(--surface-strong); color: var(--muted); box-shadow: inset 0 0 0 1rem var(--line); }
+.booking-status-no_show { background: var(--surface-strong); color: var(--muted); box-shadow: inset 0 0 0 1rem var(--line); }
+
+/*
+ * What the status means, under the word for it.
+ *
+ * Sized and coloured as body text rather than as a banner: it is the sentence
+ * that finishes the badge, not a second announcement competing with it.
+ */
+.booking-next-step { margin: 0; color: var(--ink); font-size: 17rem; line-height: 1.5; }
+
+/*
+ * The way back, for the three states that have one.
+ *
+ * A cancelled or finished appointment used to end the page: nothing to move,
+ * nothing to cancel, and no link anywhere to the studio the client had just
+ * been trying to book. The booking page is public and the slug is already in
+ * the payload, so this costs a line.
+ */
+.booking-again { display: flex; justify-content: center; padding-top: 4rem; }
+
+/*
+ * The line that explains why the page is worth leaving open, and the button for
+ * when it stops watching by itself.
+ */
+.booking-watching { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12rem; margin: 0; padding-top: 4rem; color: var(--muted); font-size: 13rem; }
+
 .booking-manage-card { display: grid; gap: 22rem; }
 .booking-manage-facts { display: grid; margin: 0; }
 .booking-manage-facts div { display: grid; grid-template-columns: 150rem 1fr; gap: 20rem; padding: 16rem 0; border-bottom: 1rem solid var(--line); }
@@ -2429,6 +2492,32 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * row, so the head keeps its 52rem and the hours below it do not move.
  */
 .calendar-column > h2 .avatar { width: 28rem; height: 28rem; font-size: 12rem; }
+
+/* The day's two figures, at the far end of the column head from the face.
+   Black for what is booked, the studio's warning ochre for what is not — the
+   same colour the blocked-time bands use, because both mean "look here". */
+.calendar-tally { margin-left: auto; display: inline-flex; align-items: baseline; gap: 3rem; font-size: 13rem; font-variant-numeric: tabular-nums; }
+.calendar-tally b { color: var(--ink); font-weight: 750; }
+.calendar-tally i { color: var(--line); font-style: normal; }
+.calendar-tally em { color: var(--warning); font-style: normal; font-weight: 750; }
+.calendar-tally em::after { content: ""; display: inline-block; width: 7rem; height: 7rem; margin-left: 4rem; border-radius: 2rem; background: var(--free-hour-edge); vertical-align: 1rem; }
+
+/* An opening, drawn on the same axis as the cards and behind them.
+   Flat, and not hatched: hatching already means blocked time in this grid
+   (`.status-blocked`), and a second hatched thing would make a holiday and an
+   opening the same shape — opposite meanings in one pattern. Flat fill, no
+   border, no shadow: it is the ground the day sits on rather than an object in
+   it, and the cards keep both. */
+.calendar-grid .calendar-free {
+  position: absolute;
+  z-index: 0;
+  inset-inline: 0;
+  border-radius: 6rem;
+  background: var(--free-hour);
+  /* The yellow, kept to the edge the eye runs down when scanning a column. */
+  box-shadow: inset 3rem 0 0 var(--free-hour-edge);
+  pointer-events: none;
+}
 
 /* The track the cards are placed on, ruled once per hour. */
 .calendar-grid .calendar-list {

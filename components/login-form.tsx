@@ -128,7 +128,6 @@ export function LoginForm({
         Nail Profit OS
       </Link>
       <h1>{mode === "signup" ? t("auth.signUpTitle") : t("auth.welcomeBack")}</h1>
-      <p>{t("auth.subtitle")}</p>
       {activeEmail && (
         <div className="warning-banner">{t("auth.activeSession", { email: activeEmail })}</div>
       )}

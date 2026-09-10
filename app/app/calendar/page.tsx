@@ -12,9 +12,11 @@ import {
   addOns,
   availabilityExceptions,
   bookingLines,
+  bookingSettings,
   bookings,
   clients,
   locations,
+  scheduleRules,
   services,
   specialistAvatars,
   specialistLocations,
@@ -237,7 +239,54 @@ export default async function CalendarPage({
       )
       .orderBy(asc(availabilityExceptions.startsAt));
 
+    /*
+     * The shifts the day view measures its free time against.
+     *
+     * Without them the grid is the only frame there is — 08:00 to 20:00, from
+     * `DEFAULT_GRID` — and every hour with no appointment in it looks free,
+     * including the hours a master is not in the studio. A rota of 10:00–16:00
+     * would report eleven free hours instead of five and paint the morning
+     * yellow for somebody who is asleep.
+     *
+     * Read for the whole window and narrowed per day in the component: a rule
+     * carries a weekday and a range of dates it applies over, and which of them
+     * covers Thursday is a question about the day being drawn.
+     */
+    const shifts = await tx
+      .select({
+        specialistId: scheduleRules.specialistId,
+        locationId: scheduleRules.locationId,
+        weekday: scheduleRules.weekday,
+        startMinute: scheduleRules.startMinute,
+        endMinute: scheduleRules.endMinute,
+        effectiveFrom: scheduleRules.effectiveFrom,
+        effectiveTo: scheduleRules.effectiveTo,
+      })
+      .from(scheduleRules)
+      .where(
+        ownSpecialistId
+          ? eq(scheduleRules.specialistId, ownSpecialistId)
+          : filters.specialist
+            ? eq(scheduleRules.specialistId, filters.specialist)
+            : undefined,
+      );
+
+    /*
+     * And the gap a studio keeps after each appointment. It is not free time —
+     * nothing can be booked into it — so counting it as free would offer the
+     * desk a ten-minute opening that the booking engine itself refuses.
+     */
+    const buffers = await tx
+      .select({
+        locationId: bookingSettings.locationId,
+        before: bookingSettings.bufferBeforeMinutes,
+        after: bookingSettings.bufferAfterMinutes,
+      })
+      .from(bookingSettings);
+
     return {
+      shifts,
+      buffers,
       rows,
       lines,
       places: active,
@@ -380,6 +429,8 @@ export default async function CalendarPage({
         }}
         ownSpecialistId={data.ownSpecialistId}
         exceptions={exceptions}
+        shifts={data.shifts}
+        buffers={data.buffers}
         canWrite={canWrite}
         canFilterBySpecialist={scopeFor(membership.role, "bookings") !== "own"}
         businessType={businessType}

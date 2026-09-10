@@ -13,6 +13,7 @@ import type { TenantTransaction } from "@/db/tenant";
 import { reminderTimeFor } from "@/domain/notification-schedule";
 import {
   smsNotificationTemplates,
+  smsReplacesEmail,
   type BookingNotificationTemplate,
   type StaffNotificationTemplate,
 } from "@/lib/notification-message";
@@ -383,10 +384,25 @@ export async function notifyBooking(
     template: BookingNotificationTemplate;
     occurrence?: string;
     scheduledAt?: Date;
+    /**
+     * Who caused the event, where the row cannot say.
+     *
+     * A cancellation records its actor in `cancelled_by`, so this is read from
+     * the booking when it is not passed. A move records nothing — there is no
+     * `rescheduled_by` column — and the difference matters: a client moving
+     * their own appointment on the public page is watching the screen that
+     * does it, and does not need to be texted about it.
+     */
+    causedBy?: "client" | "staff" | "system";
   },
 ) {
   const [booking] = await tx
-    .select({ clientId: bookings.clientId })
+    .select({
+      clientId: bookings.clientId,
+      // Read for `smsReplacesEmail`: a client who cancelled the appointment
+      // themselves is not told about their own decision.
+      cancelledBy: bookings.cancelledBy,
+    })
     .from(bookings)
     .where(eq(bookings.id, input.bookingId))
     .limit(1);
@@ -399,12 +415,32 @@ export async function notifyBooking(
     .limit(1);
   if (!client) return [] as Channel[];
 
-  const channels: Channel[] = [
-    ...(client.phone && smsNotificationTemplates.includes(input.template)
-      ? (["sms"] as const)
-      : []),
-    ...(client.email ? (["email"] as const) : []),
-  ];
+  /*
+   * Two rules, not one, and the second is the whole point.
+   *
+   * `smsNotificationTemplates` is "SMS as well as the email" — the reminder,
+   * which every client gets on their phone because that is the message whose
+   * absence costs an empty chair.
+   *
+   * `smsReplacesEmail` is "SMS because there is no email", and it exists for a
+   * client the studio typed in at the desk: `client.email` is nullable and for
+   * them it is usually null, so until now the studio cancelling their
+   * appointment reached them through no channel at all. They arrived to a
+   * locked door, and the studio looked like the one who had failed.
+   *
+   * A client with an address is unaffected — same email, same cost. The phone
+   * is used only where the alternative is silence.
+   */
+  const channels: Channel[] = [];
+  if (client.phone && smsNotificationTemplates.includes(input.template)) channels.push("sms");
+  if (client.email) channels.push("email");
+  else if (
+    client.phone &&
+    !channels.includes("sms") &&
+    smsReplacesEmail(input.template, input.causedBy ?? booking.cancelledBy)
+  ) {
+    channels.push("sms");
+  }
 
   for (const channel of channels) {
     await enqueueBookingNotification(tx, {

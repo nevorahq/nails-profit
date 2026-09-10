@@ -75,6 +75,24 @@ test.describe("the public booking page", () => {
       /\/booking\//,
     );
 
+    /*
+     * And what it leads to. The badge used to be the whole answer — one word,
+     * in the same sage pill every status wore, on a page that then said nothing
+     * about what the word meant or how long it would hold.
+     *
+     * A request is the state where that costs most: it lapses on a deadline the
+     * client was never shown, and the studio's answer arrives by an email that
+     * may be queued, filtered, or impossible to send. So the page now names the
+     * hour, and says it is watching for the answer itself.
+     */
+    await page.getByRole("link", { name: "Open appointment" }).click();
+    await expect(page.locator(".booking-status-pending_confirmation")).toBeVisible();
+    await expect(page.locator(".booking-next-step")).toContainText(
+      /The studio will answer by \d{1,2}:\d{2}/,
+    );
+    await expect(page.locator(".booking-watching")).toContainText("keep it open");
+    await page.goBack();
+
     // The other end of it: a request waiting in the studio, for the master it
     // was booked with, at the time the client chose.
     const staff = await browser.newContext({ storageState: await studio.master.storageState() });

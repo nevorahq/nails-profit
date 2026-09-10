@@ -4,11 +4,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { clockAt, groupBookings, type CalendarView } from "@/components/calendar-grouping";
+import {
+  clockAt,
+  freeWindows,
+  groupBookings,
+  rotaFor,
+  toHalfHours,
+  totalMinutes,
+  type CalendarView,
+  type ShiftRule,
+  type Span,
+} from "@/components/calendar-grouping";
 import { ToolIcon } from "@/components/icons";
 import {
   addLocalDays,
   formatLocalDate,
+  localDateWeekday,
   localToUtc,
   parseLocalDate,
   parseLocalTime,
@@ -80,6 +91,14 @@ type Person = Readonly<{ id: string; name: string; avatar?: string | null }>;
 /** Statuses that still occupy the specialist, and so still have actions. */
 const LIVE_STATUSES = new Set(["pending_confirmation", "confirmed"]);
 
+/*
+ * The statuses that hold an hour, mirroring `OCCUPYING_BOOKING_STATUSES` on the
+ * server. Only a cancellation gives the time back: a closed visit and a no-show
+ * both happened at that hour, and offering it as free would invite a second
+ * client into a slot the studio has already spent.
+ */
+const OCCUPYING = new Set(["pending_confirmation", "confirmed", "completed", "no_show"]);
+
 const CANCELLATION_REASONS = ["client_request", "studio_request", "no_contact", "duplicate", "other"];
 
 type Alternative = Readonly<{ date: string; slots: string[] }>;
@@ -147,6 +166,8 @@ export function CalendarBoard({
   filters,
   ownSpecialistId,
   exceptions,
+  shifts,
+  buffers,
   canWrite,
   canFilterBySpecialist,
   businessType,
@@ -167,6 +188,10 @@ export function CalendarBoard({
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
   exceptions: readonly CalendarException[];
+  /** The rota the day view measures its free time against. */
+  shifts: readonly (ShiftRule & Readonly<{ locationId: string }>)[];
+  /** Per location, the gap a studio keeps around each appointment. */
+  buffers: readonly Readonly<{ locationId: string; before: number; after: number }>[];
   canWrite: boolean;
   canFilterBySpecialist: boolean;
   /** Whose earnings the preview under an appointment is naming. */
@@ -207,7 +232,7 @@ export function CalendarBoard({
     url: string,
     body: unknown,
     options: { method?: string; key?: string; zone?: string } = {},
-  ) {
+  ): Promise<Record<string, unknown> | false> {
     setPending(true);
     setError(null);
     setNotice(null);
@@ -226,8 +251,16 @@ export function CalendarBoard({
 
     if (response.ok) {
       idempotency.current = null;
+      /*
+       * The body, not just the fact of success: a cancellation answers with
+       * `client_notified`, and an empty list there is the one outcome the desk
+       * has to act on rather than read about later.
+       */
+      const body = (await response.json().catch(() => null)) as {
+        data?: Record<string, unknown>;
+      } | null;
       router.refresh();
-      return true;
+      return body?.data ?? {};
     }
 
     const failure = (await response.json().catch(() => null)) as {
@@ -366,11 +399,20 @@ export function CalendarBoard({
   async function cancel(booking: CalendarBooking, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    await send(`/api/v1/bookings/${booking.id}/cancel`, {
+    const result = await send(`/api/v1/bookings/${booking.id}/cancel`, {
       reason: String(data.get("reason")),
       cancelled_by: String(data.get("cancelled_by")),
       version: booking.version,
     });
+    /*
+     * The appointment is off either way — this is about whether the client
+     * knows. An address is written to, and a client with only a phone now gets
+     * an SMS; an empty list means the card carries neither, and the only thing
+     * left that can reach them is the person reading this.
+     */
+    if (result && Array.isArray(result.client_notified) && result.client_notified.length === 0) {
+      setNotice(t("calendar.clientNotReached"));
+    }
   }
 
   async function resendManageLink(bookingId: string) {
@@ -534,12 +576,102 @@ export function CalendarBoard({
         ]
       : [];
   /*
-   * An empty day keeps the old panel. With nothing to place, `groupBookings`
-   * falls back to a single group titled with the date, and drawing that as a
-   * timetable puts a specialist column headed "2026-08-09" above twelve empty
-   * hours — a grid that says less than the sentence it replaced.
+   * Two questions that used to be one, and are not the same question.
+   *
+   * `asColumns` asks whether the sections stand side by side under a master's
+   * name and face. `isGrid` asks whether they are laid out against a column of
+   * hours — cards positioned absolutely by their start and length.
+   *
+   * The day wants both. The list wants only the first: it is grouped by master
+   * now, so the columns are right, but its window is a fortnight and a
+   * fortnight cannot be placed on one axis of hours. It keeps an ordinary
+   * ordered list inside each column.
+   *
+   * An empty view keeps the old panel either way. With nothing to place,
+   * `groupBookings` falls back to a single group titled with the dates, and
+   * drawing that as a timetable puts a column headed "2026-08-09" above twelve
+   * empty hours — a grid that says less than the sentence it replaced.
    */
   const isGrid = view === "day" && dayItems.length > 0;
+  const asColumns = isGrid || (view === "list" && bookings.length > 0);
+
+  /*
+   * The shortest thing the studio sells, which is what separates a window from
+   * a crack: a gap nothing on the price list fits into is not an opening, and
+   * counting one would put a number in the column head that nobody can act on.
+   * An hour when the catalogue says nothing — a studio that has not filled it
+   * in yet should not be told its whole day is free in one-minute pieces.
+   */
+  const shortestService = Math.min(
+    ...services.map((service) => service.durationMinutes ?? Number.POSITIVE_INFINITY),
+    60,
+  );
+
+  const weekdayOfDay = (() => {
+    const parsed = parseLocalDate(days[0]);
+    return parsed ? localDateWeekday(parsed) : null;
+  })();
+
+  /**
+   * What a master could still sell today, per column.
+   *
+   * Only the day view: it is the only one drawn against a single axis of hours,
+   * and the only one whose columns are one person on one date — which is what
+   * "free" is a property of.
+   */
+  const freeFor = (specialistId: string, taken: readonly Span[]) => {
+    if (!isGrid || weekdayOfDay === null) return { windows: [] as Span[], shift: 0, free: 0 };
+
+    const rota = rotaFor(shifts, specialistId, days[0], weekdayOfDay);
+    const windows = freeWindows(rota, taken, shortestService);
+
+    return {
+      windows,
+      /*
+       * The whole shift, and what is left of it — in hours rather than in
+       * openings, because an opening is not a fixed quantity: how many a day
+       * holds depends on the length of the service being booked into it, and
+       * the calendar has no service selected. Hours are the same number
+       * whatever anybody books, they add up across masters, and they are what
+       * `practical_capacity_basis_points` already measures a studio in.
+       */
+      shift: totalMinutes(rota.map((rule) => ({ start: rule.startMinute, end: rule.endMinute }))),
+      // Summed over the windows rather than over the shift less the bookings:
+      // a gap too short to sell is not free time, and `freeWindows` has already
+      // dropped those.
+      free: totalMinutes(windows),
+    };
+  };
+
+  /**
+   * An appointment plus the gap the studio keeps around it.
+   *
+   * The buffers belong to the location, so they are read per booking rather
+   * than once: a master working at two addresses is under two settings. Without
+   * them a ten-minute turnaround would be offered as free time that the booking
+   * engine itself refuses to fill.
+   */
+  const withBuffer = (start: number, end: number, locationId: string | null): Span => {
+    const gap = buffers.find((entry) => entry.locationId === locationId);
+    return { start: start - (gap?.before ?? 0), end: end + (gap?.after ?? 0) };
+  };
+
+  /**
+   * The day an entry falls on, for the one view where nothing else says it.
+   *
+   * A day view is one date and says so above the columns; a week is grouped by
+   * date and each section is headed with one. The list is neither: it spans a
+   * fortnight, and its cards carried a bare «10:00–11:30». That was survivable
+   * while the list was a single run in time order — the reader could infer the
+   * day from the cards above. Grouped into a master's column it is not: their
+   * Tuesday and their Friday now sit next to each other with nothing between
+   * them.
+   */
+  const dayLabel = (localDate: string) =>
+    new Date(`${localDate}T12:00:00`).toLocaleDateString(localeTag, {
+      day: "numeric",
+      month: "short",
+    });
   const daySpans = dayItems.map((item) => ({
     start: minutesOf(item.localStart),
     end: minutesOf(item.localEnd),
@@ -790,7 +922,7 @@ export function CalendarBoard({
           </div>
         )}
 
-        <div className={isGrid ? "calendar-columns" : undefined}>
+        <div className={asColumns ? "calendar-columns" : undefined}>
       {allGroups.map((group) => {
         const groupExceptions =
           view === "day"
@@ -819,6 +951,34 @@ export function CalendarBoard({
             )
           : null;
 
+        /*
+         * What stands in this master's day, in the minutes the grid is drawn
+         * in, and what is left over.
+         *
+         * Blocked intervals count as fully as appointments — a holiday is not
+         * time anybody can be booked into — while a cancellation gives its hour
+         * back, which is why the list is filtered by `OCCUPYING` rather than
+         * taken whole.
+         */
+        const taken: Span[] = isGrid
+          ? [
+              ...group.bookings
+                .filter((booking) => OCCUPYING.has(booking.status))
+                .map((booking) =>
+                  withBuffer(
+                    minutesOf(booking.localStart),
+                    minutesOf(booking.localEnd),
+                    booking.locationId,
+                  ),
+                ),
+              ...groupExceptions.map((exception) => ({
+                start: minutesOf(exception.localStart),
+                end: minutesOf(exception.localEnd),
+              })),
+            ]
+          : [];
+        const open = freeFor(group.key, taken);
+
         const slotOf = (index: number): React.CSSProperties | undefined => {
           if (!laid) return undefined;
           const span = laid.placed[index];
@@ -842,7 +1002,7 @@ export function CalendarBoard({
 
         return (
         <section
-          className={isGrid ? "calendar-column" : "panel calendar-group"}
+          className={asColumns ? "calendar-column" : "panel calendar-group"}
           key={group.key}
         >
           <h2>
@@ -857,11 +1017,49 @@ export function CalendarBoard({
               </span>
             )}
             {group.title}
+            {/*
+              The day at a glance: what stands in it, and how many openings are
+              left. Two figures rather than one because they answer different
+              questions — a full day and an empty one both have "0" somewhere,
+              and which zero it is is the whole point.
+            */}
+            {isGrid && open.shift > 0 && (
+              <span className="calendar-tally">
+                <b>{toHalfHours(open.shift).toLocaleString(localeTag)}</b>
+                <i aria-hidden="true">/</i>
+                <em>{toHalfHours(open.free).toLocaleString(localeTag)}</em>
+                <span className="sr-only">
+                  {t("calendar.tally", {
+                    shift: toHalfHours(open.shift).toLocaleString(localeTag),
+                    free: toHalfHours(open.free).toLocaleString(localeTag),
+                  })}
+                </span>
+              </span>
+            )}
           </h2>
-          {items.length === 0 && !isGrid ? (
+          {items.length === 0 && !asColumns ? (
             <p className="muted">{t("calendar.emptyDay")}</p>
           ) : (
             <ul className="calendar-list">
+              {/*
+                The openings themselves, on the same axis as the cards and
+                behind them: a band is a statement about the hours it covers,
+                and an appointment drawn over one would be a contradiction.
+                Marked `aria-hidden` because the tally in the heading already
+                says this in words, and a screen reader does not need the day
+                read out twice.
+              */}
+              {open.windows.map((window) => (
+                <li
+                  key={`free-${window.start}`}
+                  className="calendar-free"
+                  aria-hidden="true"
+                  style={{
+                    top: `calc(var(--calendar-row) * ${rows(window.start)})`,
+                    height: `calc(var(--calendar-row) * ${(window.end - window.start) / 60})`,
+                  }}
+                />
+              ))}
               {items.map((item, index) => {
                 if (item.kind === "exception") {
                   const exc = item.data;
@@ -870,13 +1068,16 @@ export function CalendarBoard({
                       <details>
                         <summary>
                           <span className="calendar-time">
+                            {view === "list" && (
+                              <span className="calendar-day">{dayLabel(exc.localDate)}</span>
+                            )}
                             {exc.localStart}–{exc.localEnd}
                           </span>
                           <span className="calendar-what">
                             {t("calendar.blockedLabel")}
                             {exc.reason && <span className="unit-hint">{exc.reason}</span>}
                           </span>
-                          {view !== "day" && (
+                          {view === "week" && (
                             <span className="calendar-who">{exc.specialistName}</span>
                           )}
                         </summary>
@@ -927,6 +1128,9 @@ export function CalendarBoard({
                   >
                     <summary>
                       <span className="calendar-time">
+                        {view === "list" && (
+                          <span className="calendar-day">{dayLabel(booking.localDate)}</span>
+                        )}
                         {booking.localStart}–{booking.localEnd}
                       </span>
                       <span className="calendar-what">
@@ -935,7 +1139,16 @@ export function CalendarBoard({
                       </span>
                       <span className="calendar-who">
                         {booking.clientName ?? t("calendar.noClient")}
-                        {view !== "day" && <span className="unit-hint">{booking.specialistName}</span>}
+                        {/*
+                          Whose it is, only where the section is not already
+                          theirs. A week is grouped by date, so every card in it
+                          needs a name; a day and a list stand in the master's
+                          own column, under their face, and repeating it there
+                          is one line of noise per appointment.
+                        */}
+                        {view === "week" && (
+                          <span className="unit-hint">{booking.specialistName}</span>
+                        )}
                       </span>
                       {/* Never colour alone (section 7.8): the status is words. */}
                       <span className="calendar-status">

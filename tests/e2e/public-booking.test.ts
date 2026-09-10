@@ -241,14 +241,16 @@ describe("public online booking", () => {
      * The reminder that was queued on creation left with the cancellation:
      * nobody is coming, so nobody is reminded.
      *
-     * Nothing is left for the client at all, and that is the whole picture for
-     * this one: they left a phone and no address, SMS carries only the
-     * reminder, and the reminder went with the cancellation. The confirmation,
-     * the move and the cancellation each had no channel to take — which here is
-     * the right silence rather than a gap, because every one of those three was
-     * something this client did themselves on the manage page and watched the
-     * answer to. The studio-side cancellation that reaches nobody is the case
-     * with real cost, and it is pinned in `tests/e2e/notifications.test.ts`.
+     * Nothing is left for the client at all, and that is still the whole
+     * picture for this one — but the rule producing it has changed, so it is
+     * worth restating. They left a phone and no address. SMS now also carries
+     * a cancellation and a move, which would put two rows here; it carries
+     * neither, because `smsReplacesEmail` asks who caused the event and every
+     * one of these three was this client, on the manage page, watching the
+     * answer. Texting them would be paying to report their own decision.
+     *
+     * The studio-side cancellation that used to reach nobody is the case with
+     * real cost, and it now sends: see `tests/e2e/notifications.test.ts`.
      *
      * The studio's own copies are filtered out rather than counted, because
      * they are the other half of these same three events and belong to
@@ -260,6 +262,57 @@ describe("public online booking", () => {
       .map((row) => row.template)
       .filter((template) => !(staffNotificationTemplates as readonly string[]).includes(template));
     expect(toTheClient.sort()).toEqual([]);
+  });
+
+  /**
+   * The endpoint the manage page checks on a timer while a client waits for an
+   * answer, so that a confirmation reaches them even when the email cannot —
+   * queued behind a cron, filtered as spam, or impossible because they left no
+   * address, which is exactly this fixture's client.
+   *
+   * The assertion that matters is the second one. This is answered to anyone
+   * holding the token, up to a hundred and twenty times an hour, and it exists
+   * to carry two facts; a future edit that answers it from the full DTO would
+   * publish the client's name, their phone number and the studio's price list
+   * to the same audience, and nothing else in the test suite would notice.
+   */
+  test("the status endpoint reports the change, and carries nothing else", async () => {
+    const seen = dataOf<{ status: string; version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${manageToken}/status`),
+    );
+
+    expect(seen.status).toBe("cancelled");
+    expect(Object.keys(seen).sort()).toEqual(["status", "version"]);
+  });
+
+  /**
+   * The studio that never turned verification on, which is most of them:
+   * `verification_mode` is `off` by default and set per location.
+   *
+   * The endpoint used to refuse this booking. It asked only what the
+   * deployment's provider was, and with Resend configured — every production
+   * deployment — an address became mandatory everywhere, including at studios
+   * with no code step for it to serve. A client with a phone and no email
+   * could not book at all.
+   */
+  test("takes a booking with no email when no code is asked for", async () => {
+    process.env.NOTIFICATION_PROVIDER = "resend";
+    try {
+      const availability = dataOf<{ slots: Slot[] }>(
+        await anonymous.get(
+          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(4)}`,
+        ),
+      );
+      const created = await createBookingAt(availability.slots[0], {
+        name: "Вера",
+        phone: "+373 69 444 555",
+        email: null,
+      });
+
+      expect(created.status).toBe("confirmed");
+    } finally {
+      delete process.env.NOTIFICATION_PROVIDER;
+    }
   });
 
   test("a confirmed booking is queued a reminder for the day before", async () => {
@@ -674,6 +727,25 @@ describe("public online booking", () => {
       // Section 7.9: verification binds a contact, not merely a session.
       const refused = await createWith({ phone: "+373 69 111 222" });
       expect(errorCodeOf(refused)).toBe("VERIFICATION_REQUIRED");
+    });
+
+    /**
+     * The other side of it: this studio does ask for a code, and the code
+     * travels by email, so there is nowhere to send one without an address.
+     * The refusal names the field rather than reporting a failed verification
+     * — the client can act on "укажите почту" and cannot act on the other.
+     */
+    test("still needs an address when the code itself travels by email", async () => {
+      process.env.NOTIFICATION_PROVIDER = "resend";
+      try {
+        await holdOne(wednesdayAhead(9));
+        const refused = await createWith({ email: null, phone: "+373 69 222 333" });
+
+        expect(errorCodeOf(refused)).toBe("INVALID_EMAIL");
+        expect(refused.status).toBe(422);
+      } finally {
+        delete process.env.NOTIFICATION_PROVIDER;
+      }
     });
 
     test("Resend verifies email; the booking reaches the inbox twice and the phone once", async () => {

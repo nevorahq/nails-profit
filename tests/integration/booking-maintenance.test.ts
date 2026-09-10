@@ -123,6 +123,19 @@ describe("booking maintenance", () => {
     expect(queued.map((row) => row.template)).toContain("booking.cancelled");
     expect(queued.every((row) => row.status === "pending")).toBe(true);
 
+    /*
+     * By SMS, because this client has no address — the fixture above gives them
+     * a phone and `email: null`, which is what a studio typing somebody in from
+     * a phone call produces. Before the fallback existed this row was written
+     * and never sent: the queue held an email for a client with no inbox, and
+     * the person who had been told «студия подтвердит» heard nothing more.
+     *
+     * One row, not two. The job used to queue both channels for every client,
+     * which is the other half of what this asserts.
+     */
+    expect(queued).toHaveLength(1);
+    expect(queued[0].channel).toBe("sms");
+
     // Running it again changes nothing: the same key, the same one message.
     await run("node", ["scripts/booking-maintenance.mjs"], { env: { ...process.env } });
     const afterSecondRun = await adminDb
@@ -130,5 +143,53 @@ describe("booking maintenance", () => {
       .from(notificationOutbox)
       .where(eq(notificationOutbox.bookingId, bookingId));
     expect(afterSecondRun).toHaveLength(queued.length);
+  });
+
+  /**
+   * The same lapse for a client who does have an address: one email, and no SMS
+   * beside it.
+   *
+   * This is the branch that used to cost a studio money without anybody asking
+   * for it. The job queued a row per channel for every client, so a client with
+   * both contacts was texted a cancellation they were about to read in their
+   * inbox — while a route cancelling the same booking sent only the email.
+   */
+  test("writes only the email when the client has one", async () => {
+    const past = new Date(Date.now() - 3 * 60 * 60_000);
+    const withAddress = await createClient(organizationId, {
+      normalizedPhone: "+37369777888",
+      email: "olga@example.com",
+    });
+
+    const bookingId = await withTenant(organizationId, async (tx) => {
+      const created = await createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId,
+        clientId: withAddress.id,
+        interval: { start: past, end: new Date(past.getTime() + 90 * 60_000) },
+        source: "public_booking",
+        confirmationMode: "manual",
+        confirmationTtlMinutes: 120,
+        lines: LINES,
+        actorUserId: null,
+        now: new Date(past.getTime() - 60 * 60_000),
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+
+    await run("node", ["scripts/booking-maintenance.mjs"], {
+      env: { ...process.env, MIGRATION_DATABASE_URL: process.env.MIGRATION_DATABASE_URL },
+    });
+
+    const queued = await adminDb
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.bookingId, bookingId));
+
+    expect(queued).toHaveLength(1);
+    expect(queued[0].channel).toBe("email");
+    expect(queued[0].template).toBe("booking.cancelled");
   });
 });

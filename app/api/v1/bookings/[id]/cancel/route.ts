@@ -49,5 +49,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   );
 
   if (!outcome.ok) return mutationFailureResponse(outcome, id);
-  return apiSuccess(bookingPayload(outcome.booking, outcome.lines), id);
+  return apiSuccess(bookingPayload(outcome.booking, outcome.lines, outcome.notifiedChannels), id);
 }

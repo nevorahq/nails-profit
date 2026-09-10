@@ -58,6 +58,21 @@ export const PUBLIC_BOOKING_CREATE_RULE: RateLimitRule = { limit: 10, windowSeco
 /** Its own bucket, section 7.9: guessing codes must not be paid for out of the create budget. */
 export const PUBLIC_BOOKING_VERIFY_RULE: RateLimitRule = { limit: 15, windowSeconds: 3_600 };
 export const PUBLIC_BOOKING_MANAGE_RULE: RateLimitRule = { limit: 30, windowSeconds: 3_600 };
+/**
+ * The manage page asking whether anything has changed, and nothing else.
+ *
+ * Its own bucket for the same reason slot browsing has one: a client watching
+ * an unanswered request must not spend the allowance that moving or cancelling
+ * the appointment needs. Thirty an hour is right for a page a person reloads by
+ * hand; a page that checks for itself while they wait would exhaust it in a
+ * quarter of an hour and then refuse the cancel button.
+ *
+ * Higher because the request is smaller: two columns off one row, no lines, no
+ * organization, no localization — see `loadPublicBookingStatus`. A hundred and
+ * twenty an hour is one check every thirty seconds for the whole two hours a
+ * request may sit unanswered, which is the longest anybody has reason to watch.
+ */
+export const PUBLIC_BOOKING_POLL_RULE: RateLimitRule = { limit: 120, windowSeconds: 3_600 };
 
 export type CountedWindow = Readonly<{ hits: number; windowEndsAt: number }>;
 
