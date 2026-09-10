@@ -120,6 +120,22 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const t = useMemo(() => getTranslator(profile.locale), [profile.locale]);
   const [locationId, setLocationId] = useState(profile.locations[0]?.id ?? "");
   const location = profile.locations.find((entry) => entry.id === locationId) ?? profile.locations[0];
+  /*
+   * Whether an address is the only way to finish, rather than merely the
+   * channel a code would use if one were asked for.
+   *
+   * The field used to be required whenever the deployment's provider was
+   * Resend, which is every production deployment — so a client with no email
+   * could not book at all, at studios that had never turned verification on.
+   * `verification_mode` is `off` by default and is a setting per location, so
+   * for most studios the code step this guarded does not exist.
+   *
+   * Both halves have to hold: a studio asking for a code, and a code that
+   * travels by email. With SMS as the verification channel the phone above
+   * already carries it.
+   */
+  const emailRequired =
+    location?.verification_mode === "code" && profile.notification_channel === "email";
   const [services, setServices] = useState<Service[]>([]);
   const [serviceId, setServiceId] = useState("");
   const service = services.find((entry) => entry.id === serviceId) ?? null;
@@ -429,10 +445,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       locale: String(data.get("locale") ?? profile.locale),
       legalAccepted: data.get("legalAccepted") === "on",
     };
-    const issues = validatePublicContact(
-      { ...entered, email: entered.email ?? "" },
-      profile.notification_channel === "email",
-    );
+    const issues = validatePublicContact({ ...entered, email: entered.email ?? "" }, emailRequired);
     if (Object.keys(issues).length > 0) {
       setFieldErrors(
         Object.fromEntries(
@@ -761,8 +774,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 {fieldErrors.phone && <span id="booking-phone-error" className="field-error">{fieldErrors.phone}</span>}
               </label>
               <label htmlFor="booking-email">
-                {t(profile.notification_channel === "email" ? "publicBooking.emailRequired" : "publicBooking.email")}
-                <input id="booking-email" name="email" type="email" autoComplete="email" placeholder={t("publicBooking.emailPlaceholder")} required={profile.notification_channel === "email"} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
+                {t(emailRequired ? "publicBooking.emailRequired" : "publicBooking.email")}
+                <input id="booking-email" name="email" type="email" autoComplete="email" placeholder={t("publicBooking.emailPlaceholder")} required={emailRequired} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
                 {fieldErrors.email && <span id="booking-email-error" className="field-error">{fieldErrors.email}</span>}
               </label>
               <label htmlFor="booking-locale">

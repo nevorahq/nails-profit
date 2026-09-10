@@ -157,11 +157,6 @@ async function handlePost(
       fieldErrors: toFieldErrors(parsed.error.issues),
     });
   }
-  if (getPublicNotificationChannel() === "email" && !parsed.data.email) {
-    return apiError(422, "INVALID_EMAIL", "A valid email is required", id, {
-      fieldErrors: [{ field: "email", code: "required", message: "Email is required" }],
-    });
-  }
   const normalizedPhone = normalizePhone(parsed.data.phone);
   if (!normalizedPhone) {
     return apiError(422, "INVALID_PHONE", "The phone number is invalid", id, {
@@ -229,6 +224,25 @@ async function handlePost(
       if (!draft) return { failure: "SERVICE_NOT_BOOKABLE" as const };
       if (hold.endsAt.getTime() - hold.startsAt.getTime() !== draft.durationMinutes * 60_000) {
         return { failure: "HOLD_MISMATCH" as const };
+      }
+
+      /*
+       * An address, but only where one is the way a code arrives.
+       *
+       * This used to be checked above, against the deployment's provider alone:
+       * with Resend configured — which is every production deployment — the
+       * endpoint refused any booking without an email, at studios that had
+       * never asked for a code. `verification_mode` is off by default and set
+       * per location, so for most of them the step this protects does not
+       * exist. Down here the location is known, which is what makes the
+       * narrower question askable at all.
+       */
+      if (
+        context.verificationMode === "code" &&
+        getPublicNotificationChannel() === "email" &&
+        !parsed.data.email
+      ) {
+        return { failure: "EMAIL_REQUIRED" as const };
       }
 
       // Section 7.2 step 7. Checked before the client record is touched: an
@@ -376,6 +390,12 @@ async function handlePost(
           return apiError(409, "CONTACT_CONFLICT", "The supplied contacts belong to different clients", id);
         case "SERVICE_NOT_BOOKABLE":
           return apiError(422, "SERVICE_NOT_BOOKABLE", "The service cannot be booked", id);
+        case "EMAIL_REQUIRED":
+          // Named on the field, so the form marks the input rather than showing
+          // a sentence about verification the client cannot act on.
+          return apiError(422, "INVALID_EMAIL", "A valid email is required", id, {
+            fieldErrors: [{ field: "email", code: "required", message: "Email is required" }],
+          });
         case "VERIFICATION_REQUIRED":
           return apiError(403, "VERIFICATION_REQUIRED", "This contact has not been verified", id);
         case "SLOT_UNAVAILABLE":
