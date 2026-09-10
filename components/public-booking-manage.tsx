@@ -148,7 +148,14 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
       await refresh();
       setNotice(t("publicBooking.statusChanged"));
     }
-  }, [booking.status, booking.version, refresh, t, token]);
+    /*
+     * `setWatching` and `setNotice` are listed even though a `useState` setter
+     * is stable and the exhaustive-deps rule does not ask for them. The React
+     * Compiler does: it infers what the callback closes over and refuses to
+     * optimize a component whose written dependencies do not match, which is
+     * what `react-hooks/preserve-manual-memoization` reports.
+     */
+  }, [booking.status, booking.version, refresh, setNotice, setWatching, t, token]);
 
   useEffect(() => {
     if (booking.status !== "pending_confirmation" || !watching) return;
