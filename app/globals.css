@@ -1065,6 +1065,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-entry summary { display: flex; flex-wrap: wrap; gap: 6rem 14rem; align-items: baseline; padding: 14rem 16rem; cursor: pointer; min-height: 44rem; }
 .calendar-entry summary::marker { color: var(--muted); }
 .calendar-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15rem; }
+/* The date a list entry falls on, ahead of its hours. Quieter than the time
+   beside it: the hour is what the reader is scanning for, the day is what tells
+   them which run of hours they are in. */
+.calendar-day { margin-right: 8rem; color: var(--muted); font-weight: 650; }
 .calendar-what { font-size: 15rem; }
 .calendar-who { color: var(--muted); font-size: 14rem; }
 .calendar-status { margin-left: auto; font-size: 12rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }

@@ -80,6 +80,7 @@ type Person = Readonly<{ id: string; name: string; avatar?: string | null }>;
 /** Statuses that still occupy the specialist, and so still have actions. */
 const LIVE_STATUSES = new Set(["pending_confirmation", "confirmed"]);
 
+
 const CANCELLATION_REASONS = ["client_request", "studio_request", "no_contact", "duplicate", "other"];
 
 type Alternative = Readonly<{ date: string; slots: string[] }>;
@@ -551,12 +552,41 @@ export function CalendarBoard({
         ]
       : [];
   /*
-   * An empty day keeps the old panel. With nothing to place, `groupBookings`
-   * falls back to a single group titled with the date, and drawing that as a
-   * timetable puts a specialist column headed "2026-08-09" above twelve empty
-   * hours — a grid that says less than the sentence it replaced.
+   * Two questions that used to be one, and are not the same question.
+   *
+   * `asColumns` asks whether the sections stand side by side under a master's
+   * name and face. `isGrid` asks whether they are laid out against a column of
+   * hours — cards positioned absolutely by their start and length.
+   *
+   * The day wants both. The list wants only the first: it is grouped by master
+   * now, so the columns are right, but its window is a fortnight and a
+   * fortnight cannot be placed on one axis of hours. It keeps an ordinary
+   * ordered list inside each column.
+   *
+   * An empty view keeps the old panel either way. With nothing to place,
+   * `groupBookings` falls back to a single group titled with the dates, and
+   * drawing that as a timetable puts a column headed "2026-08-09" above twelve
+   * empty hours — a grid that says less than the sentence it replaced.
    */
   const isGrid = view === "day" && dayItems.length > 0;
+  const asColumns = isGrid || (view === "list" && bookings.length > 0);
+
+  /**
+   * The day an entry falls on, for the one view where nothing else says it.
+   *
+   * A day view is one date and says so above the columns; a week is grouped by
+   * date and each section is headed with one. The list is neither: it spans a
+   * fortnight, and its cards carried a bare «10:00–11:30». That was survivable
+   * while the list was a single run in time order — the reader could infer the
+   * day from the cards above. Grouped into a master's column it is not: their
+   * Tuesday and their Friday now sit next to each other with nothing between
+   * them.
+   */
+  const dayLabel = (localDate: string) =>
+    new Date(`${localDate}T12:00:00`).toLocaleDateString(localeTag, {
+      day: "numeric",
+      month: "short",
+    });
   const daySpans = dayItems.map((item) => ({
     start: minutesOf(item.localStart),
     end: minutesOf(item.localEnd),
@@ -807,7 +837,7 @@ export function CalendarBoard({
           </div>
         )}
 
-        <div className={isGrid ? "calendar-columns" : undefined}>
+        <div className={asColumns ? "calendar-columns" : undefined}>
       {allGroups.map((group) => {
         const groupExceptions =
           view === "day"
@@ -859,7 +889,7 @@ export function CalendarBoard({
 
         return (
         <section
-          className={isGrid ? "calendar-column" : "panel calendar-group"}
+          className={asColumns ? "calendar-column" : "panel calendar-group"}
           key={group.key}
         >
           <h2>
@@ -875,7 +905,7 @@ export function CalendarBoard({
             )}
             {group.title}
           </h2>
-          {items.length === 0 && !isGrid ? (
+          {items.length === 0 && !asColumns ? (
             <p className="muted">{t("calendar.emptyDay")}</p>
           ) : (
             <ul className="calendar-list">
@@ -887,13 +917,16 @@ export function CalendarBoard({
                       <details>
                         <summary>
                           <span className="calendar-time">
+                            {view === "list" && (
+                              <span className="calendar-day">{dayLabel(exc.localDate)}</span>
+                            )}
                             {exc.localStart}–{exc.localEnd}
                           </span>
                           <span className="calendar-what">
                             {t("calendar.blockedLabel")}
                             {exc.reason && <span className="unit-hint">{exc.reason}</span>}
                           </span>
-                          {view !== "day" && (
+                          {view === "week" && (
                             <span className="calendar-who">{exc.specialistName}</span>
                           )}
                         </summary>
@@ -944,6 +977,9 @@ export function CalendarBoard({
                   >
                     <summary>
                       <span className="calendar-time">
+                        {view === "list" && (
+                          <span className="calendar-day">{dayLabel(booking.localDate)}</span>
+                        )}
                         {booking.localStart}–{booking.localEnd}
                       </span>
                       <span className="calendar-what">
@@ -952,7 +988,16 @@ export function CalendarBoard({
                       </span>
                       <span className="calendar-who">
                         {booking.clientName ?? t("calendar.noClient")}
-                        {view !== "day" && <span className="unit-hint">{booking.specialistName}</span>}
+                        {/*
+                          Whose it is, only where the section is not already
+                          theirs. A week is grouped by date, so every card in it
+                          needs a name; a day and a list stand in the master's
+                          own column, under their face, and repeating it there
+                          is one line of noise per appointment.
+                        */}
+                        {view === "week" && (
+                          <span className="unit-hint">{booking.specialistName}</span>
+                        )}
                       </span>
                       {/* Never colour alone (section 7.8): the status is words. */}
                       <span className="calendar-status">

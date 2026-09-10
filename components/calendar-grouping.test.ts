@@ -41,10 +41,51 @@ describe("grouping the calendar", () => {
     expect(groups[2].bookings.map((booking) => booking.id)).toEqual(["1", "2", "3"]);
   });
 
-  test("the list is everything in the window, ungrouped", () => {
+  /**
+   * The list used to come back whole — every master's appointments in one run,
+   * a client's Thursday between two of somebody else's. It answers the same
+   * question the day view does, over a longer window, so it is grouped the same
+   * way: whose is this.
+   */
+  test("the list is one column per specialist across the whole window", () => {
     const groups = groupBookings("list", ["2026-08-03", "2026-08-16"], BOOKINGS, PEOPLE);
+
+    // Ольга is here and was not in the day view: her booking is on the 6th, and
+    // the window covers it.
+    expect(groups.map((group) => group.title)).toEqual(["Анна", "Ирина", "Ольга"]);
+    expect(groups.flatMap((group) => group.bookings)).toHaveLength(4);
+    // Anna's two, ordered as they came in, and nobody else's.
+    expect(groups[0].bookings.map((booking) => booking.id)).toEqual(["1", "3"]);
+  });
+
+  /**
+   * An empty window keeps the panel it always had. A row of columns for people
+   * with nothing in any of them says less than the dates do.
+   */
+  test("an empty list stays one section headed by its dates", () => {
+    const groups = groupBookings("list", ["2026-08-03", "2026-08-16"], [], PEOPLE);
+
     expect(groups).toHaveLength(1);
-    expect(groups[0].bookings).toHaveLength(4);
+    expect(groups[0].title).toBe("2026-08-03 — 2026-08-16");
+    expect(groups[0].bookings).toEqual([]);
+  });
+
+  /**
+   * The same rule as the day view's, so a master the studio has parted with
+   * keeps a column for the appointments that outlived them.
+   */
+  test("the list gives an archived specialist a column too", () => {
+    const groups = groupBookings(
+      "list",
+      ["2026-09-10", "2026-09-16"],
+      [
+        { id: "a", localDate: "2026-09-12", specialistId: "gone", specialistName: "Маша" },
+        { id: "b", localDate: "2026-09-14", specialistId: "anna" },
+      ],
+      PEOPLE,
+    );
+
+    expect(groups.map((group) => group.title)).toEqual(["Анна", "Маша"]);
   });
 });
 
