@@ -24,6 +24,22 @@
   --warning: #6f5018;
   --warning-border: #d4bd83;
   --warning-soft: #f8f0dc;
+  /*
+   * An hour nobody has taken yet, and its edge.
+   *
+   * Two values because one could not do both jobs. The fill has to stay quieter
+   * than every card on top of it — a free day is most of the column, and paint
+   * that strong makes the emptiness shout louder than the appointments, which
+   * are what the day is actually about. The edge is where the yellow is allowed
+   * to be a yellow, so an opening still announces itself at a glance.
+   *
+   * Both sit apart from `--warning-soft`, which an appointment awaiting
+   * confirmation is painted: the two stand side by side here, and telling a
+   * column of pending appointments from a column of openings is the comparison
+   * this view exists for.
+   */
+  --free-hour: #fcf6e3;
+  --free-hour-edge: #dcc07a;
   --shadow: 0 2rem 8rem rgba(15, 42, 29, 0.4);
 
   /*
@@ -2476,6 +2492,32 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * row, so the head keeps its 52rem and the hours below it do not move.
  */
 .calendar-column > h2 .avatar { width: 28rem; height: 28rem; font-size: 12rem; }
+
+/* The day's two figures, at the far end of the column head from the face.
+   Black for what is booked, the studio's warning ochre for what is not — the
+   same colour the blocked-time bands use, because both mean "look here". */
+.calendar-tally { margin-left: auto; display: inline-flex; align-items: baseline; gap: 3rem; font-size: 13rem; font-variant-numeric: tabular-nums; }
+.calendar-tally b { color: var(--ink); font-weight: 750; }
+.calendar-tally i { color: var(--line); font-style: normal; }
+.calendar-tally em { color: var(--warning); font-style: normal; font-weight: 750; }
+.calendar-tally em::after { content: ""; display: inline-block; width: 7rem; height: 7rem; margin-left: 4rem; border-radius: 2rem; background: var(--free-hour-edge); vertical-align: 1rem; }
+
+/* An opening, drawn on the same axis as the cards and behind them.
+   Flat, and not hatched: hatching already means blocked time in this grid
+   (`.status-blocked`), and a second hatched thing would make a holiday and an
+   opening the same shape — opposite meanings in one pattern. Flat fill, no
+   border, no shadow: it is the ground the day sits on rather than an object in
+   it, and the cards keep both. */
+.calendar-grid .calendar-free {
+  position: absolute;
+  z-index: 0;
+  inset-inline: 0;
+  border-radius: 6rem;
+  background: var(--free-hour);
+  /* The yellow, kept to the edge the eye runs down when scanning a column. */
+  box-shadow: inset 3rem 0 0 var(--free-hour-edge);
+  pointer-events: none;
+}
 
 /* The track the cards are placed on, ruled once per hour. */
 .calendar-grid .calendar-list {

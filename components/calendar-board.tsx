@@ -4,11 +4,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { clockAt, groupBookings, type CalendarView } from "@/components/calendar-grouping";
+import {
+  clockAt,
+  freeWindows,
+  groupBookings,
+  rotaFor,
+  toHalfHours,
+  totalMinutes,
+  type CalendarView,
+  type ShiftRule,
+  type Span,
+} from "@/components/calendar-grouping";
 import { ToolIcon } from "@/components/icons";
 import {
   addLocalDays,
   formatLocalDate,
+  localDateWeekday,
   localToUtc,
   parseLocalDate,
   parseLocalTime,
@@ -80,6 +91,13 @@ type Person = Readonly<{ id: string; name: string; avatar?: string | null }>;
 /** Statuses that still occupy the specialist, and so still have actions. */
 const LIVE_STATUSES = new Set(["pending_confirmation", "confirmed"]);
 
+/*
+ * The statuses that hold an hour, mirroring `OCCUPYING_BOOKING_STATUSES` on the
+ * server. Only a cancellation gives the time back: a closed visit and a no-show
+ * both happened at that hour, and offering it as free would invite a second
+ * client into a slot the studio has already spent.
+ */
+const OCCUPYING = new Set(["pending_confirmation", "confirmed", "completed", "no_show"]);
 
 const CANCELLATION_REASONS = ["client_request", "studio_request", "no_contact", "duplicate", "other"];
 
@@ -148,6 +166,8 @@ export function CalendarBoard({
   filters,
   ownSpecialistId,
   exceptions,
+  shifts,
+  buffers,
   canWrite,
   canFilterBySpecialist,
   businessType,
@@ -168,6 +188,10 @@ export function CalendarBoard({
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
   exceptions: readonly CalendarException[];
+  /** The rota the day view measures its free time against. */
+  shifts: readonly (ShiftRule & Readonly<{ locationId: string }>)[];
+  /** Per location, the gap a studio keeps around each appointment. */
+  buffers: readonly Readonly<{ locationId: string; before: number; after: number }>[];
   canWrite: boolean;
   canFilterBySpecialist: boolean;
   /** Whose earnings the preview under an appointment is naming. */
@@ -571,6 +595,67 @@ export function CalendarBoard({
   const isGrid = view === "day" && dayItems.length > 0;
   const asColumns = isGrid || (view === "list" && bookings.length > 0);
 
+  /*
+   * The shortest thing the studio sells, which is what separates a window from
+   * a crack: a gap nothing on the price list fits into is not an opening, and
+   * counting one would put a number in the column head that nobody can act on.
+   * An hour when the catalogue says nothing — a studio that has not filled it
+   * in yet should not be told its whole day is free in one-minute pieces.
+   */
+  const shortestService = Math.min(
+    ...services.map((service) => service.durationMinutes ?? Number.POSITIVE_INFINITY),
+    60,
+  );
+
+  const weekdayOfDay = (() => {
+    const parsed = parseLocalDate(days[0]);
+    return parsed ? localDateWeekday(parsed) : null;
+  })();
+
+  /**
+   * What a master could still sell today, per column.
+   *
+   * Only the day view: it is the only one drawn against a single axis of hours,
+   * and the only one whose columns are one person on one date — which is what
+   * "free" is a property of.
+   */
+  const freeFor = (specialistId: string, taken: readonly Span[]) => {
+    if (!isGrid || weekdayOfDay === null) return { windows: [] as Span[], shift: 0, free: 0 };
+
+    const rota = rotaFor(shifts, specialistId, days[0], weekdayOfDay);
+    const windows = freeWindows(rota, taken, shortestService);
+
+    return {
+      windows,
+      /*
+       * The whole shift, and what is left of it — in hours rather than in
+       * openings, because an opening is not a fixed quantity: how many a day
+       * holds depends on the length of the service being booked into it, and
+       * the calendar has no service selected. Hours are the same number
+       * whatever anybody books, they add up across masters, and they are what
+       * `practical_capacity_basis_points` already measures a studio in.
+       */
+      shift: totalMinutes(rota.map((rule) => ({ start: rule.startMinute, end: rule.endMinute }))),
+      // Summed over the windows rather than over the shift less the bookings:
+      // a gap too short to sell is not free time, and `freeWindows` has already
+      // dropped those.
+      free: totalMinutes(windows),
+    };
+  };
+
+  /**
+   * An appointment plus the gap the studio keeps around it.
+   *
+   * The buffers belong to the location, so they are read per booking rather
+   * than once: a master working at two addresses is under two settings. Without
+   * them a ten-minute turnaround would be offered as free time that the booking
+   * engine itself refuses to fill.
+   */
+  const withBuffer = (start: number, end: number, locationId: string | null): Span => {
+    const gap = buffers.find((entry) => entry.locationId === locationId);
+    return { start: start - (gap?.before ?? 0), end: end + (gap?.after ?? 0) };
+  };
+
   /**
    * The day an entry falls on, for the one view where nothing else says it.
    *
@@ -866,6 +951,34 @@ export function CalendarBoard({
             )
           : null;
 
+        /*
+         * What stands in this master's day, in the minutes the grid is drawn
+         * in, and what is left over.
+         *
+         * Blocked intervals count as fully as appointments — a holiday is not
+         * time anybody can be booked into — while a cancellation gives its hour
+         * back, which is why the list is filtered by `OCCUPYING` rather than
+         * taken whole.
+         */
+        const taken: Span[] = isGrid
+          ? [
+              ...group.bookings
+                .filter((booking) => OCCUPYING.has(booking.status))
+                .map((booking) =>
+                  withBuffer(
+                    minutesOf(booking.localStart),
+                    minutesOf(booking.localEnd),
+                    booking.locationId,
+                  ),
+                ),
+              ...groupExceptions.map((exception) => ({
+                start: minutesOf(exception.localStart),
+                end: minutesOf(exception.localEnd),
+              })),
+            ]
+          : [];
+        const open = freeFor(group.key, taken);
+
         const slotOf = (index: number): React.CSSProperties | undefined => {
           if (!laid) return undefined;
           const span = laid.placed[index];
@@ -904,11 +1017,49 @@ export function CalendarBoard({
               </span>
             )}
             {group.title}
+            {/*
+              The day at a glance: what stands in it, and how many openings are
+              left. Two figures rather than one because they answer different
+              questions — a full day and an empty one both have "0" somewhere,
+              and which zero it is is the whole point.
+            */}
+            {isGrid && open.shift > 0 && (
+              <span className="calendar-tally">
+                <b>{toHalfHours(open.shift).toLocaleString(localeTag)}</b>
+                <i aria-hidden="true">/</i>
+                <em>{toHalfHours(open.free).toLocaleString(localeTag)}</em>
+                <span className="sr-only">
+                  {t("calendar.tally", {
+                    shift: toHalfHours(open.shift).toLocaleString(localeTag),
+                    free: toHalfHours(open.free).toLocaleString(localeTag),
+                  })}
+                </span>
+              </span>
+            )}
           </h2>
           {items.length === 0 && !asColumns ? (
             <p className="muted">{t("calendar.emptyDay")}</p>
           ) : (
             <ul className="calendar-list">
+              {/*
+                The openings themselves, on the same axis as the cards and
+                behind them: a band is a statement about the hours it covers,
+                and an appointment drawn over one would be a contradiction.
+                Marked `aria-hidden` because the tally in the heading already
+                says this in words, and a screen reader does not need the day
+                read out twice.
+              */}
+              {open.windows.map((window) => (
+                <li
+                  key={`free-${window.start}`}
+                  className="calendar-free"
+                  aria-hidden="true"
+                  style={{
+                    top: `calc(var(--calendar-row) * ${rows(window.start)})`,
+                    height: `calc(var(--calendar-row) * ${(window.end - window.start) / 60})`,
+                  }}
+                />
+              ))}
               {items.map((item, index) => {
                 if (item.kind === "exception") {
                   const exc = item.data;
