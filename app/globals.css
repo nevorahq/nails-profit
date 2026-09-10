@@ -1092,7 +1092,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-header { max-width: 960rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16rem; padding-bottom: 20rem; border-bottom: 1rem solid var(--line); }
 .public-booking-intro { max-width: 760rem; margin: 72rem auto 32rem; text-align: center; }
 .public-booking-intro h1, .public-booking-success h1 { font-size: clamp(38rem, 6vw, 64rem); }
-.public-booking-intro p { max-width: 580rem; margin: 0 auto; color: var(--muted); font-size: 18rem; }
 .public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 30rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
 .public-booking-card form { display: grid; gap: 24rem; }
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }

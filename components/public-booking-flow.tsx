@@ -571,7 +571,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       <section className="public-booking-intro">
         <span className="eyebrow">Nail Profit OS</span>
         <h1>{t("publicBooking.title")}</h1>
-        <p>{t("publicBooking.subtitle")}</p>
       </section>
 
       <section className="public-booking-card" aria-busy={pending}>
