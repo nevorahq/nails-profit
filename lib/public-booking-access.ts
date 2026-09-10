@@ -92,6 +92,29 @@ export async function loadPublicBookingAccess(rawToken: string, now = new Date()
         ends_at: row.booking.endsAt.toISOString(),
         status: row.booking.status,
         version: row.booking.version,
+        /*
+         * Why the appointment is in the state it is in, for a page that has to
+         * say more than the state's name.
+         *
+         * "Отменена" answers nothing a client wants to know: whether they did
+         * it, whether the studio did, or whether a request they sent simply ran
+         * out of time. All three are the same status and need different words —
+         * and only the last two need a way back to the booking page.
+         *
+         * Safe to publish. `cancelled_by` is an enum and `cancellation_reason`
+         * is a code from a closed list, kept that way by section 7.9 precisely
+         * so that no free text — a phone number, a diagnosis — is ever written
+         * where it might be read back out.
+         */
+        cancelled_by: row.booking.cancelledBy,
+        cancellation_reason: row.booking.cancellationReason,
+        /*
+         * When an unanswered request stops holding the slot. Null unless the
+         * studio confirms by hand, which is the only case with a deadline —
+         * and the only case where a client is left waiting without being told
+         * how long for.
+         */
+        confirmation_due_at: row.booking.confirmationDueAt?.toISOString() ?? null,
         price_minor: lines.reduce((total, line) => total + line.priceMinor, 0),
         service_id: lines.find((line) => line.kind === "service")?.serviceId ?? null,
         add_on_ids: lines.flatMap((line) => (line.addOnId ? [line.addOnId] : [])),
@@ -107,3 +130,56 @@ export async function loadPublicBookingAccess(rawToken: string, now = new Date()
 }
 
 export type PublicBookingAccess = NonNullable<Awaited<ReturnType<typeof loadPublicBookingAccess>>>;
+
+/**
+ * Has anything changed — and nothing else.
+ *
+ * The manage page checks this on a timer while a request waits to be answered,
+ * so that a client watching the screen learns the studio confirmed even when
+ * the email is still in a queue, or in a spam folder, or was never possible
+ * because they have no address. It is the one place the product tells somebody
+ * something without sending them a message.
+ *
+ * A separate query rather than `loadPublicBookingAccess` with the answer thrown
+ * away: that one reads the lines, the location, the specialist and the studio,
+ * and localizes every service name, to build a page that is already on screen.
+ * Called every thirty seconds it would be the most expensive read the public
+ * surface makes, for two columns.
+ *
+ * The organization is still joined. The public surface is switched off per
+ * tenant, and a page that kept polling after the rollback would be the one part
+ * of it still running — see the flag check in `loadPublicBookingAccess`.
+ */
+export async function loadPublicBookingStatus(rawToken: string, now = new Date()) {
+  if (!isPublicBookingEnabled()) return null;
+
+  const parsed = parseBookingToken(rawToken, "manage");
+  if (!parsed) return null;
+
+  return withTenant(parsed.organizationId, async (tx) => {
+    const [row] = await tx
+      .select({
+        status: bookings.status,
+        version: bookings.version,
+        bookingAccess: organizations.bookingAccess,
+        organizationDeletedAt: organizations.deletedAt,
+      })
+      .from(bookingAccessTokens)
+      .innerJoin(bookings, eq(bookings.id, bookingAccessTokens.bookingId))
+      .innerJoin(organizations, eq(organizations.id, bookings.organizationId))
+      .where(
+        and(
+          eq(bookingAccessTokens.organizationId, parsed.organizationId),
+          eq(bookingAccessTokens.tokenHash, parsed.tokenHash),
+          eq(bookingAccessTokens.purpose, "manage"),
+          gt(bookingAccessTokens.expiresAt, now),
+          isNull(bookingAccessTokens.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!row || row.organizationDeletedAt || row.bookingAccess !== "public") return null;
+
+    return { status: row.status, version: row.version };
+  });
+}

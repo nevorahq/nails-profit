@@ -262,6 +262,27 @@ describe("public online booking", () => {
     expect(toTheClient.sort()).toEqual([]);
   });
 
+  /**
+   * The endpoint the manage page checks on a timer while a client waits for an
+   * answer, so that a confirmation reaches them even when the email cannot —
+   * queued behind a cron, filtered as spam, or impossible because they left no
+   * address, which is exactly this fixture's client.
+   *
+   * The assertion that matters is the second one. This is answered to anyone
+   * holding the token, up to a hundred and twenty times an hour, and it exists
+   * to carry two facts; a future edit that answers it from the full DTO would
+   * publish the client's name, their phone number and the studio's price list
+   * to the same audience, and nothing else in the test suite would notice.
+   */
+  test("the status endpoint reports the change, and carries nothing else", async () => {
+    const seen = dataOf<{ status: string; version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${manageToken}/status`),
+    );
+
+    expect(seen.status).toBe("cancelled");
+    expect(Object.keys(seen).sort()).toEqual(["status", "version"]);
+  });
+
   test("a confirmed booking is queued a reminder for the day before", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(

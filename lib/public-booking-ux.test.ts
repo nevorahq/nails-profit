@@ -6,6 +6,7 @@ import { dictionaries } from "@/i18n/dictionary";
 import { supportedLocales } from "@/i18n/messages";
 import type { MessageKey } from "@/i18n/t";
 import {
+  bookingNextStepKey,
   bookingRequestSignature,
   publicBookingErrorKey,
   readApiError,
@@ -261,5 +262,146 @@ describe("public booking idempotency key", () => {
     expect(bookingRequestSignature({ ...draft, ...change })).not.toBe(
       bookingRequestSignature(draft),
     );
+  });
+});
+
+describe("bookingNextStepKey", () => {
+  const base = {
+    cancelledBy: null,
+    cancellationReason: null,
+    hasConfirmationDeadline: false,
+  } as const;
+
+  it("names the hour a request lapses at, when there is one", () => {
+    expect(
+      bookingNextStepKey({
+        ...base,
+        status: "pending_confirmation",
+        hasConfirmationDeadline: true,
+      }),
+    ).toBe("publicBooking.next.pending");
+  });
+
+  /**
+   * Instant confirmation leaves `confirmation_due_at` null. The deadline
+   * wording interpolates a `{time}` the page would have to invent, and a
+   * promise about an hour nothing will happen at is worse than no promise.
+   */
+  it("promises no hour when the booking has no deadline", () => {
+    expect(bookingNextStepKey({ ...base, status: "pending_confirmation" })).toBe(
+      "publicBooking.next.pendingSoon",
+    );
+  });
+
+  it.each([
+    ["confirmed", "publicBooking.next.confirmed"],
+    ["completed", "publicBooking.next.completed"],
+    ["no_show", "publicBooking.next.noShow"],
+  ] as const)("says what %s means", (status, key) => {
+    expect(bookingNextStepKey({ ...base, status })).toBe(key);
+  });
+
+  /**
+   * One status, four events. Until these were told apart the page said
+   * "Отменена" to a client whose request had quietly run out of time, to one
+   * the studio could not reach, and to one who had cancelled it themselves —
+   * and left all three without a way back to the booking page.
+   */
+  describe("a cancellation", () => {
+    const cancelled = { ...base, status: "cancelled" } as const;
+
+    it("is the client's own when they cancelled it", () => {
+      expect(bookingNextStepKey({ ...cancelled, cancelledBy: "client" })).toBe(
+        "publicBooking.next.cancelledByClient",
+      );
+    });
+
+    it("is the studio's when staff cancelled it", () => {
+      expect(
+        bookingNextStepKey({
+          ...cancelled,
+          cancelledBy: "staff",
+          cancellationReason: "studio_request",
+        }),
+      ).toBe("publicBooking.next.cancelledByStudio");
+    });
+
+    /**
+     * `client_request` is staff recording a phone call, so the actor is `staff`
+     * for both this and a cancellation the studio decided on. The client did
+     * ask — but they asked a person, not this page, and "вы отменили" would
+     * claim they had pressed something.
+     */
+    it("stays the studio's when staff recorded the client's phone call", () => {
+      expect(
+        bookingNextStepKey({
+          ...cancelled,
+          cancelledBy: "staff",
+          cancellationReason: "client_request",
+        }),
+      ).toBe("publicBooking.next.cancelledByStudio");
+    });
+
+    it("explains itself when nobody could reach the client", () => {
+      expect(
+        bookingNextStepKey({
+          ...cancelled,
+          cancelledBy: "staff",
+          cancellationReason: "no_contact",
+        }),
+      ).toBe("publicBooking.next.cancelledNoContact");
+    });
+
+    it("explains itself when the booking was a duplicate", () => {
+      expect(
+        bookingNextStepKey({
+          ...cancelled,
+          cancelledBy: "staff",
+          cancellationReason: "duplicate",
+        }),
+      ).toBe("publicBooking.next.cancelledDuplicate");
+    });
+
+    /**
+     * The maintenance job's own reason code, and the one case where nobody in
+     * the studio ever saw the request: `booking.staff_requested` was sent once
+     * and never followed up. The client should not read that as a decision.
+     */
+    it("says a request lapsed when the job cancelled it", () => {
+      expect(
+        bookingNextStepKey({
+          ...cancelled,
+          cancelledBy: "system",
+          cancellationReason: "confirmation_expired",
+        }),
+      ).toBe("publicBooking.next.cancelledExpired");
+    });
+  });
+
+  it("has wording in every language for every state it can return", () => {
+    const states = [
+      { ...base, status: "pending_confirmation", hasConfirmationDeadline: true },
+      { ...base, status: "pending_confirmation" },
+      { ...base, status: "confirmed" },
+      { ...base, status: "completed" },
+      { ...base, status: "no_show" },
+      { ...base, status: "cancelled", cancelledBy: "client" },
+      { ...base, status: "cancelled", cancelledBy: "staff" },
+      { ...base, status: "cancelled", cancelledBy: "staff", cancellationReason: "no_contact" },
+      { ...base, status: "cancelled", cancelledBy: "staff", cancellationReason: "duplicate" },
+      {
+        ...base,
+        status: "cancelled",
+        cancelledBy: "system",
+        cancellationReason: "confirmation_expired",
+      },
+    ] as const;
+
+    for (const state of states) {
+      const key = bookingNextStepKey(state);
+      for (const locale of supportedLocales) {
+        expect(dictionaries[locale][key as MessageKey], `${key} in ${locale}`).toBeTruthy();
+      }
+    }
   });
 });

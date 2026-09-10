@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
@@ -8,12 +8,14 @@ import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import {
+  bookingNextStepKey,
   publicBookingErrorKey,
   readApiError,
   retryAfterMinutes,
 } from "@/lib/public-booking-ux";
 
 type Status = "pending_confirmation" | "confirmed" | "cancelled" | "completed" | "no_show";
+type CancelledBy = "client" | "staff" | "system" | null;
 type BookingView = {
   organization_name: string;
   organization_slug: string;
@@ -24,6 +26,9 @@ type BookingView = {
   starts_at: string;
   ends_at: string;
   status: Status;
+  cancelled_by: CancelledBy;
+  cancellation_reason: string | null;
+  confirmation_due_at: string | null;
   version: number;
   price_minor: number;
   service_id: string | null;
@@ -31,6 +36,23 @@ type BookingView = {
   lines: { kind: string; name: string; price_minor: number; duration_minutes: number }[];
 };
 type Slot = { starts_at: string; ends_at: string; specialist_id: string; specialist_name: string };
+
+/**
+ * How often the page asks whether the studio has answered, and how many times
+ * it may ask before it stops.
+ *
+ * The budget is the point. `PUBLIC_BOOKING_POLL_RULE` allows 120 checks an
+ * hour from one caller; stopping at 90 means a client who leaves the tab open
+ * never meets a 429 — and never gets counted as suspicious for waiting, which
+ * is what a refusal would record. What they get instead is a button.
+ *
+ * Thirty seconds because the answer comes from a person: somebody opens the
+ * calendar between clients and confirms. Half a minute is well inside the time
+ * it takes them to do that, and slow enough that the whole two hours a request
+ * may sit unanswered fits inside the budget.
+ */
+const POLL_INTERVAL_MS = 30_000;
+const POLL_BUDGET = 90;
 
 function todayInZone(timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -57,6 +79,12 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
   const t = useMemo(() => getTranslator(booking.locale), [booking.locale]);
   const tag = localeTag(booking.locale);
   const active = booking.status === "confirmed" || booking.status === "pending_confirmation";
+  const nextStep = bookingNextStepKey({
+    status: booking.status,
+    cancelledBy: booking.cancelled_by,
+    cancellationReason: booking.cancellation_reason,
+    hasConfirmationDeadline: booking.confirmation_due_at !== null,
+  });
 
   /**
    * The same reading of a refusal the booking form does. This screen offers
@@ -70,11 +98,79 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
     setRequestId(parsed.requestId);
   }
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const response = await fetch(`/api/v1/public/bookings/${encodeURIComponent(token)}`);
     const body = await response.json().catch(() => null);
     if (response.ok) setBooking(body.data);
-  }
+  }, [token]);
+
+  /**
+   * Watching for the studio's answer, so the client does not have to.
+   *
+   * A request sits in `pending_confirmation` until somebody in the studio opens
+   * the calendar, and until now the only thing that told the client it had been
+   * answered was an email. That email is the weakest part of the whole flow:
+   * it can be queued behind a five-minute cron, filtered as spam, or — for a
+   * client the studio typed in at the desk — impossible to send at all, because
+   * `client.email` is nullable and often empty.
+   *
+   * This asks instead. The screen the client is already looking at becomes the
+   * channel, and it works for exactly the people email fails.
+   *
+   * It stops on its own, and every reason it stops matters. A hidden tab does
+   * not spend a check, because nobody is reading it. The budget runs out before
+   * the rate limiter does (see `POLL_BUDGET`), so a forgotten tab is never
+   * refused and never recorded as an abuser. Any refusal at all stops it — a
+   * link revoked, a studio rolled back off the public surface, a limit hit
+   * anyway — because a page that keeps asking after a "no" is the thing rate
+   * limits exist to stop.
+   */
+  const [watching, setWatching] = useState(true);
+  const checksLeft = useRef(POLL_BUDGET);
+  const dueAt = booking.confirmation_due_at
+    ? new Date(booking.confirmation_due_at).getTime()
+    : null;
+
+  const checkStatus = useCallback(async () => {
+    const response = await fetch(
+      `/api/v1/public/bookings/${encodeURIComponent(token)}/status`,
+    );
+    if (!response.ok) {
+      setWatching(false);
+      return;
+    }
+    const body = await response.json().catch(() => null);
+    const seen = body?.data as { status: Status; version: number } | undefined;
+    if (!seen) return;
+    // The version moves on every change, including one that leaves the status
+    // alone — a reschedule by the studio. Both are worth showing.
+    if (seen.status !== booking.status || seen.version !== booking.version) {
+      await refresh();
+      setNotice(t("publicBooking.statusChanged"));
+    }
+  }, [booking.status, booking.version, refresh, t, token]);
+
+  useEffect(() => {
+    if (booking.status !== "pending_confirmation" || !watching) return;
+
+    const timer = setInterval(() => {
+      // Nobody is looking, so nothing needs saying — and a tab left open for a
+      // week must not spend its budget while it sits behind other windows.
+      if (document.visibilityState !== "visible") return;
+      if (dueAt !== null && Date.now() > dueAt) {
+        setWatching(false);
+        return;
+      }
+      if (checksLeft.current <= 0) {
+        setWatching(false);
+        return;
+      }
+      checksLeft.current -= 1;
+      void checkStatus();
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+  }, [booking.status, checkStatus, dueAt, watching]);
 
   async function findSlots(event: FormEvent) {
     event.preventDefault();
@@ -156,6 +252,22 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
         <h1>{t("publicBooking.manageTitle")}</h1>
       </section>
       <section className="public-booking-card booking-manage-card" aria-busy={pending}>
+        {/*
+          The status in words the client can act on, above the facts rather than
+          below them: what happens next is the question they opened the link to
+          answer, and the date and price are what they already know.
+        */}
+        <p className="booking-next-step">
+          {t(nextStep, {
+            time: booking.confirmation_due_at
+              ? new Intl.DateTimeFormat(tag, {
+                  timeZone: booking.location.timezone,
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(booking.confirmation_due_at))
+              : "",
+          })}
+        </p>
         <dl className="booking-manage-facts">
           <div><dt>{t("publicBooking.when")}</dt><dd>{new Intl.DateTimeFormat(tag, { timeZone: booking.location.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date(booking.starts_at))}</dd></div>
           <div><dt>{t("publicBooking.service")}</dt><dd>{booking.lines.map((line) => line.name).join(" · ")}</dd></div>
@@ -200,6 +312,48 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/*
+          Why the page is worth leaving open — and, once it has stopped watching,
+          the button that does by hand what it was doing on its own. Saying
+          nothing here would leave a client staring at a screen with no way to
+          tell whether it is still listening.
+        */}
+        {booking.status === "pending_confirmation" && (
+          <p className="booking-watching" role="status">
+            {watching ? (
+              <span>{t("publicBooking.watching")}</span>
+            ) : (
+              <>
+                <span>{t("publicBooking.watchingStopped")}</span>
+                <button
+                  className="inline-action"
+                  type="button"
+                  onClick={() => {
+                    checksLeft.current = POLL_BUDGET;
+                    setWatching(true);
+                    void checkStatus();
+                  }}
+                >
+                  {t("publicBooking.refreshNow")}
+                </button>
+              </>
+            )}
+          </p>
+        )}
+
+        {/*
+          The way back. A cancelled or finished appointment used to end the page
+          in a dead end: nothing left to manage, and no link to the studio the
+          client had been trying to book with.
+        */}
+        {!active && (
+          <div className="booking-again">
+            <a className="secondary-button" href={`/book/${booking.organization_slug}`}>
+              {t("publicBooking.bookAgain")}
+            </a>
           </div>
         )}
       </section>
