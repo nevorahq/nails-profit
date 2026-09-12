@@ -282,6 +282,12 @@ export type CreateBookingInput = Readonly<{
   specialistId: string;
   workplaceId?: string | null;
   clientId?: string | null;
+  /**
+   * The name the client gave for this appointment, when it differs from the
+   * name on the card it was matched to. Null in every other case — see the
+   * column's own note in `db/schema.ts`.
+   */
+  clientNameSnapshot?: string | null;
   interval: Interval;
   source: "public_booking" | "staff" | "rebooking" | "waitlist" | "import" | "api";
   /** `instant` confirms on creation; `manual` leaves a request the studio answers. */
@@ -348,6 +354,7 @@ export async function createBooking(
       specialistId: input.specialistId,
       workplaceId: input.workplaceId ?? null,
       clientId: input.clientId ?? null,
+      clientNameSnapshot: input.clientNameSnapshot ?? null,
       startsAt: input.interval.start,
       endsAt: input.interval.end,
       status,

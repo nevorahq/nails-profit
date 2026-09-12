@@ -90,7 +90,17 @@ export async function GET(request: Request) {
       id: row.booking.id,
       specialist_id: row.booking.specialistId,
       specialist_name: row.specialistName,
-      client_name: row.clientName,
+      /*
+       * Who is coming, then which card they landed on.
+       *
+       * The request carries a name of its own when the client booked under one
+       * the card does not have — a number the studio first met as one person is
+       * used by another, which on a shared phone is the ordinary case rather
+       * than the strange one. The list used to show the card alone, so a
+       * request from Ольга arrived as Люда and the master had no way to tell.
+       */
+      client_name: row.booking.clientNameSnapshot ?? row.clientName,
+      client_card_name: row.booking.clientNameSnapshot ? row.clientName : null,
       service_name: serviceLine ? resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) : null,
       local_date: formatLocalDate({ year: parts.year, month: parts.month, day: parts.day }),
       local_time: formatLocalTime(parts.minutes),

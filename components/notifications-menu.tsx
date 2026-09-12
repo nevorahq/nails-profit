@@ -14,6 +14,8 @@ type NotificationItem = Readonly<{
   specialist_id: string;
   specialist_name: string;
   client_name: string | null;
+  /** The card's own name, sent only when the request was made under another. */
+  client_card_name: string | null;
   service_name: string | null;
   local_date: string;
   local_time: string;
@@ -158,6 +160,16 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
                     onClick={() => setOpen(false)}
                   >
                     <strong>{item.client_name ?? t("calendar.noClient")}</strong>
+                    {/*
+                      Whose card it landed on, when that is somebody else's
+                      name. One number in a household is one card, and the
+                      request above was made under the name of whoever is
+                      actually coming — which is the name the master needs, with
+                      the card named underneath so the two can be told apart.
+                    */}
+                    {item.client_card_name && (
+                      <small>{t("calendar.clientCard", { name: item.client_card_name })}</small>
+                    )}
                     <small>{[item.service_name, item.specialist_name].filter(Boolean).join(" · ")}</small>
                     <small>{`${item.local_date} · ${item.local_time}`}</small>
                   </Link>

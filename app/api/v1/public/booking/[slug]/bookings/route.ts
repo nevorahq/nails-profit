@@ -66,6 +66,7 @@ async function findOrCreateClient(
   const matches = await tx
     .select({
       id: clients.id,
+      name: clients.name,
       normalizedPhone: clients.normalizedPhone,
       email: clients.email,
     })
@@ -114,7 +115,13 @@ async function findOrCreateClient(
       })
       .where(eq(clients.id, existing.id))
       .returning({ id: clients.id });
-    return updated.id;
+    /*
+     * The card's name travels back with its id, because the caller has to
+     * compare it with the name on the form. The record stands — that is the
+     * paragraph above — but the difference between the two is the one thing
+     * about this request the studio cannot see anywhere else.
+     */
+    return { id: updated.id, cardName: existing.name };
   }
 
   const [created] = await tx
@@ -130,7 +137,8 @@ async function findOrCreateClient(
       consentedAt: input.now,
     })
     .returning({ id: clients.id });
-  return created.id;
+  // A card made from this very form: the two names are the same one.
+  return { id: created.id, cardName: input.name };
 }
 
 async function handlePost(
@@ -261,7 +269,7 @@ async function handlePost(
         return { failure: "VERIFICATION_REQUIRED" as const };
       }
 
-      const clientId = await findOrCreateClient(tx, {
+      const client = await findOrCreateClient(tx, {
         organizationId: organization.id,
         name: parsed.data.name,
         normalizedPhone,
@@ -269,14 +277,22 @@ async function handlePost(
         locale: parsed.data.locale,
         now,
       });
-      if (!clientId) return { failure: "CONTACT_CONFLICT" as const };
+      if (!client) return { failure: "CONTACT_CONFLICT" as const };
 
       const created = await createBooking(tx, {
         organizationId: organization.id,
         locationId: hold.locationId,
         specialistId: hold.specialistId,
         workplaceId: hold.workplaceId,
-        clientId,
+        clientId: client.id,
+        /*
+         * Kept only where it says something: a request made under a name the
+         * card does not carry is the case the studio has to be able to see, and
+         * an identical name stored twice is one more copy of a person's name
+         * for nothing.
+         */
+        clientNameSnapshot:
+          client.cardName.trim() === parsed.data.name.trim() ? null : parsed.data.name,
         interval: { start: hold.startsAt, end: hold.endsAt },
         source: "public_booking",
         confirmationMode: context.confirmationMode,

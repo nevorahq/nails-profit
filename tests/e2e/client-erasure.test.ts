@@ -80,6 +80,19 @@ describe("single-client privacy erasure", () => {
       ),
     ).id;
 
+    /*
+     * The name a public request was made under, which a booking carries when it
+     * is not the name on the card. Written here rather than booked through the
+     * public flow — this file is about erasure, not about matching — because it
+     * is the one piece of a person's name that does not live on the row being
+     * anonymized, and would otherwise survive the erasure on an appointment the
+     * studio quite rightly keeps.
+     */
+    await adminDb
+      .update(bookings)
+      .set({ clientNameSnapshot: "Ольга" })
+      .where(eq(bookings.id, bookingId));
+
     // A manage token and queued messages are privacy-relevant live access,
     // unlike the retained booking/visit history.
     expect((await studio.owner.post(`/api/v1/bookings/${bookingId}/manage-link`, {})).status).toBe(200);
@@ -150,6 +163,8 @@ describe("single-client privacy erasure", () => {
     expect(snapshotRows).toHaveLength(1);
     expect(bookingRows).toHaveLength(1);
     expect(bookingRows[0].id).toBe(bookingId);
+    // The appointment stays; the name it was booked under does not.
+    expect(bookingRows[0].clientNameSnapshot).toBeNull();
     expect(lineRows.length).toBeGreaterThan(0);
 
     expect(tokenRows.length).toBeGreaterThan(0);
@@ -159,10 +174,14 @@ describe("single-client privacy erasure", () => {
     expect(erasureEvents).toHaveLength(1);
     expect(erasureEvents[0].before).toBeNull();
     expect(erasureEvents[0].after).toEqual(
-      expect.objectContaining({ bookings_preserved: 1, access_tokens_revoked: tokenRows.length }),
+      expect.objectContaining({
+        bookings_preserved: 1,
+        booked_names_cleared: 1,
+        access_tokens_revoked: tokenRows.length,
+      }),
     );
     expect(JSON.stringify(erasureEvents)).not.toMatch(
-      /Erasure Client|69000777|erasure-client@example\.test/,
+      /Erasure Client|Ольга|69000777|erasure-client@example\.test/,
     );
 
     const visibleClients = dataOf<{ id: string }[]>(await manager.get("/api/v1/clients"));

@@ -148,7 +148,19 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
 
           <dt>{t("calendar.client")}</dt>
           <dd>
-            {card.client?.name ?? <span className="muted">{t("calendar.noClient")}</span>}
+            {/*
+              The name this appointment was booked under, and under it the card
+              it was filed against when the two are not the same person's. The
+              card is what the phone number and the history belong to; the name
+              above it is who said they were coming.
+            */}
+            {card.booking.clientNameSnapshot ??
+              card.client?.name ?? <span className="muted">{t("calendar.noClient")}</span>}
+            {card.booking.clientNameSnapshot && card.client && (
+              <span className="unit-hint">
+                {t("calendar.clientCard", { name: card.client.name })}
+              </span>
+            )}
             {card.client && !hideContacts && card.client.phone && (
               <span className="unit-hint">{card.client.phone}</span>
             )}

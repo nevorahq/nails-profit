@@ -82,6 +82,8 @@ export type CalendarBooking = Readonly<{
   locationName: string;
   clientId: string | null;
   clientName: string | null;
+  /** The card's own name, present only when the booking was made under another. */
+  clientCardName: string | null;
   clientPhone: string | null;
   serviceName: string;
   extraLines: number;
@@ -1089,6 +1091,19 @@ export function CalendarBoard({
                     </summary>
 
                     <div className="calendar-detail">
+                      {/*
+                        Which card this visit joins, when it is not the name
+                        above. A public request keeps the client's record as the
+                        studio wrote it and carries its own name instead, so the
+                        two can differ — one number, a household — and the desk
+                        has to be able to see both: who is coming, and whose
+                        history this visit will be filed under.
+                      */}
+                      {booking.clientCardName && (
+                        <p className="muted">
+                          {t("calendar.clientCard", { name: booking.clientCardName })}
+                        </p>
+                      )}
                       <p className="muted">
                         {booking.locationName} · {booking.specialistName} · {money(booking.priceMinor)}
                         {/*

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import {
   auditEvents,
+  bookings,
   clients,
   financialSnapshots,
   importJobs,
@@ -19,6 +20,7 @@ import { createCanonicalStudio, type Studio } from "../helpers/studio";
 describe("Owner data export and erasure", () => {
   let studio: Studio;
   let clientId: string;
+  let bookingId: string;
 
   beforeAll(async () => {
     await resetDatabase();
@@ -48,6 +50,39 @@ describe("Owner data export and erasure", () => {
       client_id: clientId,
       actual_duration_minutes: 90,
     });
+
+    /*
+     * An appointment for that client, booked under somebody else's name.
+     *
+     * Deleting the studio anonymizes its cards and keeps its appointments, and
+     * the name a public request was made under lives on the appointment rather
+     * than on the card — so without this the one erasure a studio can perform
+     * on itself would leave a person's name behind on every request they ever
+     * sent. Written directly for the same reason the consent fields above are.
+     */
+    const locationId = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/locations", { name: "Privacy room", slug: "privacy-studio" }),
+    ).id;
+    await studio.owner.put(`/api/v1/specialists/${studio.specialistId}/locations`, {
+      location_ids: [locationId],
+    });
+    bookingId = dataOf<{ id: string }>(
+      await studio.owner.post(
+        "/api/v1/bookings",
+        {
+          location_id: locationId,
+          specialist_id: studio.specialistId,
+          service_id: studio.serviceId,
+          client_id: clientId,
+          starts_at: "2026-10-21T09:00:00.000Z",
+        },
+        { "idempotency-key": `privacy-booking-${crypto.randomUUID()}` },
+      ),
+    ).id;
+    await adminDb
+      .update(bookings)
+      .set({ clientNameSnapshot: "Ольга" })
+      .where(eq(bookings.id, bookingId));
 
     await studio.owner.post("/api/v1/invitations", {
       email: "invited-person@example.test",
@@ -153,9 +188,12 @@ describe("Owner data export and erasure", () => {
     expect(memberRows).toHaveLength(0);
     expect(visitRows).toHaveLength(1);
     expect(snapshotRows).toHaveLength(1);
+    // The appointment is kept, the name it was booked under is not.
+    const [booking] = await adminDb.select().from(bookings).where(eq(bookings.id, bookingId));
+    expect(booking.clientNameSnapshot).toBeNull();
 
     const auditJson = JSON.stringify(eventRows);
-    expect(auditJson).not.toMatch(/Private Client|private-client@|invited-person@|Мастер/);
+    expect(auditJson).not.toMatch(/Private Client|Ольга|private-client@|invited-person@|Мастер/);
     expect(eventRows.at(-1)?.eventType).toBe("organization.deleted");
   });
 

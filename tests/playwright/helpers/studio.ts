@@ -345,7 +345,18 @@ export async function moveIntoThePast(studio: Studio, bookingId: string): Promis
 export async function requestAppointmentAsClient(
   baseURL: string,
   studio: Studio,
-  options: Readonly<{ date: Date; specialistId?: string; name?: string; afterTime?: string }> = {
+  options: Readonly<{
+    date: Date;
+    specialistId?: string;
+    name?: string;
+    afterTime?: string;
+    /* Given together when two requests have to land on one client card: the
+       number and the address are what the booking endpoint matches on, and a
+       random pair — the default — is what keeps every other test's client to
+       itself. */
+    phone?: string;
+    email?: string;
+  }> = {
     date: daysFromToday(1),
   },
 ): Promise<{ id: string; status: string }> {
@@ -391,8 +402,8 @@ export async function requestAppointmentAsClient(
           service_id: studio.serviceId,
           add_on_ids: [],
           name: options.name ?? "Client Chase",
-          phone: `+373 69 ${String(Math.floor(Math.random() * 900_000) + 100_000)}`,
-          email: `pw-client-${Math.random().toString(36).slice(2, 8)}@example.com`,
+          phone: options.phone ?? `+373 69 ${String(Math.floor(Math.random() * 900_000) + 100_000)}`,
+          email: options.email ?? `pw-client-${Math.random().toString(36).slice(2, 8)}@example.com`,
           locale: "en",
           legal_accepted: true,
         },

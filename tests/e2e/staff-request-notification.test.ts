@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { bookings, notificationOutbox, organizations } from "@/db/schema";
+import { bookings, clients, notificationOutbox, organizations } from "@/db/schema";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import { formatAppointmentTime } from "@/lib/notification-message";
 import {
@@ -122,7 +122,11 @@ async function bookableCard(name: string, userId?: string) {
  * that. Tests that care which card takes the booking ask for a week of their
  * own rather than competing for the same six hours.
  */
-async function requestAppointment(specialistId: string = "any", week = 1) {
+async function requestAppointment(
+  specialistId: string = "any",
+  week = 1,
+  contact: { name?: string; phone?: string; email?: string } = {},
+) {
   const slots = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
     await anonymous.get(
       `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${specialistId}&date=${wednesdayAhead(week)}`,
@@ -148,11 +152,11 @@ async function requestAppointment(specialistId: string = "any", week = 1) {
         hold_token: held.hold_token,
         service_id: studio.serviceId,
         add_on_ids: [],
-        name: "Анна",
-        phone: "+373 69 123 456",
+        name: contact.name ?? "Анна",
+        phone: contact.phone ?? "+373 69 123 456",
         // The pilot's provider is email, so the public form requires one; the
         // client's own message is the second one this dispatch sends.
-        email: "client@studio.example",
+        email: contact.email ?? "client@studio.example",
         locale: "ru",
         legal_accepted: true,
       },
@@ -575,5 +579,61 @@ describe("what a client does on the public page", () => {
       .from(notificationOutbox)
       .where(eq(notificationOutbox.bookingId, booking.id));
     expect(rows).toContainEqual({ status: "dead_letter", code: "booking_moved_on" });
+  });
+});
+
+/**
+ * One number, two people.
+ *
+ * A public request is matched to an existing card by number or address, and the
+ * card is deliberately left as the studio wrote it — otherwise whoever holds
+ * the link gets to rename the studio's client, and every appointment in the
+ * calendar is labelled from that row. What used to happen to the name typed on
+ * the form was nothing at all: it was read once, to decide whether a card had
+ * to be made, and then dropped. So a mother's number used by her daughter
+ * produced a request the master read as the mother's, with nothing anywhere
+ * saying otherwise — the studio's own report, and the reason this file now
+ * asserts on both names rather than one.
+ */
+describe("a request made under a name the card does not carry", () => {
+  const household = { phone: "+373 69 123 457", email: "household@studio.example" };
+
+  test("reaches the studio as the person coming, with the card named under it", async () => {
+    const hers = await requestAppointment("any", 7, { ...household, name: "Люда" });
+    const daughters = await requestAppointment("any", 8, { ...household, name: "Ольга" });
+
+    type Waiting = { id: string; client_name: string | null; client_card_name: string | null };
+    const waiting = dataOf<Waiting[]>(await studio.owner.get("/api/v1/notifications"));
+
+    // The second request: booked by Ольга, filed against Люда's card.
+    const second = waiting.find((item) => item.id === daughters.id);
+    expect(second?.client_name).toBe("Ольга");
+    expect(second?.client_card_name).toBe("Люда");
+
+    // The first, which made the card, says one name because there is one.
+    const first = waiting.find((item) => item.id === hers.id);
+    expect(first?.client_name).toBe("Люда");
+    expect(first?.client_card_name).toBeNull();
+
+    // And the card itself is untouched by the second request, as before.
+    const [card] = await adminDb
+      .select({ name: clients.name })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.organizationId, studio.organizationId),
+          eq(clients.email, household.email),
+        ),
+      );
+    expect(card.name).toBe("Люда");
+
+    // Stored only where it says something: the first booking carries no second
+    // name, because there is no second name to carry.
+    const rows = await adminDb
+      .select({ id: bookings.id, bookedAs: bookings.clientNameSnapshot })
+      .from(bookings)
+      .where(inArray(bookings.id, [hers.id, daughters.id]));
+    expect(rows.find((row) => row.id === hers.id)?.bookedAs).toBeNull();
+    expect(rows.find((row) => row.id === daughters.id)?.bookedAs).toBe("Ольга");
   });
 });

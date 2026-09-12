@@ -1812,6 +1812,23 @@ export const bookings = pgTable(
     /** Only for services that occupy a chair or a room. */
     workplaceId: uuid("workplace_id").references(() => workplaces.id, { onDelete: "restrict" }),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    /**
+     * The name this appointment was booked under, when it is not the name on
+     * the card it was attached to.
+     *
+     * A public request is matched to an existing client by number or address,
+     * and deliberately does not rewrite that card: whoever holds the link would
+     * otherwise get to rename the studio's client, and every appointment in the
+     * calendar is labelled from that row. What was lost with it was the name
+     * the person actually typed — a request from Ольга on a number the studio
+     * first met as Люда reached the master as Люда, with nothing on any screen
+     * saying otherwise.
+     *
+     * Null when the two agree, which is the ordinary case, and null for an
+     * appointment the studio entered itself — there, choosing the card is the
+     * statement of who is coming. PII, so erasure clears it with the rest.
+     */
+    clientNameSnapshot: text("client_name_snapshot"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     status: bookingStatus("status").notNull().default("pending_confirmation"),
