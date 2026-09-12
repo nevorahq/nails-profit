@@ -202,6 +202,27 @@ export function bookingNextStepKey(state: BookingStateForClient): MessageKey {
 }
 
 /**
+ * The same sentence on the studio's own page, where the record is thinner.
+ *
+ * The manage page knows why a booking was cancelled — who did it, and under
+ * which reason — and has five ways of saying so. The strip on `/book/[slug]`
+ * has a status and a version and nothing else, because that is all the status
+ * endpoint answers with and all the browser kept. So a cancellation here says
+ * only that there was one and sends the client to the page that can name it;
+ * the other four states read the same in both places and share the wording
+ * rather than growing a second set of it.
+ */
+export function bookingStripKey(status: BookingStateForClient["status"]): MessageKey {
+  if (status === "cancelled") return "publicBooking.yoursCancelled";
+  return bookingNextStepKey({
+    status,
+    cancelledBy: null,
+    cancellationReason: null,
+    hasConfirmationDeadline: false,
+  });
+}
+
+/**
  * The API's `field_errors` placed back on the fields of this form.
  *
  * Server field names are the request body's — `legal_accepted`, and a nested

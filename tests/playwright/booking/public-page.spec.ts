@@ -107,6 +107,61 @@ test.describe("the public booking page", () => {
     await staff.close();
   });
 
+  /**
+   * The same page, to somebody who has been here before.
+   *
+   * A booking page that has forgotten the client it just took a booking from is
+   * not only cold — it is how a studio ends up with the same visit twice, which
+   * is why `cancellation_reason` has a `duplicate` in it. There is no session to
+   * recognise anybody by, so the recognition is the manage token the booking
+   * left in this browser, spent on the status endpoint and shown in the header
+   * badge the page keeps on screen.
+   */
+  test("the studio's page knows a client who has already booked here", async ({
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    await page.goto(`/book/${studio.slug}`);
+
+    // A stranger is offered the form and told nothing about anybody's booking.
+    await expect(page.locator(".public-booking-yours")).toHaveCount(0);
+    await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
+
+    await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
+    await page.getByRole("button", { name: "Show available times" }).click();
+    await page.locator(".public-booking-slots button").first().click();
+    await page.getByLabel("Name").fill("Rita Return");
+    await page.getByLabel("Phone").fill("+373 69 555 222");
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Confirm booking" }).click();
+    await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
+
+    // Back to the URL they arrived by — the one in the studio's bio, the one
+    // they bookmarked — which now answers instead of starting over.
+    await page.goto(`/book/${studio.slug}`);
+    await expect(
+      page.locator(".public-booking-header .booking-status-pending_confirmation"),
+    ).toHaveText("Awaiting confirmation");
+
+    const strip = page.locator(".public-booking-yours");
+    await expect(strip).toContainText("Your appointment");
+    await expect(strip).toContainText("The studio will answer your request shortly.");
+    await expect(strip.getByRole("link", { name: "Open appointment" })).toHaveAttribute(
+      "href",
+      /\/booking\//,
+    );
+
+    // A phone is shared more often than an account is: whoever does not
+    // recognise this visit can take it off the screen, and it stays off.
+    await strip.getByRole("button", { name: "Not me" }).click();
+    await expect(strip).toHaveCount(0);
+    await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
+
+    await page.reload();
+    await expect(page.locator(".public-booking-yours")).toHaveCount(0);
+  });
+
   test("a day with nothing free says so instead of failing", async ({ page, browserErrors }) => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);

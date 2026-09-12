@@ -8,6 +8,7 @@ import type { MessageKey } from "@/i18n/t";
 import {
   bookingNextStepKey,
   bookingRequestSignature,
+  bookingStripKey,
   publicBookingErrorKey,
   readApiError,
   retryAfterMinutes,
@@ -399,6 +400,36 @@ describe("bookingNextStepKey", () => {
 
     for (const state of states) {
       const key = bookingNextStepKey(state);
+      for (const locale of supportedLocales) {
+        expect(dictionaries[locale][key as MessageKey], `${key} in ${locale}`).toBeTruthy();
+      }
+    }
+  });
+});
+
+describe("bookingStripKey", () => {
+  it.each([
+    ["pending_confirmation", "publicBooking.next.pendingSoon"],
+    ["confirmed", "publicBooking.next.confirmed"],
+    ["completed", "publicBooking.next.completed"],
+    ["no_show", "publicBooking.next.noShow"],
+  ] as const)("reads %s the way the manage page does", (status, key) => {
+    expect(bookingStripKey(status)).toBe(key);
+  });
+
+  /**
+   * The one that has to differ: the strip cannot see who cancelled or why, and
+   * a page that guessed would tell a client they had cancelled a visit the
+   * studio called off.
+   */
+  it("says a cancellation happened without inventing its cause", () => {
+    expect(bookingStripKey("cancelled")).toBe("publicBooking.yoursCancelled");
+  });
+
+  it("names a line that exists in every language", () => {
+    const statuses = ["pending_confirmation", "confirmed", "cancelled", "completed", "no_show"] as const;
+    for (const status of statuses) {
+      const key = bookingStripKey(status);
       for (const locale of supportedLocales) {
         expect(dictionaries[locale][key as MessageKey], `${key} in ${locale}`).toBeTruthy();
       }

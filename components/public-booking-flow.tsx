@@ -1,15 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { Currency } from "@/domain/money";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { AppLocale } from "@/i18n/messages";
+import {
+  forgetBooking,
+  isBookingStatus,
+  isWorthShowing,
+  needsFreshDetails,
+  noRememberedBooking,
+  rememberBooking,
+  rememberedSnapshot,
+  subscribeRemembered,
+  withStatus,
+  type RememberedBooking,
+} from "@/lib/booking-memory";
 import { formatMoneyMinor } from "@/lib/format";
 import {
   bookingRequestSignature,
+  bookingStripKey,
   publicBookingErrorKey,
   readApiError,
   retryAfterMinutes,
@@ -50,6 +63,27 @@ type Slot = {
   duration_minutes: number;
   price_minor: number;
 };
+
+/**
+ * The client's own appointment, printed in the zone it was booked in.
+ *
+ * Wrapped because the zone comes back out of `localStorage`, which is writable
+ * by anything else served from this origin and survives every deployment: an
+ * unusable `timeZone` makes `Intl` throw, and a booking page that will not
+ * render is a worse answer than an hour shown in the reader's own zone.
+ */
+function formatVisit(startsAt: string, timezone: string, tag: string) {
+  const when = new Date(startsAt);
+  try {
+    return new Intl.DateTimeFormat(tag, {
+      timeZone: timezone,
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(when);
+  } catch {
+    return new Intl.DateTimeFormat(tag, { dateStyle: "medium", timeStyle: "short" }).format(when);
+  }
+}
 
 type NearestDate = { date: string; slot_count: number };
 type PendingAction = "catalog" | "availability" | "hold" | "verification" | "booking" | null;
@@ -154,6 +188,22 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [contact, setContact] = useState<Contact | null>(null);
   const [stage, setStage] = useState<"contact" | "code">("contact");
   const [result, setResult] = useState<{ status: string; manageUrl: string } | null>(null);
+  /**
+   * The appointment this browser booked at this studio, when there is one.
+   *
+   * Read from storage rather than held in state, so that the record on disk is
+   * the only copy there is: the effect below writes what the API answered and
+   * the page re-renders from the write. The server snapshot is null on purpose
+   * — this page is server-rendered and indexed, and a strip about one client's
+   * visit must never be part of the HTML anybody else could be handed.
+   */
+  const remembered = useSyncExternalStore(
+    subscribeRemembered,
+    () => rememberedSnapshot(profile.slug),
+    noRememberedBooking,
+  );
+  /* Kept off the screen once it has stopped being news; the effect then drops it. */
+  const mine = remembered && isWorthShowing(remembered, new Date()) ? remembered : null;
   const [pendingAction, setPendingAction] = useState<PendingAction>("catalog");
   const pending = pendingAction !== null;
   const [error, setError] = useState<string | null>(null);
@@ -240,6 +290,104 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       active = false;
     };
   }, [locationId, profile.slug, sessionKey, t]);
+
+  /**
+   * What this page can tell a client who has already booked here.
+   *
+   * `/book/[slug]` has no session and no account to recognise anybody by, so
+   * the only thing that can name a visitor's appointment is the manage token
+   * their own booking left in this browser. Spent here on the status endpoint,
+   * it turns the studio's page from a form that has forgotten them into the
+   * answer to the question they opened it with — and, for a client whose
+   * request is still unanswered, into the reason they do not book it twice.
+   *
+   * One request, not a poll. The manage page is where a client waits and it
+   * watches on its own; this is a page somebody arrives at, so it asks once and
+   * is quiet. A refusal or a dropped connection leaves the last known state on
+   * screen rather than blanking it: what the browser remembers was true when it
+   * was written, and the link beside it goes to the page that is authoritative.
+   */
+  useEffect(() => {
+    const stored = rememberedSnapshot(profile.slug);
+    if (!stored) return;
+    if (!isWorthShowing(stored, new Date())) {
+      forgetBooking(profile.slug);
+      return;
+    }
+
+    let active = true;
+
+    /** Write what the API said, or forget a record that has stopped being news. */
+    function settle(next: RememberedBooking | null) {
+      if (!active) return;
+      if (!next || !isWorthShowing(next, new Date())) {
+        forgetBooking(profile.slug);
+        return;
+      }
+      rememberBooking(profile.slug, next);
+    }
+
+    /** "gone" is the token expired, revoked, or never ours: stop remembering it. */
+    async function read(path: string) {
+      const response = await fetch(path);
+      if (response.status === 404) return "gone" as const;
+      if (!response.ok) return null;
+      const body = await response.json().catch(() => null);
+      return (body?.data ?? null) as Record<string, unknown> | null;
+    }
+
+    void (async () => {
+      try {
+        const base = `/api/v1/public/bookings/${encodeURIComponent(stored.token)}`;
+        const answer = await read(`${base}/status`);
+        if (answer === "gone") {
+          settle(null);
+          return;
+        }
+        if (!answer || !isBookingStatus(answer.status) || typeof answer.version !== "number") {
+          return;
+        }
+
+        const answered = { status: answer.status, version: answer.version };
+        const next = withStatus(stored, answered, new Date());
+        if (!needsFreshDetails(stored, answered)) {
+          settle(next);
+          return;
+        }
+
+        const full = await read(base);
+        if (full === "gone") {
+          settle(null);
+          return;
+        }
+        if (!full || typeof full.starts_at !== "string") {
+          /*
+           * Keep the version this page arrived with, so the next visit asks
+           * again instead of settling for an hour that may have moved.
+           */
+          settle({ ...next, version: stored.version });
+          return;
+        }
+        if (full.organization_slug !== profile.slug) {
+          settle(null);
+          return;
+        }
+
+        const zone = (full.location as { timezone?: unknown } | null)?.timezone;
+        settle({
+          ...next,
+          startsAt: full.starts_at,
+          timezone: typeof zone === "string" && zone ? zone : stored.timezone,
+        });
+      } catch {
+        /* Offline: the strip keeps showing what this browser last knew. */
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [profile.slug]);
 
   useEffect(() => {
     if (Object.keys(fieldErrors).length > 0 || codeError) errorSummaryRef.current?.focus();
@@ -553,11 +701,34 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         return;
       }
       setResult({ status: body.data.status, manageUrl: body.data.manage_url });
+      /*
+       * What lets this studio's page greet the same client on their way back.
+       * Written here because this is the only moment a browser knows all three
+       * of it: the token the API just issued, the hour the client chose, and
+       * the zone that hour belongs to. Version 1 is what a freshly inserted row
+       * carries; anything that has happened to it since is read back from the
+       * status endpoint on the next visit.
+       */
+      if (typeof body.data.manage_token === "string" && isBookingStatus(body.data.status)) {
+        rememberBooking(profile.slug, {
+          token: body.data.manage_token,
+          startsAt: held.slot.starts_at,
+          timezone: location.timezone,
+          status: body.data.status,
+          version: 1,
+          statusSeenAt: new Date().toISOString(),
+        });
+      }
     } catch {
       setError(t("publicBooking.offline"));
     } finally {
       setPendingAction(null);
     }
+  }
+
+  /** «Это не я»: this browser stops remembering the visit, and the strip goes. */
+  function forgetMine() {
+    forgetBooking(profile.slug);
   }
 
   if (result) {
@@ -579,8 +750,49 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     <main className="public-booking-shell">
       <header className="public-booking-header">
         <span className="brand">{profile.name}</span>
-        <span className="role-badge">{t("publicBooking.eyebrow")}</span>
+        {/*
+          * The badge says what the page is until it has something better to
+          * say. For a stranger that is «Online-запись» — the page's own label,
+          * and the only thing on this header naming what it is for. For a
+          * client with a booking here it is the state of that booking, which
+          * the sticky header then keeps on screen the whole way down the form.
+          */}
+        {mine ? (
+          <span className={`role-badge booking-status-${mine.status}`}>
+            {t(`publicBooking.status.${mine.status}`)}
+          </span>
+        ) : (
+          <span className="role-badge">{t("publicBooking.eyebrow")}</span>
+        )}
       </header>
+      {/*
+        * The badge's colour and one word cannot say *which* appointment, and a
+        * page that answers "ожидает подтверждения" without saying what for has
+        * only half answered. The hour goes here, with the sentence that state
+        * means and the way to the page that can change it.
+        */}
+      {mine && (
+        <section className="public-booking-yours" aria-live="polite">
+          <p className="public-booking-yours-when">
+            <span>{t("publicBooking.yours")}</span>
+            <strong>{formatVisit(mine.startsAt, mine.timezone, localeTag(profile.locale))}</strong>
+          </p>
+          <p>{t(bookingStripKey(mine.status))}</p>
+          <p className="inline-actions">
+            <Link className="inline-action" href={`/booking/${mine.token}`}>
+              {t("publicBooking.manage")}
+            </Link>
+            {/*
+              * A phone is shared more often than an account is. Somebody who
+              * opens this page and does not recognise the visit on it needs a
+              * way to take it off their screen that is not "clear site data".
+              */}
+            <button type="button" className="inline-action" onClick={forgetMine}>
+              {t("publicBooking.yoursForget")}
+            </button>
+          </p>
+        </section>
+      )}
       <section className="public-booking-intro">
         <span className="eyebrow">Nail Profit OS</span>
         <h1>{t("publicBooking.title")}</h1>
