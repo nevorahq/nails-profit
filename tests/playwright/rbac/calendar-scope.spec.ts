@@ -46,7 +46,7 @@ test.describe("a master sees their own calendar and no further", () => {
     browserErrors,
   }) => {
     void browserErrors;
-    const url = `/app/calendar?view=day&date=${isoDate(day)}`;
+    const url = `/app/calendar?date=${isoDate(day)}`;
 
     const masterContext = await browser.newContext({
       storageState: await studio.master.storageState(),
@@ -60,13 +60,9 @@ test.describe("a master sees their own calendar and no further", () => {
     // separate matter, and one the test after this one is about.
     await expect(masterPage.locator(".calendar-entry")).not.toContainText("Colleague Client");
     // A calendar that is only ever theirs has nothing to choose between, so the
-    // filter panel offers no specialist. (The compose form below still names
-    // one — a booking has to be made for somebody — but only ever them.)
-    const masterFilters = masterPage.locator("details.calendar-filters");
-    await expect(masterFilters).toBeVisible();
-    await expect(masterFilters.getByLabel("Specialist")).toHaveCount(0);
-    // Present but folded away: the panel is a `details`, closed by default.
-    await expect(masterFilters.getByLabel("Status")).toHaveCount(1);
+    // toolbar offers no specialist filter at all. (The compose form below still
+    // names one — a booking has to be made for somebody — but only ever them.)
+    await expect(masterPage.locator(".calendar-specialist")).toHaveCount(0);
 
     const ownerContext = await browser.newContext({
       storageState: await studio.owner.storageState(),
@@ -108,7 +104,7 @@ test.describe("a master sees their own calendar and no further", () => {
   }) => {
     const context = await browser.newContext({ storageState: await studio.master.storageState() });
     const page = await context.newPage();
-    await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
+    await page.goto(`/app/calendar?date=${isoDate(day)}`);
 
     const picker = page.locator("#new-booking select[name='client_id'], #new-booking select").last();
     await expect(picker).not.toContainText("Colleague Client");

@@ -18,10 +18,10 @@ import {
  * the file leaving the page is an image the server recognises, and that the
  * circle afterwards holds a photograph instead of a letter.
  *
- * It follows the picture out of the screen that sets it, too. The calendar's
- * day columns used to read `user.image` — the account's photo, which nothing
- * ever wrote — and the point of moving them to the card is that a face set here
- * is the face there.
+ * It follows the picture out of the screen that sets it, too. The calendar used
+ * to read `user.image` — the account's photo, which nothing ever wrote — and
+ * the point of moving it to the card is that a face set here is the face there,
+ * beside the master's name on the appointment.
  */
 test.describe("a master's photo", () => {
   let studio: Studio;
@@ -29,7 +29,7 @@ test.describe("a master's photo", () => {
 
   test.beforeAll(async ({ baseURL }, testInfo) => {
     studio = await seedStudio(baseURL!, testInfo);
-    // The day view draws a column for a master who has something that day.
+    // The face rides on the appointment, so the day needs one to draw.
     await requestAppointmentAsClient(baseURL!, studio, { date: day });
   });
 
@@ -115,19 +115,23 @@ test.describe("a master's photo", () => {
 
     const address = await photo.getAttribute("src");
 
-    await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
-    const columnHead = page.locator(".calendar-column > h2");
-    await expect(columnHead).toContainText(studio.specialistName);
+    await page.goto(`/app/calendar?date=${isoDate(day)}`);
+    const named = page.locator(".calendar-entry .calendar-master");
+    await expect(named).toContainText(studio.specialistName);
     // The same address, so the calendar is reading the card rather than the
     // account behind it — and the browser has it cached already.
-    await expect(columnHead.locator(".avatar img")).toHaveAttribute("src", address as string);
+    await expect(named.locator(".avatar img")).toHaveAttribute("src", address as string);
 
     await page.goBack();
     await page.getByRole("button", { name: /Remove the photo/i }).click();
     await expect(circle).toHaveText(studio.specialistName.slice(0, 1).toUpperCase());
 
-    await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
-    await expect(page.locator(".calendar-column > h2 .avatar img")).toHaveCount(0);
+    await page.goto(`/app/calendar?date=${isoDate(day)}`);
+    await expect(page.locator(".calendar-entry .calendar-master .avatar img")).toHaveCount(0);
+    // The initial takes its place rather than the circle going empty.
+    await expect(page.locator(".calendar-entry .calendar-master .avatar")).toHaveText(
+      studio.specialistName.slice(0, 1).toUpperCase(),
+    );
 
     await context.close();
   });

@@ -7,17 +7,14 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   clockAt,
   freeWindows,
-  groupBookings,
   rotaFor,
   toHalfHours,
   totalMinutes,
-  type CalendarView,
   type ShiftRule,
   type Span,
-} from "@/components/calendar-grouping";
+} from "@/components/calendar-free-time";
 import { ToolIcon } from "@/components/icons";
 import {
-  addLocalDays,
   formatLocalDate,
   localDateWeekday,
   localToUtc,
@@ -31,7 +28,20 @@ import { specialistOptions } from "@/lib/specialist-options";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { formatMoneyMinor } from "@/lib/format";
 
-export type { CalendarView };
+/**
+ * One date in the month grid.
+ *
+ * `marks` is already capped and already in the order the day runs; `total` is
+ * how many things actually stand in it. The two differ exactly when a cell has
+ * more than it can draw, which is the case the count exists for.
+ */
+export type CalendarMonthDay = Readonly<{
+  date: string;
+  /** A date from a neighbouring month, drawn quieter but still clickable. */
+  outside: boolean;
+  marks: readonly string[];
+  total: number;
+}>;
 
 export type CalendarException = Readonly<{
   id: string;
@@ -82,8 +92,8 @@ export type CalendarBooking = Readonly<{
 type Option = Readonly<{ id: string; name: string }>;
 
 /**
- * A specialist as the board draws them: the option plus the photo their column
- * is headed with. Kept apart from `Option` so the service, add-on and client
+ * A specialist as the board draws them: the option plus the photo their name is
+ * shown beside. Kept apart from `Option` so the service, add-on and client
  * selects are not handed a field they have no use for.
  */
 type Person = Readonly<{ id: string; name: string; avatar?: string | null }>;
@@ -114,47 +124,14 @@ type BookingPreview = {
     | { status: "incomplete"; reasons: string[] };
 };
 
-/* --- The day view's time grid --- */
-
 /** "09:30" as minutes past midnight. The strings are already local wall clock. */
 function minutesOf(clock: string) {
   return Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
 }
 
-/** The hours the grid draws, widened to whole hours around what the day holds. */
-const DEFAULT_GRID = { from: 8 * 60, to: 20 * 60 };
-
-function gridBounds(spans: readonly { start: number; end: number }[]) {
-  const from = Math.min(DEFAULT_GRID.from, ...spans.map((s) => s.start));
-  const to = Math.max(DEFAULT_GRID.to, ...spans.map((s) => s.end));
-  return { from: Math.floor(from / 60) * 60, to: Math.ceil(to / 60) * 60 };
-}
-
-/**
- * Side-by-side columns for entries that overlap in time.
- *
- * A specialist cannot be double-booked — the availability engine refuses it —
- * but blocked time is stored separately from bookings and may cover a slot that
- * already has one, and a cancelled appointment still shows next to whatever
- * replaced it. Without this the later card would simply cover the earlier one
- * and the day would look emptier than it is.
- *
- * Greedy: each entry takes the first lane whose previous occupant has finished.
- */
-function assignLanes<T extends { start: number; end: number }>(spans: T[]) {
-  const laneEnds: number[] = [];
-  const placed = spans.map((span) => {
-    let lane = laneEnds.findIndex((end) => end <= span.start);
-    if (lane === -1) lane = laneEnds.push(span.start) - 1;
-    laneEnds[lane] = span.end;
-    return { ...span, lane };
-  });
-  return { placed, lanes: Math.max(1, laneEnds.length) };
-}
-
 export function CalendarBoard({
-  view,
-  days,
+  monthDays,
+  selected,
   today,
   bookings,
   locations,
@@ -175,8 +152,10 @@ export function CalendarBoard({
   localeTag,
   locale,
 }: {
-  view: CalendarView;
-  days: string[];
+  /** Every date of the month grid, in order, whole ISO weeks. */
+  monthDays: readonly CalendarMonthDay[];
+  /** The date the list below the month is showing. */
+  selected: string;
   today: string;
   bookings: CalendarBooking[];
   locations: readonly Readonly<{ id: string; name: string; timezone: string }>[];
@@ -188,7 +167,7 @@ export function CalendarBoard({
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
   exceptions: readonly CalendarException[];
-  /** The rota the day view measures its free time against. */
+  /** The rota the day's tally measures its free time against. */
   shifts: readonly (ShiftRule & Readonly<{ locationId: string }>)[];
   /** Per location, the gap a studio keeps around each appointment. */
   buffers: readonly Readonly<{ locationId: string; before: number; after: number }>[];
@@ -454,22 +433,76 @@ export function CalendarBoard({
     });
   }
 
-  const grouped = groupBookings(view, days, bookings, specialists);
+  /*
+   * The listed day, as one run in time order.
+   *
+   * Appointments and blocked time in the same list, because to whoever is
+   * reading it they are the same statement: this hour is spoken for. Sorted by
+   * the clock rather than grouped under each master, which is the trade this
+   * layout makes — a column per person was fifty pixels wide on a phone, and a
+   * flat list is not, so the name rides on the card instead of heading a column
+   * of them.
+   */
+  type DayItem =
+    | { kind: "booking"; at: string; data: CalendarBooking }
+    | { kind: "exception"; at: string; data: CalendarException };
 
-  // For the day view, specialists who have a blocked slot but no bookings that
-  // day won't appear in `grouped` (which only shows people with appointments).
-  // Add a group for each such specialist so their block is visible.
-  const allGroups = [...grouped];
-  if (view === "day") {
-    const covered = new Set(grouped.map((g) => g.key));
-    const seen = new Set<string>();
-    for (const exc of exceptions) {
-      if (exc.localDate === days[0] && !covered.has(exc.specialistId) && !seen.has(exc.specialistId)) {
-        seen.add(exc.specialistId);
-        allGroups.push({ key: exc.specialistId, title: exc.specialistName, bookings: [] });
-      }
-    }
-  }
+  const dayItems: DayItem[] = [
+    ...bookings.map((data) => ({ kind: "booking" as const, at: data.localStart, data })),
+    ...exceptions.map((data) => ({ kind: "exception" as const, at: data.localStart, data })),
+  ].sort((left, right) => left.at.localeCompare(right.at));
+
+  /*
+   * Whose appointment this is, on the card itself.
+   *
+   * The day used to stand in a column headed by its master's name and face, so
+   * naming them on every card would have been a line of noise per appointment.
+   * A flat list has no column to inherit it from: without this, a studio of
+   * four reads as one queue belonging to nobody.
+   *
+   * Still withheld wherever the reader already knows whose day this is: a
+   * studio of one, a Master looking at their own calendar, and anyone who has
+   * narrowed the filter to a single master. In all three every card would carry
+   * the same name, which is a line of noise per appointment.
+   *
+   * Offered the moment something on the day belongs to somebody no longer on
+   * the roster, since that is the one name the reader cannot infer — the
+   * roster is the live one and has to be, while the appointments deliberately
+   * are not.
+   */
+  const namesMasters =
+    ownSpecialistId === null &&
+    !filters.specialist &&
+    (specialists.length > 1 ||
+      bookings.some((booking) => !specialists.some((person) => person.id === booking.specialistId)));
+
+  /**
+   * The master's face, drawn the way `/app/visits` draws one.
+   *
+   * It used to sit in the column head, which is the one piece of that layout
+   * worth carrying over: a studio scanning its day recognises a photo faster
+   * than it reads a name. In a flat list it rides beside the name on the card,
+   * and only where the name itself is shown — a studio of one would otherwise
+   * have the same face on every row.
+   *
+   * Nothing for an appointment whose master has been archived: the roster is
+   * the live one and has to be, while the appointments deliberately are not.
+   * The card still names them, which is the half that matters.
+   */
+  const faceOf = (specialistId: string) => {
+    const person = specialists.find((candidate) => candidate.id === specialistId);
+    if (!person) return null;
+    return (
+      <span className="avatar" aria-hidden="true">
+        {person.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+          <img src={person.avatar} alt="" />
+        ) : (
+          person.name.trim().slice(0, 1).toUpperCase() || "?"
+        )}
+      </span>
+    );
+  };
 
   /**
    * Only the people who actually work at the chosen address are offered.
@@ -563,39 +596,6 @@ export function CalendarBoard({
   });
 
   /*
-   * The day view is a timetable rather than a list: one column per specialist,
-   * hours down the side, and each appointment drawn where it actually sits.
-   * Week and list stay lists — a week of columns does not fit a phone, and the
-   * list is what gets searched rather than read as a clock.
-   */
-  const dayItems =
-    view === "day"
-      ? [
-          ...bookings.filter((b) => b.localDate === days[0]),
-          ...exceptions.filter((e) => e.localDate === days[0]),
-        ]
-      : [];
-  /*
-   * Two questions that used to be one, and are not the same question.
-   *
-   * `asColumns` asks whether the sections stand side by side under a master's
-   * name and face. `isGrid` asks whether they are laid out against a column of
-   * hours — cards positioned absolutely by their start and length.
-   *
-   * The day wants both. The list wants only the first: it is grouped by master
-   * now, so the columns are right, but its window is a fortnight and a
-   * fortnight cannot be placed on one axis of hours. It keeps an ordinary
-   * ordered list inside each column.
-   *
-   * An empty view keeps the old panel either way. With nothing to place,
-   * `groupBookings` falls back to a single group titled with the dates, and
-   * drawing that as a timetable puts a column headed "2026-08-09" above twelve
-   * empty hours — a grid that says less than the sentence it replaced.
-   */
-  const isGrid = view === "day" && dayItems.length > 0;
-  const asColumns = isGrid || (view === "list" && bookings.length > 0);
-
-  /*
    * The shortest thing the studio sells, which is what separates a window from
    * a crack: a gap nothing on the price list fits into is not an opening, and
    * counting one would put a number in the column head that nobody can act on.
@@ -608,40 +608,9 @@ export function CalendarBoard({
   );
 
   const weekdayOfDay = (() => {
-    const parsed = parseLocalDate(days[0]);
+    const parsed = parseLocalDate(selected);
     return parsed ? localDateWeekday(parsed) : null;
   })();
-
-  /**
-   * What a master could still sell today, per column.
-   *
-   * Only the day view: it is the only one drawn against a single axis of hours,
-   * and the only one whose columns are one person on one date — which is what
-   * "free" is a property of.
-   */
-  const freeFor = (specialistId: string, taken: readonly Span[]) => {
-    if (!isGrid || weekdayOfDay === null) return { windows: [] as Span[], shift: 0, free: 0 };
-
-    const rota = rotaFor(shifts, specialistId, days[0], weekdayOfDay);
-    const windows = freeWindows(rota, taken, shortestService);
-
-    return {
-      windows,
-      /*
-       * The whole shift, and what is left of it — in hours rather than in
-       * openings, because an opening is not a fixed quantity: how many a day
-       * holds depends on the length of the service being booked into it, and
-       * the calendar has no service selected. Hours are the same number
-       * whatever anybody books, they add up across masters, and they are what
-       * `practical_capacity_basis_points` already measures a studio in.
-       */
-      shift: totalMinutes(rota.map((rule) => ({ start: rule.startMinute, end: rule.endMinute }))),
-      // Summed over the windows rather than over the shift less the bookings:
-      // a gap too short to sell is not free time, and `freeWindows` has already
-      // dropped those.
-      free: totalMinutes(windows),
-    };
-  };
 
   /**
    * An appointment plus the gap the studio keeps around it.
@@ -657,226 +626,247 @@ export function CalendarBoard({
   };
 
   /**
-   * The day an entry falls on, for the one view where nothing else says it.
+   * What the studio could still sell on the listed day: the rota it works, and
+   * how much of that nothing stands in.
    *
-   * A day view is one date and says so above the columns; a week is grouped by
-   * date and each section is headed with one. The list is neither: it spans a
-   * fortnight, and its cards carried a bare «10:00–11:30». That was survivable
-   * while the list was a single run in time order — the reader could infer the
-   * day from the cards above. Grouped into a master's column it is not: their
-   * Tuesday and their Friday now sit next to each other with nothing between
-   * them.
+   * One line over the day rather than a figure under every name — which is what
+   * the flat list costs and what it buys. «12 / 10» repeated down a row of
+   * columns was four numbers to add up before answering «а когда можно?»; this
+   * is the answer already added up, and it is still one person's number
+   * whenever the filter is one person's.
+   *
+   * Computed per master and only then summed, because free time is a property
+   * of one person on one date. Two masters each free from 10:00 to 11:00 is an
+   * hour the studio can sell twice; merging their rotas first would report it
+   * as one, and subtracting bookings from a merged rota would let one master's
+   * appointment eat the other's morning.
    */
-  const dayLabel = (localDate: string) =>
-    new Date(`${localDate}T12:00:00`).toLocaleDateString(localeTag, {
-      day: "numeric",
-      month: "short",
-    });
-  const daySpans = dayItems.map((item) => ({
-    start: minutesOf(item.localStart),
-    end: minutesOf(item.localEnd),
-  }));
-  const bounds = gridBounds(daySpans);
-  const gridHours = Array.from(
-    { length: (bounds.to - bounds.from) / 60 + 1 },
-    (_, index) => bounds.from / 60 + index,
-  );
+  const dayTally = (() => {
+    if (weekdayOfDay === null) return { shift: 0, free: 0 };
 
-  /** Where an entry sits in the grid, in whole rows of one hour each. */
-  const rows = (minutes: number) => (minutes - bounds.from) / 60;
+    let shift = 0;
+    let free = 0;
+
+    for (const specialistId of new Set(shifts.map((rule) => rule.specialistId))) {
+      const rota = rotaFor(shifts, specialistId, selected, weekdayOfDay);
+      if (rota.length === 0) continue;
+
+      /*
+       * Blocked intervals count as fully as appointments — a holiday is not
+       * time anybody can be booked into — while a cancellation gives its hour
+       * back, which is why the bookings are filtered by `OCCUPYING` rather than
+       * taken whole.
+       */
+      const taken: Span[] = [
+        ...bookings
+          .filter(
+            (booking) => booking.specialistId === specialistId && OCCUPYING.has(booking.status),
+          )
+          .map((booking) =>
+            withBuffer(
+              minutesOf(booking.localStart),
+              minutesOf(booking.localEnd),
+              booking.locationId,
+            ),
+          ),
+        ...exceptions
+          .filter((exception) => exception.specialistId === specialistId)
+          .map((exception) => ({
+            start: minutesOf(exception.localStart),
+            end: minutesOf(exception.localEnd),
+          })),
+      ];
+
+      /*
+       * The shift and what is left of it, in hours rather than in openings: an
+       * opening is not a fixed quantity — how many a day holds depends on the
+       * length of the service being booked into it, and the calendar has no
+       * service selected. Hours are the same number whatever anybody books,
+       * they add up across masters, and they are what
+       * `practical_capacity_basis_points` already measures a studio in.
+       */
+      shift += totalMinutes(rota.map((rule) => ({ start: rule.startMinute, end: rule.endMinute })));
+      // Summed over the windows rather than over the shift less the bookings:
+      // a gap too short to sell is not free time, and `freeWindows` has already
+      // dropped those.
+      free += totalMinutes(freeWindows(rota, taken, shortestService));
+    }
+
+    return { shift, free };
+  })();
+
+  /**
+   * The month and the year the grid is drawing, each one a list to choose from.
+   *
+   * Read off the selected date rather than passed down, because they are the
+   * same fact: the grid is built around the anchor, and the anchor is the day
+   * the list below is showing.
+   *
+   * Two controls rather than one list of «сентябрь 2026 г.». A single list has
+   * to stop somewhere, and wherever it stops is a month nobody can reach; split,
+   * the months are always all twelve and only the years are a list — a short
+   * one, and one that can be widened without touching the other half.
+   */
+  const anchor = parseLocalDate(selected) ?? { year: 1970, month: 1, day: 1 };
 
   /*
-   * The «now» line, and why it is state rather than computed during render.
-   *
-   * The server renders this page, so a time computed inline would be the
-   * server's clock baked into HTML that the browser then hydrates against its
-   * own — a mismatch React would warn about, and a line that stops moving. It
-   * is filled in after mount instead, and ticks each minute.
+   * The fifteenth at midday, not the first at midnight. `toLocaleDateString`
+   * reads an instant in the browser's own zone, and a first-of-the-month
+   * instant is within a few hours of the month before — far enough west and
+   * every name in this list would be off by one.
    */
-  const zone =
-    locations.find((place) => place.id === filters.location)?.timezone ??
-    locations[0]?.timezone ??
-    "UTC";
-  const [nowMinutes, setNowMinutes] = useState<number | null>(null);
+  const monthNames = Array.from({ length: 12 }, (_, index) =>
+    new Date(Date.UTC(anchor.year, index, 15, 12)).toLocaleDateString(localeTag, { month: "long" }),
+  );
 
-  useEffect(() => {
-    if (!isGrid || days[0] !== today) return;
-    const read = () =>
-      setNowMinutes(
-        minutesOf(
-          new Intl.DateTimeFormat("en-GB", {
-            timeZone: zone,
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          }).format(new Date()),
-        ),
-      );
-    read();
-    const timer = setInterval(read, 60_000);
-    return () => clearInterval(timer);
-  }, [isGrid, days, today, zone]);
+  /*
+   * Two years back and one forward, which is where the work is: a studio reads
+   * back over its own records and books forward only as far as it takes
+   * bookings, which `max_advance_days` caps in months rather than years.
+   *
+   * Taken from `today` rather than from the clock. This renders on the server
+   * and hydrates in the browser, and `new Date()` on both sides of that is two
+   * readings — on New Year's Eve, of two different years.
+   *
+   * The anchor's own year joins the list wherever it falls, so a link somebody
+   * kept from further back still shows the year it is actually on rather than
+   * silently displaying a different one.
+   */
+  const thisYear = Number(today.slice(0, 4));
+  const years = [
+    ...new Set([anchor.year, thisYear - 2, thisYear - 1, thisYear, thisYear + 1]),
+  ].sort((left, right) => left - right);
 
-  const nowInView =
-    nowMinutes !== null && nowMinutes >= bounds.from && nowMinutes <= bounds.to ? nowMinutes : null;
+  /**
+   * The listed day, spelled out — the name of the panel below the grid rather
+   * than a heading printed inside it. The grid says which date is chosen by
+   * filling it in, and a heading repeating that was the same fact twice.
+   */
+  const dayLabel = new Date(`${selected}T12:00:00`).toLocaleDateString(localeTag, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
+  /**
+   * «Пн Вт Ср…», taken from the grid's own first week rather than written out.
+   *
+   * The grid always starts on a Monday, so its first seven dates are one of
+   * each weekday in order — which means the row of headings cannot drift out of
+   * step with the columns beneath it, whatever a locale spells them.
+   */
+  const weekdayNames = monthDays
+    .slice(0, 7)
+    .map((day) =>
+      new Date(`${day.date}T12:00:00`).toLocaleDateString(localeTag, { weekday: "short" }),
+    );
 
   return (
     <>
       <nav className="calendar-toolbar" aria-label={t("calendar.period")}>
-        <div className="calendar-steps">
-          <Link className="secondary-button" href={queryFor({ ...filters, view, date: today })}>
+        <div className="calendar-where">
+          {/*
+            Whose calendar this is, open on the bar rather than folded behind a
+            «Фильтры» button.
+
+            It is the only filter with a control now, and it is the one a studio
+            actually reaches for — «покажи день Ирины» is a question asked many
+            times a day, where the address and the status were asked once and
+            then left alone. Folded away it cost two taps every time and, on a
+            phone, a panel that opened off the side of the screen.
+
+            First in the bar, because it is the widest thing it says: the month
+            after it is a statement about the calendar this select has already
+            chosen.
+
+            Navigated rather than submitted: the grid's own dates are `<Link>`s
+            through `queryFor`, and routing this the same way keeps one
+            mechanism instead of a form that would need every other filter
+            copied into hidden fields to avoid dropping them.
+          */}
+          {canFilterBySpecialist && specialists.length > 1 && (
+            <select
+              className="calendar-specialist"
+              aria-label={t("calendar.specialist")}
+              value={filters.specialist}
+              onChange={(event) =>
+                router.push(
+                  queryFor({ ...filters, specialist: event.target.value, date: selected }),
+                )
+              }
+            >
+              <option value="">{t("calendar.allSpecialists")}</option>
+              {specialists.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/*
+            The way back, and the one control of the old set that was not a
+            second way to do something.
+
+            The arrows went because the month select already steps a month, and
+            they stepped exactly one. This does something neither the grid nor
+            the selects can: today's date wears a ring in the grid and can be
+            pressed — but only while today is in the month on screen. From March
+            2027 the way home is two changes of two fields, each its own trip to
+            the server, and this is one.
+          */}
+          <Link className="secondary-button" href={queryFor({ ...filters, date: today })}>
             {t("calendar.today")}
           </Link>
-          {/* One control in one frame, the way the direction draws it: the two
-              arrows step the same period and belong together. */}
-          <span className="calendar-stepper">
-            <Link
-              className="calendar-step"
-              href={queryFor({ ...filters, view, date: shiftDate(days[0], -days.length) })}
-              aria-label={t("calendar.previous")}
+
+          {/*
+            The month, which is what the arrows now step and what the grid
+            below is drawing. A date was only ever needed here while the board
+            was one day wide; the day the list is showing is named over the
+            list itself, where the reader is when they need it.
+          */}
+          <span className="calendar-period">
+            <select
+              aria-label={t("calendar.month")}
+              value={anchor.month}
+              onChange={(event) =>
+                router.push(
+                  queryFor({
+                    ...filters,
+                    date: dateIn(selected, { month: Number(event.target.value) }),
+                  }),
+                )
+              }
             >
-              ←
-            </Link>
-            <Link
-              className="calendar-step"
-              href={queryFor({ ...filters, view, date: shiftDate(days[0], days.length) })}
-              aria-label={t("calendar.next")}
+              {monthNames.map((name, index) => (
+                <option key={name} value={index + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label={t("calendar.year")}
+              value={anchor.year}
+              onChange={(event) =>
+                router.push(
+                  queryFor({
+                    ...filters,
+                    date: dateIn(selected, { year: Number(event.target.value) }),
+                  }),
+                )
+              }
             >
-              →
-            </Link>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
           </span>
-          {/*
-            Midday rather than midnight: "2026-05-14" parses as UTC, and a
-            browser west of Greenwich would render the day before.
-          */}
-          {/*
-            Keyed to the view, not to `isGrid`: a day with nothing in it is
-            still one day, and `isGrid` also turns off when there is nothing to
-            place — which printed the range "2026-08-09 — 2026-08-09".
-          */}
-          <strong className="calendar-period">
-            {view === "day" ? (
-              /*
-                Two spellings of one date, because the longest Russian spelling
-                — «воскресенье, 20 сентября», 124 units — does not fit beside
-                the buttons at 288, where about 109 are left for it. Only one is
-                displayed at a time, so it is read out once.
-              */
-              <>
-                <span className="period-long">
-                  {new Date(`${days[0]}T12:00:00`).toLocaleDateString(localeTag, {
-                    day: "numeric",
-                    month: "long",
-                    weekday: "long",
-                  })}
-                </span>
-                <span className="period-short">
-                  {new Date(`${days[0]}T12:00:00`).toLocaleDateString(localeTag, {
-                    day: "numeric",
-                    month: "short",
-                    weekday: "short",
-                  })}
-                </span>
-              </>
-            ) : (
-              `${days[0]} — ${days.at(-1)}`
-            )}
-          </strong>
+
         </div>
 
         <div className="calendar-tools">
-          <div className="calendar-views" role="group" aria-label={t("calendar.view")}>
-            {(["day", "week", "list"] as const).map((option) => (
-              <Link
-                key={option}
-                href={queryFor({ ...filters, view: option, date: days[0] })}
-                className={option === view ? "active" : undefined}
-                aria-current={option === view ? "true" : undefined}
-              >
-                {t(`calendar.view.${option}` as MessageKey)}
-              </Link>
-            ))}
-          </div>
-
-          {/*
-            The three selects were open on the page at all times, which on a
-            phone pushed the day itself below the fold. `details` folds them
-            behind the button the direction shows without any state to keep:
-            the disclosure, the keyboard behaviour and the escape are the
-            browser's, and the form inside is byte-for-byte the one that was
-            already here.
-
-            A Master gets them too. Their calendar is narrowed to their own
-            column either way, so the specialist select is still withheld — but
-            the status filter is one they can arrive already carrying, because
-            the notification link points at a day and a status. A filter nobody
-            can see is a filter nobody can undo: confirming the appointment
-            moves it out of `pending_confirmation` and off a screen that never
-            said it was filtered, which reads as the booking being deleted.
-          */}
-          <details className="calendar-filters">
-            <summary>
-              <ToolIcon name="filter" />
-              {t("filters.title")}
-            </summary>
-            <form className="inline-form" method="get">
-              <input type="hidden" name="view" value={view} />
-              <input type="hidden" name="date" value={days[0]} />
-              {/*
-                A filter is offered only where there is something to filter
-                out. «Все адреса / Центр» over one address, and «Все мастера /
-                Ирина» over one master, are two controls that cannot change
-                what is on screen — and they were the first two things a solo
-                studio met on opening its own calendar.
-
-                The value is still honoured when it arrives in the query
-                string: the page reads `filters` before this form is drawn, so
-                a link somebody kept from a wider week still narrows the day.
-              */}
-              {locations.length > 1 && (
-                <label>
-                  {t("calendar.location")}
-                  <select name="location" defaultValue={filters.location}>
-                    <option value="">{t("calendar.allLocations")}</option>
-                    {locations.map((place) => (
-                      <option key={place.id} value={place.id}>
-                        {place.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {canFilterBySpecialist && specialists.length > 1 && (
-                <label>
-                  {t("calendar.specialist")}
-                  <select name="specialist" defaultValue={filters.specialist}>
-                    <option value="">{t("calendar.allSpecialists")}</option>
-                    {specialists.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <label>
-                {t("calendar.status")}
-                <select name="status" defaultValue={filters.status}>
-                  <option value="">{t("calendar.allStatuses")}</option>
-                  <option value="pending_confirmation,confirmed">{t("calendar.statusLive")}</option>
-                  <option value="pending_confirmation">{t("bookingStatus.pending_confirmation")}</option>
-                  <option value="confirmed">{t("bookingStatus.confirmed")}</option>
-                  <option value="cancelled">{t("bookingStatus.cancelled")}</option>
-                  <option value="completed">{t("bookingStatus.completed")}</option>
-                  <option value="no_show">{t("bookingStatus.no_show")}</option>
-                </select>
-              </label>
-              <button className="secondary-button" type="submit">
-                {t("calendar.apply")}
-              </button>
-            </form>
-          </details>
-
           {/*
             An anchor to the form that already exists further down the page,
             not a new one. The direction puts a primary action in the toolbar;
@@ -909,176 +899,127 @@ export function CalendarBoard({
       )}
       {notice && <p className="booking-manage-notice" role="status">{notice}</p>}
 
-      <div
-        className={isGrid ? "calendar-grid" : undefined}
-        style={isGrid ? ({ "--calendar-span": gridHours.length - 1 } as React.CSSProperties) : undefined}
-      >
-        {isGrid && (
-          /* The hour rail. Decorative: every card states its own time in text. */
-          <div className="calendar-hours" aria-hidden="true">
-            {gridHours.slice(0, -1).map((hour) => (
-              <span key={hour}>{`${String(hour).padStart(2, "0")}:00`}</span>
-            ))}
-          </div>
-        )}
+      {/*
+        The month, as navigation.
 
-        <div className={asColumns ? "calendar-columns" : undefined}>
-      {allGroups.map((group) => {
-        const groupExceptions =
-          view === "day"
-            ? exceptions.filter((e) => e.specialistId === group.key && e.localDate === days[0])
-            : view === "week"
-              ? exceptions.filter((e) => e.localDate === group.key)
-              : exceptions;
+        Every date of the grid is a link to itself, so the day below changes by
+        the same mechanism the arrows and «Сегодня» already use: a query string
+        the server reads. That is a round trip per date, and it is the right
+        trade — the alternative is shipping a month of appointments to the
+        browser so a click can filter them locally, which is a month of names
+        and phone numbers sent to render a list of one day. It also leaves the
+        date in the address, so a day can be sent to somebody.
 
-        type GroupItem =
-          | { kind: "booking"; data: CalendarBooking }
-          | { kind: "exception"; data: CalendarException };
+        The marks are `aria-hidden`: they are a picture of the count, and the
+        count is already in the cell's own words underneath them.
+      */}
+      <section className="panel calendar-month" aria-label={`${monthNames[anchor.month - 1]} ${anchor.year}`}>
+        <div className="calendar-weekdays" aria-hidden="true">
+          {weekdayNames.map((name, index) => (
+            <span key={index}>{name}</span>
+          ))}
+        </div>
 
-        const items: GroupItem[] = [
-          ...group.bookings.map((b) => ({ kind: "booking" as const, data: b })),
-          ...groupExceptions.map((e) => ({ kind: "exception" as const, data: e })),
-        ].sort((a, b) => a.data.localStart.localeCompare(b.data.localStart));
-
-        // `items` is already in start order, so the lanes come back in the same
-        // order and can be read by the index of the entry being drawn.
-        const laid = isGrid
-          ? assignLanes(
-              items.map((item) => ({
-                start: minutesOf(item.data.localStart),
-                end: minutesOf(item.data.localEnd),
-              })),
-            )
-          : null;
-
-        /*
-         * What stands in this master's day, in the minutes the grid is drawn
-         * in, and what is left over.
-         *
-         * Blocked intervals count as fully as appointments — a holiday is not
-         * time anybody can be booked into — while a cancellation gives its hour
-         * back, which is why the list is filtered by `OCCUPYING` rather than
-         * taken whole.
-         */
-        const taken: Span[] = isGrid
-          ? [
-              ...group.bookings
-                .filter((booking) => OCCUPYING.has(booking.status))
-                .map((booking) =>
-                  withBuffer(
-                    minutesOf(booking.localStart),
-                    minutesOf(booking.localEnd),
-                    booking.locationId,
-                  ),
-                ),
-              ...groupExceptions.map((exception) => ({
-                start: minutesOf(exception.localStart),
-                end: minutesOf(exception.localEnd),
-              })),
-            ]
-          : [];
-        const open = freeFor(group.key, taken);
-
-        const slotOf = (index: number): React.CSSProperties | undefined => {
-          if (!laid) return undefined;
-          const span = laid.placed[index];
-          return {
-            top: `calc(var(--calendar-row) * ${rows(span.start)})`,
-            height: `calc(var(--calendar-row) * ${(span.end - span.start) / 60})`,
-            insetInlineStart: `${(span.lane / laid.lanes) * 100}%`,
-            width: `${(1 / laid.lanes) * 100}%`,
-          };
-        };
-
-        /*
-         * A day is grouped by specialist and every other view by date, so the
-         * key is the only thing that says which of the two this heading is
-         * about — a person's id resolves here, a date does not. The face is
-         * drawn inside the `<h2>` rather than around it: the sticky column head
-         * is styled as `.calendar-column > h2` and is already a flex row, so a
-         * wrapper would cost the heading both its stickiness and its rules.
-         */
-        const person = specialists.find((candidate) => candidate.id === group.key);
-
-        return (
-        <section
-          className={asColumns ? "calendar-column" : "panel calendar-group"}
-          key={group.key}
-        >
-          <h2>
-            {person && (
-              <span className="avatar" aria-hidden="true">
-                {person.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
-                  <img src={person.avatar} alt="" />
-                ) : (
-                  person.name.trim().slice(0, 1).toUpperCase() || "?"
+        <div className="calendar-cells">
+          {monthDays.map((day) => (
+            <Link
+              key={day.date}
+              href={queryFor({ ...filters, date: day.date })}
+              className={[
+                "calendar-cell",
+                day.outside ? "is-outside" : "",
+                day.date === today ? "is-today" : "",
+                day.date === selected ? "is-selected" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-current={day.date === selected ? "date" : undefined}
+            >
+              <span className="calendar-cell-date" aria-hidden="true">
+                {Number(day.date.slice(8))}
+              </span>
+              {/*
+                Drawn even when the day is empty. The cell centres what is in
+                it, so a date with marks and a date without put their numbers on
+                different lines unless the row is always there — and a month
+                whose numbers do not line up across a week is harder to read
+                than one with no marks at all.
+              */}
+              <span className="calendar-marks" aria-hidden="true">
+                {day.marks.map((status, index) => (
+                  <i key={index} className={`calendar-mark status-${status}`} />
+                ))}
+                {day.total > day.marks.length && (
+                  <b className="calendar-more">+{day.total - day.marks.length}</b>
                 )}
               </span>
-            )}
-            {group.title}
-            {/*
-              The day at a glance: what stands in it, and how many openings are
-              left. Two figures rather than one because they answer different
-              questions — a full day and an empty one both have "0" somewhere,
-              and which zero it is is the whole point.
-            */}
-            {isGrid && open.shift > 0 && (
-              <span className="calendar-tally">
-                <b>{toHalfHours(open.shift).toLocaleString(localeTag)}</b>
-                <i aria-hidden="true">/</i>
-                <em>{toHalfHours(open.free).toLocaleString(localeTag)}</em>
-                <span className="sr-only">
-                  {t("calendar.tally", {
-                    shift: toHalfHours(open.shift).toLocaleString(localeTag),
-                    free: toHalfHours(open.free).toLocaleString(localeTag),
-                  })}
-                </span>
+              <span className="sr-only">
+                {new Date(`${day.date}T12:00:00`).toLocaleDateString(localeTag, {
+                  day: "numeric",
+                  month: "long",
+                })}
+                {day.total > 0 && ` · ${t("calendar.dayEntries", { count: String(day.total) })}`}
               </span>
-            )}
-          </h2>
-          {items.length === 0 && !asColumns ? (
-            <p className="muted">{t("calendar.emptyDay")}</p>
-          ) : (
-            <ul className="calendar-list">
-              {/*
-                The openings themselves, on the same axis as the cards and
-                behind them: a band is a statement about the hours it covers,
-                and an appointment drawn over one would be a contradiction.
-                Marked `aria-hidden` because the tally in the heading already
-                says this in words, and a screen reader does not need the day
-                read out twice.
-              */}
-              {open.windows.map((window) => (
-                <li
-                  key={`free-${window.start}`}
-                  className="calendar-free"
-                  aria-hidden="true"
-                  style={{
-                    top: `calc(var(--calendar-row) * ${rows(window.start)})`,
-                    height: `calc(var(--calendar-row) * ${(window.end - window.start) / 60})`,
-                  }}
-                />
-              ))}
-              {items.map((item, index) => {
-                if (item.kind === "exception") {
-                  const exc = item.data;
-                  return (
-                    <li key={exc.id} className="calendar-entry status-blocked" style={slotOf(index)}>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/*
+        The day itself is not printed over the list.
+
+        It was a heading here — «пятница, 11 сентября» — and it said what the
+        grid directly above had just said by filling that date in. The panel
+        keeps the date as its accessible name instead: a reader with the screen
+        in front of them has it in the cell, and one without it still gets the
+        region announced by the day it covers rather than as an unnamed box.
+      */}
+      <section className="panel calendar-daylist" aria-label={dayLabel}>
+        {/*
+          The day at a glance: the shift the studio works, and how many of those
+          hours are still open. Two figures rather than one because they answer
+          different questions — a full day and a day nobody works both have "0"
+          somewhere, and which zero it is is the whole point.
+
+          Written out, where it used to be «10 / 5,5» with the words kept for
+          screen readers only. That pair sat in a master's column head, which
+          named it; over a flat list it names nothing, and two bare numbers and
+          a slash are a thing the reader has to be told once and then remember.
+          The sentence is the same string the screen reader was already getting,
+          so it is one string in three languages rather than a new legend.
+        */}
+        {dayTally.shift > 0 && (
+          <p className="calendar-tally">
+            {t("calendar.tally", {
+              shift: toHalfHours(dayTally.shift).toLocaleString(localeTag),
+              free: toHalfHours(dayTally.free).toLocaleString(localeTag),
+            })}
+          </p>
+        )}
+
+        {dayItems.length === 0 ? (
+          <p className="muted">{t("calendar.emptyDay")}</p>
+        ) : (
+          <ul className="calendar-list">
+            {dayItems.map((item) => {
+              if (item.kind === "exception") {
+                const exc = item.data;
+                return (
+                    <li key={exc.id} className="calendar-entry status-blocked">
                       <details>
                         <summary>
                           <span className="calendar-time">
-                            {view === "list" && (
-                              <span className="calendar-day">{dayLabel(exc.localDate)}</span>
-                            )}
                             {exc.localStart}–{exc.localEnd}
                           </span>
                           <span className="calendar-what">
                             {t("calendar.blockedLabel")}
                             {exc.reason && <span className="unit-hint">{exc.reason}</span>}
                           </span>
-                          {view === "week" && (
-                            <span className="calendar-who">{exc.specialistName}</span>
+                          {namesMasters && (
+                            <span className="calendar-who calendar-master">
+                              {faceOf(exc.specialistId)}
+                              {exc.specialistName}
+                            </span>
                           )}
                         </summary>
                         <div className="calendar-detail">
@@ -1087,7 +1028,6 @@ export function CalendarBoard({
                             {" · "}
                             {exc.specialistName}
                           </p>
-                          <p className="muted">{t("calendar.inZone", { zone: exc.timezone })}</p>
                           {canWrite && (
                             <button
                               className="danger-button"
@@ -1114,7 +1054,6 @@ export function CalendarBoard({
                 <li
                   key={booking.id}
                   className={`calendar-entry status-${booking.status}`}
-                  style={slotOf(index)}
                 >
                   <details
                     onToggle={(event) => {
@@ -1128,9 +1067,6 @@ export function CalendarBoard({
                   >
                     <summary>
                       <span className="calendar-time">
-                        {view === "list" && (
-                          <span className="calendar-day">{dayLabel(booking.localDate)}</span>
-                        )}
                         {booking.localStart}–{booking.localEnd}
                       </span>
                       <span className="calendar-what">
@@ -1139,15 +1075,11 @@ export function CalendarBoard({
                       </span>
                       <span className="calendar-who">
                         {booking.clientName ?? t("calendar.noClient")}
-                        {/*
-                          Whose it is, only where the section is not already
-                          theirs. A week is grouped by date, so every card in it
-                          needs a name; a day and a list stand in the master's
-                          own column, under their face, and repeating it there
-                          is one line of noise per appointment.
-                        */}
-                        {view === "week" && (
-                          <span className="unit-hint">{booking.specialistName}</span>
+                        {namesMasters && (
+                          <span className="unit-hint calendar-master">
+                            {faceOf(booking.specialistId)}
+                            {booking.specialistName}
+                          </span>
                         )}
                       </span>
                       {/* Never colour alone (section 7.8): the status is words. */}
@@ -1159,17 +1091,47 @@ export function CalendarBoard({
                     <div className="calendar-detail">
                       <p className="muted">
                         {booking.locationName} · {booking.specialistName} · {money(booking.priceMinor)}
-                        {booking.clientPhone && ` · ${booking.clientPhone}`}
+                        {/*
+                          The number, as something to press rather than to read
+                          out to yourself and type into a phone. «Клиент
+                          опаздывает» and «клиент не отвечает» are both answered
+                          by calling, and this card is where the desk is
+                          standing when either happens.
+
+                          `normalizedPhone` is safe in the href as it stands:
+                          `normalizePhone` in `domain/phone` strips every space,
+                          dash and bracket a human might type and returns
+                          `+<код><номер>`, which is what `tel:` wants.
+
+                          Absent for an Analyst — the column arrives null under
+                          `exclude_pii`, so the link cannot be built from data
+                          that is not there.
+                        */}
+                        {booking.clientPhone && (
+                          <>
+                            {" · "}
+                            <a className="calendar-call" href={`tel:${booking.clientPhone}`}>
+                              {booking.clientPhone}
+                            </a>
+                          </>
+                        )}
                       </p>
-                      <p className="muted">
-                        {t("calendar.inZone", { zone: booking.timezone })}
-                        {booking.confirmationDueAt &&
-                          ` · ${t("calendar.answerBy", {
+                      {/*
+                        The zone used to head this line — «Время локации
+                        (Europe/Chisinau)» over every card, on a screen where
+                        every time already is that location's. It named the
+                        address it belongs to two lines up, so the paragraph is
+                        now the deadline alone, and goes when there is none.
+                      */}
+                      {booking.confirmationDueAt && (
+                        <p className="muted">
+                          {t("calendar.answerBy", {
                             when: new Date(booking.confirmationDueAt).toLocaleString(localeTag, {
                               timeZone: booking.timezone,
                             }),
-                          })}`}
-                      </p>
+                          })}
+                        </p>
+                      )}
 
                       <p>
                         <Link className="text-link" href={`/app/calendar/${booking.id}`}>
@@ -1368,19 +1330,9 @@ export function CalendarBoard({
                 </li>
                 );
               })}
-            </ul>
-          )}
-        </section>
-        );
-      })}
-        </div>
-
-        {isGrid && nowInView !== null && (
-          <div className="calendar-now" style={{ top: `calc(var(--calendar-row) * ${rows(nowInView)})` }}>
-            <span>{`${String(Math.floor(nowInView / 60)).padStart(2, "0")}:${String(nowInView % 60).padStart(2, "0")}`}</span>
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
       {canWrite && bookable.length > 0 && locations.length > 0 && services.length > 0 && (
         /*
@@ -1448,7 +1400,7 @@ export function CalendarBoard({
             </label>
             <label>
               {t("calendar.date")}
-              <input type="date" name="date" defaultValue={days[0]} required />
+              <input type="date" name="date" defaultValue={selected} required />
             </label>
             <label>
               {t("calendar.time")}
@@ -1548,7 +1500,7 @@ export function CalendarBoard({
             )}
             <label>
               {t("calendar.date")}
-              <input type="date" name="date" defaultValue={days[0]} required />
+              <input type="date" name="date" defaultValue={selected} required />
             </label>
             <label>
               {t("calendar.from")}
@@ -1574,7 +1526,25 @@ function queryFor(state: Record<string, string>) {
   return `/app/calendar?${params.toString()}`;
 }
 
-function shiftDate(date: string, days: number) {
+/**
+ * The same date in another month or year, or the last day when there is no
+ * same.
+ *
+ * «31 января» has no counterpart in February, and a calendar that normalizes it
+ * lands in March — two months of movement from one change of one field. The end
+ * of the month being entered is what a reader means by "this date, over there",
+ * and it is what makes the step reversible: January's 31st becomes February's
+ * 28th and comes back as January's 28th, which is a day, rather than a month
+ * nobody asked for.
+ */
+function dateIn(date: string, part: Readonly<{ year?: number; month?: number }>) {
   const parsed = parseLocalDate(date);
-  return parsed ? formatLocalDate(addLocalDays(parsed, days)) : date;
+  if (!parsed) return date;
+
+  const year = part.year ?? parsed.year;
+  const month = part.month ?? parsed.month;
+  // Day 0 of the next month is the last day of this one.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  return formatLocalDate({ year, month, day: Math.min(parsed.day, lastDay) });
 }

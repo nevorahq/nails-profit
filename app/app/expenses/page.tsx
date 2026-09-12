@@ -117,15 +117,15 @@ export default async function ExpensesPage({
       </header>
 
       {/*
-        The same toolbar `/app/visits` carries, down to the classes: a `details`
-        that folds the form away, and `.visit-filters` so the panel drops into
-        the flow rather than floating right — the trigger sits at the toolbar's
-        left edge here too, next to the sidebar. A plain GET form, so the
-        filter lives in the URL and survives a reload, a bookmark and the
-        `router.refresh()` that follows every edit.
+        The last folded filter panel in the product: a `details` that hides the
+        form until it is asked for. The calendar, the dashboard and the visit
+        list have all put theirs open on the bar; this one has a category select
+        as well as a period, and moving it has not been asked for. A plain GET
+        form, so the filter lives in the URL and survives a reload, a bookmark
+        and the `router.refresh()` that follows every edit.
       */}
       <nav className="calendar-toolbar" aria-label={t("filters.title")}>
-        <details className="calendar-filters visit-filters">
+        <details className="calendar-filters">
           <summary>
             <ToolIcon name="filter" />
             {t("filters.title")}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { FirstRun } from "@/components/first-run";
-import { MetricIcon, ToolIcon } from "@/components/icons";
+import { MetricIcon } from "@/components/icons";
 import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
 import { ProfitBars } from "@/components/profit-bars";
@@ -416,25 +416,19 @@ export default async function AppPage({
         {t("dashboard.eyebrow")} · {period}
       </span>
 
-      <details className="calendar-filters report-filters">
-        <summary>
-          <ToolIcon name="filter" />
-          {t("filters.title")}
-        </summary>
-        <PeriodFilter
-          locale={locale}
-          from={filters.from}
-          to={filters.to}
-          specialistId={filters.specialist}
-          people={data.people}
-          /*
-            A picker over one person narrows nothing. The capability is still
-            what decides whether the report *may* be narrowed — a master may
-            not — and the count decides whether there is anything to narrow to.
-          */
-          showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
-        />
-      </details>
+      <PeriodFilter
+        locale={locale}
+        from={filters.from}
+        to={filters.to}
+        specialistId={filters.specialist}
+        people={data.people}
+        /*
+          A picker over one person narrows nothing. The capability is still what
+          decides whether the report *may* be narrowed — a master may not — and
+          the count decides whether there is anything to narrow to.
+        */
+        showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
+      />
 
       {/*
         Diagnosis now, not onboarding. A studio still on its way to the first

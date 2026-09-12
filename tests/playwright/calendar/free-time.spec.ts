@@ -9,26 +9,26 @@ import {
 } from "../helpers/studio";
 
 /**
- * What a master could still sell today, as the day view says it.
+ * What the studio could still sell on the day the list is showing.
  *
- * The grid is 08:00–20:00 for everybody, so a column with nothing in it looks
- * identical whether the master is free all day or not working at all. These
- * are the two things that tell them apart: bands over the hours the rota
- * actually covers, and a tally in the column head.
+ * The list is one run of appointments in time order, so nothing in its shape
+ * says whether the hours between them are hours somebody works. These two
+ * figures are what say it: the rota the day holds, and how much of that rota
+ * nothing stands in.
  *
- * The tally is in hours rather than in openings, and deliberately: how many
- * openings a day holds depends on the length of the service being booked into
- * it, and the calendar has no service selected. Twelve hours is twelve hours
- * whatever anybody books.
+ * They are hours rather than openings, deliberately: how many openings a day
+ * holds depends on the length of the service being booked into it, and the
+ * calendar has no service selected. Twelve hours is twelve hours whatever
+ * anybody books.
  *
- * The fixture's rota is 08:00–20:00 — twelve hours — and one 90-minute
- * appointment at 09:00 splits it in two. What is left is 08:00–09:00 and
- * 10:40–20:00: the ten-minute default buffer after an appointment goes with it,
- * because nothing can be booked into a turnaround. That is 620 minutes, which
- * the head reports as 10 rather than 10.5 — hours round down, since twenty
- * spare minutes are not half an hour of anything anybody can sell.
+ * The fixture gives both masters a 08:00–20:00 rota — twelve hours each — and
+ * one 90-minute appointment at 09:00 splits Mara's in two. What is left of hers
+ * is 08:00–09:00 and 10:40–20:00: the ten-minute default buffer after an
+ * appointment goes with it, because nothing can be booked into a turnaround.
+ * That is 620 minutes, reported as 10 rather than 10.5 — hours round down,
+ * since twenty spare minutes are not half an hour of anything anybody can sell.
  */
-test.describe("free time in the day view", () => {
+test.describe("the hours left in the listed day", () => {
   let studio: Studio;
   const day = daysFromToday(1);
 
@@ -41,41 +41,68 @@ test.describe("free time in the day view", () => {
     if (studio) await disposeStudio(studio);
   });
 
-  test("bands the open hours and counts them in the head", async ({ browser, browserErrors }) => {
+  /**
+   * The figure an owner reads is the studio's, and a studio is more than one
+   * person. Two masters free from 10:00 to 11:00 is an hour that can be sold
+   * twice — so the arithmetic is done per master and only then added up, and
+   * this is the assertion that catches it being done the cheap way instead. A
+   * merged rota would report the owner 12 and 10, the same as the master below.
+   */
+  test("adds up what every master has left", async ({ browser, browserErrors }) => {
     void browserErrors;
     const context = await browser.newContext({ storageState: await studio.owner.storageState() });
     const page = await context.newPage();
 
-    await page.goto(`/app/calendar?view=day&date=${isoDate(day)}`);
+    await page.goto(`/app/calendar?date=${isoDate(day)}`);
 
-    const column = page.locator(".calendar-column").first();
-    await expect(column.locator("h2")).toContainText(studio.specialistName);
+    // Two twelve-hour rotas, less the appointment and its turnaround — and the
+    // words, which is the whole line rather than a pair of numbers now.
+    await expect(page.locator(".calendar-daylist .calendar-tally")).toHaveText(
+      "Shift 24 h · free 22 h",
+    );
 
-    // The whole shift, and what is left of it: 620 minutes, reported down.
-    await expect(column.locator(".calendar-tally b")).toHaveText("12");
-    await expect(column.locator(".calendar-tally em")).toHaveText("10");
-    // Which is two stretches: the hour before, and the rest of the day after.
-    await expect(column.locator(".calendar-free")).toHaveCount(2);
+    await context.close();
+  });
+
+  test("is one master's own day when the calendar is one master's", async ({
+    browser,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const page = await context.newPage();
+
+    await page.goto(`/app/calendar?date=${isoDate(day)}`);
+
+    await expect(page.locator(".calendar-daylist .calendar-tally")).toHaveText(
+      "Shift 12 h · free 10 h",
+    );
 
     /*
-     * A band must not cover the appointment that split it. They share an axis,
-     * so an off-by-one in the arithmetic would paint an occupied hour as free
-     * and the studio would double-book it.
+     * And their own name is not printed on their own appointment. A studio's
+     * list needs it on every card — there is no column heading to carry it any
+     * more — but a Master's calendar is theirs by construction, so it would be
+     * one line of noise per row.
      */
-    const card = await column.locator(".calendar-entry").first().boundingBox();
-    for (const band of await column.locator(".calendar-free").all()) {
-      const box = await band.boundingBox();
-      const overlaps = box!.y < card!.y + card!.height && card!.y < box!.y + box!.height;
-      expect(overlaps, "a free band sits over an appointment").toBe(false);
-    }
+    await expect(page.locator(".calendar-entry .calendar-master")).toHaveCount(0);
 
-    // The other views are not measured against a rota and say nothing about it.
-    await page.goto(`/app/calendar?view=week&date=${isoDate(day)}`);
-    await expect(page.locator(".calendar-free")).toHaveCount(0);
-    await expect(page.locator(".calendar-tally")).toHaveCount(0);
+    await context.close();
+  });
 
-    await page.goto(`/app/calendar?view=list&date=${isoDate(day)}`);
-    await expect(page.locator(".calendar-free")).toHaveCount(0);
+  /**
+   * A day nobody works has no tally at all, rather than a tally of zero. «0 / 0»
+   * is what a fully booked day looks like too, and the two are opposite facts.
+   */
+  test("says nothing about a day outside every rota", async ({ browser, browserErrors }) => {
+    void browserErrors;
+    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const page = await context.newPage();
+
+    // The rota starts yesterday, so any date before that is a day the studio
+    // had not yet said it works.
+    await page.goto(`/app/calendar?date=${isoDate(daysFromToday(-30))}`);
+
+    await expect(page.locator(".calendar-daylist")).toContainText("Nothing booked.");
     await expect(page.locator(".calendar-tally")).toHaveCount(0);
 
     await context.close();
