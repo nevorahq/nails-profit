@@ -359,7 +359,7 @@ export async function requestAppointmentAsClient(
   }> = {
     date: daysFromToday(1),
   },
-): Promise<{ id: string; status: string }> {
+): Promise<{ id: string; status: string; manage_token: string }> {
   const anonymous = await newRequest.newContext({
     baseURL,
     extraHTTPHeaders: { "x-forwarded-for": clientAddress() },
@@ -395,7 +395,9 @@ export async function requestAppointmentAsClient(
       "public hold",
     );
 
-    return await unwrap<{ id: string; status: string }>(
+    // The manage token comes back with the booking: it is the client's only way
+    // to their own appointment, and a test that opens that page needs it.
+    return await unwrap<{ id: string; status: string; manage_token: string }>(
       await anonymous.post(`/api/v1/public/booking/${studio.slug}/bookings`, {
         data: {
           hold_token: hold.hold_token,
