@@ -135,17 +135,26 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
               {items.map((item) => (
                 <li key={item.id}>
                   {/*
-                    The day the request sits on, filtered to the appointments
-                    that are still live rather than to `pending_confirmation`
-                    alone. Confirming is the whole point of following this
-                    link, and a status filter naming only the state being left
-                    behind makes the appointment vanish the moment it is
-                    answered — the calendar refreshes on the same URL.
+                    The day the request sits on, and whose it is. No status.
+
+                    It used to carry one — `pending_confirmation,confirmed`,
+                    widened from `pending_confirmation` alone after confirming
+                    a booking made it vanish from the screen that confirmed it
+                    (commit 9ffa713: the calendar refreshes on the same URL, so
+                    the answer erased the question). The widening survived only
+                    because the calendar also showed the filter and let it be
+                    cleared; with that panel gone, a status arriving here would
+                    be a state the reader could not get out of. So the link
+                    stops setting one, which is the same fix made at the cause
+                    rather than at the symptom.
+
+                    The specialist stays: the calendar shows that filter openly
+                    in its toolbar, and «Все мастера» is one tap away.
                   */}
                   <Link
                     className="notifications-item"
                     role="menuitem"
-                    href={`/app/calendar?view=day&date=${item.local_date}&status=pending_confirmation,confirmed&specialist=${item.specialist_id}`}
+                    href={`/app/calendar?date=${item.local_date}&specialist=${item.specialist_id}`}
                     onClick={() => setOpen(false)}
                   >
                     <strong>{item.client_name ?? t("calendar.noClient")}</strong>

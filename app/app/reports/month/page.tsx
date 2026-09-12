@@ -1,6 +1,7 @@
 import { isNull } from "drizzle-orm";
 import Link from "next/link";
 
+import { MonthPicker } from "@/components/month-picker";
 import { specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { soloNeedsPrincipal } from "@/domain/principal";
@@ -23,13 +24,6 @@ import { requireWorkspace } from "@/lib/workspace";
  *
  * Owner-only, like the ledger it reads: rent and wages are in every line.
  */
-
-/** `YYYY-MM` shifted by whole months, for the two arrows. */
-function shiftMonth(month: string, by: number): string {
-  const date = new Date(`${month}-01T00:00:00.000Z`);
-  date.setUTCMonth(date.getUTCMonth() + by);
-  return date.toISOString().slice(0, 7);
-}
 
 export default async function MonthReportPage({
   searchParams,
@@ -129,35 +123,12 @@ export default async function MonthReportPage({
         {t("pl.eyebrow")} · {monthLabel}
       </span>
 
-      <nav className="month-nav" aria-label={t("pl.month")}>
-        {/*
-          The word goes on a phone and the accessible name stays: three rows of
-          month controls pushed the report itself below the fold.
-        */}
-        <Link
-          className="secondary-button"
-          href={`/app/reports/month?month=${shiftMonth(month, -1)}`}
-          aria-label={t("pl.previousMonth")}
-        >
-          ← <span className="month-nav-word">{t("pl.previousMonth")}</span>
-        </Link>
-        <form method="get">
-          <label>
-            <span className="sr-only">{t("pl.month")}</span>
-            <input type="month" name="month" defaultValue={month} />
-          </label>
-          <button className="secondary-button" type="submit">
-            {t("pl.show")}
-          </button>
-        </form>
-        <Link
-          className="secondary-button"
-          href={`/app/reports/month?month=${shiftMonth(month, 1)}`}
-          aria-label={t("pl.nextMonth")}
-        >
-          <span className="month-nav-word">{t("pl.nextMonth")}</span> →
-        </Link>
-      </nav>
+      <MonthPicker
+        locale={locale}
+        localeTag={localeCode}
+        month={month}
+        thisMonth={monthOf(new Date())}
+      />
 
       {soloWithoutPrincipal && (
         <div className="warning-banner">

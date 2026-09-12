@@ -38,7 +38,6 @@
    * column of pending appointments from a column of openings is the comparison
    * this view exists for.
    */
-  --free-hour: #fcf6e3;
   --free-hour-edge: #dcc07a;
   --shadow: 0 2rem 8rem rgba(15, 42, 29, 0.4);
 
@@ -94,7 +93,7 @@
   top: 12rem;
   left: 12rem;
   padding: 12rem 16rem;
-  border-radius: 10rem;
+  border-radius: 4rem;
   background: var(--ink);
   color: var(--on-accent);
   font-size: 16rem;
@@ -165,11 +164,11 @@ small { font-size: 12rem; }
 h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.045em; margin: 20rem 0; }
 .hero p { color: var(--muted); font-size: clamp(17rem, 2vw, 21rem); line-height: 1.6; max-width: 680rem; margin-bottom: 36rem; }
 
-.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 999rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard); }
+.primary-button { min-height: 44rem; font-size: 16rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 4rem; background: var(--accent); color: var(--on-accent); padding: 14rem 24rem; font-weight: 750; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard); }
 .primary-button:hover:not(:disabled) { background: var(--accent-dark); }
 .primary-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
-.metric-preview { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; box-shadow: var(--shadow); overflow: hidden; }
+.metric-preview { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; box-shadow: var(--shadow); overflow: hidden; }
 .metric-preview div { padding: 26rem; border-right: 1rem solid var(--line); }
 .metric-preview div:first-child { background: var(--forest-950); color: var(--on-accent); }
 .metric-preview div:nth-child(2) { background: var(--forest-700); color: var(--on-accent); }
@@ -179,20 +178,20 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .metric-preview strong { font-size: 26rem; }
 
 .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24rem; background: radial-gradient(circle at 22% 18%, rgba(174, 195, 176, 0.72), transparent 38%), var(--paper); }
-.auth-card { width: min(100%, 460rem); background: var(--surface); border: 1rem solid var(--line); border-radius: 28rem; padding: clamp(28rem, 6vw, 48rem); }
+.auth-card { width: min(100%, 460rem); background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: clamp(28rem, 6vw, 48rem); }
 .auth-card h1 { font-size: 40rem; margin-bottom: 40rem; text-align: center;}
 .auth-card > p { color: var(--muted); font-size: 18rem; line-height: 1.5; margin-bottom: 28rem; text-align: center; }
 .auth-card form { display: grid; gap: 18rem; }
 .auth-card label, .auth-card legend { color: var(--muted); font-size: 13rem; font-weight: 700; }
-.auth-card input, .auth-card select { width: 100%; margin-top: 8rem; border: 1rem solid var(--line); border-radius: 12rem; padding: 13rem 14rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
+.auth-card input, .auth-card select { width: 100%; margin-top: 8rem; border: 1rem solid var(--line); border-radius: 4rem; padding: 13rem 14rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
 .auth-card input:focus, .auth-card select:focus { outline: 3rem solid var(--focus-ring); border-color: var(--accent); }
-.auth-card fieldset { border: 1rem solid var(--line); border-radius: 14rem; padding: 14rem; }
+.auth-card fieldset { border: 1rem solid var(--line); border-radius: 4rem; padding: 14rem; }
 .auth-card .radio-row { display: flex; align-items: center; gap: 10rem; color: var(--ink); padding: 6rem 0; }
 .auth-card .radio-row input { width: auto; margin: 0; }
-.form-error { color: var(--danger); background: var(--danger-soft); padding: 12rem; border-radius: 10rem; font-size: 14rem; }
+.form-error { color: var(--danger); background: var(--danger-soft); padding: 12rem; border-radius: 4rem; font-size: 14rem; }
 /* Hidden clients: the toggle that reveals them, and the mark that names them. */
 .clients-archived-toggle { display: inline-flex; align-items: center; gap: 8rem; margin-bottom: 12rem; font-size: 13rem; color: var(--muted); cursor: pointer; }
-.client-hidden-badge { display: inline-block; margin-right: 8rem; padding: 2rem 8rem; border-radius: 999rem; background: var(--surface-2, rgba(0,0,0,0.06)); font-size: 11rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); vertical-align: middle; }
+.client-hidden-badge { display: inline-block; margin-right: 8rem; padding: 2rem 8rem; border-radius: 4rem; background: var(--surface-2, rgba(0,0,0,0.06)); font-size: 11rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); vertical-align: middle; }
 /* The request id under a refusal: readable when it is needed, quiet when it is not. */
 .error-reference { display: block; margin-top: 6rem; font-size: 12rem; opacity: 0.75; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .switch-button { display: block; width: 100%; margin-top: 10rem; border: 0; background: transparent; color: var(--accent); font-size: 16rem; text-align: center; cursor: pointer; }
@@ -289,10 +288,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 30rem; }
 .marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-decoration: none; transition: color var(--duration-fast) var(--ease-standard); }
 .marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
-.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 8rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard); }
+.marketing-cta { display: inline-flex; align-items: center; justify-content: center; gap: 22rem; min-height: 48rem; padding: 0 18rem 0 20rem; border-radius: 4rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 13rem; font-weight: 700; text-decoration: none; transition: background var(--duration-fast) var(--ease-standard); }
 .marketing-cta:hover { background: var(--marketing-accent-dark); }
 .marketing-cta span { font-size: 18rem; font-weight: 400; line-height: 1; }
-.marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 7rem; }
+.marketing-cta-small { min-height: 40rem; padding: 0 15rem; border-radius: 4rem; }
 
 .marketing-hero { display: grid; grid-template-columns: minmax(0, .94fr) minmax(440rem, 1.06fr); align-items: center; gap: clamp(42rem, 6vw, 120rem); width: min(1248rem, calc(100% - 96rem)); min-height: 720rem; margin: 0 auto; padding: 76rem 0 92rem; }
 .marketing-kicker { display: flex; align-items: center; gap: 10rem; margin: 0 0 20rem; color: var(--marketing-accent); font-size: 11rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
@@ -314,25 +313,25 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-text-action span { color: var(--marketing-accent); font-size: 17rem; }
 .hero-fine-print { max-width: 330rem; margin: 42rem 0 0; color: var(--marketing-muted); font-size: 11rem; line-height: 1.45; }
 .hero-visual { position: relative; min-height: 550rem; padding: 0 38rem 38rem 0; }
-.hero-visual > img { display: block; width: 100%; height: 520rem; border-radius: 10rem; object-fit: cover; object-position: 55% center; filter: saturate(.84) contrast(.98); }
-.hero-visual::after { position: absolute; inset: 0 38rem 38rem 0; border-radius: 10rem; background: linear-gradient(130deg, rgba(15, 42, 29, .08), transparent 52%); content: ""; pointer-events: none; }
+.hero-visual > img { display: block; width: 100%; height: 520rem; border-radius: 4rem; object-fit: cover; object-position: 55% center; filter: saturate(.84) contrast(.98); }
+.hero-visual::after { position: absolute; inset: 0 38rem 38rem 0; border-radius: 4rem; background: linear-gradient(130deg, rgba(15, 42, 29, .08), transparent 52%); content: ""; pointer-events: none; }
 .hero-sun { position: absolute; top: -28rem; right: -12rem; width: 154rem; height: 154rem; border-radius: 50%; background: var(--marketing-accent); mix-blend-mode: multiply; opacity: .94; }
-.hero-calculation { position: absolute; right: 0; bottom: 0; width: 312rem; padding: 20rem; border: 1rem solid var(--marketing-line); border-radius: 8rem; background: rgba(251, 253, 248, .96); box-shadow: 0 22rem 54rem rgba(15, 42, 29, .15); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
+.hero-calculation { position: absolute; right: 0; bottom: 0; width: 312rem; padding: 20rem; border: 1rem solid var(--marketing-line); border-radius: 4rem; background: rgba(251, 253, 248, .96); box-shadow: 0 22rem 54rem rgba(15, 42, 29, .15); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
 .calculation-topline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16rem; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .calculation-topline i { display: block; width: 7rem; height: 7rem; border-radius: 50%; background: var(--marketing-profit); }
 .hero-calculation > strong { display: block; margin-bottom: 16rem; font-size: 15rem; letter-spacing: -.02em; }
 .calculation-row, .calculation-total { display: flex; align-items: baseline; justify-content: space-between; gap: 10rem; padding: 6rem 0; font-size: 12rem; }
 .calculation-row span { color: var(--marketing-muted); }.calculation-row b { font-size: 12rem; font-weight: 600; }.calculation-total { margin-top: 7rem; padding: 13rem 0 3rem; border-top: 1rem solid var(--marketing-line); }.calculation-total span { font-weight: 700; }.calculation-total strong { color: var(--marketing-profit); font-size: 21rem; letter-spacing: -.04em; }
-.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 6rem; background: var(--marketing-sunken); }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all var(--duration-fast) var(--ease-standard); }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
+.calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 3rem; border-radius: 4rem; background: var(--marketing-sunken); }.calculation-tabs button { flex: 1; min-height: 29rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 10rem; font-weight: 700; cursor: pointer; transition: all var(--duration-fast) var(--ease-standard); }.calculation-tabs button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
 .hero-stamp { position: absolute; bottom: 70rem; left: -50rem; display: grid; gap: 4rem; width: 92rem; height: 92rem; place-content: center; border-radius: 50%; background: var(--marketing-ink); color: var(--marketing-surface); text-align: center; transform: rotate(-12deg); }.hero-stamp span:first-child { color: var(--marketing-on-dark-muted); font-size: 11rem; }.hero-stamp span:last-child { font-size: 11rem; line-height: 1; }
 
 .section-wrap { width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; }.marketing-reason { display: grid; grid-template-columns: .85fr 1.15fr; gap: clamp(45rem, 9vw, 180rem); padding: 124rem 0; border-top: 1rem solid var(--marketing-line); }.section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: clamp(35rem, 3.4vw, 57rem); }.section-lead > p:last-child, .product-copy > p:last-child, .calculator-copy > p:last-child { max-width: 475rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }.marketing-pillars { display: grid; border-top: 1rem solid var(--marketing-line); }.marketing-pillar { display: grid; grid-template-columns: 56rem 1fr minmax(160rem, .85fr); align-items: baseline; gap: 14rem; padding: 22rem 0; border-bottom: 1rem solid var(--marketing-line); }.marketing-pillar > span { color: var(--marketing-accent); font-size: 14rem; font-variant-numeric: tabular-nums; }.marketing-pillar h3 { margin: 0; font-size: 17rem; letter-spacing: -.03em; }.marketing-pillar p { margin: 0; color: var(--marketing-muted); font-size: 13rem; line-height: 1.5; }
 
-.marketing-product { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(50rem, 8vw, 140rem); padding: 108rem 0; }.product-photo { position: relative; padding-bottom: 45rem; }.product-photo img { display: block; width: 100%; height: 490rem; border-radius: 8rem; object-fit: cover; object-position: 70% center; filter: saturate(.75); }.product-photo p { position: absolute; right: -28rem; bottom: 0; display: flex; align-items: center; gap: 11rem; width: 250rem; margin: 0; padding: 15rem 17rem; border-radius: 7rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 11rem; line-height: 1.4; }.product-photo p span { font-size: 17rem; }.product-report { margin-top: 34rem; padding: 22rem; border: 1rem solid var(--marketing-line); border-radius: 8rem; background: var(--marketing-surface); }.report-heading, .report-labels { display: flex; justify-content: space-between; gap: 12rem; }.report-heading { font-size: 13rem; font-weight: 700; }.report-status { padding: 3rem 7rem; border-radius: 99rem; background: var(--marketing-canvas); color: var(--marketing-accent); font-size: 10rem; }.report-bar { display: flex; height: 13rem; margin: 24rem 0 7rem; overflow: hidden; border-radius: 2rem; background: var(--marketing-sunken); }.report-bar i:nth-child(1) { width: 54%; background: var(--marketing-profit); }.report-bar i:nth-child(2) { width: 7%; background: var(--marketing-decor); }.report-bar i:nth-child(3) { width: 39%; background: var(--marketing-accent); }.report-labels { color: var(--marketing-muted); font-size: 10rem; }.product-report p { margin: 21rem 0 16rem; font-size: 12rem; line-height: 1.5; }.product-report button { display: inline-flex; align-items: center; gap: 18rem; padding: 0; border: 0; background: transparent; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; cursor: pointer; }.product-report button span { font-size: 17rem; }
+.marketing-product { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: clamp(50rem, 8vw, 140rem); padding: 108rem 0; }.product-photo { position: relative; padding-bottom: 45rem; }.product-photo img { display: block; width: 100%; height: 490rem; border-radius: 4rem; object-fit: cover; object-position: 70% center; filter: saturate(.75); }.product-photo p { position: absolute; right: -28rem; bottom: 0; display: flex; align-items: center; gap: 11rem; width: 250rem; margin: 0; padding: 15rem 17rem; border-radius: 4rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 11rem; line-height: 1.4; }.product-photo p span { font-size: 17rem; }.product-report { margin-top: 34rem; padding: 22rem; border: 1rem solid var(--marketing-line); border-radius: 4rem; background: var(--marketing-surface); }.report-heading, .report-labels { display: flex; justify-content: space-between; gap: 12rem; }.report-heading { font-size: 13rem; font-weight: 700; }.report-status { padding: 3rem 7rem; border-radius: 4rem; background: var(--marketing-canvas); color: var(--marketing-accent); font-size: 10rem; }.report-bar { display: flex; height: 13rem; margin: 24rem 0 7rem; overflow: hidden; border-radius: 4rem; background: var(--marketing-sunken); }.report-bar i:nth-child(1) { width: 54%; background: var(--marketing-profit); }.report-bar i:nth-child(2) { width: 7%; background: var(--marketing-decor); }.report-bar i:nth-child(3) { width: 39%; background: var(--marketing-accent); }.report-labels { color: var(--marketing-muted); font-size: 10rem; }.product-report p { margin: 21rem 0 16rem; font-size: 12rem; line-height: 1.5; }.product-report button { display: inline-flex; align-items: center; gap: 18rem; padding: 0; border: 0; background: transparent; color: var(--marketing-accent); font-size: 12rem; font-weight: 800; cursor: pointer; }.product-report button span { font-size: 17rem; }
 
-.marketing-calculator { display: grid; grid-template-columns: .78fr 1.22fr; align-items: start; gap: clamp(50rem, 10vw, 180rem); padding: 116rem 0; border-top: 1rem solid var(--marketing-line); }.calculator-card { display: grid; gap: 26rem; padding: 29rem; border-radius: 10rem; background: var(--marketing-ink); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); color: var(--marketing-on-dark); }.calculator-card label { display: grid; grid-template-columns: 1fr auto; gap: 11rem 16rem; color: var(--marketing-on-dark-muted); font-size: 12rem; font-weight: 600; }.calculator-card output { color: var(--marketing-on-dark); font-size: 17rem; font-weight: 650; font-variant-numeric: tabular-nums; }.calculator-card input { grid-column: 1 / -1; width: 100%; height: 15rem; appearance: none; border-radius: 99rem; background: var(--marketing-muted); cursor: pointer; }.calculator-card input::-webkit-slider-thumb { width: 18rem; height: 18rem; appearance: none; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 1rem var(--marketing-on-dark); }.calculator-result { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 5rem 16rem; padding-top: 22rem; border-top: 1rem solid var(--marketing-on-dark-line); }.calculator-result > span { color: var(--marketing-on-dark-muted); font-size: 12rem; font-weight: 700; }.calculator-result > strong { color: var(--marketing-profit); font-size: 36rem; font-weight: 750; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }.calculator-result > div { display: flex; grid-column: 1 / -1; justify-content: space-between; padding-top: 12rem; color: var(--marketing-on-dark-muted); font-size: 11rem; }.calculator-result b { color: var(--marketing-on-dark); font-size: 13rem; }.calculator-card small { color: var(--marketing-on-dark-muted); font-size: 10rem; line-height: 1.45; }
+.marketing-calculator { display: grid; grid-template-columns: .78fr 1.22fr; align-items: start; gap: clamp(50rem, 10vw, 180rem); padding: 116rem 0; border-top: 1rem solid var(--marketing-line); }.calculator-card { display: grid; gap: 26rem; padding: 29rem; border-radius: 4rem; background: var(--marketing-ink); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); color: var(--marketing-on-dark); }.calculator-card label { display: grid; grid-template-columns: 1fr auto; gap: 11rem 16rem; color: var(--marketing-on-dark-muted); font-size: 12rem; font-weight: 600; }.calculator-card output { color: var(--marketing-on-dark); font-size: 17rem; font-weight: 650; font-variant-numeric: tabular-nums; }.calculator-card input { grid-column: 1 / -1; width: 100%; height: 15rem; appearance: none; border-radius: 4rem; background: var(--marketing-muted); cursor: pointer; }.calculator-card input::-webkit-slider-thumb { width: 18rem; height: 18rem; appearance: none; border: 3rem solid var(--marketing-ink); border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 1rem var(--marketing-on-dark); }.calculator-result { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 5rem 16rem; padding-top: 22rem; border-top: 1rem solid var(--marketing-on-dark-line); }.calculator-result > span { color: var(--marketing-on-dark-muted); font-size: 12rem; font-weight: 700; }.calculator-result > strong { color: var(--marketing-profit); font-size: 36rem; font-weight: 750; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }.calculator-result > div { display: flex; grid-column: 1 / -1; justify-content: space-between; padding-top: 12rem; color: var(--marketing-on-dark-muted); font-size: 11rem; }.calculator-result b { color: var(--marketing-on-dark); font-size: 13rem; }.calculator-card small { color: var(--marketing-on-dark-muted); font-size: 10rem; line-height: 1.45; }
 
-.marketing-final { display: grid; justify-items: center; padding: 136rem 8vw; border-radius: 12rem; background: var(--marketing-sunken); text-align: center; }.marketing-final .marketing-mark { margin-bottom: 27rem; }.marketing-final h2 { max-width: 780rem; }.marketing-final p { max-width: 500rem; margin: 22rem 0 30rem; color: var(--marketing-muted); font-size: 15rem; line-height: 1.55; }.marketing-footer { display: flex; align-items: center; justify-content: space-between; width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; padding: 34rem 0; color: var(--marketing-muted); font-size: 11rem; }.marketing-footer div { display: flex; gap: 22rem; }.marketing-footer a { text-decoration: none; }.marketing-footer a:hover { color: var(--marketing-ink); }
+.marketing-final { display: grid; justify-items: center; padding: 136rem 8vw; border-radius: 4rem; background: var(--marketing-sunken); text-align: center; }.marketing-final .marketing-mark { margin-bottom: 27rem; }.marketing-final h2 { max-width: 780rem; }.marketing-final p { max-width: 500rem; margin: 22rem 0 30rem; color: var(--marketing-muted); font-size: 15rem; line-height: 1.55; }.marketing-footer { display: flex; align-items: center; justify-content: space-between; width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; padding: 34rem 0; color: var(--marketing-muted); font-size: 11rem; }.marketing-footer div { display: flex; gap: 22rem; }.marketing-footer a { text-decoration: none; }.marketing-footer a:hover { color: var(--marketing-ink); }
 
 .marketing-reveal { animation: marketing-enter var(--duration-slow) var(--ease-standard) both; }.marketing-reveal-delayed { animation-delay: 130ms; }@keyframes marketing-enter { from { opacity: 0; transform: translateY(22rem); } to { opacity: 1; transform: none; } }
 /* Ambient loops, intentionally outside the standard motion system — see the note by --ease-standard. */
@@ -359,8 +358,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pricing-head { display: grid; justify-items: center; max-width: 640rem; margin: 0 auto 56rem; text-align: center; }
 .pricing-head h2 { margin: 0; font-size: clamp(35rem, 3.4vw, 57rem); font-weight: 750; line-height: 1.02; letter-spacing: -.045em; }
 .pricing-head > p { max-width: 520rem; margin: 22rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; }
-.pricing-period { display: inline-flex; gap: 4rem; margin-top: 30rem; padding: 4rem; border-radius: 8rem; background: var(--marketing-sunken); }
-.pricing-period button { min-height: 38rem; padding: 0 18rem; border: 0; border-radius: 5rem; background: transparent; color: var(--marketing-muted); font-size: 12rem; font-weight: 700; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.pricing-period { display: inline-flex; gap: 4rem; margin-top: 30rem; padding: 4rem; border-radius: 4rem; background: var(--marketing-sunken); }
+.pricing-period button { min-height: 38rem; padding: 0 18rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 12rem; font-weight: 700; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
 .pricing-period button:hover { color: var(--marketing-ink); }
 .pricing-period button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
 .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24rem; align-items: start; }
@@ -370,7 +369,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * both `transform` — are left free to compose on top rather than be clamped by
  * the animation's fill.
  */
-.pricing-card { position: relative; display: flex; flex-direction: column; gap: 16rem; padding: 32rem 28rem; border: 1rem solid var(--marketing-line); border-radius: 12rem; background: var(--marketing-surface); animation: pricing-card-in var(--duration-slow) var(--ease-standard) both; transition: transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard); }
+.pricing-card { position: relative; display: flex; flex-direction: column; gap: 16rem; padding: 32rem 28rem; border: 1rem solid var(--marketing-line); border-radius: 4rem; background: var(--marketing-surface); animation: pricing-card-in var(--duration-slow) var(--ease-standard) both; transition: transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard); }
 .pricing-card:nth-child(2) { animation-delay: 80ms; }
 .pricing-card:nth-child(3) { animation-delay: 160ms; }
 @keyframes pricing-card-in { from { opacity: 0; translate: 0 20rem; } }
@@ -380,7 +379,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pricing-card:not(.featured):hover { transform: translateY(-6rem); border-color: var(--marketing-accent); }
 .pricing-card.featured { border-color: var(--marketing-ink); background: var(--marketing-ink); color: var(--marketing-on-dark); box-shadow: 0 24rem 50rem rgba(15, 42, 29, .16); transform: translateY(-14rem); transition: box-shadow var(--duration-base) var(--ease-standard); }
 .pricing-card.featured:hover { box-shadow: 0 34rem 66rem rgba(15, 42, 29, .26); }
-.pricing-badge { position: absolute; top: -11rem; left: 28rem; padding: 4rem 11rem; border-radius: 99rem; background: var(--marketing-profit); color: var(--marketing-ink); font-size: 10rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.pricing-badge { position: absolute; top: -11rem; left: 28rem; padding: 4rem 11rem; border-radius: 4rem; background: var(--marketing-profit); color: var(--marketing-ink); font-size: 10rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .pricing-tier h3 { margin: 0; font-size: 19rem; letter-spacing: -.03em; }
 .pricing-tier p { margin: 6rem 0 0; color: var(--marketing-muted); font-size: 12rem; line-height: 1.45; }
 .pricing-card.featured .pricing-tier p { color: var(--marketing-on-dark-muted); }
@@ -394,7 +393,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pricing-price strong { display: inline-block; font-size: 42rem; font-weight: 750; letter-spacing: -.045em; font-variant-numeric: tabular-nums; animation: pricing-figure var(--duration-base) var(--ease-standard) backwards; }
 .pricing-terms { animation: pricing-figure var(--duration-base) var(--ease-standard) backwards; }
 @keyframes pricing-figure { from { opacity: 0; transform: translateY(7rem); } }
-.pricing-save { padding: 2rem 7rem; border-radius: 99rem; background: var(--marketing-canvas); color: var(--marketing-accent); font-size: 10rem; font-weight: 800; }
+.pricing-save { padding: 2rem 7rem; border-radius: 4rem; background: var(--marketing-canvas); color: var(--marketing-accent); font-size: 10rem; font-weight: 800; }
 .pricing-card.featured .pricing-save { background: var(--marketing-on-dark-line); color: var(--marketing-on-dark); }
 .pricing-features { flex: 1; display: grid; align-content: start; gap: 11rem; margin: 8rem 0 0; padding: 18rem 0 0; border-top: 1rem solid var(--marketing-line); list-style: none; }
 .pricing-card.featured .pricing-features { border-color: var(--marketing-on-dark-line); }
@@ -426,8 +425,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .workspace-card { width: min(100%, 520rem); }
 
 .app-header h1 { font-size: 42rem; margin: 10rem 0 0; }
-.role-badge { padding: 8rem 12rem; border-radius: 999rem; background: var(--sage); text-transform: capitalize; font-size: 13rem; font-weight: 700; }
-.empty-state { max-width: 680rem; margin: 12vh auto 0; text-align: center; background: var(--surface); border: 1rem solid var(--line); border-radius: 28rem; padding: 54rem 36rem; box-shadow: var(--shadow); }
+.role-badge { padding: 8rem 12rem; border-radius: 4rem; background: var(--sage); text-transform: capitalize; font-size: 13rem; font-weight: 700; }
+.empty-state { max-width: 680rem; margin: 12vh auto 0; text-align: center; background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: 54rem 36rem; box-shadow: var(--shadow); }
 .empty-state h2 { font-size: 36rem; margin: 18rem 0 10rem; }
 .empty-state p { color: var(--muted); font-size: 16rem; line-height: 1.6; margin: 0 auto 26rem; max-width: 480rem; }
 .step-number { display: inline-grid; place-items: center; width: 48rem; height: 48rem; border-radius: 50%; background: var(--sage); color: var(--accent); font-size: 18rem; font-weight: 800; }
@@ -437,20 +436,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .hero { padding: 80rem 0 52rem; }
   .metric-preview { grid-template-columns: 1fr; }
   .metric-preview div { border-right: 0; border-bottom: 1rem solid var(--line); }
-  .auth-card { padding: 28rem 22rem; border-radius: 22rem; }
+  .auth-card { padding: 28rem 22rem; border-radius: 4rem; }
   .auth-card h1 { font-size: 36rem; }
-}
-
-.app-shell .visit-filters > .inline-form,
-.app-shell .report-filters > .inline-form {
-  position: static;
-  width: auto;
-  max-width: none;
-  margin: 12rem 0 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .visit-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280rem, 1fr)); gap: 20rem; align-items: start; margin: 8rem 0 18rem; }
@@ -465,6 +452,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   height: 40rem;
   flex: none;
   overflow: hidden;
+  /* A portrait, not a box: this one stays a circle while the corners of
+     everything around it are squared to 4. */
   border-radius: 999rem;
   background: var(--accent);
   color: var(--on-accent);
@@ -479,7 +468,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   border: 1rem solid var(--line);
   border-left-width: 4rem;
   border-left-color: var(--accent);
-  border-radius: 16rem;
+  border-radius: 4rem;
   background: var(--surface);
   padding: 14rem 16rem;
 }
@@ -540,7 +529,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   margin: 6rem 0 6rem;
   padding: 14rem 16rem;
   border: 1rem solid var(--line);
-  border-radius: 16rem;
+  border-radius: 4rem;
   background: var(--surface-strong);
   font-size: 14rem;
 }
@@ -562,7 +551,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
   .client-card {
     border: 1rem solid var(--line);
-    border-radius: 16rem;
+    border-radius: 4rem;
     background: var(--surface);
     padding: 14rem 16rem;
   }
@@ -608,7 +597,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .tab-nav a.active { color: var(--accent); transform: scale(1.2); font-weight: 700; }
 
 .button-row { display: flex; gap: 12rem; justify-content: center; flex-wrap: wrap; }
-.secondary-button { min-height: 44rem; display: inline-flex; align-items: center; padding: 14rem 22rem; border-radius: 999rem; border: 1rem solid var(--sage-600); background: rgba(243, 247, 237, 0.6); color: var(--ink); font-size: 16rem; font-weight: 700; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+.secondary-button { min-height: 44rem; display: inline-flex; align-items: center; padding: 14rem 22rem; border-radius: 4rem; border: 1rem solid var(--sage-600); background: rgba(243, 247, 237, 0.6); color: var(--ink); font-size: 16rem; font-weight: 700; text-decoration: none; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
 .secondary-button:hover:not(:disabled) { background: var(--sage-300); border-color: var(--forest-700); }
 /* A minor action inside a table cell: it has to stay a real button for the
    keyboard, but it must not weigh as much as the form's primary action. */
@@ -623,7 +612,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Add-form toggle: button shown only on mobile, hidden on desktop. */
 .add-form-toggle { display: none; margin-top: 40rem; margin-bottom: 18rem; }
 
-.panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 24rem; padding: 28rem 26rem; margin: 26rem 0; box-shadow: var(--shadow); }
+.panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: 28rem 26rem; margin: 26rem 0; box-shadow: var(--shadow); }
 .panel h2 { font-size: 26rem; margin: 0; }
 
 /*
@@ -657,7 +646,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .inline-form { display: flex; gap: 16rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 20rem; }
 .inline-form label { display: flex; flex-direction: column; gap: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
-.inline-form input, .inline-form select { padding: 11rem 12rem; border-radius: 12rem; border: 1rem solid var(--line); background: var(--surface); font: inherit; font-size: 16rem; min-width: 140rem; }
+.inline-form input, .inline-form select { padding: 11rem 12rem; border-radius: 4rem; border: 1rem solid var(--line); background: var(--surface); font: inherit; font-size: 16rem; min-width: 140rem; }
 /* A checkbox reads left-to-right beside its label, not stacked above it like
    the text fields, and sits on the same baseline as the button next to it. */
 .inline-form label.checkbox-field { flex-direction: row; align-items: center; gap: 10rem; padding-bottom: 11rem; }
@@ -670,7 +659,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    summary rather than one more entry. */
 .data-table tfoot td { border-bottom: 0; color: var(--muted); text-transform: uppercase; font-size: 12rem; letter-spacing: 0.06em; }
 .data-table tfoot strong { color: var(--ink); font-size: 16rem; letter-spacing: normal; }
-.data-table input { width: 110rem; padding: 8rem 10rem; border-radius: 10rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
+.data-table input { width: 110rem; padding: 8rem 10rem; border-radius: 4rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
 .data-table a { color: var(--accent); font-size: 14rem; font-weight: 600; }
 
 /* A master's face and their name are one cell.
@@ -753,7 +742,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   width: min(360rem, calc(100vw - 40rem));
   padding: 8rem;
   border: 1rem solid var(--line);
-  border-radius: 14rem;
+  border-radius: 4rem;
   background: var(--surface-strong);
   box-shadow: 0 16rem 44rem rgba(15, 42, 29, 0.18);
 }
@@ -800,7 +789,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   gap: 3rem;
   padding: 9rem 10rem;
   border: 0;
-  border-radius: 9rem;
+  border-radius: 4rem;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -828,11 +817,11 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   gap: 14rem;
   padding: 14rem;
   border: 1rem solid var(--line);
-  border-radius: 14rem;
+  border-radius: 4rem;
 }
 .specialist-service-row > label { display: flex; flex-direction: column; gap: 6rem; color: var(--muted); font-size: 13rem; font-weight: 600; }
 .specialist-service-row > label.checkbox-field { flex-direction: row; align-items: center; padding-bottom: 10rem; }
-.specialist-service-row input[type="number"] { width: 100%; padding: 10rem 12rem; border: 1rem solid var(--line); border-radius: 10rem; font: inherit; }
+.specialist-service-row input[type="number"] { width: 100%; padding: 10rem 12rem; border: 1rem solid var(--line); border-radius: 4rem; font: inherit; }
 .specialist-service-row input[type="checkbox"] { width: 19rem; height: 19rem; flex: none; accent-color: var(--accent); }
 .specialist-service-name strong { color: var(--ink); font-size: 15rem; }
 
@@ -863,33 +852,29 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    about 3.3:1, which is under the 4.5:1 a figure has to clear, and a number
    nobody can read is a worse outcome than a number nobody notices. */
 .pl-table .pl-addback td { background: var(--leaf-100); }
-.pl-table .pl-addback td:first-child { border-radius: 8rem 0 0 8rem; }
-.pl-table .pl-addback td:last-child { border-radius: 0 8rem 8rem 0; }
+.pl-table .pl-addback td:first-child { border-radius: 4rem 0 0 4rem; }
+.pl-table .pl-addback td:last-child { border-radius: 0 4rem 4rem 0; }
 .pl-note { margin: 0 0 18rem; color: var(--muted); font-size: 13rem; line-height: 1.6; }
 /* Superseded wage rules: present, and folded away until asked for. */
 .pl-history { margin: 0 0 18rem; }
 .pl-history summary { cursor: pointer; color: var(--muted); font-size: 13rem; padding: 6rem 0; }
 .pl-history .compact-list { margin: 8rem 0 0; color: var(--muted); font-size: 13rem; }
-.month-nav { display: flex; align-items: center; gap: 12rem; flex-wrap: wrap; margin-bottom: 18rem; }
-.month-nav form { display: flex; align-items: center; gap: 8rem; }
-.month-nav input { padding: 8rem 12rem; border-radius: 12rem; border: 1rem solid var(--line); font: inherit; font-size: 14rem; }
-.month-nav .secondary-button { padding: 8rem 14rem; }
 .unit-hint { margin-left: 8rem; color: var(--muted); font-size: 13rem; }
 
-.warning-banner { background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); border-radius: 16rem; padding: 16rem 20rem; margin: 20rem 0; font-size: 14rem; line-height: 1.6; }
+.warning-banner { background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); border-radius: 4rem; padding: 16rem 20rem; margin: 20rem 0; font-size: 14rem; line-height: 1.6; }
 .warning-banner ul { margin: 8rem 0 0; padding-left: 20rem; }
-.badge-warning { display: inline-block; margin-left: 8rem; padding: 4rem 10rem; border-radius: 999rem; background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); font-size: 12rem; font-weight: 700; }
+.badge-warning { display: inline-block; margin-left: 8rem; padding: 4rem 10rem; border-radius: 4rem; background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); font-size: 12rem; font-weight: 700; }
 /* Same pill as above in the house green: it states a fact about a row rather
    than warning about it, and amber would read as something to fix. */
-.badge-accent { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 999rem; background: var(--sage); border: 1rem solid var(--line); color: var(--forest-950); font-size: 12rem; font-weight: 700; }
+.badge-accent { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 4rem; background: var(--sage); border: 1rem solid var(--line); color: var(--forest-950); font-size: 12rem; font-weight: 700; }
 /* A settled state rather than an open one — an invitation that was taken up,
    beside the pale pills that mark the ones still waiting. The word in the pill
    says which is which; the fill only makes the difference visible at a glance. */
-.badge-done { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 999rem; background: var(--positive); border: 1rem solid var(--positive); color: var(--paper); font-size: 12rem; font-weight: 700; }
+.badge-done { display: inline-block; margin-left: 8rem; white-space: nowrap; padding: 4rem 10rem; border-radius: 4rem; background: var(--positive); border: 1rem solid var(--positive); color: var(--paper); font-size: 12rem; font-weight: 700; }
 
 .insight-panel { background: linear-gradient(180deg, var(--surface), var(--sage)); }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180rem, 1fr)); gap: 16rem; }
-.metric { background: var(--surface); border: 1rem solid var(--line); border-radius: 18rem; padding: 18rem 20rem; display: flex; flex-direction: column; gap: 8rem; }
+.metric { background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: 18rem 20rem; display: flex; flex-direction: column; gap: 8rem; }
 .metric span { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .metric strong { font-size: 24rem; }
 .metric small { font-size: 12rem; line-height: 1.4; }
@@ -904,8 +889,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * visible text, since the delta now sits where that line used to be.
  */
 .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180rem, 1fr)); gap: 16rem; }
-.metric-card { background: var(--surface); border: 1rem solid var(--line); border-radius: 18rem; padding: 18rem 20rem; display: flex; flex-direction: column; gap: 10rem; }
-.metric-card-icon { display: flex; align-items: center; justify-content: center; width: 36rem; height: 36rem; border-radius: 999rem; background: var(--leaf-100); color: var(--accent); flex: none; }
+.metric-card { background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: 18rem 20rem; display: flex; flex-direction: column; gap: 10rem; }
+.metric-card-icon { display: flex; align-items: center; justify-content: center; width: 36rem; height: 36rem; border-radius: 4rem; background: var(--leaf-100); color: var(--accent); flex: none; }
 .metric-card-icon-glyph { width: 18rem; height: 18rem; }
 .metric-card-label { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .metric-card-value { font-size: 24rem; font-weight: 750; }
@@ -920,8 +905,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .profit-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12rem; }
 .profit-bar-row { display: grid; grid-template-columns: minmax(90rem, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 12rem; }
 .profit-bar-label { font-size: 14rem; color: var(--ink); }
-.profit-bar-track { height: 10rem; border-radius: 999rem; background: var(--leaf-100); overflow: hidden; }
-.profit-bar-fill { display: block; height: 100%; border-radius: 999rem; background: var(--accent); }
+.profit-bar-track { height: 10rem; border-radius: 4rem; background: var(--leaf-100); overflow: hidden; }
+.profit-bar-fill { display: block; height: 100%; border-radius: 4rem; background: var(--accent); }
 .profit-bar-value { font-size: 14rem; font-weight: 650; white-space: nowrap; }
 
 /* «Динамика прибыли»: an SVG the page hands finished numbers to, since the
@@ -966,7 +951,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * 360 px is the screen this flow is checked at.
  */
 .modal-backdrop { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; padding: 20rem; background: rgba(15, 42, 29, 0.45); }
-.modal-card { width: min(440rem, 100%); max-height: 90vh; overflow-y: auto; padding: 28rem 26rem; border-radius: 24rem; border: 1rem solid var(--line); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
+.modal-card { width: min(440rem, 100%); max-height: 90vh; overflow-y: auto; padding: 28rem 26rem; border-radius: 4rem; border: 1rem solid var(--line); background: var(--surface); box-shadow: var(--shadow); text-align: center; }
 .modal-card h2 { margin: 0 0 12rem; font-size: 24rem; }
 .modal-card p { margin: 0 0 22rem; color: var(--muted); font-size: 15rem; line-height: 1.6; }
 /*
@@ -1026,7 +1011,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 /* One line under the step being pointed at, saying what it makes the report able to state. */
 .checklist-hint { display: block; margin-top: 2rem; color: var(--muted); font-size: 13rem; line-height: 1.5; }
-.checkbox-set { border: 1rem solid var(--line); border-radius: 14rem; padding: 12rem 16rem; margin: 0; }
+.checkbox-set { border: 1rem solid var(--line); border-radius: 4rem; padding: 12rem 16rem; margin: 0; }
 .checkbox-set legend { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 6rem; }
 /*
  * One line per option, unlike the add-on checkboxes above it: these two are
@@ -1045,12 +1030,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .danger-zone { margin-top: 28rem; padding-top: 22rem; border-top: 1rem solid var(--line); }
 .danger-zone h3 { color: var(--danger); }
 .danger-zone label { display: grid; gap: 8rem; max-width: 480rem; color: var(--muted); font-size: 13rem; font-weight: 700; }
-.danger-zone input { padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 12rem; background: var(--surface); color: var(--ink); font: inherit; font-size: 16rem; }
-.danger-button { min-height: 44rem; margin-top: 14rem; padding: 12rem 20rem; border: 0; border-radius: 999rem; background: var(--danger); color: var(--surface-strong); font: inherit; font-size: 16rem; font-weight: 750; cursor: pointer; }
+.danger-zone input { padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface); color: var(--ink); font: inherit; font-size: 16rem; }
+.danger-button { min-height: 44rem; margin-top: 14rem; padding: 12rem 20rem; border: 0; border-radius: 4rem; background: var(--danger); color: var(--surface-strong); font: inherit; font-size: 16rem; font-weight: 750; cursor: pointer; }
 .danger-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .legal-shell { min-height: 100vh; padding: 28rem clamp(20rem, 6vw, 96rem) 64rem; }
-.legal-document { max-width: 820rem; margin: 48rem auto 0; padding: clamp(24rem, 5vw, 48rem); border: 1rem solid var(--line); border-radius: 24rem; background: var(--surface); box-shadow: var(--shadow); }
+.legal-document { max-width: 820rem; margin: 48rem auto 0; padding: clamp(24rem, 5vw, 48rem); border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface); box-shadow: var(--shadow); }
 .legal-document h1 { font-size: clamp(36rem, 6vw, 58rem); line-height: 1.05; }
 .legal-document section { margin-top: 34rem; }
 .legal-document p, .legal-document li { color: var(--muted); font-size: 16rem; line-height: 1.7; }
@@ -1059,17 +1044,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* --- Phase 7.3: the staff calendar --- */
 
 .calendar-toolbar { display: flex; flex-wrap: wrap; gap: 16rem; align-items: center; justify-content: space-between; margin: 18rem 0 4rem; }
-.calendar-views { display: flex; gap: 16rem; }
-.calendar-views a { color: var(--muted); font-size: 14rem; font-weight: 600; text-decoration: none; padding: 8rem 0; border-bottom: 2rem solid transparent; }
-.calendar-views a.active { color: var(--accent); border-bottom-color: var(--accent); }
-.calendar-steps { display: flex; gap: 10rem; justify-content: end; }
-/* Section 7.8 asks for 44rem touch targets under the 1px = 1rem scale, and the
-   period arrows are the smallest controls on the screen. */
-.calendar-steps .secondary-button { min-width: 44rem; justify-content: center; padding: 12rem 16rem; }
 
-.calendar-group h2 { font-size: 20rem; margin-bottom: 12rem; }
 .calendar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10rem; }
-.calendar-entry { border: 1rem solid var(--line); border-radius: 16rem; background: var(--surface); }
+.calendar-entry { border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface); }
 /* The stripe repeats what the status text already says; it is a second signal,
    never the only one (section 7.8). */
 .calendar-entry { border-left-width: 4rem; }
@@ -1081,10 +1058,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-entry summary { display: flex; flex-wrap: wrap; gap: 6rem 14rem; align-items: baseline; padding: 14rem 16rem; cursor: pointer; min-height: 44rem; }
 .calendar-entry summary::marker { color: var(--muted); }
 .calendar-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15rem; }
-/* The date a list entry falls on, ahead of its hours. Quieter than the time
-   beside it: the hour is what the reader is scanning for, the day is what tells
-   them which run of hours they are in. */
-.calendar-day { margin-right: 8rem; color: var(--muted); font-weight: 650; }
 .calendar-what { font-size: 15rem; }
 .calendar-who { color: var(--muted); font-size: 14rem; }
 .calendar-status { margin-left: auto; font-size: 12rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
@@ -1112,35 +1085,35 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-header { max-width: 960rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16rem; padding-bottom: 20rem; border-bottom: 1rem solid var(--line); }
 .public-booking-intro { max-width: 760rem; margin: 72rem auto 32rem; text-align: center; }
 .public-booking-intro h1, .public-booking-success h1 { font-size: clamp(38rem, 6vw, 64rem); }
-.public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 30rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
+.public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 4rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
 .public-booking-card form { display: grid; gap: 24rem; }
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
 .public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
-.public-booking-grid input, .public-booking-grid select { width: 100%; min-height: 48rem; padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 13rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
+.public-booking-grid input, .public-booking-grid select { width: 100%; min-height: 48rem; padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
 /* Lighter than the answer, dark enough to read: the example has to look
    like a hint, not like a field somebody already filled in. */
 .public-booking-grid input::placeholder { color: rgba(55, 85, 52, 0.8); }
-.public-booking-options { display: grid; gap: 8rem; margin: 0; padding: 16rem; border: 1rem solid var(--line); border-radius: 16rem; }
+.public-booking-options { display: grid; gap: 8rem; margin: 0; padding: 16rem; border: 1rem solid var(--line); border-radius: 4rem; }
 .public-booking-options legend { padding: 0 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 .public-booking-options label { display: grid; grid-template-columns: 22rem 1fr auto; align-items: center; gap: 10rem; min-height: 44rem; font-size: 15rem; cursor: pointer; }
 .public-booking-options input { width: 20rem; height: 20rem; }
 .public-booking-options small { color: var(--muted); }
-.public-booking-quote { display: flex; align-items: center; justify-content: space-between; gap: 18rem; padding: 18rem 20rem; border-radius: 18rem; background: var(--forest-950); color: var(--on-accent); }
+.public-booking-quote { display: flex; align-items: center; justify-content: space-between; gap: 18rem; padding: 18rem 20rem; border-radius: 4rem; background: var(--forest-950); color: var(--on-accent); }
 .public-booking-quote strong { font-family: var(--font-display, inherit); font-size: 30rem; }
 .public-booking-quote div { display: grid; gap: 3rem; text-align: right; }
 .public-booking-quote span { color: var(--sage-300); font-size: 14rem; }
 .public-booking-slots { margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
 .public-booking-slots h2 { margin: 0 0 16rem; }
 .public-booking-slots > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; }
-.public-booking-slots button { min-height: 60rem; display: grid; place-items: center; gap: 2rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 14rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+.public-booking-slots button { min-height: 60rem; display: grid; place-items: center; gap: 2rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
 .public-booking-slots button:hover:not(:disabled) { background: var(--sage-300); }
 .public-booking-slots button span { color: var(--muted); font-size: 12rem; }
-.public-booking-summary { display: grid; gap: 14rem; padding: 20rem; border-radius: 20rem; background: var(--forest-950); color: var(--on-accent); }
+.public-booking-summary { display: grid; gap: 14rem; padding: 20rem; border-radius: 4rem; background: var(--forest-950); color: var(--on-accent); }
 .public-booking-summary div { display: flex; align-items: baseline; justify-content: space-between; gap: 18rem; }
 .public-booking-summary span, .public-booking-summary p { color: var(--sage-300); font-size: 13rem; }
 .public-booking-summary p { margin: 0; }
 .public-booking-consent { grid-template-columns: 44rem 1fr; align-items: center; margin: 0; font-size: 14rem; cursor: pointer; }
-.public-booking-consent input { appearance: none; display: grid; place-items: center; width: 44rem; height: 44rem; margin: 0; border: 1rem solid var(--sage-600); border-radius: 12rem; background: var(--surface-strong); cursor: pointer; }
+.public-booking-consent input { appearance: none; display: grid; place-items: center; width: 44rem; height: 44rem; margin: 0; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); cursor: pointer; }
 .public-booking-consent input::after { content: ""; width: 9rem; height: 17rem; border: solid var(--on-accent); border-width: 0 3rem 3rem 0; transform: rotate(45deg) scale(0); transition: transform var(--duration-fast) var(--ease-standard); }
 .public-booking-consent input:checked { background: var(--accent); }
 .public-booking-consent input:checked::after { transform: rotate(45deg) scale(1); }
@@ -1148,19 +1121,19 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .field-error { color: var(--danger); font-size: 13rem; font-weight: 650; line-height: 1.4; }
 .public-booking-grid [aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
 .public-booking-consent-error { grid-column: 2; }
-.form-error-summary { display: grid; gap: 8rem; padding: 16rem 18rem; border: 1rem solid var(--danger); border-radius: 14rem; background: var(--danger-soft); color: var(--danger); }
+.form-error-summary { display: grid; gap: 8rem; padding: 16rem 18rem; border: 1rem solid var(--danger); border-radius: 4rem; background: var(--danger-soft); color: var(--danger); }
 .form-error-summary strong { font-size: 16rem; }
 .form-error-summary ul { margin: 0; padding-left: 20rem; }
 .form-error-summary a { display: inline-flex; align-items: center; min-height: 44rem; color: inherit; font-size: 14rem; font-weight: 650; text-underline-offset: 3rem; }
-.public-booking-status { margin: 22rem 0 0; padding: 14rem 16rem; border-radius: 14rem; background: var(--sage-300); color: var(--forest-950); font-weight: 700; }
+.public-booking-status { margin: 22rem 0 0; padding: 14rem 16rem; border-radius: 4rem; background: var(--sage-300); color: var(--forest-950); font-weight: 700; }
 .public-booking-loading { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
 /* Ambient loop, intentionally outside the standard motion system — see the note by --ease-standard. */
-.public-booking-loading > span:not(.sr-only) { min-height: 60rem; border-radius: 14rem; background: linear-gradient(100deg, var(--sage-300) 20%, var(--surface-strong) 45%, var(--sage-300) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
+.public-booking-loading > span:not(.sr-only) { min-height: 60rem; border-radius: 4rem; background: linear-gradient(100deg, var(--sage-300) 20%, var(--surface-strong) 45%, var(--sage-300) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
 @keyframes booking-skeleton { to { background-position-x: -220%; } }
-.public-booking-nearest, .public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 20rem; background: var(--surface-strong); }
+.public-booking-nearest, .public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); }
 .public-booking-nearest h2 { margin: 0 0 16rem; font-size: 22rem; }
 .public-booking-nearest > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; }
-.public-booking-nearest button { display: grid; place-items: center; gap: 3rem; min-height: 64rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 14rem; background: var(--surface); color: var(--ink); cursor: pointer; }
+.public-booking-nearest button { display: grid; place-items: center; gap: 3rem; min-height: 64rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface); color: var(--ink); cursor: pointer; }
 .public-booking-nearest button:hover { background: var(--sage-300); }
 .public-booking-nearest button span { color: var(--muted); font-size: 12rem; }
 .public-booking-nearest p, .public-booking-empty p { margin-bottom: 0; }
@@ -1216,8 +1189,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .booking-manage-facts div { display: grid; grid-template-columns: 150rem 1fr; gap: 20rem; padding: 16rem 0; border-bottom: 1rem solid var(--line); }
 .booking-manage-facts dt { color: var(--muted); font-size: 12rem; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; }
 .booking-manage-facts dd { margin: 0; font-size: 16rem; font-weight: 650; }
-.booking-manage-notice { margin: 0; padding: 14rem 16rem; border-radius: 14rem; background: var(--sage-300); color: var(--forest-950); }
-.booking-manage-action { border: 1rem solid var(--line); border-radius: 18rem; padding: 16rem; }
+.booking-manage-notice { margin: 0; padding: 14rem 16rem; border-radius: 4rem; background: var(--sage-300); color: var(--forest-950); }
+.booking-manage-action { border: 1rem solid var(--line); border-radius: 4rem; padding: 16rem; }
 .booking-manage-action summary { min-height: 44rem; display: flex; align-items: center; color: var(--accent); font-size: 16rem; font-weight: 750; cursor: pointer; }
 .booking-manage-action .inline-form { margin: 12rem 0 0; }
 .booking-manage-action .public-booking-slots { margin-top: 18rem; padding-top: 18rem; }
@@ -1361,7 +1334,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    corners on a surface this soft read as somebody else's rectangle. It applies
    at once while the colour fades in, which is the right order — the shape is
    there before there is anything to see it on. */
-.booking-panel details.calendar-entry:not([open]) > summary:hover { background: var(--surface-strong); border-radius: 14rem; }
+.booking-panel details.calendar-entry:not([open]) > summary:hover { background: var(--surface-strong); border-radius: 4rem; }
 .booking-panel details.calendar-entry > summary:hover::after { border-color: var(--ink); }
 
 /* One padding for everything under the summary, so the heading, the fields and
@@ -1419,7 +1392,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .app-frame .panel,
 .public-booking-shell .panel {
   border: 0;
-  border-radius: 28rem;
+  border-radius: 4rem;
 }
 
 .auth-card {
@@ -1436,7 +1409,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-shell select,
 .public-booking-shell textarea {
   border: 0;
-  border-radius: 14rem;
+  border-radius: 4rem;
   background: var(--surface);
   box-shadow: var(--neu-inset);
 }
@@ -1463,7 +1436,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    one from the next is the gap between them and the status stripe below. */
 .app-frame .calendar-entry {
   border: 0;
-  border-radius: 20rem;
+  border-radius: 4rem;
 }
 
 /*
@@ -1501,7 +1474,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    each other, not the table to the page. */
 .app-shell > .data-table {
   background: var(--surface);
-  border-radius: 24rem;
+  border-radius: 4rem;
   padding: 8rem 14rem;
   border-collapse: separate;
   border-spacing: 0;
@@ -1552,13 +1525,21 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 6rem;
+  border-radius: 4rem;
   background: var(--surface);
   box-shadow: var(--neu-inset);
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
 }
 
+/*
+ * The one radius on the page that is not a style.
+ *
+ * The rule above dresses checkboxes and radios alike; this is the only thing
+ * that tells them apart, and what it tells the reader is whether they may
+ * choose one answer or several. Squared off with everything else, a radio is a
+ * checkbox — so this stays round while the corners around it went to 4.
+ */
 .app-frame input[type="radio"],
 .auth-card input[type="radio"],
 .public-booking-shell input[type="radio"] { border-radius: 999rem; }
@@ -1596,7 +1577,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-shell .public-booking-consent input[type="checkbox"]:checked {
   width: 44rem;
   height: 44rem;
-  border-radius: 14rem;
+  border-radius: 4rem;
   background-image: none;
 }
 
@@ -1655,10 +1636,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
    one signal carry a state alone. */
 .app-frame .sidebar-link.active {
   box-shadow: var(--neu-pressed);
-  border-radius: 14rem;
+  border-radius: 4rem;
 }
 
-.app-frame .bottom-link.active { box-shadow: var(--neu-pressed); border-radius: 14rem; }
+.app-frame .bottom-link.active { box-shadow: var(--neu-pressed); border-radius: 4rem; }
 
 /* The chip and the bell are flat until a pointer is on them, and pressed while
    it is. */
@@ -1706,17 +1687,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .data-table.pl-table .pl-total td { font-size: 15rem; }
   /* On one line at this width the hint would push the figure off the row. */
   .data-table.pl-table .pl-total .unit-hint { display: block; margin-left: 0; }
-  /* Three rows of month controls pushed the report itself below the fold. The
-     arrows keep their accessible names and lose their words. */
-  .month-nav { flex-wrap: nowrap; gap: 8rem; }
-  .month-nav form { flex: 1; }
-  .month-nav input { flex: 1; min-width: 0; }
-  .month-nav .month-nav-word { display: none; }
-  .month-nav .secondary-button { padding: 10rem 12rem; }
   .metric-grid { grid-template-columns: 1fr; }
   .public-booking-shell { padding: 18rem 14rem 48rem; }
   .public-booking-intro { margin: 46rem auto 24rem; text-align: left; }
-  .public-booking-card { padding: 22rem 16rem; border-radius: 24rem; }
+  .public-booking-card { padding: 22rem 16rem; border-radius: 4rem; }
   .public-booking-grid { grid-template-columns: 1fr; }
   .public-booking-slots > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .public-booking-loading { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1820,7 +1794,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   flex: none;
   min-height: 36rem;
   border: 1rem solid var(--warning-border);
-  border-radius: 999rem;
+  border-radius: 4rem;
   background: var(--surface);
   color: var(--warning);
   padding: 6rem 16rem;
@@ -1847,7 +1821,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   margin: 0 auto;
   padding: 18rem 20rem;
   border: 1rem solid var(--line);
-  border-radius: 16rem;
+  border-radius: 4rem;
   background: var(--surface-strong);
   box-shadow: var(--shadow);
   animation: cookie-consent-enter var(--duration-slow) var(--ease-standard) both;
@@ -1861,7 +1835,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .cookie-consent-decline, .cookie-consent-accept {
   min-height: 40rem;
-  border-radius: 999rem;
+  border-radius: 4rem;
   padding: 8rem 18rem;
   font-size: 13rem;
   font-weight: 700;
@@ -1895,7 +1869,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   height: 44rem;
   padding: 0;
   border: 1rem solid var(--line);
-  border-radius: 999rem;
+  border-radius: 4rem;
   background: var(--surface-strong);
   color: var(--muted);
   font-size: 12rem;
@@ -1992,7 +1966,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   margin-inline-start: 4rem;
   padding: 4rem;
   border: 0;
-  border-radius: 999rem;
+  border-radius: 4rem;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -2018,7 +1992,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   max-width: min(300rem, calc(100vw - 24rem));
   padding: 6rem;
   border: 1rem solid var(--line);
-  border-radius: 16rem;
+  border-radius: 4rem;
   background: var(--surface-strong);
   box-shadow: var(--shadow);
 }
@@ -2042,7 +2016,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   min-height: 44rem;
   padding: 10rem 12rem;
   border: 0;
-  border-radius: 10rem;
+  border-radius: 4rem;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -2070,7 +2044,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   height: 36rem;
   flex: none;
   border: 0;
-  border-radius: 999rem;
+  border-radius: 4rem;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -2084,7 +2058,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   right: 6rem;
   width: 8rem;
   height: 8rem;
-  border-radius: 999rem;
+  border-radius: 4rem;
   background: var(--accent);
   box-shadow: 0 0 0 2rem var(--surface-strong);
 }
@@ -2097,7 +2071,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   display: grid;
   gap: 2rem;
   padding: 10rem 12rem;
-  border-radius: 10rem;
+  border-radius: 4rem;
   text-decoration: none;
   color: var(--ink);
 }
@@ -2113,6 +2087,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   width: 32rem;
   height: 32rem;
   flex: none;
+  /* An avatar, and round for the same reason `.avatar` is. */
   border-radius: 999rem;
   background: var(--accent);
   color: var(--on-accent);
@@ -2201,7 +2176,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .bottom-link .nav-icon {
   box-sizing: content-box;
   padding: 3rem 12rem;
-  border-radius: 999rem;
+  border-radius: 4rem;
 }
 
 .bottom-link.active .nav-icon { background: var(--sage); }
@@ -2244,7 +2219,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   min-height: 52rem;
   padding: 12rem 16rem;
   border: 1rem solid var(--line);
-  border-radius: 16rem;
+  border-radius: 4rem;
   background: var(--surface);
   color: var(--ink);
   font-size: 16rem;
@@ -2368,7 +2343,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
     gap: 12rem;
     min-height: 44rem;
     padding: 10rem 12rem;
-    border-radius: 12rem;
+    border-radius: 4rem;
     color: var(--muted);
     font-size: 15rem;
     font-weight: 650;
@@ -2416,225 +2391,223 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * is booked outside it. Everything positions off one row height, so the grid
  * and the cards can never disagree about where 14:00 is.
  */
-.calendar-grid {
-  --calendar-row: 56rem;
-  position: relative;
+/*
+ * The month grid.
+ *
+ * Seven columns and nothing else deciding the width: the cells share whatever
+ * the panel has, which is about 38 units each at 288 and about 150 at 1920.
+ * That constant is the whole reason this replaced a column per master — seven
+ * is seven, where a roster is not, and a layout that divides its width by the
+ * roster stops fitting the day somebody is hired.
+ */
+.calendar-month { padding: 14rem; margin-bottom: 16rem; }
+
+.calendar-weekdays,
+.calendar-cells {
   display: grid;
-  grid-template-columns: 54rem minmax(0, 1fr);
-  gap: 0;
-  margin: 18rem 0 26rem;
-  border: 1rem solid var(--line);
-  border-radius: 20rem;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4rem;
 }
 
-.calendar-hours {
-  display: grid;
-  grid-auto-rows: var(--calendar-row);
-  /* Clears the column headers, so 09:00 lines up with the 09:00 row. */
-  padding-top: 52rem;
-  border-right: 1rem solid var(--line);
-}
-
-.calendar-hours span {
-  padding: 0 8rem;
+.calendar-weekdays {
+  margin-bottom: 6rem;
   color: var(--muted);
   font-size: 11rem;
-  font-variant-numeric: tabular-nums;
-  /* Sits on the line it names rather than inside the box below it. */
-  transform: translateY(-6rem);
-  text-align: right;
-}
-
-/*
- * The columns share the width instead of scrolling sideways, and that is a
- * deliberate trade. A scroll container clips: `overflow-x` forces `overflow-y`
- * to match, so an appointment opened late in the day had its actions cut off by
- * the bottom of the box — measured, not guessed. Sharing the width keeps every
- * card able to open over its neighbours, and a studio with too many people for
- * the space filters to one of them with the control already in the toolbar.
- */
-.calendar-columns {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  min-width: 0;
-}
-
-.calendar-column { min-width: 0; border-left: 1rem solid var(--line); }
-.calendar-column:first-child { border-left: 0; }
-
-/* The specialist's name stays visible while their day is scrolled. */
-.calendar-column > h2 {
-  position: sticky;
-  z-index: 5;
-  top: 0;
-  height: 52rem;
-  margin: 0;
-  padding: 0 12rem;
-  display: flex;
-  align-items: center;
-  gap: 8rem;
-  border-bottom: 1rem solid var(--line);
-  background: var(--surface-strong);
-  color: var(--ink);
-  font-size: 14rem;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
+  text-transform: capitalize;
 }
 
 /*
- * The master's own face at the top of their column, the same pairing /visits
- * heads a group with — sized to the sticky bar rather than to the visit card's
- * row, so the head keeps its 52rem and the hours below it do not move.
- */
-.calendar-column > h2 .avatar { width: 28rem; height: 28rem; font-size: 12rem; }
-
-/* The day's two figures, at the far end of the column head from the face.
-   Black for what is booked, the studio's warning ochre for what is not — the
-   same colour the blocked-time bands use, because both mean "look here". */
-.calendar-tally { margin-left: auto; display: inline-flex; align-items: baseline; gap: 3rem; font-size: 13rem; font-variant-numeric: tabular-nums; }
-.calendar-tally b { color: var(--ink); font-weight: 750; }
-.calendar-tally i { color: var(--line); font-style: normal; }
-.calendar-tally em { color: var(--warning); font-style: normal; font-weight: 750; }
-.calendar-tally em::after { content: ""; display: inline-block; width: 7rem; height: 7rem; margin-left: 4rem; border-radius: 2rem; background: var(--free-hour-edge); vertical-align: 1rem; }
-
-/* An opening, drawn on the same axis as the cards and behind them.
-   Flat, and not hatched: hatching already means blocked time in this grid
-   (`.status-blocked`), and a second hatched thing would make a holiday and an
-   opening the same shape — opposite meanings in one pattern. Flat fill, no
-   border, no shadow: it is the ground the day sits on rather than an object in
-   it, and the cards keep both. */
-.calendar-grid .calendar-free {
-  position: absolute;
-  z-index: 0;
-  inset-inline: 0;
-  border-radius: 6rem;
-  background: var(--free-hour);
-  /* The yellow, kept to the edge the eye runs down when scanning a column. */
-  box-shadow: inset 3rem 0 0 var(--free-hour-edge);
-  pointer-events: none;
-}
-
-/* The track the cards are placed on, ruled once per hour. */
-.calendar-grid .calendar-list {
-  position: relative;
-  display: block;
-  height: calc(var(--calendar-row) * var(--calendar-span));
-  margin: 0;
-  padding: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--line) 0 1rem,
-    transparent 1rem var(--calendar-row)
-  );
-}
-
-.calendar-grid .calendar-entry {
-  position: absolute;
-  /* Never shorter than the touch target its summary asks for. */
-  min-height: 46rem;
-  margin: 0 4rem 0 0;
-  border-radius: 10rem;
-  border-left-width: 3rem;
-  background: var(--surface-strong);
-  overflow: hidden;
-}
-
-.calendar-grid .calendar-entry summary {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2rem;
-  padding: 7rem 9rem;
-  font-size: 12rem;
-}
-
-.calendar-grid .calendar-time { order: 3; font-size: 11rem; font-weight: 600; color: var(--muted); }
-.calendar-grid .calendar-what { font-size: 12rem; }
-.calendar-grid .calendar-who { order: -1; font-size: 12rem; font-weight: 700; color: var(--ink); }
-/* Colour is never the only signal, but in a card this narrow the word does not
-   fit — the status keeps its stripe and is read out on the opened detail. */
-.calendar-grid .calendar-status { position: absolute; width: 1rem; height: 1rem; overflow: hidden; clip: rect(0, 0, 0, 0); }
-
-/* A soft wash per status, over the stripe the list view already carries. */
-.calendar-grid .status-confirmed { background: var(--leaf-100); }
-.calendar-grid .status-completed { background: var(--sage-300); }
-.calendar-grid .status-pending_confirmation { background: var(--warning-soft); }
-.calendar-grid .status-cancelled, .calendar-grid .status-no_show { background: var(--danger-soft); }
-.calendar-grid .status-blocked { background: repeating-linear-gradient(135deg, var(--sage-300) 0 6rem, var(--surface) 6rem 12rem); }
-
-/*
- * An opened card leaves its slot rather than being cut off by it: the actions
- * inside it — confirm, move, cancel, close into a visit — are taller than any
- * appointment, and clipping them would make them unreachable.
- */
-/*
- * `!important` is load-bearing here, not laziness. The slot's height is an
- * inline style — the component computes it from the appointment's own start and
- * end — and an inline declaration outranks any selector. Without the override
- * an opened card keeps the height of its slot: the actions spill out past a
- * background that did not grow with them, over the cards underneath.
- */
-.calendar-grid .calendar-entry:has(details[open]) {
-  z-index: 20;
-  height: auto !important;
-  min-width: 240rem;
-  overflow: visible;
-  background: var(--surface-strong);
-  box-shadow: var(--shadow);
-}
-
-.calendar-now {
-  position: absolute;
-  z-index: 10;
-  inset-inline: 0;
-  /* Offset by the column headers, the same 52 units the hour rail is padded. */
-  margin-top: 52rem;
-  border-top: 2rem solid var(--danger);
-  pointer-events: none;
-}
-
-.calendar-now span {
-  position: absolute;
-  top: -9rem;
-  inset-inline-start: 2rem;
-  padding: 2rem 5rem;
-  border-radius: 999rem;
-  background: var(--danger);
-  color: var(--surface-strong);
-  font-size: 10rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-/*
- * The period control: «Сегодня ← →» and the date it is pointing at.
+ * A date, as a link — pressing one is what changes the day listed below.
  *
- * `align-items` has to be set. The default leaves the date stretched to the
- * height of the buttons beside it, and a stretched block draws its text from
- * the top while each button centres its own — so the row lined up by box and
- * not by what you actually read. Wrapping is on for the same reason the date
- * gets its own line below 680: «вторник, 11 августа» does not fit beside three
- * buttons at 288, and a nowrap row would break the words instead.
+ * The 44rem floor is section 7.8's touch target, and it is what stops a month
+ * from being drawn as thirty small squares nobody can hit with a thumb. The
+ * marks keep their own row whether or not the day has any, so a busy week and
+ * a quiet one are the same height and the grid stays a grid.
  */
-.calendar-steps {
+.calendar-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rem;
+  min-height: 44rem;
+  padding: 6rem 2rem;
+  border: 1rem solid transparent;
+  border-radius: 4rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.calendar-cell:hover { background: var(--leaf-100); }
+.calendar-cell-date { font-size: 14rem; line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* A date from the month either side. Quiet, but not disabled: pressing it
+   works, and takes the grid to the month it belongs to. */
+.calendar-cell.is-outside { color: var(--muted); opacity: 0.55; }
+
+/*
+ * Today, and the day being listed — two different facts, so two different
+ * marks, because they are the same date only most of the time. Today is a ring
+ * the date wears wherever it sits on the grid; the selection is a filled cell,
+ * which is the one the list underneath belongs to. Neither is colour alone:
+ * both change the weight of the number as well (section 7.8).
+ */
+.calendar-cell.is-today { border-color: var(--accent); }
+.calendar-cell.is-today .calendar-cell-date { font-weight: 750; }
+
+.calendar-cell.is-selected,
+.calendar-cell.is-selected:hover {
+  background: var(--forest-950);
+  border-color: var(--forest-950);
+  color: var(--on-accent);
+}
+
+.calendar-cell.is-selected .calendar-cell-date { font-weight: 750; }
+/* The selected date is read at full strength even when it belongs to the month
+   next door — it is the day on screen, not a neighbour being previewed. */
+.calendar-cell.is-selected.is-outside { opacity: 1; color: var(--on-accent); }
+
+/*
+ * What stands in the day: one mark per appointment or block, in the order the
+ * day runs them.
+ *
+ * Deliberately not wrapped. A second row of marks would make a busy week's
+ * cells taller than a quiet week's, and the month would lose the even rhythm
+ * that makes it scannable at all. What does not fit is said as a number.
+ */
+.calendar-marks { display: flex; align-items: center; justify-content: center; gap: 2rem; height: 6rem; }
+.calendar-mark { width: 5rem; height: 5rem; border-radius: 4rem; background: var(--muted); }
+.calendar-mark.status-confirmed { background: var(--accent); }
+.calendar-mark.status-completed { background: var(--sage-600); }
+.calendar-mark.status-pending_confirmation { background: var(--warning); }
+.calendar-mark.status-cancelled,
+.calendar-mark.status-no_show { background: var(--danger); }
+.calendar-mark.status-blocked { background: var(--free-hour-edge); }
+
+/* The marks a cell could not draw. Four is what fits at 288; the difference
+   between five appointments and fifteen is otherwise the same picture, and
+   which of the two it is decides whether anybody opens the day. */
+.calendar-more { font-size: 9rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* On the filled cell the marks sit on forest, where the accent green and the
+   forest ink both disappear. Both are lifted to the palette's light end. */
+.calendar-cell.is-selected .calendar-more { color: var(--sage-300); }
+.calendar-cell.is-selected .calendar-mark { background: var(--sage-300); }
+.calendar-cell.is-selected .calendar-mark.status-confirmed { background: var(--leaf-100); }
+.calendar-cell.is-selected .calendar-mark.status-pending_confirmation { background: var(--warning); }
+.calendar-cell.is-selected .calendar-mark.status-cancelled,
+.calendar-cell.is-selected .calendar-mark.status-no_show { background: var(--danger); }
+
+/* --- The chosen day --- */
+
+/*
+ * The day's two figures, over the list rather than beside a date: the heading
+ * they used to share has gone, since the grid above already says which day this
+ * is by filling it in.
+ *
+ * A caption rather than a headline. The figures were «10 / 5,5» in black and
+ * ochre, with a swatch tying the second to the yellow free-time bands of the
+ * old hour grid — bands that went with the grid, leaving a colour sample of
+ * nothing beside a number nothing named. Now both are spelled out, which is
+ * what a caption is for, and the weights and the swatch have nothing left to
+ * carry.
+ */
+.calendar-tally {
+  margin: 0 0 12rem;
+  color: var(--muted);
+  font-size: 13rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/*
+ * Whose appointment it is, on the card.
+ *
+ * The face used to head a column of one master's day; here it rides beside
+ * their name, sized as a caption rather than as a portrait — the name it is
+ * attached to is the quietest thing in the row, and a photo scaled to the row
+ * would outrank the client's name next to it.
+ */
+.calendar-master { display: inline-flex; align-items: center; gap: 5rem; }
+.calendar-master .avatar { width: 18rem; height: 18rem; font-size: 10rem; }
+
+/*
+ * Where the reader is: whose calendar, and which month.
+ *
+ * It used to hold «Сегодня ← →» as well, which is what the class was named for
+ * — both were a second way to do what the grid and the month select already do,
+ * and the row is the two statements that are left.
+ *
+ * `align-items: center` has to be set. The default stretches each child to the
+ * tallest, and a stretched box draws its text from the top while a select
+ * centres its own — so the row lined up by box rather than by what is read.
+ */
+.calendar-where {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 10rem;
   justify-content: flex-start;
-  row-gap: 10rem;
 }
 
+/*
+ * Every select in the bar, in the bar's own shapes.
+ *
+ * Hung on `.calendar-where` rather than on `.calendar-toolbar`: the bar is the
+ * thing four screens share, while the toolbar around it is the calendar's and
+ * the visit list's alone. Scoped to the toolbar, the dashboard and the monthly
+ * report drew their selects in the browser's own grey chrome.
+ *
+ * `appearance: none` is the point of this rule. Left native, these three came
+ * out of the browser's own kit — grey chrome, its own radius, its own arrow —
+ * standing in a row of squared sage buttons that the rest of the product does
+ * not have either. One rule puts all three on the same border, radius and
+ * translucent ground as the buttons beside them; the sizes below are the only
+ * thing that differs, because a month is a heading and a master is a caption.
+ *
+ * Stripping the native chrome takes the arrow with it, so one is drawn back in
+ * as a background: without it a select is a box that gives no sign of opening.
+ * It has to be a fixed colour — a background image cannot read `currentColor` —
+ * and the ink is the one these controls are written in at every state.
+ */
+.calendar-where select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1rem solid var(--sage-600);
+  border-radius: 4rem;
+  background-color: rgba(243, 247, 237, 0.6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%230f2a1d' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11rem center;
+  background-size: 11rem 8rem;
+  color: var(--ink);
+  min-height: 40rem;
+  padding: 4rem 32rem 4rem 12rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.calendar-where select:hover { background-color: var(--sage-300); }
+
+/*
+ * The month and the year. Bigger than the controls around them because they
+ * name what is on the screen; the same shape because they are pressed the same
+ * way. The right-hand padding is the arrow's room — text running under it would
+ * be the one thing this rule is for.
+ */
 .calendar-period {
   display: inline-flex;
   align-items: center;
+  gap: 6rem;
   min-height: 44rem;
   margin-inline-start: 6rem;
-  font-size: 15rem;
-  font-weight: 700;
 }
+
+.calendar-period select { max-width: 190rem; font-size: 20rem; font-weight: 700; }
 
 /*
  * The toolbar's own shapes.
@@ -2648,15 +2621,56 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-toolbar { align-items: flex-start; gap: 12rem; }
 .calendar-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10rem; }
 
-.calendar-toolbar .secondary-button,
-.calendar-filters > summary,
+/*
+ * The folded filter panel, now serving `/app/expenses` alone.
+ *
+ * Every other screen that had one — the calendar, the dashboard, the visit list
+ * — has since put its filters open on the bar. This was deleted with the
+ * calendar's button and had to come back: expenses was still wearing the class
+ * and lost its panel's shape without it, which nothing catches, because nothing
+ * tests it.
+ */
+.calendar-filters { position: relative; }
+
+.calendar-filters > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7rem;
+  min-height: 40rem;
+  padding: 9rem 16rem;
+  border: 1rem solid var(--sage-600);
+  border-radius: 4rem;
+  background: rgba(243, 247, 237, 0.6);
+  color: var(--ink);
+  font-size: 14rem;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.calendar-filters > summary::-webkit-details-marker { display: none; }
+.calendar-filters[open] > summary { background: var(--sage-300); }
+
+/* The panel drops into the flow rather than floating right: the trigger sits at
+   the toolbar's left edge, and anchoring the panel to its right opened it off
+   the side of the screen on a phone. */
+.calendar-filters > .inline-form {
+  margin: 12rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.calendar-where .secondary-button,
 .calendar-create {
   min-height: 40rem;
-  border-radius: 10rem;
+  border-radius: 4rem;
   padding: 9rem 16rem;
   font-size: 14rem;
   font-weight: 650;
 }
+
+
 
 /*
  * The compose form, closed by default. Reuses the disclosure-triangle pattern
@@ -2670,7 +2684,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   min-height: 44rem;
   margin: -6rem -4rem 4rem;
   padding: 6rem 4rem;
-  border-radius: 12rem;
+  border-radius: 4rem;
   cursor: pointer;
   list-style: none;
 }
@@ -2689,109 +2703,84 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .calendar-block-time > summary h2 { font-size: 18rem; white-space: nowrap; }
 }
 
-/* The two arrows read as one control: a single frame, split by a hairline. */
-.calendar-stepper {
-  display: inline-flex;
-  align-items: center;
-  border: 1rem solid var(--sage-600);
-  border-radius: 10rem;
-  background: rgba(243, 247, 237, 0.6);
-  overflow: hidden;
-}
-
-/* 38 plus the frame's own two units makes 40, the height every other control
-   in the bar is set to — so the row lines up by edge and not only by centre. */
-.calendar-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44rem;
-  min-height: 38rem;
-  color: var(--ink);
-  font-size: 15rem;
-  text-decoration: none;
-  transition: background var(--duration-fast) var(--ease-standard);
-}
-
-.calendar-step + .calendar-step { border-left: 1rem solid var(--sage-600); }
-.calendar-step:hover { background: var(--sage-300); }
-
-/* The view picker: one frame, the current view filled rather than underlined. */
-.calendar-views {
-  gap: 0;
-  border: 1rem solid var(--sage-600);
-  border-radius: 10rem;
-  background: rgba(243, 247, 237, 0.6);
-  overflow: hidden;
-}
-
-.calendar-views a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 38rem;
-  padding: 0 14rem;
-  border-bottom: 0;
-  font-size: 14rem;
-}
-
-.calendar-views a.active {
-  background: var(--accent);
-  border-bottom-color: transparent;
-  color: var(--on-accent);
-}
-
-.calendar-filters { position: relative; }
-
-.calendar-filters > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 7rem;
-  border: 1rem solid var(--sage-600);
-  background: rgba(243, 247, 237, 0.6);
-  color: var(--ink);
-  cursor: pointer;
-  list-style: none;
-}
-
-.calendar-filters > summary::-webkit-details-marker { display: none; }
-.calendar-filters[open] > summary { background: var(--sage-300); }
 .tool-icon { width: 16rem; height: 16rem; flex: none; }
 
 /*
- * The panel floats over the day rather than pushing it down — reopening the
- * filters should not move the appointment someone was about to click.
+ * The specialist filter, first in the bar.
+ *
+ * A caption on the wide screen and a heading on the narrow one: with a desktop
+ * bar's worth of room the month is what the eye should land on first, while on
+ * a phone this select is alone on its own line and a caption-sized control
+ * there is just a small target in a lot of space. The narrow size is set in
+ * the mobile block below.
+ *
+ * `max-width` keeps a studio with a long name on the roster from pushing the
+ * row apart: the names are the studio's, not ours.
  */
-.calendar-filters > .inline-form {
-  position: absolute;
-  z-index: 40;
-  inset-inline-end: 0;
-  top: calc(100% + 8rem);
-  width: max-content;
-  max-width: 92vw;
-  margin: 0;
-  padding: 16rem;
-  border: 1rem solid var(--line);
-  border-radius: 16rem;
-  background: var(--surface-strong);
-  box-shadow: var(--shadow);
+.calendar-specialist { max-width: 215rem; font-size: 14rem; font-weight: 650; }
+
+/*
+ * The two dates, where the bar's period is a range rather than a month.
+ *
+ * Field-sized rather than heading-sized, unlike the month and the year: those
+ * name what is on the screen, while these are two values being typed in, and a
+ * date entry dressed as a title invites nobody to edit it. The shell is the
+ * bar's own — same border, ground and 4-unit corner — so the pair belongs to
+ * this row rather than to the forms further down the page.
+ *
+ * The labels are `sr-only`: «С» and «По» printed over two fields that already
+ * show a date format is a row twice as tall saying what the pair says by
+ * standing together.
+ */
+.calendar-where label { display: inline-flex; min-width: 0; }
+
+.calendar-where input[type="date"] {
+  width: 100%;
+  min-height: 40rem;
+  padding: 4rem 12rem;
+  border: 1rem solid var(--sage-600);
+  border-radius: 4rem;
+  background: rgba(243, 247, 237, 0.6);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14rem;
+  font-weight: 650;
+  cursor: pointer;
 }
+
+.calendar-where input[type="date"]:hover { background: var(--sage-300); }
+
+/*
+ * The client's number in a card, as a call.
+ *
+ * `inline-flex` with a negative block margin is the trick `.public-booking-
+ * consent a` already uses: the link is given the 44-unit height section 7.8
+ * asks of anything a thumb aims at, and then the margin takes that height back
+ * out of the line box, so a paragraph with a number in it is no taller than one
+ * without.
+ *
+ * Coloured and underlined because it sits inside a `.muted` line: without both
+ * it would inherit the grey of the address and the price beside it and read as
+ * one more fact rather than as the one thing here that does something.
+ */
+.calendar-call {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44rem;
+  margin-block: -12rem;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3rem;
+  white-space: nowrap;
+}
+
+.calendar-call:hover { color: var(--accent-dark); }
 
 .calendar-create {
   display: inline-flex;
   align-items: center;
   gap: 7rem;
-}
-
-/*
- * The abbreviated date is for the narrowest phones only. By 430 the full
- * spelling has room to spare, and «воскресенье» reads better than «вс» when
- * there is width to print it in.
- */
-.period-short { display: none; }
-
-@media (max-width: 400px) {
-  .period-long { display: none; }
-  .period-short { display: inline; }
 }
 
 /*
@@ -2803,12 +2792,12 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .header-action { display: none; }
 
 @media (max-width: 680px) {
-  .calendar-grid { --calendar-row: 52rem; grid-template-columns: 40rem minmax(0, 1fr); }
-  /* At 288 the card has to use the column it has rather than widening past the
-     screen, so the opened state drops the minimum it takes on a desktop. */
-  .calendar-grid .calendar-entry:has(details[open]) { min-width: 0; }
-  .calendar-grid .calendar-entry { margin-right: 2rem; }
-  .calendar-grid .calendar-entry summary { padding: 6rem; }
+  /* At 288 a cell is about 38 units across: the marks shrink with it, and the
+     padding goes rather than the touch target. */
+  .calendar-month { padding: 10rem; }
+  .calendar-weekdays, .calendar-cells { gap: 2rem; }
+  .calendar-cell { padding: 5rem 1rem; }
+  .calendar-mark { width: 4rem; height: 4rem; }
 
   /* The compose action moves up to the title row, so the toolbar's copy of it
      stands down and the day starts higher up the screen. */
@@ -2821,7 +2810,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
     flex: none;
     width: 44rem;
     height: 44rem;
-    border-radius: 999rem;
+    border-radius: 4rem;
     background: var(--accent);
     color: var(--on-accent);
     text-decoration: none;
@@ -2864,41 +2853,75 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
     gap: 12rem;
   }
 
-  .calendar-tools { width: 100%; }
-  .calendar-views { flex: 1 1 auto; }
-  .calendar-views a { flex: 1; justify-content: center; padding: 0 10rem; }
+  /*
+   * On a phone the three controls that say where you are — whose calendar,
+   * today, which month — are one size, and it is the month's.
+   *
+   * They sit over two lines here with nothing else competing, so there is no
+   * hierarchy left for a caption to be the quiet half of; a 14-unit word
+   * between two 20-unit ones just reads as a smaller thing. On the desktop bar
+   * the split is kept, where the month does have to lead.
+   */
+  .calendar-specialist,
+  .calendar-where .secondary-button {
+    padding: 4rem 32rem 4rem 12rem;
+    font-size: 20rem;
+    font-weight: 700;
+  }
+
+  /* The button has no arrow to leave room for. */
+  .calendar-where .secondary-button { padding-inline: 14rem; }
 
   /*
-   * The period control keeps to one line at every width, which is what the
-   * smaller controls below are for: at 288 the row has about 261 units to
-   * spend once the shell's padding is taken off, and the full-size buttons
-   * wanted more than that.
-   *
-   * The date is the part that gives: it may shrink and, in the worst case a
-   * long weekday in a long locale makes, ellipsise. Wrapping is not on the
-   * table — a second line here would push the day's first appointment down.
+   * The header is an empty row on this screen — the compose action aside, the
+   * title lives in the topbar — so the space it reserved underneath pushed the
+   * bar down for nothing.
    */
-  .calendar-steps { flex-wrap: nowrap; gap: 6rem; }
+  .app-header { margin-bottom: 0; }
 
-  .calendar-toolbar .secondary-button {
-    min-height: 34rem;
-    padding: 6rem 10rem;
-    font-size: 13rem;
+  .calendar-tools { width: 100%; }
+
+  /* At 288 the row has about 261 units once the shell's padding is off, so it
+     is spent on the controls rather than on the air between them. */
+  .calendar-where { gap: 6rem; }
+
+  /*
+   * Two by two, and the columns line up: «Мастер / Сегодня» over «месяц / год».
+   *
+   * A wrapped flex row put the break in the right place but let each line size
+   * itself, so the month landed a little short of the filter above it and the
+   * year a little past the button — four controls, four edges, no two of them
+   * agreeing. A grid makes it one shape: the columns are shared, so the month
+   * is exactly as wide as the filter and the year exactly as wide as the
+   * button, whatever any of them says in any language.
+   *
+   * `display: contents` is what makes that possible. The month and the year sit
+   * in a wrapper that holds them together on the wide screen; here that wrapper
+   * steps out of the box tree, so the two selects become items of this grid
+   * rather than two things inside one item of it.
+   *
+   * The placements are written out rather than left to auto-flow, because the
+   * first cell is not always filled: a Master and a solo studio have no filter
+   * to choose from, and flow alone would slide «Сегодня» up beside the month.
+   * When it is the first thing in the row it takes the left column instead, so
+   * it is never a lone button hanging off the right edge.
+   *
+   * `max-width` comes off all three: it exists to stop a long name pushing a
+   * flex row apart, and in a grid the column has already decided the width.
+   */
+  .calendar-where {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 
-  .calendar-stepper { flex: none; }
-  .calendar-step { min-width: 32rem; min-height: 32rem; font-size: 14rem; }
+  .calendar-period { display: contents; }
 
-  .calendar-period {
-    flex: 0 1 auto;
-    min-width: 0;
-    min-height: 0;
-    margin-inline-start: 2rem;
-    font-size: 13rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .calendar-specialist { grid-area: 1 / 1; max-width: none; }
+  .calendar-where > .secondary-button { grid-area: 1 / 2; }
+  .calendar-where > .secondary-button:first-child { grid-area: 1 / 1; }
+  .calendar-period > :first-child { grid-area: 2 / 1; max-width: none; }
+  .calendar-period > :last-child { grid-area: 2 / 2; max-width: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

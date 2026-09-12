@@ -4,7 +4,7 @@ import {
   CalendarBoard,
   type CalendarBooking,
   type CalendarException,
-  type CalendarView,
+  type CalendarMonthDay,
 } from "@/components/calendar-board";
 import { ToolIcon } from "@/components/icons";
 import { avatarUrl } from "@/domain/avatar-image";
@@ -42,10 +42,17 @@ import { requireWorkspace } from "@/lib/workspace";
 /**
  * The staff calendar, roadmap section 7.2.
  *
- * Three views rather than a grid of hours: at 360 px a column-per-specialist
- * timetable is unreadable, and section 7.8 asks for the mobile width to work
- * rather than to be tolerated. A day is a list per specialist, a week is a list
- * per day, and the flat list is what a receptionist searches in.
+ * A month of dates above, one day's appointments below it. The month is the
+ * navigation — a mark per thing standing in a day, so a glance says which dates
+ * are full — and the list below is the work: the same card, with the same
+ * actions, as the day it belongs to.
+ *
+ * It replaces a timetable of one column per specialist against an axis of
+ * hours. That grid answered "who is with whom at 14:00", which is a question a
+ * studio asks about today and never about the 19th, and it answered it in a
+ * shape that at 390 px gave each master about fifty pixels of width. What the
+ * desk actually reaches for is «когда есть место» — a question about a month,
+ * which twelve hours of a single day cannot answer at any width.
  *
  * Every time on the screen is the local time of the location the appointment is
  * at. A studio with two addresses can have them in different zones, and the
@@ -53,22 +60,48 @@ import { requireWorkspace } from "@/lib/workspace";
  * formatting in the browser would use the viewer's zone and quietly move
  * everyone's Tuesday.
  */
-const VIEWS: readonly CalendarView[] = ["day", "week", "list"];
 
-/** How many local days each view covers, starting from its first day. */
-const SPAN: Readonly<Record<CalendarView, number>> = { day: 1, week: 7, list: 14 };
+/** How many marks a cell carries before it says «and this many more». */
+const MARKS_PER_DAY = 4;
 
-function firstDayOf(view: CalendarView, anchor: LocalDate): LocalDate {
-  if (view !== "week") return anchor;
-  // ISO weeks start on Monday, which is what a rota is written in.
-  return addLocalDays(anchor, 1 - localDateWeekday(anchor));
+/** The local date an instant falls on, read at the location it happened at. */
+function localDateAt(instant: Date, timezone: string) {
+  const parts = toZonedParts(instant, timezone);
+  return formatLocalDate({ year: parts.year, month: parts.month, day: parts.day });
+}
+
+/**
+ * The whole ISO weeks a month is drawn in — 35 or 42 days, Monday first.
+ *
+ * Weeks rather than the month alone, because a grid of seven columns has to
+ * begin on a Monday: a February that starts on a Sunday would otherwise put its
+ * 1st under «пн». The days either side belong to the neighbouring months and
+ * are drawn quieter, but they are real dates and pressing one works — the last
+ * days of the outgoing month are exactly what somebody looking at the 1st is
+ * most likely to want next.
+ */
+function monthGrid(anchor: LocalDate): LocalDate[] {
+  const first: LocalDate = { year: anchor.year, month: anchor.month, day: 1 };
+  const start = addLocalDays(first, 1 - localDateWeekday(first));
+
+  const nextMonth: LocalDate =
+    anchor.month === 12
+      ? { year: anchor.year + 1, month: 1, day: 1 }
+      : { year: anchor.year, month: anchor.month + 1, day: 1 };
+  const last = addLocalDays(nextMonth, -1);
+  const end = formatLocalDate(addLocalDays(last, 7 - localDateWeekday(last)));
+
+  const days: LocalDate[] = [];
+  for (let cursor = start; ; cursor = addLocalDays(cursor, 1)) {
+    days.push(cursor);
+    if (formatLocalDate(cursor) === end) return days;
+  }
 }
 
 export default async function CalendarPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    view?: string;
     date?: string;
     location?: string;
     specialist?: string;
@@ -87,10 +120,6 @@ export default async function CalendarPage({
   }
 
   const filters = await searchParams;
-  const view: CalendarView = VIEWS.includes(filters.view as CalendarView)
-    ? (filters.view as CalendarView)
-    : "day";
-
   const now = new Date();
 
   const data = await withTenant(membership.organizationId, async (tx) => {
@@ -112,16 +141,15 @@ export default async function CalendarPage({
     const todayParts = toZonedParts(now, anchorZone);
     const today: LocalDate = { year: todayParts.year, month: todayParts.month, day: todayParts.day };
     const anchor = (filters.date ? parseLocalDate(filters.date) : null) ?? today;
-    const from = firstDayOf(view, anchor);
-    const days = Array.from({ length: SPAN[view] }, (_, index) => addLocalDays(from, index));
-    const dayKeys = new Set(days.map(formatLocalDate));
+    const grid = monthGrid(anchor);
+    const selected = formatLocalDate(anchor);
 
     // A day either side, because the window is expressed in local dates and the
     // studio's locations need not share a zone: the filtering back to exact
     // local days happens below, once each booking's own zone is known.
-    const windowStart = new Date(Date.UTC(from.year, from.month - 1, from.day - 1));
+    const windowStart = new Date(Date.UTC(grid[0].year, grid[0].month - 1, grid[0].day - 1));
     const windowEnd = new Date(
-      Date.UTC(days.at(-1)!.year, days.at(-1)!.month - 1, days.at(-1)!.day + 2),
+      Date.UTC(grid.at(-1)!.year, grid.at(-1)!.month - 1, grid.at(-1)!.day + 2),
     );
 
     const ownSpecialistId = await scopedSpecialistId(tx, membership);
@@ -157,8 +185,25 @@ export default async function CalendarPage({
       )
       .orderBy(asc(bookings.startsAt));
 
+    // Widened in UTC, narrowed back in local time: a booking at 23:00 in one
+    // zone belongs to a different local day than the same instant in another.
+    const dated = rows.map((row) => ({
+      ...row,
+      localDate: localDateAt(row.booking.startsAt, row.timezone),
+    }));
+    const onDay = dated.filter((row) => row.localDate === selected);
+
+    /*
+     * The priced-up contents of an appointment, for the listed day alone.
+     *
+     * A month of dates is drawn from status and start time only — a mark in a
+     * cell says nothing about what was booked — so reading every line of every
+     * appointment in it would be a month of rows fetched to render nothing. The
+     * day below is the half that names services and totals money, and it is one
+     * date's worth.
+     */
     const lines =
-      rows.length === 0
+      onDay.length === 0
         ? []
         : await tx
             .select()
@@ -166,13 +211,13 @@ export default async function CalendarPage({
             .where(
               inArray(
                 bookingLines.bookingId,
-                rows.map((row) => row.booking.id),
+                onDay.map((row) => row.booking.id),
               ),
             );
 
     // The photo comes from the card, the way `app/app/visits/page.tsx` reads
-    // it: a card nobody has given one has none, and the column head falls back
-    // to the initial.
+    // it: a card nobody has given one has none, and the list falls back to the
+    // initial.
     const people = (
       await tx
         .select({
@@ -240,17 +285,15 @@ export default async function CalendarPage({
       .orderBy(asc(availabilityExceptions.startsAt));
 
     /*
-     * The shifts the day view measures its free time against.
+     * The shifts the day's tally measures its free time against.
      *
-     * Without them the grid is the only frame there is — 08:00 to 20:00, from
-     * `DEFAULT_GRID` — and every hour with no appointment in it looks free,
-     * including the hours a master is not in the studio. A rota of 10:00–16:00
-     * would report eleven free hours instead of five and paint the morning
-     * yellow for somebody who is asleep.
+     * Without them there is no frame at all: the hours nobody booked would be
+     * indistinguishable from the hours a master is not in the studio, and a
+     * rota of 10:00–16:00 would be reported as a whole empty day.
      *
      * Read for the whole window and narrowed per day in the component: a rule
      * carries a weekday and a range of dates it applies over, and which of them
-     * covers Thursday is a question about the day being drawn.
+     * covers Thursday is a question about the day being listed.
      */
     const shifts = await tx
       .select({
@@ -287,7 +330,8 @@ export default async function CalendarPage({
     return {
       shifts,
       buffers,
-      rows,
+      dated,
+      onDay,
       lines,
       places: active,
       people,
@@ -298,8 +342,9 @@ export default async function CalendarPage({
       exceptionsRaw,
       anchorZone,
       today: formatLocalDate(today),
-      days: days.map(formatLocalDate),
-      dayKeys,
+      grid,
+      anchorMonth: anchor.month,
+      selected,
       ownSpecialistId,
     };
   });
@@ -314,73 +359,110 @@ export default async function CalendarPage({
   const moduleOff = bookingAccess === "off";
   const canWrite = can(membership.role, "bookings", "write") && !moduleOff;
 
-  const exceptions: CalendarException[] = data.exceptionsRaw
-    .map((exc) => {
-      const timezone =
-        exc.locationId
-          ? (data.places.find((p) => p.id === exc.locationId)?.timezone ?? data.anchorZone)
-          : data.anchorZone;
-      const startParts = toZonedParts(exc.startsAt, timezone);
-      const endParts = toZonedParts(exc.endsAt, timezone);
-      return {
-        id: exc.id,
-        localDate: formatLocalDate({ year: startParts.year, month: startParts.month, day: startParts.day }),
-        localStart: formatLocalTime(startParts.minutes),
-        localEnd: formatLocalTime(endParts.minutes),
-        timezone,
-        specialistId: exc.specialistId,
-        specialistName: data.people.find((p) => p.id === exc.specialistId)?.name ?? "",
-        locationId: exc.locationId,
-        locationName: exc.locationId
-          ? (data.places.find((p) => p.id === exc.locationId)?.name ?? null)
-          : null,
-        reason: exc.reason,
-      };
-    })
-    .filter((e) => data.dayKeys.has(e.localDate));
+  const datedExceptions = data.exceptionsRaw.map((exc) => {
+    const timezone = exc.locationId
+      ? (data.places.find((place) => place.id === exc.locationId)?.timezone ?? data.anchorZone)
+      : data.anchorZone;
+    const startParts = toZonedParts(exc.startsAt, timezone);
+    const endParts = toZonedParts(exc.endsAt, timezone);
+    return {
+      id: exc.id,
+      localDate: formatLocalDate({
+        year: startParts.year,
+        month: startParts.month,
+        day: startParts.day,
+      }),
+      startsAt: exc.startsAt.toISOString(),
+      localStart: formatLocalTime(startParts.minutes),
+      localEnd: formatLocalTime(endParts.minutes),
+      timezone,
+      specialistId: exc.specialistId,
+      specialistName: data.people.find((person) => person.id === exc.specialistId)?.name ?? "",
+      locationId: exc.locationId,
+      locationName: exc.locationId
+        ? (data.places.find((place) => place.id === exc.locationId)?.name ?? null)
+        : null,
+      reason: exc.reason,
+    };
+  });
 
-  const calendar: CalendarBooking[] = data.rows
-    .map((row) => {
-      const parts = toZonedParts(row.booking.startsAt, row.timezone);
-      const endParts = toZonedParts(row.booking.endsAt, row.timezone);
-      const ownLines = data.lines.filter((line) => line.bookingId === row.booking.id);
-      const serviceLine = ownLines.find((line) => line.kind === "service");
+  const exceptions: CalendarException[] = datedExceptions
+    .filter((exc) => exc.localDate === data.selected)
+    .map(({ startsAt, ...exc }) => {
+      void startsAt;
+      return exc;
+    });
 
-      return {
-        id: row.booking.id,
-        localDate: formatLocalDate({ year: parts.year, month: parts.month, day: parts.day }),
-        startsAt: row.booking.startsAt.toISOString(),
-        endsAt: row.booking.endsAt.toISOString(),
-        localStart: formatLocalTime(parts.minutes),
-        localEnd: formatLocalTime(endParts.minutes),
-        timezone: row.timezone,
-        status: row.booking.status,
-        version: row.booking.version,
-        specialistId: row.booking.specialistId,
-        specialistName: row.specialistName,
-        locationId: row.booking.locationId,
-        locationName: row.locationName,
-        clientId: row.booking.clientId,
-        clientName: row.clientName,
-        clientPhone: hideContacts ? null : row.clientPhone,
-        serviceName: serviceLine
-          ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? t("calendar.service"))
-          : t("calendar.service"),
-        extraLines: Math.max(0, ownLines.length - 1),
-        priceMinor: ownLines.reduce((total, line) => total + line.priceMinor, 0),
-        confirmationDueAt: row.booking.confirmationDueAt?.toISOString() ?? null,
-      };
-    })
-    // Widened in UTC, narrowed back in local time: a booking at 23:00 in one
-    // zone belongs to a different local day than the same instant in another.
-    .filter((booking) => data.dayKeys.has(booking.localDate));
+  const calendar: CalendarBooking[] = data.onDay.map((row) => {
+    const parts = toZonedParts(row.booking.startsAt, row.timezone);
+    const endParts = toZonedParts(row.booking.endsAt, row.timezone);
+    const ownLines = data.lines.filter((line) => line.bookingId === row.booking.id);
+    const serviceLine = ownLines.find((line) => line.kind === "service");
+
+    return {
+      id: row.booking.id,
+      localDate: row.localDate,
+      startsAt: row.booking.startsAt.toISOString(),
+      endsAt: row.booking.endsAt.toISOString(),
+      localStart: formatLocalTime(parts.minutes),
+      localEnd: formatLocalTime(endParts.minutes),
+      timezone: row.timezone,
+      status: row.booking.status,
+      version: row.booking.version,
+      specialistId: row.booking.specialistId,
+      specialistName: row.specialistName,
+      locationId: row.booking.locationId,
+      locationName: row.locationName,
+      clientId: row.booking.clientId,
+      clientName: row.clientName,
+      clientPhone: hideContacts ? null : row.clientPhone,
+      serviceName: serviceLine
+        ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? t("calendar.service"))
+        : t("calendar.service"),
+      extraLines: Math.max(0, ownLines.length - 1),
+      priceMinor: ownLines.reduce((total, line) => total + line.priceMinor, 0),
+      confirmationDueAt: row.booking.confirmationDueAt?.toISOString() ?? null,
+    };
+  });
+
+  /*
+   * What each date in the grid carries, as the marks a cell draws.
+   *
+   * One mark per thing standing in the day — an appointment or a block —
+   * ordered the way the day runs, so the colours read left to right in the
+   * order they will happen. A cell is about fifty pixels wide on a phone, which
+   * is four marks and no more; the rest is a count, because «5 записей» and «15
+   * записей» are the same cell otherwise, and which of the two it is decides
+   * whether anybody opens it.
+   */
+  const marks = new Map<string, { at: string; status: string }[]>();
+  const mark = (localDate: string, at: string, status: string) => {
+    const day = marks.get(localDate);
+    if (day) day.push({ at, status });
+    else marks.set(localDate, [{ at, status }]);
+  };
+  for (const row of data.dated) {
+    mark(row.localDate, row.booking.startsAt.toISOString(), row.booking.status);
+  }
+  for (const exc of datedExceptions) mark(exc.localDate, exc.startsAt, "blocked");
+
+  const monthDays: CalendarMonthDay[] = data.grid.map((day) => {
+    const date = formatLocalDate(day);
+    const entries = (marks.get(date) ?? []).sort((left, right) => left.at.localeCompare(right.at));
+    return {
+      date,
+      outside: day.month !== data.anchorMonth,
+      marks: entries.slice(0, MARKS_PER_DAY).map((entry) => entry.status),
+      total: entries.length,
+    };
+  });
 
   return (
     <main className="app-shell">
       <header className="app-header">
         {/*
           The compose action, on a phone. It lives in the title row rather than
-          the toolbar because at 288 a full-width button pushed the day itself
+          the toolbar because at 288 a full-width button pushed the month itself
           further down, and it points at the same form the toolbar's button
           does — one place a booking is made, shown in two shapes. Only ever one
           of the two is displayed, so the anchor is not offered twice.
@@ -405,8 +487,8 @@ export default async function CalendarPage({
       {moduleOff && <p className="warning-banner">{t("calendar.moduleOff")}</p>}
 
       <CalendarBoard
-        view={view}
-        days={data.days}
+        monthDays={monthDays}
+        selected={data.selected}
         today={data.today}
         bookings={calendar}
         locations={data.places}

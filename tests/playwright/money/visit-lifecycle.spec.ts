@@ -2,7 +2,6 @@ import { expect, test } from "../fixtures";
 import type { Locator } from "@playwright/test";
 import {
   daysFromToday,
-  isoDate,
   disposeStudio,
   moveIntoThePast,
   requestAppointmentAsClient,
@@ -74,7 +73,7 @@ test.describe("from a client's request to the month's profit", () => {
     // The client asked for tomorrow, as clients do. The studio then moves it to
     // an hour ago, because the rest of this test is about closing the work, and
     // a visit cannot be closed before its appointment has started.
-    const startedAt = await moveIntoThePast(studio, booking.id);
+    await moveIntoThePast(studio, booking.id);
 
     const context = await browser.newContext({ storageState: await studio.owner.storageState() });
     const page = await context.newPage();
@@ -98,16 +97,13 @@ test.describe("from a client's request to the month's profit", () => {
 
     await entry.getByRole("button", { name: "Close into a visit" }).click();
 
-    // The day arrived filtered from the bell to the appointments still on, and
-    // closed work is no longer one of them — so it leaves this screen. Unlike
-    // the confirm bug this is the filter doing what it says, and the studio can
-    // now see the filter that is doing it: the same day unfiltered still has
-    // the appointment, marked as finished.
-    await expect(entry).toHaveCount(0);
-    await expect(page.locator("details.calendar-filters")).toBeVisible();
-
-    await page.goto(`/app/calendar?view=day&date=${isoDate(startedAt)}`);
-    await expect(page.locator(".calendar-entry")).toContainText("Completed");
+    // The appointment stays on the day it was closed on, now marked as
+    // finished. It used to leave the screen here — the bell filtered the day to
+    // the statuses still live, and closed work is not one of them — which was
+    // correct and still read as a disappearance. The link no longer carries a
+    // status, so there is nothing left to drop it.
+    await expect(entry).toHaveCount(1);
+    await expect(entry).toContainText("Completed");
 
     await page.goto("/app/visits");
     await expect(page.locator(".visit-card").filter({ hasText: "Manicure with coating" })).toHaveCount(1);

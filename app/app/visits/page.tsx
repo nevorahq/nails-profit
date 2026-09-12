@@ -167,20 +167,16 @@ export default async function VisitsPage({
       </header>
 
       <nav className="calendar-toolbar" aria-label={t("filters.title")}>
-        <details className="calendar-filters visit-filters">
-          <summary>
-            <ToolIcon name="filter" />
-            {t("filters.title")}
-          </summary>
-          <PeriodFilter
-            locale={locale}
-            from={filters.from}
-            to={filters.to}
-            specialistId={filters.specialist}
-            people={data.people}
-            showSpecialist={data.canFilterBySpecialist}
-          />
-        </details>
+        <PeriodFilter
+          locale={locale}
+          from={filters.from}
+          to={filters.to}
+          specialistId={filters.specialist}
+          people={data.people}
+          /* One master is not a choice — the same rule the dashboard and the
+             calendar already apply. */
+          showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
+        />
 
         {canAddVisit && (
           <Link className="primary-button calendar-create" href="/app/visits/new">
