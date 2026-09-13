@@ -128,6 +128,15 @@ test.describe("the client's number on an appointment", () => {
 
     const ways = page.locator(".client-contact-way");
     await expect(ways).toHaveCount(4);
+
+    /*
+     * The row is four marks and no words, so the name each one answers to is
+     * the only thing a screen reader — or a person hovering, unsure which
+     * bubble is which — has to go on.
+     */
+    for (const name of ["Call", "WhatsApp", "Telegram", "Viber"]) {
+      await expect(page.getByRole("menuitem", { name, exact: true })).toHaveCount(1);
+    }
     await expect(ways.nth(1)).toHaveAttribute("href", `https://wa.me/${digits}`);
     await expect(ways.nth(2)).toHaveAttribute("href", `tg://resolve?phone=${digits}`);
     await expect(ways.nth(3)).toHaveAttribute("href", `viber://chat?number=%2B${digits}`);

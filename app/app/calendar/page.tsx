@@ -33,6 +33,7 @@ import {
   toZonedParts,
   type LocalDate,
 } from "@/domain/timezone";
+import { parseContactChannels } from "@/domain/contact-channels";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -163,6 +164,7 @@ export default async function CalendarPage({
         timezone: locations.timezone,
         clientName: clients.name,
         clientPhone: clients.normalizedPhone,
+        clientChannels: clients.contactChannels,
       })
       .from(bookings)
       .innerJoin(specialists, eq(bookings.specialistId, specialists.id))
@@ -421,6 +423,8 @@ export default async function CalendarPage({
       clientName: row.booking.clientNameSnapshot ?? row.clientName,
       clientCardName: row.booking.clientNameSnapshot ? row.clientName : null,
       clientPhone: hideContacts ? null : row.clientPhone,
+      /* Read with the number and hidden with it: an Analyst has neither. */
+      clientChannels: hideContacts ? {} : parseContactChannels(row.clientChannels),
       serviceName: serviceLine
         ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? t("calendar.service"))
         : t("calendar.service"),

@@ -19,7 +19,8 @@ import {
 describe("public booking contact validation", () => {
   it("returns field-level errors for an empty required form", () => {
     expect(
-      validatePublicContact({ name: "", phone: "", email: "", legalAccepted: false }, true),
+      validatePublicContact(
+{ name: "", phone: "", email: "", legalAccepted: false }, true),
     ).toEqual({
       name: "required",
       phone: "required",
@@ -45,6 +46,7 @@ describe("public booking contact validation", () => {
       ),
     ).toEqual({ name: "nameTooShort", phone: "phoneInvalid", email: "emailInvalid" });
   });
+
 });
 
 describe("public booking placeholders", () => {

@@ -7,6 +7,7 @@ import { can, hasConstraint } from "@/domain/rbac";
 import { formatLocalTime, toZonedParts } from "@/domain/timezone";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { ClientContact } from "@/components/client-contact";
+import { parseContactChannels } from "@/domain/contact-channels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { mayActOnSpecialist } from "@/lib/booking-access";
@@ -60,7 +61,12 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
 
     const [client] = booking.clientId
       ? await tx
-          .select({ name: clients.name, phone: clients.normalizedPhone, email: clients.email })
+          .select({
+            name: clients.name,
+            phone: clients.normalizedPhone,
+            email: clients.email,
+            channels: clients.contactChannels,
+          })
           .from(clients)
           .where(eq(clients.id, booking.clientId))
           .limit(1)
@@ -169,7 +175,11 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
             */}
             {card.client && !hideContacts && card.client.phone && (
               <span className="unit-hint">
-                <ClientContact phone={card.client.phone} locale={locale} />
+                <ClientContact
+                  phone={card.client.phone}
+                  locale={locale}
+                  marks={parseContactChannels(card.client.channels)}
+                />
               </span>
             )}
             {card.client && !hideContacts && card.client.email && (

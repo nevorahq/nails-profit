@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { Currency } from "@/domain/money";
-import { getTranslator } from "@/i18n/t";
+import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { AppLocale } from "@/i18n/messages";
 import {
@@ -19,6 +19,8 @@ import {
   withStatus,
   type RememberedBooking,
 } from "@/lib/booking-memory";
+import { isContactChannel, messengerChannels } from "@/domain/contact-channels";
+import type { ContactChannel } from "@/domain/contact-links";
 import { formatMoneyMinor } from "@/lib/format";
 import {
   bookingRequestSignature,
@@ -102,6 +104,8 @@ type Contact = {
   phone: string;
   email: string | null;
   locale: string;
+  /** Where this client would like to be written to, if they said. */
+  channels: ContactChannel[];
   legalAccepted: boolean;
 };
 
@@ -604,6 +608,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       phone: String(data.get("phone") ?? "").trim(),
       email: String(data.get("email") ?? "").trim() || null,
       locale: String(data.get("locale") ?? profile.locale),
+      channels: data.getAll("contact_channels").filter(isContactChannel),
       legalAccepted: data.get("legalAccepted") === "on",
     };
     const issues = validatePublicContact({ ...entered, email: entered.email ?? "" }, emailRequired);
@@ -704,6 +709,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           phone: entered.phone,
           email: entered.email,
           locale: entered.locale,
+          contact_channels: entered.channels,
           legal_accepted: entered.legalAccepted,
         },
         { "idempotency-key": bookingIdempotencyKey(held.token, service.id, entered) },
@@ -999,7 +1005,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 {fieldErrors.phone && <span id="booking-phone-error" className="field-error">{fieldErrors.phone}</span>}
               </label>
               <label htmlFor="booking-email">
-                {t(emailRequired ? "publicBooking.emailRequired" : "publicBooking.email")}
+                {t("publicBooking.email")}
                 <input id="booking-email" name="email" type="email" autoComplete="email" placeholder={t("publicBooking.emailPlaceholder")} required={emailRequired} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
                 {fieldErrors.email && <span id="booking-email-error" className="field-error">{fieldErrors.email}</span>}
               </label>
@@ -1010,6 +1016,43 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 </select>
               </label>
             </div>
+
+            {/*
+              Where to write, asked of the only party who knows.
+              *
+              * Nothing can be detected here: WhatsApp stopped answering whether
+              * a number is registered, and Telegram answers only to a user
+              * account. So the studio's alternative to asking is guessing, and
+              * the person filling in this form is the one who can say.
+              *
+              * The call is not among the boxes and cannot be: the number above
+              * is required, so a call and an SMS are possible by construction,
+              * and a checkbox for them would ask somebody to confirm what they
+              * have already written down.
+              *
+              * Which leaves the three that are genuinely unknown — optional,
+              * unvalidated, nothing preselected. Ticking none of them is an
+              * answer rather than an error: no messengers, reach me the way the
+              * number allows. Three taps at most, no keyboard.
+            */}
+            <fieldset className="public-booking-options public-booking-channels">
+              <legend>{t("publicBooking.channels")}</legend>
+              <div>
+                {messengerChannels.map((channel) => (
+                  <label key={channel} htmlFor={`booking-channel-${channel}`}>
+                    <input
+                      id={`booking-channel-${channel}`}
+                      type="checkbox"
+                      name="contact_channels"
+                      value={channel}
+                      defaultChecked={contact?.channels.includes(channel) ?? false}
+                    />
+                    <span>{t(`contact.channel.${channel}` as MessageKey)}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <label className="consent-field public-booking-consent">
               <input id="booking-legalAccepted" name="legalAccepted" type="checkbox" required aria-invalid={Boolean(fieldErrors.legalAccepted)} aria-describedby={fieldErrors.legalAccepted ? "booking-consent-error" : undefined} onChange={() => clearFieldError("legalAccepted")} />
               <span>{t("publicBooking.consent")} <Link href="/terms">{t("legal.termsLink")}</Link> · <Link href="/privacy">{t("legal.privacyLink")}</Link></span>

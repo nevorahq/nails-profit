@@ -41,6 +41,9 @@ describe("Owner data export and erasure", () => {
         termsVersion: "2026-08-01",
         privacyVersion: "2026-08-01",
         consentedAt: new Date("2026-08-01T12:00:00.000Z"),
+        contactChannels: {
+          viber: { state: "yes", source: "client", at: "2026-08-01T12:00:00.000Z" },
+        },
       })
       .where(eq(clients.id, clientId));
 
@@ -172,6 +175,7 @@ describe("Owner data export and erasure", () => {
     expect(clientRows[0]).toMatchObject({
       normalizedPhone: null,
       email: null,
+      contactChannels: null,
       locale: null,
       termsVersion: null,
       privacyVersion: null,

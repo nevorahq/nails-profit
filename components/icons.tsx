@@ -209,6 +209,89 @@ export function MetricIcon({ name }: { name: "revenue" | "expenses" | "profit" }
  * The account menu's glyphs, kept separate from `NavIcon` because neither
  * names a navigation section.
  */
+/**
+ * The four ways to reach a client, as marks rather than words.
+ *
+ * Drawn here like every other icon in the product — one grid, one stroke
+ * weight, `currentColor` — rather than pasted in from each service's brand
+ * pack. Three of them are somebody else's logo, and a logo in its own colours
+ * would be the only place in this interface where the palette is not ours; in
+ * line form they belong to the same set as the bell and the filter.
+ *
+ * What that costs is the one pair a person could mix up: WhatsApp and Viber are
+ * both a handset in a speech bubble, and colour is what usually tells them
+ * apart at a glance. So the silhouettes differ — a square-ish bubble against a
+ * round one — the order never changes, and every one of them carries its name
+ * for a screen reader and for a hover.
+ */
+export function ContactIcon({ name }: { name: "call" | "whatsapp" | "telegram" | "viber" }) {
+  const paths: Record<typeof name, React.ReactNode> = {
+    // Позвонить — the handset every dialler has drawn since 1963.
+    call: (
+      <path d="M6.4 3.5h2.9l1.4 3.8-2 1.4a12.4 12.4 0 0 0 6.1 6.1l1.4-2 3.8 1.4v2.9a1.9 1.9 0 0 1-2 1.9A16.6 16.6 0 0 1 4.5 5.5a1.9 1.9 0 0 1 1.9-2z" />
+    ),
+    // WhatsApp — a handset inside a bubble with a corner tail.
+    whatsapp: (
+      <>
+        <path d="M20.3 11.6a8.3 8.3 0 0 1-12.4 7.2L3.7 20.3l1.6-4.1a8.3 8.3 0 1 1 15-4.6z" />
+        <path d="M9.4 8.8c.6-.2 1 .1 1.2.6l.5 1-.8.7c.5 1 1.3 1.8 2.3 2.3l.7-.8 1 .5c.5.2.8.6.6 1.2-.2.7-.9 1.1-1.6 1-2.3-.5-4-2.2-4.5-4.5-.1-.7.2-1.3 1-1.5z" />
+      </>
+    ),
+    // Telegram — the paper plane, with the fold that makes it one.
+    telegram: (
+      <>
+        <path d="M20.8 4.4 3.1 11.1a.5.5 0 0 0 0 .9l4.4 1.6 1.7 4.8a.5.5 0 0 0 .9.1l2.3-3 4.3 3.2a.5.5 0 0 0 .8-.3z" />
+        <path d="m7.5 13.6 13.3-9.2-11.4 12" />
+      </>
+    ),
+    /*
+     * Viber — the rounded tile with the tail under its left shoulder, and a
+     * handset standing almost upright inside it.
+     *
+     * Drawn away from WhatsApp's on purpose, because in line form the two are
+     * one idea: a handset in a bubble. What separates the real marks once their
+     * purple and green are gone is the outline — Viber's is a squarish tile,
+     * WhatsApp's a circle — and the angle of the handset, upright against
+     * tilted. Both of those are here.
+     */
+    viber: (
+      <>
+        {/*
+          * The tile, written as a rounded rectangle with its edges stated:
+          * left 4.2, right 19.8, top 3.3, and a tail to 20.4. That puts the
+          * mark on the grid's middle in X and gives it the span its neighbours
+          * have — drawn by eye it came out both narrow and high, which is what
+          * reads as an icon that is not aligned with the others.
+          */}
+        <path d="M8.8 3.3H15.2A4.6 4.6 0 0 1 19.8 7.9V12.6A4.6 4.6 0 0 1 15.2 17.2H12.4L9 20.4V17.2A4.6 4.6 0 0 1 4.2 12.6V7.9A4.6 4.6 0 0 1 8.8 3.3Z" />
+        {/* Centred on the tile's own middle — (12, 10.25) — rather than on the
+            grid's: the tail hangs below the body, so a handset centred on the
+            viewBox sits low inside the shape that holds it. */}
+        <path
+          d="M10.7 6.9c.6-.2 1.2.1 1.4.7l.5 1.3c.2.5 0 1.1-.5 1.4l-.4.2c.2.9.8 1.6 1.6 2l.3-.4c.3-.4.9-.6 1.4-.3l1.2.7c.5.3.7 1 .4 1.5-.6.9-1.7 1.3-2.7 1a7.4 7.4 0 0 1-4.9-4.9c-.3-1 .1-2.1 1-2.7z"
+          transform="translate(-0.95 -0.6)"
+        />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      className={`contact-icon icon-${name}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {paths[name]}
+    </svg>
+  );
+}
+
 export function ChromeIcon({ name }: { name: "chevron" | "signOut" | "bell" }) {
   const paths: Record<typeof name, React.ReactNode> = {
     chevron: <path d="M6 9l6 6 6-6" />,

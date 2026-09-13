@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { ContactIcon } from "@/components/icons";
+import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { contactWays, type ContactChannel } from "@/domain/contact-links";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
@@ -11,6 +13,10 @@ import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
  * Brand names, not words: nobody translates WhatsApp, and a dictionary entry
  * per language for a name that is the same in all three would be three places
  * to spell it wrong. «Позвонить» is a verb and lives in the dictionary.
+ *
+ * Printed small under each mark, which is what makes the row readable at a
+ * glance: two of the four are a handset in a bubble, and the word beneath is
+ * faster than telling the bubbles apart. It is the link's accessible name too.
  */
 const BRAND: Partial<Record<ContactChannel, string>> = {
   whatsapp: "WhatsApp",
@@ -32,7 +38,16 @@ const BRAND: Partial<Record<ContactChannel, string>> = {
  * has is the address for all of them — nothing here asks anybody to store a
  * messenger handle they would have to keep up to date.
  */
-export function ClientContact({ phone, locale }: { phone: string; locale: AppLocale }) {
+export function ClientContact({
+  phone,
+  locale,
+  marks = {},
+}: {
+  phone: string;
+  locale: AppLocale;
+  /** What anybody has said about reaching this client. Empty means nobody has. */
+  marks?: ContactChannelMarks;
+}) {
   const t = getTranslator(locale);
   const [open, setOpen] = useState(false);
   const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
@@ -60,9 +75,19 @@ export function ClientContact({ phone, locale }: { phone: string; locale: AppLoc
           {ways.map((way) => (
             <a
               key={way.channel}
-              className="client-contact-way"
+              /*
+               * Three states, and the third is why this is not a boolean.
+               * «Неизвестно» — nobody has said — must not be drawn as «нет», or
+               * the desk stops trying a messenger that would have worked. And
+               * «нет» stays clickable: it is somebody's note from a week ago,
+               * not a fact about today.
+               */
+              className={`client-contact-way${
+                marks[way.channel] ? ` is-${marks[way.channel]!.state}` : ""
+              }`}
               role="menuitem"
               data-channel={way.channel}
+              data-state={marks[way.channel]?.state ?? "unknown"}
               href={way.href}
               /*
                * A messenger opens in its own application, and the two that are
@@ -75,7 +100,13 @@ export function ClientContact({ phone, locale }: { phone: string; locale: AppLoc
               rel={way.href.startsWith("https:") ? "noreferrer" : undefined}
               onClick={() => setOpen(false)}
             >
-              {BRAND[way.channel] ?? t("contact.call")}
+              <ContactIcon name={way.channel} />
+              {/* Named under the mark rather than in an `aria-label`: a line of
+                  text a person can read is also the accessible name, and two
+                  names on one link is one of them going stale. */}
+              <span className="client-contact-name">
+                {BRAND[way.channel] ?? t("contact.call")}
+              </span>
             </a>
           ))}
         </span>

@@ -62,9 +62,9 @@ test.describe("the public booking page", () => {
     // picked.
     await expect(page.locator(".public-booking-summary")).toContainText("Manicure with coating");
     await page.getByLabel("Name").fill("Clara Client");
-    await page.getByLabel("Phone").fill("+373 69 555 111");
-    await page.getByLabel("Email (optional)").fill("clara@example.com");
-    await page.getByRole("checkbox").check();
+    await page.locator("#booking-phone").fill("+373 69 555 111");
+    await page.locator("#booking-email").fill("clara@example.com");
+    await page.locator("#booking-legalAccepted").check();
     await page.getByRole("button", { name: "Confirm booking" }).click();
 
     await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
@@ -132,8 +132,8 @@ test.describe("the public booking page", () => {
     await page.getByRole("button", { name: "Show available times" }).click();
     await page.locator(".public-booking-slots button").first().click();
     await page.getByLabel("Name").fill("Rita Return");
-    await page.getByLabel("Phone").fill("+373 69 555 222");
-    await page.getByRole("checkbox").check();
+    await page.locator("#booking-phone").fill("+373 69 555 222");
+    await page.locator("#booking-legalAccepted").check();
     await page.getByRole("button", { name: "Confirm booking" }).click();
     await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
 
@@ -192,6 +192,92 @@ test.describe("the public booking page", () => {
     await expect(page.locator(".public-booking-yours")).toHaveCount(0);
   });
 
+  /**
+   * Where to write, from the client's own hand to the master's screen.
+   *
+   * Nothing about a number can be looked up — WhatsApp stopped answering
+   * whether one is registered, Telegram answers only to a user account — so the
+   * booking page asking is the whole of how a studio comes to know. This walks
+   * it end to end, because a field that is stored and never shown is a field
+   * nobody filled in for a reason.
+   */
+  test("a client says where to write, and the master's screen shows it", async ({
+    browser,
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    await page.goto(`/book/${studio.slug}`);
+
+    await page.getByLabel("Date").fill(isoDate(daysFromToday(3)));
+    await page.getByRole("button", { name: "Show available times" }).click();
+    await page.locator(".public-booking-slots button").first().click();
+
+    await page.getByLabel("Name").fill("Nadia Note");
+    await page.locator("#booking-phone").fill("+373 69 556 700");
+
+    /*
+     * The messengers, and only them: the call is not offered because the number
+     * above already guarantees it. Optional, nothing preselected — ticking none
+     * is an answer, not an error.
+     */
+    const channels = page.locator(".public-booking-channels");
+    await expect(channels.getByRole("checkbox")).toHaveCount(3);
+    await expect(channels.getByRole("checkbox", { checked: true })).toHaveCount(0);
+    await channels.getByRole("checkbox", { name: "WhatsApp" }).check();
+
+    await page.locator("#booking-legalAccepted").check();
+    await page.getByRole("button", { name: "Confirm booking" }).click();
+    await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
+
+    // And on the day, where somebody has to decide how to reach them.
+    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const staff = await context.newPage();
+    await staff.goto(`/app/calendar?date=${isoDate(daysFromToday(3))}`);
+    await staff.locator(".calendar-entry summary").first().click();
+    await staff.locator(".calendar-call").click();
+
+    await expect(staff.locator('.client-contact-way[data-channel="whatsapp"]')).toHaveAttribute(
+      "data-state",
+      "yes",
+    );
+    /*
+     * And the rest stay unsaid. A client who did not tick Telegram has not said
+     * they lack it, and a screen that drew it as absent would stop the desk
+     * trying something that would have worked.
+     */
+    await expect(staff.locator('.client-contact-way[data-channel="telegram"]')).toHaveAttribute(
+      "data-state",
+      "unknown",
+    );
+
+    await context.close();
+  });
+
+  /**
+   * The other end of the same rule: a client who uses no messengers books
+   * without answering, and the studio reaches them the way the number allows.
+   * Nothing about this form may stop somebody for whom the honest answer to a
+   * question about WhatsApp is «нет».
+   */
+  test("takes a booking from a client who uses no messengers", async ({ page, browserErrors }) => {
+    void browserErrors;
+    await page.goto(`/book/${studio.slug}`);
+    await page.getByLabel("Date").fill(isoDate(daysFromToday(4)));
+    await page.getByRole("button", { name: "Show available times" }).click();
+    await page.locator(".public-booking-slots button").first().click();
+
+    await page.getByLabel("Name").fill("Nora None");
+    await page.locator("#booking-phone").fill("+373 69 556 701");
+    await page.locator("#booking-legalAccepted").check();
+    await expect(
+      page.locator(".public-booking-channels").getByRole("checkbox", { checked: true }),
+    ).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Confirm booking" }).click();
+    await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
+  });
+
   test("a day with nothing free says so instead of failing", async ({ page, browserErrors }) => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);
@@ -247,9 +333,9 @@ test.describe("a refused booking", () => {
       await times.first().click();
 
       await page.getByLabel("Name").fill(contact.name);
-      await page.getByLabel("Phone").fill(contact.phone);
-      await page.getByLabel("Email (optional)").fill(contact.email);
-      await page.getByRole("checkbox").check();
+      await page.locator("#booking-phone").fill(contact.phone);
+      await page.locator("#booking-email").fill(contact.email);
+      await page.locator("#booking-legalAccepted").check();
       await page.getByRole("button", { name: "Confirm booking" }).click();
     };
 
