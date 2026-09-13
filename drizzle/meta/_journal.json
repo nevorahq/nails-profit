@@ -365,6 +365,13 @@
       "when": 1789289756542,
       "tag": "0051_the_bell_remembers_what_happened",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1789304531384,
+      "tag": "0052_a_client_says_where_to_write",
+      "breakpoints": true
     }
   ]
 }

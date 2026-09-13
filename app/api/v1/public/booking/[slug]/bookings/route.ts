@@ -22,6 +22,8 @@ import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
+import { parseContactChannels, withClientChoice } from "@/domain/contact-channels";
+import { contactChannels, type ContactChannel } from "@/domain/contact-links";
 import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { findPublicOrganization } from "@/lib/public-booking";
 import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
@@ -33,6 +35,12 @@ const bodySchema = z.object({
   add_on_ids: z.array(z.uuid()).max(20).default([]),
   name: z.string().trim().min(2).max(120),
   phone: z.string().trim().min(6).max(40),
+  /**
+   * Where the client would like to be written to, if they said. Optional and
+   * unvalidated beyond the four names: a field in a booking form costs
+   * completed bookings, and this one must never be the reason one fails.
+   */
+  contact_channels: z.array(z.enum(contactChannels)).max(4).default([]),
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)).nullable().optional(),
   locale: z.enum(supportedLocales),
   legal_accepted: z.literal(true),
@@ -46,6 +54,7 @@ async function findOrCreateClient(
     normalizedPhone: string;
     email: string | null;
     locale: (typeof supportedLocales)[number];
+    channels: readonly ContactChannel[];
     now: Date;
   },
 ) {
@@ -69,6 +78,7 @@ async function findOrCreateClient(
       name: clients.name,
       normalizedPhone: clients.normalizedPhone,
       email: clients.email,
+      contactChannels: clients.contactChannels,
     })
     .from(clients)
     .where(
@@ -107,6 +117,17 @@ async function findOrCreateClient(
       .set({
         normalizedPhone: existing.normalizedPhone ?? input.normalizedPhone,
         email: existing.email ?? input.email,
+        /*
+         * Ticks add and never take away. A returning client who taps nothing
+         * has said nothing — not «у меня больше нет WhatsApp» — and reading
+         * that silence as a denial would empty the record of everyone who
+         * books twice. Only the studio, who found out by writing, removes one.
+         */
+        contactChannels: withClientChoice(
+          parseContactChannels(existing.contactChannels),
+          input.channels,
+          input.now,
+        ),
         locale: input.locale,
         termsVersion: TERMS_VERSION,
         privacyVersion: PRIVACY_VERSION,
@@ -131,6 +152,7 @@ async function findOrCreateClient(
       name: input.name,
       normalizedPhone: input.normalizedPhone,
       email: input.email,
+      contactChannels: withClientChoice({}, input.channels, input.now),
       locale: input.locale,
       termsVersion: TERMS_VERSION,
       privacyVersion: PRIVACY_VERSION,
@@ -275,6 +297,7 @@ async function handlePost(
         normalizedPhone,
         email: parsed.data.email ?? null,
         locale: parsed.data.locale,
+        channels: parsed.data.contact_channels,
         now,
       });
       if (!client) return { failure: "CONTACT_CONFLICT" as const };

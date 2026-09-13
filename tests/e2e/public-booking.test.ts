@@ -75,7 +75,12 @@ describe("public online booking", () => {
   /** Hold and confirm one offered slot, the way the public form does. */
   async function createBookingAt(
     slot: Slot,
-    contact: { name: string; phone: string; email: string | null } = {
+    contact: {
+      name: string;
+      phone: string;
+      email: string | null;
+      channels?: readonly string[];
+    } = {
       name: "Анна",
       phone: "+373 69 123 456",
       email: null,
@@ -101,6 +106,7 @@ describe("public online booking", () => {
           name: contact.name,
           phone: contact.phone,
           email: contact.email,
+          contact_channels: contact.channels ?? [],
           locale: "ru",
           legal_accepted: true,
         },
@@ -519,6 +525,89 @@ describe("public online booking", () => {
    * single archived match simply took the booking, and the appointment carried
    * a name from a card missing everywhere.
    */
+  /**
+   * Where to write, asked of the one party who knows.
+   *
+   * Nothing about a number can be detected: WhatsApp stopped answering whether
+   * one is registered, and Telegram answers only to a user account. So the
+   * studio's alternative to asking is guessing, and this is the asking.
+   */
+  describe("the channels a client ticks", () => {
+    const contact = { phone: "+373 68 969 200", email: "channels@studio.example" };
+
+    async function freeSlot(week: number) {
+      const availability = dataOf<{ slots: Slot[] }>(
+        await anonymous.get(
+          `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(week)}`,
+        ),
+      );
+      expect(availability.slots.length).toBeGreaterThan(0);
+      return availability.slots[0];
+    }
+
+    async function channelsOf(email: string) {
+      const [client] = await adminDb
+        .select({ channels: clients.contactChannels })
+        .from(clients)
+        .where(and(eq(clients.organizationId, studio.organizationId), eq(clients.email, email)));
+      return (client?.channels ?? {}) as Record<string, { state: string; source: string }>;
+    }
+
+    /**
+     * A client who uses no messengers leaves the question alone, and that is an
+     * answer: nothing is written, and the studio reaches them the way the
+     * number they gave allows. Nothing invents a channel on their behalf.
+     */
+    test("stay empty for a client who ticked nothing", async () => {
+      const bare = { phone: "+373 68 969 201", email: "bare-channels@studio.example" };
+      await createBookingAt(await freeSlot(10), { name: "Зина", ...bare });
+
+      expect(await channelsOf(bare.email)).toEqual({});
+    });
+
+    test("are stored against their card, and only the ones they ticked", async () => {
+      await createBookingAt(await freeSlot(11), {
+        name: "Нина",
+        ...contact,
+        channels: ["whatsapp", "viber"],
+      });
+
+      const marks = await channelsOf(contact.email);
+      expect(marks.whatsapp).toMatchObject({ state: "yes", source: "client" });
+      expect(marks.viber).toMatchObject({ state: "yes", source: "client" });
+      // Not ticked is not the same as not had: Telegram stays unsaid.
+      expect(marks.telegram).toBeUndefined();
+      expect(marks.call).toBeUndefined();
+    });
+
+    /**
+     * The rule the whole feature rests on. A returning client who taps nothing
+     * has said nothing — not «у меня больше нет WhatsApp» — and reading silence
+     * as a denial would empty the record of everyone who books twice.
+     */
+    test("survive a second booking that says nothing about them", async () => {
+      await createBookingAt(await freeSlot(12), { name: "Нина", ...contact });
+
+      const marks = await channelsOf(contact.email);
+      expect(marks.whatsapp).toMatchObject({ state: "yes" });
+      expect(marks.viber).toMatchObject({ state: "yes" });
+    });
+
+    test("grow when the same client ticks another one", async () => {
+      await createBookingAt(await freeSlot(13), {
+        name: "Нина",
+        ...contact,
+        channels: ["telegram"],
+      });
+
+      expect(Object.keys(await channelsOf(contact.email)).sort()).toEqual([
+        "telegram",
+        "viber",
+        "whatsapp",
+      ]);
+    });
+  });
+
   test("a client the studio hid neither claims a booking nor blocks one", async () => {
     // A week of its own: the neighbouring test fills its Wednesday, and a
     // ninety-minute service on a half-hour step leaves overlapping slots behind.

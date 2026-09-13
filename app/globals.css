@@ -2954,7 +2954,54 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   line-height: 1;
 }
 
+/*
+ * The question on the booking form, in the shape the add-ons already use — a
+ * fieldset of checkboxes — because it is the same kind of answer: several boxes,
+ * none of them required. The legend carries «Необязательно» in its own words
+ * rather than in a second line of hint text, which on a phone is one more line
+ * between a client and the button they came for.
+ */
+.public-booking-channels > div { display: flex; flex-wrap: wrap; gap: 8rem 18rem; }
+.public-booking-channels label { grid-template-columns: 22rem auto; min-height: 44rem; }
+
 .client-contact-way:hover { background: var(--leaf-100); }
+
+/*
+ * Three states, told by shape rather than by colour alone (section 7.8).
+ *
+ * Known — a small filled dot over the mark's shoulder, the way a badge sits.
+ * Not there — the whole cell dimmed and struck through on the diagonal, which
+ * is legible without colour and reads as «tried, no answer» rather than as
+ * «disabled». It stays pressable on purpose: the note is somebody's from last
+ * week, and a client can install an app in that time.
+ * Nobody has said — nothing at all, which is the state most clients are in and
+ * must never look like a denial.
+ */
+.client-contact-way { position: relative; }
+
+.client-contact-way.is-yes::after {
+  content: "";
+  position: absolute;
+  top: 5rem;
+  right: 9rem;
+  width: 6rem;
+  height: 6rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.client-contact-way.is-no { opacity: 0.55; }
+.client-contact-way.is-no::after {
+  content: "";
+  position: absolute;
+  top: 9rem;
+  left: 12rem;
+  width: 26rem;
+  height: 1rem;
+  background: currentColor;
+  transform: rotate(-45deg);
+  transform-origin: left center;
+}
 
 /* The call, which is what this line was before it was a menu and what it still
    answers first. Colour rather than weight, there being no text left to weigh —

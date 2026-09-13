@@ -14,6 +14,7 @@ import {
   type Span,
 } from "@/components/calendar-free-time";
 import { ClientContact } from "@/components/client-contact";
+import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { ToolIcon } from "@/components/icons";
 import {
   formatLocalDate,
@@ -86,6 +87,8 @@ export type CalendarBooking = Readonly<{
   /** The card's own name, present only when the booking was made under another. */
   clientCardName: string | null;
   clientPhone: string | null;
+  /** What anybody has said about reaching them; empty when nobody has. */
+  clientChannels: ContactChannelMarks;
   serviceName: string;
   extraLines: number;
   priceMinor: number;
@@ -1128,7 +1131,11 @@ export function CalendarBoard({
                         {booking.clientPhone && (
                           <>
                             {" · "}
-                            <ClientContact phone={booking.clientPhone} locale={locale} />
+                            <ClientContact
+                              phone={booking.clientPhone}
+                              locale={locale}
+                              marks={booking.clientChannels}
+                            />
                           </>
                         )}
                       </p>

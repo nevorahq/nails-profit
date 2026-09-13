@@ -103,6 +103,8 @@ export async function POST(request: Request) {
         name: sql`concat('Deleted client ', left(${clients.id}::text, 8))`,
         normalizedPhone: null,
         email: null,
+        // Where to write is a fact about a person, and it goes with them.
+        contactChannels: null,
         locale: null,
         termsVersion: null,
         privacyVersion: null,

@@ -230,6 +230,8 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         name: "Deleted client",
         normalizedPhone: null,
         email: null,
+        // Where to write is a fact about a person, and it goes with them.
+        contactChannels: null,
         locale: null,
         termsVersion: null,
         privacyVersion: null,

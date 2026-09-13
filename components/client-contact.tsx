@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ContactIcon } from "@/components/icons";
+import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { contactWays, type ContactChannel } from "@/domain/contact-links";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
@@ -37,7 +38,16 @@ const BRAND: Partial<Record<ContactChannel, string>> = {
  * has is the address for all of them — nothing here asks anybody to store a
  * messenger handle they would have to keep up to date.
  */
-export function ClientContact({ phone, locale }: { phone: string; locale: AppLocale }) {
+export function ClientContact({
+  phone,
+  locale,
+  marks = {},
+}: {
+  phone: string;
+  locale: AppLocale;
+  /** What anybody has said about reaching this client. Empty means nobody has. */
+  marks?: ContactChannelMarks;
+}) {
   const t = getTranslator(locale);
   const [open, setOpen] = useState(false);
   const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
@@ -65,9 +75,19 @@ export function ClientContact({ phone, locale }: { phone: string; locale: AppLoc
           {ways.map((way) => (
             <a
               key={way.channel}
-              className="client-contact-way"
+              /*
+               * Three states, and the third is why this is not a boolean.
+               * «Неизвестно» — nobody has said — must not be drawn as «нет», or
+               * the desk stops trying a messenger that would have worked. And
+               * «нет» stays clickable: it is somebody's note from a week ago,
+               * not a fact about today.
+               */
+              className={`client-contact-way${
+                marks[way.channel] ? ` is-${marks[way.channel]!.state}` : ""
+              }`}
               role="menuitem"
               data-channel={way.channel}
+              data-state={marks[way.channel]?.state ?? "unknown"}
               href={way.href}
               /*
                * A messenger opens in its own application, and the two that are

@@ -879,6 +879,19 @@ export const clients = pgTable(
     /** E.164, normalized on the way in (LOC-005). */
     normalizedPhone: text("normalized_phone"),
     email: text("email"),
+    /**
+     * Where this client can be reached besides the handset, and who said so.
+     *
+     * Not detection: WhatsApp stopped answering «is this number registered»
+     * and Telegram answers only to a user account, which no product should be
+     * running. This is what somebody stated — the client, ticking boxes on the
+     * booking page, or the studio, writing down what they learned by writing.
+     *
+     * A channel missing from here is «nobody has said», which is a third state
+     * and not a «no»: drawing it as absent would stop a desk trying a messenger
+     * that would have worked. See `domain/contact-channels.ts`.
+     */
+    contactChannels: jsonb("contact_channels"),
     locale: locale("locale"),
     /**
      * What a client agreed to when they booked themselves, section 7.2.

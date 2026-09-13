@@ -47,6 +47,10 @@ describe("single-client privacy erasure", () => {
         termsVersion: "2026-08-01",
         privacyVersion: "2026-08-01",
         consentedAt: new Date("2026-08-01T12:00:00.000Z"),
+        // Where to write is a fact about a person, so it goes with them.
+        contactChannels: {
+          whatsapp: { state: "yes", source: "client", at: "2026-08-01T12:00:00.000Z" },
+        },
       })
       .where(eq(clients.id, clientId))
       .returning({ version: clients.version });
@@ -150,6 +154,7 @@ describe("single-client privacy erasure", () => {
       name: "Deleted client",
       normalizedPhone: null,
       email: null,
+      contactChannels: null,
       locale: null,
       termsVersion: null,
       privacyVersion: null,
