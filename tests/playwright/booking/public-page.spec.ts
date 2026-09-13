@@ -137,6 +137,21 @@ test.describe("the public booking page", () => {
     await page.getByRole("button", { name: "Confirm booking" }).click();
     await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
 
+    /*
+     * The status check, held long enough that the client presses «это не я»
+     * before it answers. `route.fetch` runs the request; the reply waits.
+     */
+    let releaseCheck = () => {};
+    const heldCheck = new Promise<void>((resolve) => {
+      releaseCheck = resolve;
+    });
+    await page.route("**/api/v1/public/bookings/*/status", async (route) => {
+      const response = await route.fetch();
+      await new Promise((wait) => setTimeout(wait, 1_500));
+      await route.fulfill({ response });
+      releaseCheck();
+    });
+
     // Back to the URL they arrived by — the one in the studio's bio, the one
     // they bookmarked — which now answers instead of starting over.
     await page.goto(`/book/${studio.slug}`);
@@ -152,10 +167,25 @@ test.describe("the public booking page", () => {
       /\/booking\//,
     );
 
-    // A phone is shared more often than an account is: whoever does not
-    // recognise this visit can take it off the screen, and it stays off.
-    await strip.getByRole("button", { name: "Not me" }).click();
-    await expect(strip).toHaveCount(0);
+    /*
+     * A phone is shared more often than an account is: whoever does not
+     * recognise this visit can take it off the screen, and it stays off.
+     *
+     * Pressed while the page's own status check is deliberately still in
+     * flight, which is how this went wrong: the answer landed after the record
+     * had been removed and wrote it straight back, so the strip vanished and
+     * the visit was on the screen again the next time the page opened. A
+     * parallel run found it by accident; the delay here finds it every time.
+     *
+     * The click is retried under `toPass` for the ordinary reason — the button
+     * is React's and the page is server-rendered, so under load it can be on
+     * screen a beat before it is listening.
+     */
+    await expect(async () => {
+      await strip.getByRole("button", { name: "Not me" }).click();
+      await expect(strip).toHaveCount(0, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await heldCheck;
     await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
 
     await page.reload();

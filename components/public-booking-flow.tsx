@@ -324,6 +324,19 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         forgetBooking(profile.slug);
         return;
       }
+      /*
+       * Never write a record back that is no longer there.
+       *
+       * «Это не я» removes it while this check may still be in flight, and the
+       * answer arriving a moment later used to put it straight back: the strip
+       * vanished, and the visit was on the screen again the next time the page
+       * was opened. On a shared phone that is the whole of what the button is
+       * for, undone by a request nobody could see.
+       *
+       * Reading storage rather than holding a flag, because the removal is not
+       * always this page's: another tab of the same browser is the same record.
+       */
+      if (!rememberedSnapshot(profile.slug)) return;
       rememberBooking(profile.slug, next);
     }
 
