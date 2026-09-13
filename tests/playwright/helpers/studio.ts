@@ -419,6 +419,39 @@ export async function requestAppointmentAsClient(
 }
 
 /**
+ * The client calling their own visit off, from their own link.
+ *
+ * The studio's reissue endpoint deliberately never hands the token back, so the
+ * only way to hold one is the way a client does: it came with their booking.
+ * The version goes with the request for the reason the page sends it — a tab
+ * left open must not cancel an appointment that has moved since.
+ */
+export async function cancelAsClient(
+  baseURL: string,
+  manageToken: string,
+): Promise<{ status: string }> {
+  const anonymous = await newRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { "x-forwarded-for": clientAddress() },
+  });
+  try {
+    const current = await unwrap<{ version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${manageToken}`),
+      "public booking",
+    );
+    return await unwrap<{ status: string }>(
+      await anonymous.post(`/api/v1/public/bookings/${manageToken}/cancel`, {
+        data: { version: current.version },
+        headers: { "idempotency-key": `pw-cancel-${Math.random().toString(36).slice(2)}` },
+      }),
+      "public cancel",
+    );
+  } finally {
+    await anonymous.dispose();
+  }
+}
+
+/**
  * Books an appointment as the studio would from its own calendar.
  *
  * The idempotency key is required by the endpoint, not optional politeness: a

@@ -7,6 +7,7 @@ import { formatLocalDate, formatLocalTime, toZonedParts } from "@/domain/timezon
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { scopedSpecialistId } from "@/lib/booking-access";
+import { groupNotices, loadNoticeFeed, noticesReadAt } from "@/lib/staff-notices";
 import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
   }
 
   const actor = caller.membership;
-  if (!can(actor.role, "bookings", "read")) return apiSuccess([], id);
+  if (!can(actor.role, "bookings", "read")) {
+    return apiSuccess({ pending: [], feed: [], unread: 0 }, id);
+  }
   // A no-op today — `bookingModuleRefusal` only refuses writes — but this list
   // is calendar-surface data same as `GET /api/v1/bookings`, so it stays
   // reachable to the same rollout gate rather than reading around it.
@@ -77,7 +80,15 @@ export async function GET(request: Request) {
               ),
             );
 
-    return { found, lines };
+    return {
+      found,
+      lines,
+      notices: await loadNoticeFeed(tx, { organizationId: actor.organizationId, actor }),
+      readAt: await noticesReadAt(tx, {
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+      }),
+    };
   });
 
   const items = rows.found.map((row) => {
@@ -107,5 +118,45 @@ export async function GET(request: Request) {
     };
   });
 
-  return apiSuccess(items, id);
+  /*
+   * The second half of the bell: what has already happened.
+   *
+   * Grouped by appointment, because a visit moved twice and then called off is
+   * one story and one hole in the day. The hour a notice is about is not always
+   * the hour the booking now says — a client who moved to another master left
+   * this one an empty slot at the old time — so the line names both, and the
+   * link goes to the day the reader can do something on.
+   */
+  const feed = groupNotices(rows.notices, rows.readAt).map((group) => {
+    const at = toZonedParts(group.row.startsAt, group.row.timezone);
+    const previous = group.previousStartsAt
+      ? toZonedParts(new Date(group.previousStartsAt), group.row.timezone)
+      : null;
+    const day = (parts: ReturnType<typeof toZonedParts>) =>
+      formatLocalDate({ year: parts.year, month: parts.month, day: parts.day });
+
+    return {
+      booking_id: group.bookingId,
+      kind: group.kind,
+      earlier: group.earlier,
+      unread: group.unread,
+      happened_at: group.at.toISOString(),
+      client_name: group.row.clientName,
+      specialist_id: group.row.specialistId,
+      specialist_name: group.row.specialistName,
+      local_date: day(at),
+      local_time: formatLocalTime(at.minutes),
+      previous_local_date: previous ? day(previous) : null,
+      previous_local_time: previous ? formatLocalTime(previous.minutes) : null,
+      /*
+       * Where the link goes. Every other notice is about the appointment as it
+       * stands, so the day it is on is the day to open; a released master's
+       * appointment belongs to somebody else now, and what is theirs is the
+       * hour it used to occupy.
+       */
+      link_date: group.kind === "client_released" && previous ? day(previous) : day(at),
+    };
+  });
+
+  return apiSuccess({ pending: items, feed, unread: feed.filter((row) => row.unread).length }, id);
 }

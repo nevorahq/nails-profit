@@ -2144,6 +2144,42 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .notifications-item strong { font-size: 13rem; font-weight: 700; overflow-wrap: anywhere; }
 .notifications-item small { color: var(--muted); font-size: 12rem; }
 
+/*
+ * The two halves of the bell, and what tells them apart.
+ *
+ * A heading over each, shown only when both are there — one list needs no label
+ * to be told from a list it is not beside. The headings are the panel's own
+ * caption size rather than a second thing to look at: the reader is looking for
+ * a name, not for the word above it.
+ */
+.notifications-group {
+  margin: 8rem 0 2rem;
+  padding: 0 12rem;
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.notifications-group:first-of-type { margin-top: 0; }
+
+/* What happened, beside whose it is: an ordinary weight after a bold name, so
+   the line reads «Ольга · отменена клиентом» rather than as two headings. */
+.notifications-what { margin-left: 6rem; color: var(--muted); font-weight: 600; }
+.notifications-when { font-variant-numeric: tabular-nums; }
+
+/*
+ * Unread, said with a bar rather than with a colour.
+ *
+ * A dot would need a column of its own on a line that is already three deep,
+ * and colour alone is what section 7.8 forbids — the bar is a shape, and it is
+ * on the side the eye runs down when it scans a list for what is new.
+ */
+.notifications-item.unread {
+  box-shadow: inset 3rem 0 0 var(--accent);
+  background: var(--surface-strong);
+}
+
 /* Reused from the account chip that used to sit at the foot of the sidebar —
    same fallback-to-initial rule as `.avatar` for a specialist with no photo. */
 .sidebar-avatar {

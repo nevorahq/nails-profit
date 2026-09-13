@@ -238,6 +238,17 @@ export const memberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: memberRole("role").notNull(),
+    /**
+     * When this person last opened the studio's notices, which is all the read
+     * state a bell needs: anything newer is unread, and opening the list makes
+     * everything older than that moment read.
+     *
+     * Here rather than in a table of its own because this row is already the
+     * pair it belongs to — one person in one studio — and a second table keyed
+     * on exactly that pair would be the same row with more joins. Null for
+     * somebody who has never opened it, which reads as "everything is new".
+     */
+    noticesReadAt: timestamp("notices_read_at", { withTimezone: true }),
     ...auditColumns,
   },
   (table) => [
@@ -2148,6 +2159,71 @@ export const notificationOutbox = pgTable(
       "notification_outbox_target",
       sql`(${table.bookingId} is not null) <> (${table.verificationId} is not null)`,
     ),
+  ],
+);
+
+/**
+ * What happened in the studio while somebody was not looking, roadmap 7.2's
+ * other half.
+ *
+ * The bell has always been a list of unanswered requests — a to-do, and only
+ * ever `pending_confirmation`. Everything else the studio learned by email: a
+ * client calling off a visit reached the master's inbox a minute later and the
+ * app itself said nothing, which is exactly how a studio describes it — «на
+ * странице мастера оповещения нет».
+ *
+ * One row per event, not per reader. Who may see it is decided when it is read
+ * — a master sees their own appointments, everyone else the studio's, the same
+ * split the calendar already enforces — and the one person it is never shown to
+ * is whoever caused it. The outbox above does the opposite, a row per address,
+ * because a message has to be delivered to someone and this only has to be
+ * shown.
+ *
+ * No client's name and no service here. Both are read off the booking when the
+ * feed is built, which keeps them current and — more to the point — keeps a
+ * person's name out of one more table that erasure would have to find. What the
+ * payload carries is the single fact a booking cannot be asked for afterwards:
+ * the hour it used to be at, for the moves and for the master whose day it left.
+ */
+export const staffNoticeKind = pgEnum("staff_notice_kind", [
+  "client_booked",
+  "client_rescheduled",
+  "client_cancelled",
+  /** The master a client moved off: their hour is free and the booking is not theirs. */
+  "client_released",
+  "staff_rescheduled",
+  "staff_cancelled",
+]);
+
+export const staffNotices = pgTable(
+  "staff_notice",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    kind: staffNoticeKind("kind").notNull(),
+    /**
+     * Whose day this concerns, which is not always the booking's own master: a
+     * client moving to another specialist frees an hour in the first one's day,
+     * and the row about that names the first one.
+     */
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "cascade" }),
+    /** Who did it; null when it was the client, who has no account. */
+    actorUserId: text("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** ISO 8601 — `jsonb` holds no timestamps, and the booking no longer holds this one. */
+    payload: jsonb("payload").$type<{ previousStartsAt?: string }>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("staff_notice_org_created_idx").on(table.organizationId, table.createdAt),
+    index("staff_notice_specialist_idx").on(table.specialistId, table.createdAt),
+    index("staff_notice_booking_idx").on(table.bookingId),
   ],
 );
 

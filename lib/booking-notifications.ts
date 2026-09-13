@@ -17,6 +17,7 @@ import {
   type BookingNotificationTemplate,
   type StaffNotificationTemplate,
 } from "@/lib/notification-message";
+import { recordStaffNotice, type StaffNoticeKind } from "@/lib/staff-notices";
 
 export type { BookingNotificationTemplate };
 
@@ -88,6 +89,19 @@ export async function enqueueBookingNotification(
  * with an address, never a phone number, so there is no second channel to
  * choose between.
  */
+/**
+ * Which of the studio's messages is also worth a line in the app.
+ *
+ * `booking.staff_requested` is deliberately absent: an unanswered request is
+ * already the bell's first group, and a request that appeared in both would be
+ * closed in one and left standing in the other.
+ */
+const STAFF_NOTICE_KIND: Partial<Record<StaffNotificationTemplate, StaffNoticeKind>> = {
+  "booking.staff_booked": "client_booked",
+  "booking.staff_rescheduled": "client_rescheduled",
+  "booking.staff_cancelled": "client_cancelled",
+};
+
 export async function notifyStaff(
   tx: TenantTransaction,
   input: {
@@ -98,11 +112,31 @@ export async function notifyStaff(
   },
 ) {
   const [target] = await tx
-    .select({ specialistUserId: specialists.userId })
+    .select({ specialistId: bookings.specialistId, specialistUserId: specialists.userId })
     .from(bookings)
     .innerJoin(specialists, eq(specialists.id, bookings.specialistId))
     .where(eq(bookings.id, input.bookingId))
     .limit(1);
+
+  /*
+   * The same event as a line in the app, written here because this is already
+   * the function every client-caused change calls to tell the studio. A request
+   * is the exception: it has its own place in the bell — the list of things
+   * waiting for an answer — and saying it twice would make one of them noise.
+   *
+   * The client has no account, so the notice has no actor, which is what makes
+   * it visible to everyone rather than to everyone but the person who did it.
+   */
+  const noticeKind = STAFF_NOTICE_KIND[input.template];
+  if (noticeKind && target) {
+    await recordStaffNotice(tx, {
+      organizationId: input.organizationId,
+      bookingId: input.bookingId,
+      kind: noticeKind,
+      specialistId: target.specialistId,
+      actorUserId: null,
+    });
+  }
 
   const [owner] = await tx
     .select({ userId: memberships.userId })
@@ -223,6 +257,22 @@ export async function notifyReleasedSpecialist(
     occurrence: string;
   },
 ) {
+  /*
+   * The line goes in whether or not there is an inbox to write to. A card with
+   * no linked account gets no message — there is nowhere to send one — but the
+   * hour is still free in somebody's day, and whoever opens the studio's app
+   * should see that it is. Which is the difference between the two: a message
+   * needs an address, a notice needs only a reader.
+   */
+  await recordStaffNotice(tx, {
+    organizationId: input.organizationId,
+    bookingId: input.bookingId,
+    kind: "client_released",
+    specialistId: input.specialistId,
+    actorUserId: null,
+    previousStartsAt: input.startsAt,
+  });
+
   const [previous] = await tx
     .select({ userId: specialists.userId })
     .from(specialists)

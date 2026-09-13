@@ -907,6 +907,13 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/notifications" }),
   },
   {
+    route: "/api/v1/notifications/read",
+    method: "POST",
+    allowed: ALL_ROLES,
+    note: "marks the reader's own bell read; the same gate the list carries, and it changes nothing anybody else can see",
+    request: async () => ({ path: "/api/v1/notifications/read", method: "POST" as const }),
+  },
+  {
     route: "/api/v1/bookings",
     method: "POST",
     allowed: ["owner", "manager", "master"],

@@ -1,6 +1,7 @@
 import { withTenant, type TenantTransaction } from "@/db/tenant";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
+import { recordStaffNotice } from "@/lib/staff-notices";
 import {
   cancelPendingNotifications,
   notifyBooking,
@@ -165,6 +166,26 @@ export async function applyStaffTransition(
     });
 
     const notifiedChannels = await notifyTransition(tx, actor.organizationId, moved.booking, now);
+
+    /*
+     * The studio telling itself, for the one transition somebody else in the
+     * studio has to act on: an hour that was sold and is now free.
+     *
+     * Only cancellation. A confirmation takes no hour from anyone — the slot was
+     * already held by the request — and a completion or a no-show is the master
+     * writing down their own day. The person who pressed the button is excluded
+     * where the feed is read, so this row is for their colleagues: the owner
+     * seeing what a master did, and the master whose day an owner changed.
+     */
+    if (moved.booking.status === "cancelled") {
+      await recordStaffNotice(tx, {
+        organizationId: actor.organizationId,
+        bookingId: moved.booking.id,
+        kind: "staff_cancelled",
+        specialistId: moved.booking.specialistId,
+        actorUserId: actor.userId,
+      });
+    }
 
     return {
       ok: true,
