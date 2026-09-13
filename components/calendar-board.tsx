@@ -13,6 +13,7 @@ import {
   type ShiftRule,
   type Span,
 } from "@/components/calendar-free-time";
+import { ClientContact } from "@/components/client-contact";
 import { ToolIcon } from "@/components/icons";
 import {
   formatLocalDate,
@@ -1110,8 +1111,10 @@ export function CalendarBoard({
                           The number, as something to press rather than to read
                           out to yourself and type into a phone. «Клиент
                           опаздывает» and «клиент не отвечает» are both answered
-                          by calling, and this card is where the desk is
-                          standing when either happens.
+                          by reaching the client, and this card is where the desk
+                          is standing when either happens — by calling, or by
+                          writing where somebody who does not pick up will read
+                          it. See `ClientContact`.
 
                           `normalizedPhone` is safe in the href as it stands:
                           `normalizePhone` in `domain/phone` strips every space,
@@ -1125,9 +1128,7 @@ export function CalendarBoard({
                         {booking.clientPhone && (
                           <>
                             {" · "}
-                            <a className="calendar-call" href={`tel:${booking.clientPhone}`}>
-                              {booking.clientPhone}
-                            </a>
+                            <ClientContact phone={booking.clientPhone} locale={locale} />
                           </>
                         )}
                       </p>

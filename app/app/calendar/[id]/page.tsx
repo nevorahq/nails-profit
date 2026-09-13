@@ -6,6 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { can, hasConstraint } from "@/domain/rbac";
 import { formatLocalTime, toZonedParts } from "@/domain/timezone";
 import { resolveLocalizedText } from "@/i18n/localized-text";
+import { ClientContact } from "@/components/client-contact";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { mayActOnSpecialist } from "@/lib/booking-access";
@@ -161,8 +162,15 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
                 {t("calendar.clientCard", { name: card.client.name })}
               </span>
             )}
+            {/*
+              The same four ways as the day's own card. It was plain text here —
+              a number to read out and type — which is the version of this line
+              that predates anybody being able to press it.
+            */}
             {card.client && !hideContacts && card.client.phone && (
-              <span className="unit-hint">{card.client.phone}</span>
+              <span className="unit-hint">
+                <ClientContact phone={card.client.phone} locale={locale} />
+              </span>
             )}
             {card.client && !hideContacts && card.client.email && (
               <span className="unit-hint">{card.client.email}</span>

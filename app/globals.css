@@ -1695,6 +1695,20 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .calendar-toolbar { flex-direction: column; align-items: stretch; }
   .calendar-status { margin-left: 0; }
   .calendar-facts { grid-template-columns: 1fr; gap: 6rem; }
+  /*
+   * The ways open under the number rather than over the card.
+   *
+   * A menu floating from a number that sits near the right edge of a 390-wide
+   * screen is a menu hanging off the screen, and the fix is not arithmetic: at
+   * this width there is nothing to float over. It becomes a short list in the
+   * flow, with the same targets and no way to overflow anything.
+   */
+  .client-contact { display: block; }
+  .client-contact-ways {
+    position: static;
+    min-width: 0;
+    margin-top: 6rem;
+  }
   .calendar-facts dd + dt { margin-top: 12rem; }
   .inline-form { flex-direction: column; align-items: stretch; }
   .booking-panel .inline-form { grid-template-columns: 1fr; }
@@ -2869,14 +2883,71 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   align-items: center;
   min-height: 44rem;
   margin-block: -12rem;
+  /* A button now, and a button brings its own chrome to shed: the browser's
+     border, ground and font are not what a number in a sentence looks like. */
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   color: var(--accent);
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3rem;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .calendar-call:hover { color: var(--accent-dark); }
+
+/*
+ * The four ways to reach the client, opened from the number itself.
+ *
+ * A panel rather than four links printed in the line: three of them are
+ * messengers this studio may not use with this client, and a row of brand names
+ * across a card that is already dense would be four guesses shown at once. The
+ * number stays the thing you press; the guesses appear only when somebody asks
+ * for them.
+ *
+ * Positioned on the number and left to overflow the card, which is what a menu
+ * does. The stacking context is the entry's own — nothing on this screen floats
+ * above an open appointment except this.
+ */
+.client-contact { position: relative; display: inline-block; }
+.client-contact-plain { white-space: nowrap; }
+
+.client-contact-ways {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4rem);
+  left: 0;
+  display: grid;
+  min-width: 160rem;
+  padding: 4rem;
+  border: 1rem solid var(--line);
+  border-radius: 4rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.client-contact-way {
+  display: flex;
+  align-items: center;
+  min-height: 44rem;
+  padding: 0 12rem;
+  border-radius: 4rem;
+  color: var(--ink);
+  font-size: 14rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.client-contact-way:hover { background: var(--leaf-100); }
+
+/* The call, which is what this line was before it was a menu and what it still
+   answers first. Weight rather than colour, so the row reads as the one to
+   press without becoming a second accent beside the number above it. */
+.client-contact-way[data-channel="call"] { color: var(--accent); font-weight: 750; }
 
 .calendar-create {
   display: inline-flex;
