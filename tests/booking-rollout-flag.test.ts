@@ -110,6 +110,17 @@ const OUTSIDE_THE_FLAG = [
    * `visit.booking_id` is null and the route never touches the table.
    */
   join(API_ROOT, "visits", "[id]", "route.ts"),
+  /*
+   * Deleting the organization is the same obligation as erasing one client,
+   * one size larger, and the same reasoning puts it outside the flag: a studio
+   * closing down is owed the removal of its people's data whatever level its
+   * booking module happens to be on.
+   *
+   * It reaches `booking` for one column — the name a public request was made
+   * under, which lives on the appointment rather than on the card — because the
+   * pass that anonymizes the cards cannot reach it and it is a person's name.
+   */
+  join(API_ROOT, "organizations", "delete", "route.ts"),
 ];
 
 function routeFiles(directory: string, found: string[] = []): string[] {

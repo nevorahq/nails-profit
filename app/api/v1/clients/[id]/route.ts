@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -181,7 +181,23 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
 
     let tokensRevoked = 0;
     let notificationsDropped = 0;
+    let bookedNamesCleared = 0;
     if (bookingIds.length > 0) {
+      /*
+       * The appointments stay — they are the studio's own record of work done —
+       * but the name a request was made under is this person's, the same as the
+       * one on the card being anonymized. It is cleared here rather than left
+       * for the card's own `UPDATE`, because it lives on the booking row and
+       * nothing else would ever come back for it.
+       */
+      bookedNamesCleared = (
+        await tx
+          .update(bookings)
+          .set({ clientNameSnapshot: null, updatedBy: actor.userId, updatedAt: now })
+          .where(and(inArray(bookings.id, bookingIds), isNotNull(bookings.clientNameSnapshot)))
+          .returning({ id: bookings.id })
+      ).length;
+
       tokensRevoked = (
         await tx
           .update(bookingAccessTokens)
@@ -238,6 +254,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       // Counts describe the privacy operation without copying the erased PII.
       after: {
         bookings_preserved: bookingIds.length,
+        booked_names_cleared: bookedNamesCleared,
         access_tokens_revoked: tokensRevoked,
         notifications_dropped: notificationsDropped,
       },

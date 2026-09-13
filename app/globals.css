@@ -1083,6 +1083,42 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .public-booking-shell { min-height: 100vh; padding: 22rem clamp(18rem, 5vw, 72rem) 72rem; }
 .public-booking-header { max-width: 960rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16rem; padding-bottom: 20rem; border-bottom: 1rem solid var(--line); }
+
+/*
+ * The line the page shows a client who has booked here already.
+ *
+ * A card rather than a banner: it belongs to the page the way the form below it
+ * does, and a coloured alert bar over a booking page reads as a warning about
+ * the studio rather than as news about one visit. The state itself is carried
+ * by the badge in the header, which is coloured and stays on screen; this is
+ * the detail under it — which visit, what it means, and the way to the page
+ * that can change it.
+ */
+.public-booking-yours {
+  max-width: 960rem;
+  margin: 18rem auto 0;
+  display: grid;
+  gap: 6rem;
+  padding: 16rem 20rem;
+  border: 1rem solid var(--line);
+  border-radius: 4rem;
+  background: var(--surface-strong);
+}
+.public-booking-yours p { margin: 0; color: var(--muted); font-size: 14rem; }
+.public-booking-yours-when { display: flex; align-items: baseline; justify-content: space-between; gap: 12rem; flex-wrap: wrap; }
+.public-booking-yours-when span { font-size: 12rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.06em; }
+.public-booking-yours-when strong { color: var(--ink); font-size: 17rem; }
+.public-booking-yours .inline-actions { margin-top: 4rem; }
+/* The 44-unit target of section 7.8, taken back out of the line box by the
+   negative block margin — the same trick `.public-booking-consent a` uses, so a
+   row of two actions is no taller than the sentence above it. */
+.public-booking-yours .inline-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44rem;
+  margin-left: 0;
+  margin-block: -12rem;
+}
 .public-booking-intro { max-width: 760rem; margin: 72rem auto 32rem; text-align: center; }
 .public-booking-intro h1, .public-booking-success h1 { font-size: clamp(38rem, 6vw, 64rem); }
 .public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 4rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
@@ -1659,6 +1695,20 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .calendar-toolbar { flex-direction: column; align-items: stretch; }
   .calendar-status { margin-left: 0; }
   .calendar-facts { grid-template-columns: 1fr; gap: 6rem; }
+  /*
+   * The ways open under the number rather than over the card.
+   *
+   * A menu floating from a number that sits near the right edge of a 390-wide
+   * screen is a menu hanging off the screen, and the fix is not arithmetic: at
+   * this width there is nothing to float over. It becomes a short list in the
+   * flow, with the same targets and no way to overflow anything.
+   */
+  .client-contact { display: block; }
+  .client-contact-ways {
+    position: static;
+    min-width: 0;
+    margin-top: 6rem;
+  }
   .calendar-facts dd + dt { margin-top: 12rem; }
   .inline-form { flex-direction: column; align-items: stretch; }
   .booking-panel .inline-form { grid-template-columns: 1fr; }
@@ -1689,6 +1739,35 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .data-table.pl-table .pl-total .unit-hint { display: block; margin-left: 0; }
   .metric-grid { grid-template-columns: 1fr; }
   .public-booking-shell { padding: 18rem 14rem 48rem; }
+
+  /*
+   * The header follows the screen down the page.
+   *
+   * It carries the studio's name, the only thing here that says whose booking
+   * form this is, and on a phone the form below runs several screens long: the
+   * name is gone after the first swipe and the rest is filled in for nobody.
+   * The desktop page leaves it in the flow, where the form is about a screenful
+   * and the name never leaves.
+   *
+   * The negative margins take back the shell's own top and side padding and the
+   * padding puts the same room back inside the header, so the stuck bar spans
+   * the full width and keeps its inset from the screen edge while the page
+   * below starts exactly where it did before.
+   *
+   * Fully opaque, not the translucent-and-blurred treatment the cards use: the
+   * form scrolls underneath, and at any alpha below 1 the field labels passing
+   * behind the studio's name read as a smudge across it. The ground here is a
+   * fixed gradient on `body` the header cannot inherit, so it states its own.
+   */
+  .public-booking-header {
+    position: sticky;
+    z-index: 30;
+    top: 0;
+    margin: -18rem -14rem 0;
+    padding: 18rem 14rem 20rem;
+    background: var(--surface);
+  }
+  .public-booking-yours { margin-top: 14rem; padding: 14rem 16rem; }
   .public-booking-intro { margin: 46rem auto 24rem; text-align: left; }
   .public-booking-card { padding: 22rem 16rem; border-radius: 4rem; }
   .public-booking-grid { grid-template-columns: 1fr; }
@@ -2078,6 +2157,42 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .notifications-item:hover { background: var(--leaf-100); }
 .notifications-item strong { font-size: 13rem; font-weight: 700; overflow-wrap: anywhere; }
 .notifications-item small { color: var(--muted); font-size: 12rem; }
+
+/*
+ * The two halves of the bell, and what tells them apart.
+ *
+ * A heading over each, shown only when both are there — one list needs no label
+ * to be told from a list it is not beside. The headings are the panel's own
+ * caption size rather than a second thing to look at: the reader is looking for
+ * a name, not for the word above it.
+ */
+.notifications-group {
+  margin: 8rem 0 2rem;
+  padding: 0 12rem;
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.notifications-group:first-of-type { margin-top: 0; }
+
+/* What happened, beside whose it is: an ordinary weight after a bold name, so
+   the line reads «Ольга · отменена клиентом» rather than as two headings. */
+.notifications-what { margin-left: 6rem; color: var(--muted); font-weight: 600; }
+.notifications-when { font-variant-numeric: tabular-nums; }
+
+/*
+ * Unread, said with a bar rather than with a colour.
+ *
+ * A dot would need a column of its own on a line that is already three deep,
+ * and colour alone is what section 7.8 forbids — the bar is a shape, and it is
+ * on the side the eye runs down when it scans a list for what is new.
+ */
+.notifications-item.unread {
+  box-shadow: inset 3rem 0 0 var(--accent);
+  background: var(--surface-strong);
+}
 
 /* Reused from the account chip that used to sit at the foot of the sidebar —
    same fallback-to-initial rule as `.avatar` for a specialist with no photo. */
@@ -2768,14 +2883,71 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   align-items: center;
   min-height: 44rem;
   margin-block: -12rem;
+  /* A button now, and a button brings its own chrome to shed: the browser's
+     border, ground and font are not what a number in a sentence looks like. */
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   color: var(--accent);
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3rem;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .calendar-call:hover { color: var(--accent-dark); }
+
+/*
+ * The four ways to reach the client, opened from the number itself.
+ *
+ * A panel rather than four links printed in the line: three of them are
+ * messengers this studio may not use with this client, and a row of brand names
+ * across a card that is already dense would be four guesses shown at once. The
+ * number stays the thing you press; the guesses appear only when somebody asks
+ * for them.
+ *
+ * Positioned on the number and left to overflow the card, which is what a menu
+ * does. The stacking context is the entry's own — nothing on this screen floats
+ * above an open appointment except this.
+ */
+.client-contact { position: relative; display: inline-block; }
+.client-contact-plain { white-space: nowrap; }
+
+.client-contact-ways {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4rem);
+  left: 0;
+  display: grid;
+  min-width: 160rem;
+  padding: 4rem;
+  border: 1rem solid var(--line);
+  border-radius: 4rem;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.client-contact-way {
+  display: flex;
+  align-items: center;
+  min-height: 44rem;
+  padding: 0 12rem;
+  border-radius: 4rem;
+  color: var(--ink);
+  font-size: 14rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.client-contact-way:hover { background: var(--leaf-100); }
+
+/* The call, which is what this line was before it was a menu and what it still
+   answers first. Weight rather than colour, so the row reads as the one to
+   press without becoming a second accent beside the number above it. */
+.client-contact-way[data-channel="call"] { color: var(--accent); font-weight: 750; }
 
 .calendar-create {
   display: inline-flex;

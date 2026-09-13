@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { toZonedParts } from "@/domain/timezone";
 import { recordAuditEvent } from "@/lib/audit";
+import { recordStaffNotice } from "@/lib/staff-notices";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "@/lib/booking-http";
 import {
@@ -153,6 +154,22 @@ async function handlePost(request: Request, context: { params: Promise<{ id: str
         source: "api",
         entityType: "booking",
         entityId: moved.booking.id,
+      });
+
+      /*
+       * And the studio's own side of it. A move made at the desk changes a
+       * master's day as surely as a client's does — more so, since it can carry
+       * the appointment to a different master altogether, which is why the
+       * notice names the specialist the booking is leaving rather than the one
+       * it lands on. Whoever made the move does not see it; everyone else does.
+       */
+      await recordStaffNotice(tx, {
+        organizationId: actor.organizationId,
+        bookingId: moved.booking.id,
+        kind: "staff_rescheduled",
+        specialistId: existing.specialistId,
+        actorUserId: actor.userId,
+        previousStartsAt: moved.previous.start,
       });
 
       // Section 7.7's "дата, время, мастер или услуга изменены": the client

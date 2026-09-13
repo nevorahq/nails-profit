@@ -107,6 +107,91 @@ test.describe("the public booking page", () => {
     await staff.close();
   });
 
+  /**
+   * The same page, to somebody who has been here before.
+   *
+   * A booking page that has forgotten the client it just took a booking from is
+   * not only cold — it is how a studio ends up with the same visit twice, which
+   * is why `cancellation_reason` has a `duplicate` in it. There is no session to
+   * recognise anybody by, so the recognition is the manage token the booking
+   * left in this browser, spent on the status endpoint and shown in the header
+   * badge the page keeps on screen.
+   */
+  test("the studio's page knows a client who has already booked here", async ({
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    await page.goto(`/book/${studio.slug}`);
+
+    // A stranger is offered the form and told nothing about anybody's booking.
+    await expect(page.locator(".public-booking-yours")).toHaveCount(0);
+    await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
+
+    await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
+    await page.getByRole("button", { name: "Show available times" }).click();
+    await page.locator(".public-booking-slots button").first().click();
+    await page.getByLabel("Name").fill("Rita Return");
+    await page.getByLabel("Phone").fill("+373 69 555 222");
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Confirm booking" }).click();
+    await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
+
+    /*
+     * The status check, held long enough that the client presses «это не я»
+     * before it answers. `route.fetch` runs the request; the reply waits.
+     */
+    let releaseCheck = () => {};
+    const heldCheck = new Promise<void>((resolve) => {
+      releaseCheck = resolve;
+    });
+    await page.route("**/api/v1/public/bookings/*/status", async (route) => {
+      const response = await route.fetch();
+      await new Promise((wait) => setTimeout(wait, 1_500));
+      await route.fulfill({ response });
+      releaseCheck();
+    });
+
+    // Back to the URL they arrived by — the one in the studio's bio, the one
+    // they bookmarked — which now answers instead of starting over.
+    await page.goto(`/book/${studio.slug}`);
+    await expect(
+      page.locator(".public-booking-header .booking-status-pending_confirmation"),
+    ).toHaveText("Awaiting confirmation");
+
+    const strip = page.locator(".public-booking-yours");
+    await expect(strip).toContainText("Your appointment");
+    await expect(strip).toContainText("The studio will answer your request shortly.");
+    await expect(strip.getByRole("link", { name: "Open appointment" })).toHaveAttribute(
+      "href",
+      /\/booking\//,
+    );
+
+    /*
+     * A phone is shared more often than an account is: whoever does not
+     * recognise this visit can take it off the screen, and it stays off.
+     *
+     * Pressed while the page's own status check is deliberately still in
+     * flight, which is how this went wrong: the answer landed after the record
+     * had been removed and wrote it straight back, so the strip vanished and
+     * the visit was on the screen again the next time the page opened. A
+     * parallel run found it by accident; the delay here finds it every time.
+     *
+     * The click is retried under `toPass` for the ordinary reason — the button
+     * is React's and the page is server-rendered, so under load it can be on
+     * screen a beat before it is listening.
+     */
+    await expect(async () => {
+      await strip.getByRole("button", { name: "Not me" }).click();
+      await expect(strip).toHaveCount(0, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await heldCheck;
+    await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
+
+    await page.reload();
+    await expect(page.locator(".public-booking-yours")).toHaveCount(0);
+  });
+
   test("a day with nothing free says so instead of failing", async ({ page, browserErrors }) => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);

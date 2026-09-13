@@ -6,6 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { can, hasConstraint } from "@/domain/rbac";
 import { formatLocalTime, toZonedParts } from "@/domain/timezone";
 import { resolveLocalizedText } from "@/i18n/localized-text";
+import { ClientContact } from "@/components/client-contact";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { mayActOnSpecialist } from "@/lib/booking-access";
@@ -148,9 +149,28 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
 
           <dt>{t("calendar.client")}</dt>
           <dd>
-            {card.client?.name ?? <span className="muted">{t("calendar.noClient")}</span>}
+            {/*
+              The name this appointment was booked under, and under it the card
+              it was filed against when the two are not the same person's. The
+              card is what the phone number and the history belong to; the name
+              above it is who said they were coming.
+            */}
+            {card.booking.clientNameSnapshot ??
+              card.client?.name ?? <span className="muted">{t("calendar.noClient")}</span>}
+            {card.booking.clientNameSnapshot && card.client && (
+              <span className="unit-hint">
+                {t("calendar.clientCard", { name: card.client.name })}
+              </span>
+            )}
+            {/*
+              The same four ways as the day's own card. It was plain text here —
+              a number to read out and type — which is the version of this line
+              that predates anybody being able to press it.
+            */}
             {card.client && !hideContacts && card.client.phone && (
-              <span className="unit-hint">{card.client.phone}</span>
+              <span className="unit-hint">
+                <ClientContact phone={card.client.phone} locale={locale} />
+              </span>
             )}
             {card.client && !hideContacts && card.client.email && (
               <span className="unit-hint">{card.client.email}</span>

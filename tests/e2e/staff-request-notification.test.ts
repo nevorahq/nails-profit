@@ -1,14 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
-import { bookings, notificationOutbox, organizations } from "@/db/schema";
+import { bookings, clients, notificationOutbox, organizations } from "@/db/schema";
 import { dispatchDueNotifications } from "@/lib/notification-dispatch";
 import { formatAppointmentTime } from "@/lib/notification-message";
 import {
   setNotificationProvider,
   type OutgoingMessage,
 } from "@/lib/notification-provider";
-import { anonymous, dataOf } from "../helpers/api";
+import { anonymous, dataOf, type Actor } from "../helpers/api";
 import { wednesdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { CANONICAL, createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
@@ -122,7 +122,11 @@ async function bookableCard(name: string, userId?: string) {
  * that. Tests that care which card takes the booking ask for a week of their
  * own rather than competing for the same six hours.
  */
-async function requestAppointment(specialistId: string = "any", week = 1) {
+async function requestAppointment(
+  specialistId: string = "any",
+  week = 1,
+  contact: { name?: string; phone?: string; email?: string | null } = {},
+) {
   const slots = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
     await anonymous.get(
       `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${specialistId}&date=${wednesdayAhead(week)}`,
@@ -148,11 +152,13 @@ async function requestAppointment(specialistId: string = "any", week = 1) {
         hold_token: held.hold_token,
         service_id: studio.serviceId,
         add_on_ids: [],
-        name: "Анна",
-        phone: "+373 69 123 456",
+        name: contact.name ?? "Анна",
+        phone: contact.phone ?? "+373 69 123 456",
         // The pilot's provider is email, so the public form requires one; the
         // client's own message is the second one this dispatch sends.
-        email: "client@studio.example",
+        // `??` cannot say "no address": a client who left only a number is the
+        // case half of these tests are about.
+        email: "email" in contact ? contact.email : "client@studio.example",
         locale: "ru",
         legal_accepted: true,
       },
@@ -268,12 +274,13 @@ describe("a request nobody in the studio has seen", () => {
       "staff-notify-owner@studio.example",
     ]);
 
-    const mineBell = dataOf<{ id: string }[]>(await mine.get("/api/v1/notifications"));
-    const theirBell = dataOf<{ id: string }[]>(await theirs.get("/api/v1/notifications"));
-    expect(mineBell.map((row) => row.id)).toContain(booking.id);
+    type Bell = { pending: { id: string }[] };
+    const mineBell = dataOf<Bell>(await mine.get("/api/v1/notifications"));
+    const theirBell = dataOf<Bell>(await theirs.get("/api/v1/notifications"));
+    expect(mineBell.pending.map((row) => row.id)).toContain(booking.id);
     // Not "does not contain this one": a master with no requests of their own
     // has an empty list, however busy the studio around them is.
-    expect(theirBell).toEqual([]);
+    expect(theirBell.pending).toEqual([]);
   });
 });
 
@@ -575,5 +582,221 @@ describe("what a client does on the public page", () => {
       .from(notificationOutbox)
       .where(eq(notificationOutbox.bookingId, booking.id));
     expect(rows).toContainEqual({ status: "dead_letter", code: "booking_moved_on" });
+  });
+});
+
+/**
+ * One number, two people.
+ *
+ * A public request is matched to an existing card by number or address, and the
+ * card is deliberately left as the studio wrote it — otherwise whoever holds
+ * the link gets to rename the studio's client, and every appointment in the
+ * calendar is labelled from that row. What used to happen to the name typed on
+ * the form was nothing at all: it was read once, to decide whether a card had
+ * to be made, and then dropped. So a mother's number used by her daughter
+ * produced a request the master read as the mother's, with nothing anywhere
+ * saying otherwise — the studio's own report, and the reason this file now
+ * asserts on both names rather than one.
+ */
+describe("a request made under a name the card does not carry", () => {
+  const household = { phone: "+373 69 123 457", email: "household@studio.example" };
+
+  test("reaches the studio as the person coming, with the card named under it", async () => {
+    const hers = await requestAppointment("any", 7, { ...household, name: "Люда" });
+    const daughters = await requestAppointment("any", 8, { ...household, name: "Ольга" });
+
+    type Waiting = { id: string; client_name: string | null; client_card_name: string | null };
+    const waiting = dataOf<{ pending: Waiting[] }>(
+      await studio.owner.get("/api/v1/notifications"),
+    ).pending;
+
+    // The second request: booked by Ольга, filed against Люда's card.
+    const second = waiting.find((item) => item.id === daughters.id);
+    expect(second?.client_name).toBe("Ольга");
+    expect(second?.client_card_name).toBe("Люда");
+
+    // The first, which made the card, says one name because there is one.
+    const first = waiting.find((item) => item.id === hers.id);
+    expect(first?.client_name).toBe("Люда");
+    expect(first?.client_card_name).toBeNull();
+
+    // And the card itself is untouched by the second request, as before.
+    const [card] = await adminDb
+      .select({ name: clients.name })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.organizationId, studio.organizationId),
+          eq(clients.email, household.email),
+        ),
+      );
+    expect(card.name).toBe("Люда");
+
+    // Stored only where it says something: the first booking carries no second
+    // name, because there is no second name to carry.
+    const rows = await adminDb
+      .select({ id: bookings.id, bookedAs: bookings.clientNameSnapshot })
+      .from(bookings)
+      .where(inArray(bookings.id, [hers.id, daughters.id]));
+    expect(rows.find((row) => row.id === hers.id)?.bookedAs).toBeNull();
+    expect(rows.find((row) => row.id === daughters.id)?.bookedAs).toBe("Ольга");
+  });
+});
+
+/**
+ * The other half of the same request: what the client hears when it is
+ * answered.
+ *
+ * It lives in this file because this is where a request that a studio has to
+ * answer exists — a booking taken at the desk is confirmed on the spot and was
+ * never a request at all.
+ *
+ * A public booking does not ask for an email. A client who gave only a number
+ * was therefore queued nothing when their request was accepted: not an SMS,
+ * because the rule then carried only a cancellation and a move, and no address
+ * for the email that would have carried it. The studio answered, and the answer
+ * reached nobody.
+ */
+describe("a client who booked without an address", () => {
+  async function clientRowsFor(bookingId: string) {
+    const rows = await adminDb
+      .select({ template: notificationOutbox.template, channel: notificationOutbox.channel })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.bookingId, bookingId));
+    return rows.filter((row) => row.template === "booking.request_accepted");
+  }
+
+  test("is texted that the studio accepted their request", async () => {
+    const booking = await requestAppointment("any", 10, {
+      name: "Ольга",
+      phone: "+373 69 555 444",
+      email: null,
+    });
+    expect(booking.status).toBe("pending_confirmation");
+
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    expect(await clientRowsFor(booking.id)).toEqual([
+      { template: "booking.request_accepted", channel: "sms" },
+    ]);
+  });
+
+  /**
+   * And the client who did leave one hears it exactly as before. The SMS is a
+   * replacement for an inbox, not a second copy for everyone: a studio pays per
+   * message, and this one would be paid for twice.
+   */
+  test("a client with an address still hears it by email alone", async () => {
+    const booking = await requestAppointment("any", 11, {
+      name: "Раиса",
+      phone: "+373 69 555 555",
+      email: "raisa@studio.example",
+    });
+
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    expect(await clientRowsFor(booking.id)).toEqual([
+      { template: "booking.request_accepted", channel: "email" },
+    ]);
+  });
+});
+
+/**
+ * The bell's other half: what already happened, for people who were not
+ * looking at the screen when it did.
+ *
+ * A studio's report, 13.09.2026: a client called off a visit and the master's
+ * page said nothing. Nothing was broken — the bell listed unanswered requests
+ * and only those, so a cancellation had no place in it to appear, and the email
+ * a minute later was the whole of the studio's warning.
+ */
+describe("the studio's own feed", () => {
+  type Feed = {
+    unread: number;
+    feed: {
+      booking_id: string;
+      kind: string;
+      unread: boolean;
+      earlier: string[];
+      previous_local_date: string | null;
+    }[];
+  };
+
+  const bellOf = async (actor: Actor) =>
+    dataOf<Feed>(await actor.get("/api/v1/notifications"));
+
+  test("carries a cancellation the client made, and marks it new", async () => {
+    const booking = await requestAppointment("any", 12, {
+      name: "Ольга",
+      phone: "+373 69 556 001",
+    });
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    /*
+     * The client, on their own link, with nobody in the studio watching. The
+     * token is the one their booking gave them — the studio's own reissue
+     * endpoint deliberately never hands it back, which is a rule worth not
+     * working around even in a test.
+     *
+     * The version travels with the cancellation the way it does on the page: it
+     * is what stops a stale tab calling off an appointment that has moved.
+     */
+    const manage = booking.manage_token;
+    const current = dataOf<{ version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${manage}`),
+    );
+    expect(
+      (
+        await anonymous.post(
+          `/api/v1/public/bookings/${manage}/cancel`,
+          { version: current.version },
+          { "idempotency-key": `feed-cancel-${crypto.randomUUID()}` },
+        )
+      ).status,
+    ).toBe(200);
+
+    const bell = await bellOf(studio.owner);
+    const line = bell.feed.find((row) => row.booking_id === booking.id);
+    expect(line).toMatchObject({ kind: "client_cancelled", unread: true, earlier: [] });
+    expect(bell.unread).toBeGreaterThan(0);
+
+    // And opening it is what reads it: the same line, no longer new.
+    expect((await studio.owner.post("/api/v1/notifications/read", {})).status).toBe(200);
+    const afterReading = await bellOf(studio.owner);
+    expect(afterReading.feed.find((row) => row.booking_id === booking.id)?.unread).toBe(false);
+    expect(afterReading.unread).toBe(0);
+  });
+
+  /**
+   * The rule that keeps the list worth opening: it reports what other people
+   * did, never what you just did yourself. An owner who cancels an appointment
+   * does not need the app to tell them about it — but the master whose day it
+   * was does.
+   */
+  test("says nothing to whoever did it, and tells the master whose day it was", async () => {
+    const master = await inviteMember(studio.owner, "feed-master@studio.example", "master");
+    const card = await bookableCard("Лента", master.userId);
+    const booking = await requestAppointment(card, 13, {
+      name: "Раиса",
+      phone: "+373 69 556 002",
+    });
+
+    expect(
+      (
+        await studio.owner.post(`/api/v1/bookings/${booking.id}/cancel`, {
+          reason: "studio_request",
+          cancelled_by: "staff",
+        })
+      ).status,
+    ).toBe(200);
+
+    const ownersBell = await bellOf(studio.owner);
+    expect(ownersBell.feed.map((row) => row.booking_id)).not.toContain(booking.id);
+
+    const mastersBell = await bellOf(master);
+    expect(mastersBell.feed.find((row) => row.booking_id === booking.id)).toMatchObject({
+      kind: "staff_cancelled",
+      unread: true,
+    });
   });
 });

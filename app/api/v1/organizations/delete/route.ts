@@ -1,8 +1,9 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
   auditEvents,
+  bookings,
   clients,
   expenses,
   externalReferences,
@@ -79,6 +80,22 @@ export async function POST(request: Request) {
       })
       .where(eq(invitations.organizationId, actor.organizationId))
       .returning({ id: invitations.id });
+
+    /*
+     * The name a public request was made under, which lives on the booking and
+     * not on the card. Cleared first, so that the pass below — which turns
+     * every card into «Deleted client» — does not leave the person's real name
+     * sitting one join away on the appointments it kept.
+     */
+    await tx
+      .update(bookings)
+      .set({ clientNameSnapshot: null, updatedBy: actor.userId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(bookings.organizationId, actor.organizationId),
+          isNotNull(bookings.clientNameSnapshot),
+        ),
+      );
 
     const anonymizedClients = await tx
       .update(clients)

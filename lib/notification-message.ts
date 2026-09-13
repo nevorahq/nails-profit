@@ -115,6 +115,23 @@ const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
 };
 
 /**
+ * The messages that say the same thing in fewer characters when they are a text.
+ *
+ * Only where the saving is a segment rather than a preference. Cyrillic is
+ * UCS-2 — seventy characters alone, sixty-seven apiece once it is not — and the
+ * confirmation's own sentence, «ваша заявка принята мастером Анна. Визит
+ * забронирован на 11 сент., 14:00», is eighty-eight with an ordinary studio
+ * name. Two segments, of which the second buys grammar.
+ *
+ * What goes is the master's name, not the facts: the studio, that the request
+ * was accepted, and when. The client chose that master themselves a moment ago,
+ * and the email — where the line costs nothing — still names them.
+ */
+const SMS_BODY = {
+  "booking.request_accepted": "notify.requestAccepted.bodySms",
+} as const satisfies Partial<Record<BookingNotificationTemplate, MessageKey>>;
+
+/**
  * The four staff messages that name the master, and what they say when the
  * master is the person reading them.
  *
@@ -191,14 +208,28 @@ export const smsNotificationTemplates: readonly BookingNotificationTemplate[] = 
  * The reasoning above says every message but the reminder "answers something
  * the client just did… and arrives while they are still looking at the screen
  * that caused it". That holds for the four a client causes. It does not hold
- * for the two a studio causes: a receptionist moving an appointment or calling
+ * for the ones a studio causes: a receptionist moving an appointment or calling
  * it off is not something the client is watching, and it reaches them exactly
  * the way the reminder does — out of nowhere, into a day that has moved on.
  *
- * Two, not more. Both are the same failure — the client arrives when nobody is
- * expecting them, or does not arrive when somebody is — and both are worth
- * 0,30 MDL to prevent. A confirmation is not: the client is standing at the
- * desk or on the phone while it is made, and has already been told.
+ * `booking.request_accepted` is the third of those, and it was left out at
+ * first on the grounds that "the client is standing at the desk or on the phone
+ * while it is made, and has already been told". That is `booking.confirmed` —
+ * an appointment taken at the desk or confirmed by the studio's instant
+ * setting, which is why the two are separate templates. A request is the
+ * opposite case: it is answered when somebody in the studio next opens the
+ * calendar, up to `confirmation_due_at` — two hours by default — and the client
+ * who sent it is by then doing something else entirely.
+ *
+ * Leaving it out had a consequence sharper than a missed notice. A public
+ * booking does not require an email, so a client who gives only a number was
+ * queued nothing at all when their request was accepted: not an SMS by this
+ * rule, and no address for the email that would have carried it. Their request
+ * was answered and the answer reached no one.
+ *
+ * Three, not more, and each is the same failure: the client arrives when nobody
+ * is expecting them, does not arrive when somebody is, or does not know whether
+ * they are expected at all. Every one is worth 0,30 MDL to prevent.
  *
  * Nobody has to opt in. This is transactional notice about an appointment the
  * client made, not marketing, and it goes only to a number they gave for it.
@@ -206,6 +237,7 @@ export const smsNotificationTemplates: readonly BookingNotificationTemplate[] = 
 export const smsFallbackTemplates: readonly BookingNotificationTemplate[] = [
   "booking.cancelled",
   "booking.rescheduled",
+  "booking.request_accepted",
 ];
 
 /**
@@ -343,7 +375,12 @@ export function renderNotification(facts: NotificationFacts): RenderedNotificati
     facts.businessType === "solo"
       ? SOLO_BODY[facts.template as keyof typeof SOLO_BODY]
       : undefined;
-  const lead = t(soloBody ?? (`${prefix}.body` as MessageKey), params);
+  /* The channel first: `SOLO_BODY` rewrites messages addressed to the studio,
+     which are read in an inbox, so the two lists cannot collide today — and if
+     one ever does, the segment is the constraint and taste is not. */
+  const smsBody =
+    facts.channel === "sms" ? SMS_BODY[facts.template as keyof typeof SMS_BODY] : undefined;
+  const lead = t(smsBody ?? soloBody ?? (`${prefix}.body` as MessageKey), params);
   const action =
     messageCarriesLink(facts.template, facts.channel) && facts.link !== ""
       ? {

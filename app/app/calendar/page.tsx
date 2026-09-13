@@ -414,7 +414,12 @@ export default async function CalendarPage({
       locationId: row.booking.locationId,
       locationName: row.locationName,
       clientId: row.booking.clientId,
-      clientName: row.clientName,
+      /* The name this appointment was booked under, then the card it belongs
+         to — the same pair the notification list shows, and for the same
+         reason: the card is whose history this joins, the snapshot is who is
+         coming. */
+      clientName: row.booking.clientNameSnapshot ?? row.clientName,
+      clientCardName: row.booking.clientNameSnapshot ? row.clientName : null,
       clientPhone: hideContacts ? null : row.clientPhone,
       serviceName: serviceLine
         ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? t("calendar.service"))

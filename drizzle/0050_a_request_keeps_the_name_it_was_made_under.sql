@@ -1,0 +1,1 @@
+ALTER TABLE "booking" ADD COLUMN "client_name_snapshot" text;

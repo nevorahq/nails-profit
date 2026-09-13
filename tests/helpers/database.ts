@@ -35,6 +35,8 @@ const TABLES_IN_DELETE_ORDER = [
   "organization_subscription",
   "notification_provider_event",
   "notification_outbox",
+  // Before `booking` and `specialist`, both of which it points at.
+  "staff_notice",
   "booking_verification",
   "booking_access_token",
   "booking_idempotency_key",

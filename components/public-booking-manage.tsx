@@ -52,6 +52,24 @@ type Slot = { starts_at: string; ends_at: string; specialist_id: string; special
  * may sit unanswered fits inside the budget.
  */
 const POLL_INTERVAL_MS = 30_000;
+/**
+ * The same watching, at the pace a confirmed appointment deserves.
+ *
+ * The page used to stop the moment the studio answered — `pending_confirmation`
+ * was the only status it watched — and that is the gap a studio found: a
+ * request confirmed at 16:16 and called off at 16:16 left the client's open
+ * page saying «Подтверждена» for as long as they cared to look at it. The
+ * cancellation reached them by email four minutes later, which is the channel
+ * this poll exists precisely because it cannot be relied on.
+ *
+ * Two minutes rather than thirty seconds, because the two states are different
+ * waits. A request is being answered now, by somebody between clients; a
+ * confirmed appointment changes rarely, and when it does the client is not
+ * sitting over the screen counting seconds. The slower tick spends the same
+ * budget over hours instead of minutes, which is what a page left open on a
+ * phone actually is.
+ */
+const CONFIRMED_POLL_INTERVAL_MS = 120_000;
 const POLL_BUDGET = 90;
 
 function todayInZone(timezone: string) {
@@ -127,6 +145,15 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
    */
   const [watching, setWatching] = useState(true);
   const checksLeft = useRef(POLL_BUDGET);
+  /**
+   * A refusal, as opposed to a budget that ran out.
+   *
+   * Both stop the timer, and only one of them may be started again without a
+   * person asking: coming back to the tab is a reason to look once more, while
+   * a "no" from the server — a revoked link, a studio rolled off the public
+   * surface, a limit already hit — is the thing that must not be asked twice.
+   */
+  const refused = useRef(false);
   const dueAt = booking.confirmation_due_at
     ? new Date(booking.confirmation_due_at).getTime()
     : null;
@@ -136,6 +163,7 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
       `/api/v1/public/bookings/${encodeURIComponent(token)}/status`,
     );
     if (!response.ok) {
+      refused.current = true;
       setWatching(false);
       return;
     }
@@ -158,13 +186,19 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
   }, [booking.status, booking.version, refresh, setNotice, setWatching, t, token]);
 
   useEffect(() => {
-    if (booking.status !== "pending_confirmation" || !watching) return;
+    // Anything still ahead of the client is worth watching: a request while it
+    // is answered, and an appointment while it stands. Only the ended ones —
+    // cancelled, finished, missed — have nothing left to report.
+    if (!active || !watching) return;
 
+    const pending = booking.status === "pending_confirmation";
     const timer = setInterval(() => {
       // Nobody is looking, so nothing needs saying — and a tab left open for a
       // week must not spend its budget while it sits behind other windows.
       if (document.visibilityState !== "visible") return;
-      if (dueAt !== null && Date.now() > dueAt) {
+      // The deadline belongs to the request: it is the hour the request lapses
+      // at, and a confirmed appointment is not waiting for it.
+      if (pending && dueAt !== null && Date.now() > dueAt) {
         setWatching(false);
         return;
       }
@@ -174,10 +208,37 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
       }
       checksLeft.current -= 1;
       void checkStatus();
-    }, POLL_INTERVAL_MS);
+    }, pending ? POLL_INTERVAL_MS : CONFIRMED_POLL_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [booking.status, checkStatus, dueAt, watching]);
+  }, [active, booking.status, checkStatus, dueAt, watching]);
+
+  /**
+   * Coming back to the tab asks once, straight away.
+   *
+   * The timer deliberately skips a hidden tab, so a client who put the phone
+   * down and picked it up an hour later was reading an hour-old screen until
+   * the next tick — two minutes, on an appointment that may have been called
+   * off in the meantime. Returning to the page is the moment they are actually
+   * asking the question, so that is the moment to answer it.
+   *
+   * It spends the same budget as a tick and, unlike the timer, does not need
+   * `watching`: a page that only ran out of ticks may look again, while one
+   * that was told "no" stays quiet.
+   */
+  useEffect(() => {
+    if (!active) return;
+
+    function lookAgain() {
+      if (document.visibilityState !== "visible") return;
+      if (refused.current || checksLeft.current <= 0) return;
+      checksLeft.current -= 1;
+      void checkStatus();
+    }
+
+    document.addEventListener("visibilitychange", lookAgain);
+    return () => document.removeEventListener("visibilitychange", lookAgain);
+  }, [active, checkStatus]);
 
   async function findSlots(event: FormEvent) {
     event.preventDefault();
@@ -328,10 +389,24 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
           nothing here would leave a client staring at a screen with no way to
           tell whether it is still listening.
         */}
-        {booking.status === "pending_confirmation" && (
+        {active && (
           <p className="booking-watching" role="status">
             {watching ? (
-              <span>{t("publicBooking.watching")}</span>
+              /*
+                Two waits, two sentences. A request is waiting for an answer and
+                the page says it will show it; a confirmed appointment is not
+                waiting for anything, and promising an answer to a client who is
+                not expecting one reads as though something were still unsettled.
+                What it promises instead is the thing this page was not doing: to
+                say so if the studio changes it.
+              */
+              <span>
+                {t(
+                  booking.status === "pending_confirmation"
+                    ? "publicBooking.watching"
+                    : "publicBooking.watchingConfirmed",
+                )}
+              </span>
             ) : (
               <>
                 <span>{t("publicBooking.watchingStopped")}</span>
@@ -339,6 +414,9 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
                   className="inline-action"
                   type="button"
                   onClick={() => {
+                    // A person asking is the one thing that clears a refusal:
+                    // they can see the screen, and they decided to press it.
+                    refused.current = false;
                     checksLeft.current = POLL_BUDGET;
                     setWatching(true);
                     void checkStatus();

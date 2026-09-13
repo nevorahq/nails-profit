@@ -345,10 +345,21 @@ export async function moveIntoThePast(studio: Studio, bookingId: string): Promis
 export async function requestAppointmentAsClient(
   baseURL: string,
   studio: Studio,
-  options: Readonly<{ date: Date; specialistId?: string; name?: string; afterTime?: string }> = {
+  options: Readonly<{
+    date: Date;
+    specialistId?: string;
+    name?: string;
+    afterTime?: string;
+    /* Given together when two requests have to land on one client card: the
+       number and the address are what the booking endpoint matches on, and a
+       random pair — the default — is what keeps every other test's client to
+       itself. */
+    phone?: string;
+    email?: string;
+  }> = {
     date: daysFromToday(1),
   },
-): Promise<{ id: string; status: string }> {
+): Promise<{ id: string; status: string; manage_token: string }> {
   const anonymous = await newRequest.newContext({
     baseURL,
     extraHTTPHeaders: { "x-forwarded-for": clientAddress() },
@@ -384,21 +395,56 @@ export async function requestAppointmentAsClient(
       "public hold",
     );
 
-    return await unwrap<{ id: string; status: string }>(
+    // The manage token comes back with the booking: it is the client's only way
+    // to their own appointment, and a test that opens that page needs it.
+    return await unwrap<{ id: string; status: string; manage_token: string }>(
       await anonymous.post(`/api/v1/public/booking/${studio.slug}/bookings`, {
         data: {
           hold_token: hold.hold_token,
           service_id: studio.serviceId,
           add_on_ids: [],
           name: options.name ?? "Client Chase",
-          phone: `+373 69 ${String(Math.floor(Math.random() * 900_000) + 100_000)}`,
-          email: `pw-client-${Math.random().toString(36).slice(2, 8)}@example.com`,
+          phone: options.phone ?? `+373 69 ${String(Math.floor(Math.random() * 900_000) + 100_000)}`,
+          email: options.email ?? `pw-client-${Math.random().toString(36).slice(2, 8)}@example.com`,
           locale: "en",
           legal_accepted: true,
         },
         headers: { "idempotency-key": `pw-public-${Math.random().toString(36).slice(2)}-${Date.now()}` },
       }),
       "public booking",
+    );
+  } finally {
+    await anonymous.dispose();
+  }
+}
+
+/**
+ * The client calling their own visit off, from their own link.
+ *
+ * The studio's reissue endpoint deliberately never hands the token back, so the
+ * only way to hold one is the way a client does: it came with their booking.
+ * The version goes with the request for the reason the page sends it — a tab
+ * left open must not cancel an appointment that has moved since.
+ */
+export async function cancelAsClient(
+  baseURL: string,
+  manageToken: string,
+): Promise<{ status: string }> {
+  const anonymous = await newRequest.newContext({
+    baseURL,
+    extraHTTPHeaders: { "x-forwarded-for": clientAddress() },
+  });
+  try {
+    const current = await unwrap<{ version: number }>(
+      await anonymous.get(`/api/v1/public/bookings/${manageToken}`),
+      "public booking",
+    );
+    return await unwrap<{ status: string }>(
+      await anonymous.post(`/api/v1/public/bookings/${manageToken}/cancel`, {
+        data: { version: current.version },
+        headers: { "idempotency-key": `pw-cancel-${Math.random().toString(36).slice(2)}` },
+      }),
+      "public cancel",
     );
   } finally {
     await anonymous.dispose();

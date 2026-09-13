@@ -16,11 +16,15 @@ import {
  * The number was printed there to be read aloud and typed into a handset; this
  * is the same number as something to press.
  *
- * What has to hold is that the number shown and the number dialled are one
- * number. A `tel:` href is the one thing on this screen a reader cannot check
- * before acting on it — by the time the dialler opens, the call is the studio's
- * problem, and a card that displays one client and rings another is worse than
- * one that offers no link at all.
+ * It is now four ways rather than one — a call, and the three messengers a
+ * client who does not pick up may answer instead — and the number itself is
+ * what opens them.
+ *
+ * What has to hold is that the number shown and the number reached are one
+ * number. An address behind a link is the one thing on this screen a reader
+ * cannot check before acting on it — by the time the dialler or the messenger
+ * opens, the call is the studio's problem, and a card that displays one client
+ * and rings another is worse than one that offers no link at all.
  */
 test.describe("the client's number on an appointment", () => {
   let studio: Studio;
@@ -42,14 +46,25 @@ test.describe("the client's number on an appointment", () => {
     await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);
     await page.locator(".calendar-entry summary").first().click();
 
-    const call = page.locator(".calendar-call");
-    await expect(call).toHaveCount(1);
+    const number = page.locator(".calendar-call");
+    await expect(number).toHaveCount(1);
+    const shown = (await number.textContent())!.trim();
 
-    const shown = (await call.textContent())!.trim();
-    const href = await call.getAttribute("href");
+    // The ways appear only when somebody asks for them: the card is dense
+    // enough without three brand names nobody pressed.
+    await expect(page.locator(".client-contact-ways")).toHaveCount(0);
+    await number.click();
+
+    const call = page.locator('.client-contact-way[data-channel="call"]');
+    // The call is first and still one tap from the number, which is what this
+    // line was before it was a menu.
+    await expect(page.locator(".client-contact-way").first()).toHaveAttribute(
+      "data-channel",
+      "call",
+    );
 
     // The assertion this test exists for.
-    expect(href).toBe(`tel:${shown}`);
+    expect(await call.getAttribute("href")).toBe(`tel:${shown}`);
 
     /*
      * And the stored form is one a dialler accepts. The client typed «+373 69
@@ -79,9 +94,49 @@ test.describe("the client's number on an appointment", () => {
     await page.locator(".calendar-entry summary").first().click();
 
     // A Master keeps their own clients' contacts: theirs is the appointment.
-    const call = page.locator(".calendar-call");
-    await expect(call).toHaveCount(1);
-    await expect(call).toHaveAttribute("href", /^tel:\+\d+$/);
+    const number = page.locator(".calendar-call");
+    await expect(number).toHaveCount(1);
+    await number.click();
+    await expect(page.locator('.client-contact-way[data-channel="call"]')).toHaveAttribute(
+      "href",
+      /^tel:\+\d+$/,
+    );
+
+    await context.close();
+  });
+
+  /**
+   * The three that are not a call, each in the shape its own service accepts —
+   * bare digits for WhatsApp, bare digits for Telegram, an encoded plus for
+   * Viber. Built from one column, so the way to get them wrong is to get them
+   * all wrong at once, which is precisely what this asserts against.
+   */
+  test("offers the messengers the same number, each in its own form", async ({
+    browser,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const page = await context.newPage();
+
+    await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);
+    await page.locator(".calendar-entry summary").first().click();
+    const number = page.locator(".calendar-call");
+    const shown = (await number.textContent())!.trim();
+    const digits = shown.slice(1);
+    await number.click();
+
+    const ways = page.locator(".client-contact-way");
+    await expect(ways).toHaveCount(4);
+    await expect(ways.nth(1)).toHaveAttribute("href", `https://wa.me/${digits}`);
+    await expect(ways.nth(2)).toHaveAttribute("href", `tg://resolve?phone=${digits}`);
+    await expect(ways.nth(3)).toHaveAttribute("href", `viber://chat?number=%2B${digits}`);
+
+    // And it closes the way a menu closes, without taking the appointment's own
+    // disclosure with it.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".client-contact-ways")).toHaveCount(0);
+    await expect(page.locator(".calendar-detail")).toBeVisible();
 
     await context.close();
   });

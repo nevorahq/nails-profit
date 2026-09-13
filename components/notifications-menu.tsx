@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ChromeIcon } from "@/components/icons";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { getTranslator, type MessageKey } from "@/i18n/t";
+import { localeTag } from "@/i18n/translate";
 import { playNotificationChime, unlockNotificationChime } from "@/lib/notification-chime";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
@@ -14,18 +15,68 @@ type NotificationItem = Readonly<{
   specialist_id: string;
   specialist_name: string;
   client_name: string | null;
+  /** The card's own name, sent only when the request was made under another. */
+  client_card_name: string | null;
   service_name: string | null;
   local_date: string;
   local_time: string;
 }>;
 
+type NoticeKind =
+  | "client_booked"
+  | "client_rescheduled"
+  | "client_cancelled"
+  | "client_released"
+  | "staff_rescheduled"
+  | "staff_cancelled";
+
+/** One appointment's story, however many events it took. */
+type NoticeItem = Readonly<{
+  booking_id: string;
+  kind: NoticeKind;
+  /** What happened before the line above it, oldest first. */
+  earlier: readonly NoticeKind[];
+  unread: boolean;
+  happened_at: string;
+  client_name: string | null;
+  specialist_id: string;
+  specialist_name: string;
+  local_date: string;
+  local_time: string;
+  previous_local_date: string | null;
+  previous_local_time: string | null;
+  /** The day this reader can act on, which is not always the booking's own. */
+  link_date: string;
+}>;
+
+type Notifications = Readonly<{
+  pending: readonly NotificationItem[];
+  feed: readonly NoticeItem[];
+  unread: number;
+}>;
+
+/**
+ * What the chime is for: something arrived, not something changed.
+ *
+ * A request is new by its id. A notice is new by the moment it happened, so
+ * that a second cancellation on an appointment the reader has already seen
+ * still sounds — it is another hour gone, and the row it collapses into looks
+ * almost the same.
+ */
+function keysOf(next: Notifications) {
+  return new Set([
+    ...next.pending.map((row) => `pending:${row.id}`),
+    ...next.feed.map((row) => `notice:${row.booking_id}:${row.happened_at}`),
+  ]);
+}
+
 /** How often an open tab checks for a new request while nobody has clicked the bell. */
 const POLL_INTERVAL_MS = 30_000;
 
-async function fetchNotifications(locale: AppLocale, fallback: string): Promise<NotificationItem[]> {
+async function fetchNotifications(locale: AppLocale, fallback: string): Promise<Notifications> {
   const response = await fetch(`/api/v1/notifications?locale=${locale}`);
   if (!response.ok) throw new Error(fallback);
-  const body = (await response.json()) as { data: NotificationItem[] };
+  const body = (await response.json()) as { data: Notifications };
   return body.data;
 }
 
@@ -45,23 +96,23 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
   const loadFailed = t("notifications.loadFailed");
 
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<NotificationItem[] | null>(null);
+  const [data, setData] = useState<Notifications | null>(null);
   const [failed, setFailed] = useState(false);
   const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
 
   // Null until the first successful load, so that load never counts as
-  // "new" — only a request that lands after the list was already known to.
-  const knownIds = useRef<Set<string> | null>(null);
+  // "new" — only something that lands after the list was already known to.
+  const known = useRef<Set<string> | null>(null);
 
-  function applyItems(rows: NotificationItem[]) {
-    const ids = new Set(rows.map((row) => row.id));
-    if (knownIds.current && rows.some((row) => !knownIds.current!.has(row.id))) {
+  const apply = useCallback((next: Notifications) => {
+    const keys = keysOf(next);
+    if (known.current && [...keys].some((key) => !known.current!.has(key))) {
       playNotificationChime();
     }
-    knownIds.current = ids;
-    setItems(rows);
+    known.current = keys;
+    setData(next);
     setFailed(false);
-  }
+  }, []);
 
   useEffect(() => {
     unlockNotificationChime();
@@ -69,8 +120,8 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
 
     function poll() {
       void fetchNotifications(locale, loadFailed)
-        .then((rows) => {
-          if (!ignore) applyItems(rows);
+        .then((next) => {
+          if (!ignore) apply(next);
         })
         .catch(() => {
           if (!ignore) setFailed(true);
@@ -83,13 +134,35 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
       ignore = true;
       clearInterval(timer);
     };
-  }, [locale, loadFailed]);
+  }, [apply, locale, loadFailed]);
 
   async function reload() {
     try {
-      applyItems(await fetchNotifications(locale, loadFailed));
+      apply(await fetchNotifications(locale, loadFailed));
     } catch {
       setFailed(true);
+    }
+  }
+
+  /**
+   * Opening the list is what reads it.
+   *
+   * The mark is written on the server and taken locally at once rather than
+   * waited for: the dot going out is the answer to a click, and a client that
+   * blinked until a round trip finished would be the interface asking to be
+   * clicked again. A failed write leaves the rows unread, which the next poll
+   * shows honestly.
+   */
+  async function markRead() {
+    setData((current) =>
+      current
+        ? { ...current, unread: 0, feed: current.feed.map((row) => ({ ...row, unread: false })) }
+        : current,
+    );
+    try {
+      await fetch("/api/v1/notifications/read", { method: "POST" });
+    } catch {
+      /* The dot comes back on the next poll, which is the honest answer. */
     }
   }
 
@@ -105,11 +178,16 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
         onClick={() => {
           const next = !open;
           setOpen(next);
-          if (next) void reload();
+          if (next) {
+            void reload();
+            void markRead();
+          }
         }}
       >
         <ChromeIcon name="bell" />
-        {items !== null && items.length > 0 && (
+        {/* A dot for either half: a request nobody has answered, or something
+            that happened since this person last looked. */}
+        {data !== null && (data.pending.length > 0 || data.unread > 0) && (
           <span className="topbar-notifications-badge" aria-hidden="true" />
         )}
       </button>
@@ -125,14 +203,20 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
           </div>
 
           {failed && <p className="notifications-empty">{loadFailed}</p>}
-          {!failed && items === null && <p className="notifications-empty">{t("notifications.loading")}</p>}
-          {!failed && items !== null && items.length === 0 && (
+          {!failed && data === null && <p className="notifications-empty">{t("notifications.loading")}</p>}
+          {!failed && data !== null && data.pending.length === 0 && data.feed.length === 0 && (
             <p className="notifications-empty">{t("notifications.empty")}</p>
           )}
 
-          {items !== null && items.length > 0 && (
-            <ul className="notifications-list">
-              {items.map((item) => (
+          {data !== null && data.pending.length > 0 && (
+            <>
+              {/* Named only when there is a second group under it: one list
+                  needs no heading to tell it from the list it is not beside. */}
+              {data.feed.length > 0 && (
+                <p className="notifications-group">{t("notifications.waiting")}</p>
+              )}
+              <ul className="notifications-list">
+              {data.pending.map((item) => (
                 <li key={item.id}>
                   {/*
                     The day the request sits on, and whose it is. No status.
@@ -158,15 +242,84 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
                     onClick={() => setOpen(false)}
                   >
                     <strong>{item.client_name ?? t("calendar.noClient")}</strong>
+                    {/*
+                      Whose card it landed on, when that is somebody else's
+                      name. One number in a household is one card, and the
+                      request above was made under the name of whoever is
+                      actually coming — which is the name the master needs, with
+                      the card named underneath so the two can be told apart.
+                    */}
+                    {item.client_card_name && (
+                      <small>{t("calendar.clientCard", { name: item.client_card_name })}</small>
+                    )}
                     <small>{[item.service_name, item.specialist_name].filter(Boolean).join(" · ")}</small>
                     <small>{`${item.local_date} · ${item.local_time}`}</small>
                   </Link>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
+          )}
+
+          {data !== null && data.feed.length > 0 && (
+            <>
+              <p className="notifications-group">{t("notifications.happened")}</p>
+              <ul className="notifications-list">
+                {data.feed.map((notice) => (
+                  <li key={`${notice.booking_id}:${notice.happened_at}`}>
+                    <Link
+                      className={`notifications-item${notice.unread ? " unread" : ""}`}
+                      role="menuitem"
+                      href={`/app/calendar?date=${notice.link_date}&specialist=${notice.specialist_id}`}
+                      onClick={() => setOpen(false)}
+                    >
+                      <strong>
+                        {notice.client_name ?? t("calendar.noClient")}
+                        <span className="notifications-what">
+                          {t(`notifications.kind.${notice.kind}` as MessageKey)}
+                        </span>
+                      </strong>
+                      <small>{notice.specialist_name}</small>
+                      {/* The hour it was at, where that is not the hour it is
+                          at now: a move states both, and a cancellation has
+                          only the one it will no longer be at. */}
+                      <small>
+                        {notice.previous_local_date
+                          ? t("notifications.was", {
+                              when: `${notice.previous_local_date} · ${notice.previous_local_time}`,
+                            })
+                          : `${notice.local_date} · ${notice.local_time}`}
+                      </small>
+                      <small className="notifications-when">
+                        {happenedAt(notice.happened_at, locale)}
+                        {notice.earlier.length > 0 &&
+                          ` · ${t("notifications.more", { count: String(notice.earlier.length) })}`}
+                      </small>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * When it happened, on the reader's own clock.
+ *
+ * The appointment times on these rows are the location's — a client reads their
+ * own hour, and so does the master standing in that room. This one is not about
+ * the appointment at all: it answers «когда это произошло», which is a question
+ * about the moment the person reading is living in.
+ */
+function happenedAt(iso: string, locale: AppLocale) {
+  return new Intl.DateTimeFormat(localeTag(locale), {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
