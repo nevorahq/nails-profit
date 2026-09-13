@@ -1005,7 +1005,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 {fieldErrors.phone && <span id="booking-phone-error" className="field-error">{fieldErrors.phone}</span>}
               </label>
               <label htmlFor="booking-email">
-                {t(emailRequired ? "publicBooking.emailRequired" : "publicBooking.email")}
+                {t("publicBooking.email")}
                 <input id="booking-email" name="email" type="email" autoComplete="email" placeholder={t("publicBooking.emailPlaceholder")} required={emailRequired} defaultValue={contact?.email ?? ""} aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? "booking-email-error" : undefined} onChange={() => clearFieldError("email")} />
                 {fieldErrors.email && <span id="booking-email-error" className="field-error">{fieldErrors.email}</span>}
               </label>

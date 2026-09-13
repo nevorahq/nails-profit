@@ -63,7 +63,7 @@ test.describe("the public booking page", () => {
     await expect(page.locator(".public-booking-summary")).toContainText("Manicure with coating");
     await page.getByLabel("Name").fill("Clara Client");
     await page.locator("#booking-phone").fill("+373 69 555 111");
-    await page.getByLabel("Email (optional)").fill("clara@example.com");
+    await page.locator("#booking-email").fill("clara@example.com");
     await page.locator("#booking-legalAccepted").check();
     await page.getByRole("button", { name: "Confirm booking" }).click();
 
@@ -334,7 +334,7 @@ test.describe("a refused booking", () => {
 
       await page.getByLabel("Name").fill(contact.name);
       await page.locator("#booking-phone").fill(contact.phone);
-      await page.getByLabel("Email (optional)").fill(contact.email);
+      await page.locator("#booking-email").fill(contact.email);
       await page.locator("#booking-legalAccepted").check();
       await page.getByRole("button", { name: "Confirm booking" }).click();
     };
