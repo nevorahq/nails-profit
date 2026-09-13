@@ -125,7 +125,7 @@ async function bookableCard(name: string, userId?: string) {
 async function requestAppointment(
   specialistId: string = "any",
   week = 1,
-  contact: { name?: string; phone?: string; email?: string } = {},
+  contact: { name?: string; phone?: string; email?: string | null } = {},
 ) {
   const slots = dataOf<{ slots: { starts_at: string; specialist_id: string }[] }>(
     await anonymous.get(
@@ -156,7 +156,9 @@ async function requestAppointment(
         phone: contact.phone ?? "+373 69 123 456",
         // The pilot's provider is email, so the public form requires one; the
         // client's own message is the second one this dispatch sends.
-        email: contact.email ?? "client@studio.example",
+        // `??` cannot say "no address": a client who left only a number is the
+        // case half of these tests are about.
+        email: "email" in contact ? contact.email : "client@studio.example",
         locale: "ru",
         legal_accepted: true,
       },
@@ -637,3 +639,62 @@ describe("a request made under a name the card does not carry", () => {
     expect(rows.find((row) => row.id === daughters.id)?.bookedAs).toBe("Ольга");
   });
 });
+
+/**
+ * The other half of the same request: what the client hears when it is
+ * answered.
+ *
+ * It lives in this file because this is where a request that a studio has to
+ * answer exists — a booking taken at the desk is confirmed on the spot and was
+ * never a request at all.
+ *
+ * A public booking does not ask for an email. A client who gave only a number
+ * was therefore queued nothing when their request was accepted: not an SMS,
+ * because the rule then carried only a cancellation and a move, and no address
+ * for the email that would have carried it. The studio answered, and the answer
+ * reached nobody.
+ */
+describe("a client who booked without an address", () => {
+  async function clientRowsFor(bookingId: string) {
+    const rows = await adminDb
+      .select({ template: notificationOutbox.template, channel: notificationOutbox.channel })
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.bookingId, bookingId));
+    return rows.filter((row) => row.template === "booking.request_accepted");
+  }
+
+  test("is texted that the studio accepted their request", async () => {
+    const booking = await requestAppointment("any", 10, {
+      name: "Ольга",
+      phone: "+373 69 555 444",
+      email: null,
+    });
+    expect(booking.status).toBe("pending_confirmation");
+
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    expect(await clientRowsFor(booking.id)).toEqual([
+      { template: "booking.request_accepted", channel: "sms" },
+    ]);
+  });
+
+  /**
+   * And the client who did leave one hears it exactly as before. The SMS is a
+   * replacement for an inbox, not a second copy for everyone: a studio pays per
+   * message, and this one would be paid for twice.
+   */
+  test("a client with an address still hears it by email alone", async () => {
+    const booking = await requestAppointment("any", 11, {
+      name: "Раиса",
+      phone: "+373 69 555 555",
+      email: "raisa@studio.example",
+    });
+
+    expect((await studio.owner.post(`/api/v1/bookings/${booking.id}/confirm`, {})).status).toBe(200);
+
+    expect(await clientRowsFor(booking.id)).toEqual([
+      { template: "booking.request_accepted", channel: "email" },
+    ]);
+  });
+});
+

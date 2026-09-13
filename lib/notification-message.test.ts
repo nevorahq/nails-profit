@@ -334,11 +334,16 @@ describe("appointment time", () => {
 describe("SMS as a replacement for an inbox", () => {
   /**
    * The list is short on purpose and the reason is money: a studio pays per
-   * message, and these two are the only ones whose absence puts a client
-   * outside a locked door or in a chair nobody is expecting them in.
+   * message, and these three are the only ones whose absence puts a client
+   * outside a locked door, in a chair nobody is expecting them in, or waiting
+   * on an answer that was given hours ago.
    */
   it("carries only what a client cannot afford to miss", () => {
-    expect([...smsFallbackTemplates].sort()).toEqual(["booking.cancelled", "booking.rescheduled"]);
+    expect([...smsFallbackTemplates].sort()).toEqual([
+      "booking.cancelled",
+      "booking.request_accepted",
+      "booking.rescheduled",
+    ]);
   });
 
   it("sends a cancellation the studio decided on", () => {
@@ -362,14 +367,63 @@ describe("SMS as a replacement for an inbox", () => {
     expect(smsReplacesEmail("booking.rescheduled", null)).toBe(true);
   });
 
+  /**
+   * The answer to a request, which is the one acceptance nobody is watching
+   * for: it comes when somebody in the studio next opens the calendar, up to
+   * `confirmation_due_at` later. A client who gave only a number was queued
+   * nothing at all for it — no SMS by the old rule, and no address for the
+   * email — so their request was answered and the answer reached no one.
+   */
+  it("sends the answer to a request, which arrives long after it was asked", () => {
+    expect(smsReplacesEmail("booking.request_accepted", null)).toBe(true);
+  });
+
+  /**
+   * And not its neighbour. `booking.confirmed` covers an appointment that was
+   * never a request — taken at the desk, or confirmed by the studio's instant
+   * setting — where the client was there while it was made.
+   */
   it.each([
     "booking.confirmed",
     "booking.pending_confirmation",
-    "booking.request_accepted",
     "booking.visit_completed",
     "booking.link_reissued",
   ] as const)("leaves %s to email alone", (template) => {
     expect(smsReplacesEmail(template, null)).toBe(false);
+  });
+
+  /**
+   * The confirmation in the shape it is paid for.
+   *
+   * Its own sentence — «ваша заявка принята мастером Ирина. Визит забронирован
+   * на …» — is eighty-eight characters with an ordinary studio name, which in
+   * UCS-2 is two segments and twice the price for the same three facts. The
+   * short one keeps the studio, the acceptance and the hour, and is measured
+   * here against a long name so that nobody can grow it back by a word.
+   */
+  it("says the acceptance in one segment, in every language", () => {
+    const at = new Date("2026-09-11T11:00:00.000Z");
+    for (const locale of supportedLocales) {
+      const when = formatAppointmentTime(at, "Europe/Chisinau", locale, "sms");
+      const sms = renderNotification({
+        ...base,
+        locale,
+        channel: "sms",
+        studioName: "Студия красоты Анастасии",
+        when,
+        template: "booking.request_accepted",
+      });
+
+      expect(sms.body.length, `${locale}: ${sms.body}`).toBeLessThanOrEqual(70);
+      expect(sms.body).toContain(when);
+      // The master's name is what was cut. The email below still has it.
+      expect(sms.body).not.toContain("Ирина");
+    }
+  });
+
+  it("keeps the master's name where the line is free", () => {
+    const email = renderNotification({ ...base, template: "booking.request_accepted" });
+    expect(email.body).toContain("Ирина");
   });
 
   /**

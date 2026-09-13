@@ -341,6 +341,7 @@ const ru = {
   "notify.requestAccepted.subject": "{studio}: заявка принята",
   "notify.requestAccepted.body":
     "{studio}: ваша заявка принята мастером {specialist}. Визит забронирован на {when}.",
+  "notify.requestAccepted.bodySms": "{studio}: заявка принята, визит {when}.",
   "notify.requestAccepted.cta": "Перенести или отменить",
   "notify.rescheduled.subject": "{studio}: запись перенесена",
   "notify.rescheduled.body": "{studio}: новое время записи — {when}.",
@@ -1622,6 +1623,7 @@ const ro: Record<MessageKey, Message> = {
   "notify.requestAccepted.subject": "{studio}: cererea a fost acceptată",
   "notify.requestAccepted.body":
     "{studio}: cererea dumneavoastră a fost acceptată de {specialist}. Vizita este rezervată pentru {when}.",
+  "notify.requestAccepted.bodySms": "{studio}: cerere acceptată, vizita {when}.",
   "notify.requestAccepted.cta": "Reprogramați sau anulați",
   "notify.rescheduled.subject": "{studio}: programare reprogramată",
   "notify.rescheduled.body": "{studio}: noua oră a programării este {when}.",
@@ -2897,6 +2899,7 @@ const en: Record<MessageKey, Message> = {
   "notify.requestAccepted.subject": "{studio}: your request was accepted",
   "notify.requestAccepted.body":
     "{studio}: your request was accepted by {specialist}. The visit is booked for {when}.",
+  "notify.requestAccepted.bodySms": "{studio}: request accepted, visit {when}.",
   "notify.requestAccepted.cta": "Reschedule or cancel",
   "notify.rescheduled.subject": "{studio}: booking moved",
   "notify.rescheduled.body": "{studio}: your booking is now {when}.",
