@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { ContactIcon } from "@/components/icons";
 import { contactWays, type ContactChannel } from "@/domain/contact-links";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
@@ -11,6 +12,10 @@ import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
  * Brand names, not words: nobody translates WhatsApp, and a dictionary entry
  * per language for a name that is the same in all three would be three places
  * to spell it wrong. «Позвонить» is a verb and lives in the dictionary.
+ *
+ * Printed small under each mark, which is what makes the row readable at a
+ * glance: two of the four are a handset in a bubble, and the word beneath is
+ * faster than telling the bubbles apart. It is the link's accessible name too.
  */
 const BRAND: Partial<Record<ContactChannel, string>> = {
   whatsapp: "WhatsApp",
@@ -75,7 +80,13 @@ export function ClientContact({ phone, locale }: { phone: string; locale: AppLoc
               rel={way.href.startsWith("https:") ? "noreferrer" : undefined}
               onClick={() => setOpen(false)}
             >
-              {BRAND[way.channel] ?? t("contact.call")}
+              <ContactIcon name={way.channel} />
+              {/* Named under the mark rather than in an `aria-label`: a line of
+                  text a person can read is also the accessible name, and two
+                  names on one link is one of them going stale. */}
+              <span className="client-contact-name">
+                {BRAND[way.channel] ?? t("contact.call")}
+              </span>
             </a>
           ))}
         </span>
