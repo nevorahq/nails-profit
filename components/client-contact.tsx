@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { ContactIcon } from "@/components/icons";
-import type { ContactChannelMarks } from "@/domain/contact-channels";
+import { offeredChannels, type ContactChannelMarks } from "@/domain/contact-channels";
 import { contactWays, type ContactChannel } from "@/domain/contact-links";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
@@ -51,7 +51,15 @@ export function ClientContact({
   const t = getTranslator(locale);
   const [open, setOpen] = useState(false);
   const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
-  const ways = contactWays(phone);
+  /*
+   * What the number allows, narrowed to what somebody said reaches this client.
+   *
+   * The call survives every narrowing — see `offeredChannels` — so a client
+   * nobody has been asked about is one link rather than none, and the studio
+   * reaches them the way the number always allowed.
+   */
+  const offered = offeredChannels(marks);
+  const ways = contactWays(phone).filter((way) => offered.includes(way.channel));
 
   // A number in a shape none of these services accepts is still a number the
   // desk can read aloud. It is printed, and it does nothing.
@@ -76,11 +84,13 @@ export function ClientContact({
             <a
               key={way.channel}
               /*
-               * Three states, and the third is why this is not a boolean.
-               * «Неизвестно» — nobody has said — must not be drawn as «нет», or
-               * the desk stops trying a messenger that would have worked. And
-               * «нет» stays clickable: it is somebody's note from a week ago,
-               * not a fact about today.
+               * What is left of the three states once absence does the talking.
+               *
+               * Every messenger drawn here is a «да», so the mark on it says
+               * «somebody was asked and answered»; the call carries no mark and
+               * never will, and reads as the one that is simply always there.
+               * «Нет» and «неизвестно» are no longer drawn at all — they are the
+               * rows this menu now leaves out.
                */
               className={`client-contact-way${
                 marks[way.channel] ? ` is-${marks[way.channel]!.state}` : ""

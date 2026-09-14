@@ -1,23 +1,35 @@
+import { z } from "zod";
+
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { bookingModuleRefusal } from "@/lib/booking-http";
-import { apiError, apiSuccess, requestId } from "@/lib/http";
+import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
-import { markNoticesRead } from "@/lib/staff-notices";
+import { markNoticeRead } from "@/lib/staff-notices";
 
 /**
- * "I have seen the bell."
+ * "I have dealt with this one."
  *
- * One moment per person per studio, written when they open the list, and that
- * is the whole read model: everything older is read, anything newer is not.
- * No row per notice — the question a bell answers is «есть ли что-то новое»,
- * and a table of read receipts would be a larger thing to keep correct than the
- * question deserves.
+ * It used to be «I have seen the bell» — one moment per person per studio,
+ * written when they opened the list, and everything older than it was read.
+ * That answers «есть ли что-то новое» and it was the right shape while the feed
+ * was a record of what happened.
  *
- * A POST because it changes something, and the something is small enough that
- * the answer is the moment it wrote: a client that sent the request can stop
- * showing its dot without asking again.
+ * It is a queue now: a line sinks below the ones still waiting once its
+ * appointment has been opened, and a list that emptied itself the moment
+ * somebody glanced at it could not also be the list of what is left to work
+ * through. One timestamp cannot say «эти три я посмотрел, а ту нет» however it
+ * is read, so the mark is per appointment — see `staff_notice_read`.
+ *
+ * The booking is not checked against what this reader can see. Nothing is
+ * revealed by writing one of these: the row is never read back by anybody else,
+ * the foreign key already refuses an appointment that does not exist, and the
+ * tenant policy refuses one belonging to another studio. What is left is
+ * somebody marking their own copy of a line they were not shown, which costs
+ * nothing and saves a query on every click.
  */
+const schema = z.object({ booking_id: z.uuid() });
+
 export async function POST(request: Request) {
   const id = requestId(request);
   const caller = await getActiveMembership();
@@ -41,14 +53,27 @@ export async function POST(request: Request) {
   const disabled = await bookingModuleRefusal(actor.organizationId, id, "read");
   if (disabled) return disabled;
 
+  /*
+   * Parsed after the role is checked, so somebody without the calendar still
+   * meets a 403 rather than a complaint about their request body: which of the
+   * two a caller is told is the difference the RBAC matrix asserts.
+   */
+  const parsed = schema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
+      fieldErrors: toFieldErrors(parsed.error.issues),
+    });
+  }
+
   const now = new Date();
   await withTenant(actor.organizationId, async (tx) => {
-    await markNoticesRead(tx, {
+    await markNoticeRead(tx, {
       organizationId: actor.organizationId,
       userId: actor.userId,
+      bookingId: parsed.data.booking_id,
       now,
     });
   });
 
-  return apiSuccess({ read_at: now.toISOString() }, id);
+  return apiSuccess({ booking_id: parsed.data.booking_id, read_at: now.toISOString() }, id);
 }

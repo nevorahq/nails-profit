@@ -460,17 +460,26 @@ async function verificationFacts(
  */
 function staffMessageStillHolds(template: StaffNotificationTemplate, status: string): boolean {
   if (template === "booking.staff_requested") return status === "pending_confirmation";
+  /*
+   * Both say an appointment is off, and nothing follows `cancelled`. The second
+   * is narrower than it looks: the repair job is the only writer of it, and a
+   * request it cancelled cannot become anything else.
+   */
   if (template === "booking.staff_cancelled") return status === "cancelled";
+  if (template === "booking.staff_request_expired") return status === "cancelled";
   /*
    * The move off this master's day already happened, and nothing the booking
    * becomes afterwards gives the hour back — confirmed, moved again or called
    * off, it is still not theirs. The one thing that would undo it is the
    * booking coming back to their card, which is a question about the card and
    * not about the status: `staffFacts` asks it, where the payload is.
+   *
+   * True of both, because who performed the move changes the sentence and not
+   * the fact it asserts.
    */
-  if (template === "booking.staff_released") return true;
-  // The other two announce an hour somebody is expected in, which is exactly
-  // what an active status means.
+  if (template === "booking.staff_released" || template === "booking.staff_freed") return true;
+  // The rest announce an hour somebody is expected in, which is exactly what an
+  // active status means.
   return ACTIVE_BOOKING_STATUSES.includes(status as (typeof ACTIVE_BOOKING_STATUSES)[number]);
 }
 

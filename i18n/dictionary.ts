@@ -45,6 +45,8 @@ const ru = {
   "notifications.kind.client_released": "перенесена к другому мастеру",
   "notifications.kind.staff_rescheduled": "перенесена студией",
   "notifications.kind.staff_cancelled": "отменена студией",
+  "notifications.kind.staff_booked": "записана студией",
+  "notifications.kind.request_expired": "заявка отменилась без ответа",
   "clients.title": "Клиентская база",
   "clients.noAccess": "У вас нет доступа к клиентской базе.",
   "clients.none": "Клиентов пока нет. Добавьте первого.",
@@ -341,6 +343,19 @@ const ru = {
     "Клиент перенёс визит {when} к мастеру {specialist}. Час снова свободен.",
   "notify.staffReleased.bodySolo": "Клиент перенёс визит {when}. Час снова свободен.",
   "notify.staffReleased.cta": "Открыть календарь",
+  "notify.staffAssigned.subject": "Новая запись в вашем расписании — {studio}",
+  "notify.staffAssigned.body": "Вам записали клиента на {when}.",
+  "notify.staffAssigned.cta": "Открыть запись",
+  "notify.staffFreed.subject": "Час освободился в вашем расписании — {studio}",
+  "notify.staffFreed.body":
+    "Визит {when} перенесён к мастеру {specialist}. Час снова свободен.",
+  "notify.staffFreed.cta": "Открыть календарь",
+  "notify.staffRequestExpired.subject": "Заявка отменилась без ответа — {studio}",
+  "notify.staffRequestExpired.body":
+    "Заявка к мастеру {specialist} на {when} не была подтверждена вовремя и отменилась. Окно снова свободно.",
+  "notify.staffRequestExpired.bodySolo":
+    "Заявка на {when} не была подтверждена вовремя и отменилась. Окно снова свободно.",
+  "notify.staffRequestExpired.cta": "Открыть календарь",
   "notify.visitCompleted.subject": "{studio}: спасибо за визит",
   "notify.visitCompleted.body": "Спасибо, что были у нас {when}.",
   "notify.visitCompleted.cta": "Записаться снова",
@@ -877,9 +892,8 @@ const ru = {
     "Если ничего не отмечено, процент начисляется за все услуги. Отметьте — и за остальные мастер не получит ничего; доплата за них задаётся отдельным правилом по услуге.",
   "specialists.offeredServices": "Доступные услуги",
   "specialists.allServices": "Все активные услуги",
-  "specialists.servicesHint": "Пустой выбор означает, что мастер оказывает все активные услуги. Для выбранной услуги можно переопределить длительность и потребность в рабочем месте.",
+  "specialists.servicesHint": "Пустой выбор означает, что мастер оказывает все активные услуги. Для выбранной услуги можно переопределить длительность.",
   "specialists.durationOverride": "Длительность, мин",
-  "specialists.requiresWorkplace": "Нужно рабочее место",
   "specialists.saveServices": "Сохранить услуги",
 
   "closeVisit.title": "Закрыть визит",
@@ -905,8 +919,7 @@ const ru = {
   "auth.signInFailed": "Не удалось выполнить вход",
   "auth.signInNoMatch": "Адрес или пароль не подошли. Если аккаунта ещё нет — создайте его ниже.",
   "auth.tooManyAttempts": "Слишком много попыток. Подождите несколько минут и попробуйте снова.",
-  "auth.activeSession":
-    "Сейчас выполнен вход: {email}. Вход в другой аккаунт завершит этот сеанс в текущем браузере. Чтобы работать в двух аккаунтах одновременно, откройте второй в отдельном окне или в приватном режиме.",
+  "auth.activeSession": "Вы вошли как {email}",
   "auth.invitedEmailHint": "Приглашение в «{org}» выдано на этот адрес — аккаунт должен быть на нём.",
   "auth.checkMail": "Проверьте почту",
   "auth.checkMailBody":
@@ -1339,6 +1352,8 @@ const ro: Record<MessageKey, Message> = {
   "notifications.kind.client_released": "mutată la alt specialist",
   "notifications.kind.staff_rescheduled": "reprogramată de salon",
   "notifications.kind.staff_cancelled": "anulată de salon",
+  "notifications.kind.staff_booked": "programată de salon",
+  "notifications.kind.request_expired": "cererea s-a anulat fără răspuns",
   "clients.title": "Baza de clienți",
   "clients.noAccess": "Nu aveți acces la baza de clienți.",
   "clients.none": "Niciun client încă. Adăugați primul.",
@@ -1638,6 +1653,19 @@ const ro: Record<MessageKey, Message> = {
   "notify.staffReleased.bodySolo":
     "Un client a mutat vizita din {when}. Ora este din nou liberă.",
   "notify.staffReleased.cta": "Deschideți calendarul",
+  "notify.staffAssigned.subject": "Programare nouă în agenda dumneavoastră — {studio}",
+  "notify.staffAssigned.body": "Un client a fost programat la dumneavoastră pentru {when}.",
+  "notify.staffAssigned.cta": "Deschideți programarea",
+  "notify.staffFreed.subject": "O oră s-a eliberat în agenda dumneavoastră — {studio}",
+  "notify.staffFreed.body":
+    "Vizita de {when} a fost mutată la {specialist}. Ora este din nou liberă.",
+  "notify.staffFreed.cta": "Deschideți calendarul",
+  "notify.staffRequestExpired.subject": "Cererea s-a anulat fără răspuns — {studio}",
+  "notify.staffRequestExpired.body":
+    "Cererea la {specialist} pentru {when} nu a fost confirmată la timp și s-a anulat. Ora este din nou liberă.",
+  "notify.staffRequestExpired.bodySolo":
+    "Cererea pentru {when} nu a fost confirmată la timp și s-a anulat. Ora este din nou liberă.",
+  "notify.staffRequestExpired.cta": "Deschideți calendarul",
   "notify.visitCompleted.subject": "{studio}: vă mulțumim pentru vizită",
   "notify.visitCompleted.body": "Vă mulțumim că ați fost la noi {when}.",
   "notify.visitCompleted.cta": "Programați-vă din nou",
@@ -2172,9 +2200,8 @@ const ro: Record<MessageKey, Message> = {
     "Dacă nu este bifat nimic, procentul se calculează pentru toate serviciile. Bifați — și pentru restul maestrul nu primește nimic; plata pentru ele se setează printr-o regulă separată pe serviciu.",
   "specialists.offeredServices": "Servicii disponibile",
   "specialists.allServices": "Toate serviciile active",
-  "specialists.servicesHint": "O selecție goală înseamnă că maestrul oferă toate serviciile active. Pentru un serviciu selectat puteți modifica durata și necesitatea unui post de lucru.",
+  "specialists.servicesHint": "O selecție goală înseamnă că maestrul oferă toate serviciile active. Pentru un serviciu selectat puteți modifica durata.",
   "specialists.durationOverride": "Durata, min",
-  "specialists.requiresWorkplace": "Necesită post de lucru",
   "specialists.saveServices": "Salvează serviciile",
 
   "closeVisit.title": "Finalizează vizita",
@@ -2200,8 +2227,7 @@ const ro: Record<MessageKey, Message> = {
   "auth.signInFailed": "Autentificarea nu a reușit",
   "auth.signInNoMatch": "Adresa sau parola nu se potrivesc. Dacă încă nu aveți cont, creați-l mai jos.",
   "auth.tooManyAttempts": "Prea multe încercări. Așteptați câteva minute și încercați din nou.",
-  "auth.activeSession":
-    "Sunteți autentificat ca {email}. Autentificarea într-un alt cont va încheia sesiunea curentă în acest browser. Pentru a lucra în două conturi simultan, deschideți-l pe al doilea într-o fereastră separată sau în mod privat.",
+  "auth.activeSession": "Sunteți autentificat ca {email}",
   "auth.invitedEmailHint": "Invitația în „{org}” a fost emisă pentru această adresă — contul trebuie să fie pe ea.",
   "auth.checkMail": "Verificați e-mailul",
   "auth.checkMailBody":
@@ -2632,6 +2658,8 @@ const en: Record<MessageKey, Message> = {
   "notifications.kind.client_released": "moved to another specialist",
   "notifications.kind.staff_rescheduled": "moved by the studio",
   "notifications.kind.staff_cancelled": "cancelled by the studio",
+  "notifications.kind.staff_booked": "booked by the studio",
+  "notifications.kind.request_expired": "request lapsed unanswered",
   "clients.title": "Client database",
   "clients.noAccess": "You do not have access to the client database.",
   "clients.none": "No clients yet. Add the first one.",
@@ -2929,6 +2957,19 @@ const en: Record<MessageKey, Message> = {
   "notify.staffReleased.bodySolo":
     "A client moved their visit on {when}. The hour is free again.",
   "notify.staffReleased.cta": "Open the calendar",
+  "notify.staffAssigned.subject": "A new appointment in your day — {studio}",
+  "notify.staffAssigned.body": "A client was booked with you for {when}.",
+  "notify.staffAssigned.cta": "Open the appointment",
+  "notify.staffFreed.subject": "An hour came free in your day — {studio}",
+  "notify.staffFreed.body":
+    "The {when} visit was moved to {specialist}. The hour is free again.",
+  "notify.staffFreed.cta": "Open the calendar",
+  "notify.staffRequestExpired.subject": "A request lapsed unanswered — {studio}",
+  "notify.staffRequestExpired.body":
+    "The request with {specialist} for {when} was not confirmed in time and has been cancelled. The slot is free again.",
+  "notify.staffRequestExpired.bodySolo":
+    "The request for {when} was not confirmed in time and has been cancelled. The slot is free again.",
+  "notify.staffRequestExpired.cta": "Open the calendar",
   "notify.visitCompleted.subject": "{studio}: thank you for your visit",
   "notify.visitCompleted.body": "Thank you for visiting us on {when}.",
   "notify.visitCompleted.cta": "Book again",
@@ -3456,9 +3497,8 @@ const en: Record<MessageKey, Message> = {
     "With nothing ticked the share is paid on every service. Tick some, and the master gets nothing for the rest — pay for those with a per-service rule of its own.",
   "specialists.offeredServices": "Available services",
   "specialists.allServices": "All active services",
-  "specialists.servicesHint": "An empty selection means the specialist offers every active service. A selected service can override its duration and workplace requirement.",
+  "specialists.servicesHint": "An empty selection means the specialist offers every active service. A selected service can override its duration.",
   "specialists.durationOverride": "Duration, min",
-  "specialists.requiresWorkplace": "Requires a workplace",
   "specialists.saveServices": "Save services",
 
   "closeVisit.title": "Close a visit",
@@ -3484,8 +3524,7 @@ const en: Record<MessageKey, Message> = {
   "auth.signInFailed": "Could not sign in",
   "auth.signInNoMatch": "That address and password do not match. If you have no account yet, create one below.",
   "auth.tooManyAttempts": "Too many attempts. Wait a few minutes and try again.",
-  "auth.activeSession":
-    "You are signed in as {email}. Signing in to another account ends the current session in this browser. To use two accounts at once, open the second one in a separate window or in a private window.",
+  "auth.activeSession": "Signed in as {email}",
   "auth.invitedEmailHint": "The invitation to “{org}” was issued for this address — the account has to use it.",
   "auth.checkMail": "Check your email",
   "auth.checkMailBody":

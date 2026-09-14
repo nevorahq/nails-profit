@@ -9,6 +9,7 @@ import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "
 import {
   cancelPendingNotifications,
   notifyBooking,
+  notifyFreedSpecialist,
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
 import { bookingLinesOf, loadBooking, rescheduleBooking } from "@/lib/booking-service";
@@ -171,6 +172,31 @@ async function handlePost(request: Request, context: { params: Promise<{ id: str
         actorUserId: actor.userId,
         previousStartsAt: moved.previous.start,
       });
+
+      /*
+       * And, where the appointment left this master's day for somebody else's,
+       * a message to the master who lost the hour.
+       *
+       * The line above reaches them whenever the studio moves the booking at
+       * all, and a line is read at the next sign-in. The client's version of
+       * this same move has written to them since `booking.staff_released`
+       * existed; the studio's version wrote to nobody, so the one person with a
+       * free hour to sell heard about it last — and kept it blocked out
+       * meanwhile.
+       *
+       * Only on a change of card. A move inside one master's day leaves the
+       * hour theirs, and `staff_rescheduled` above already says where it went.
+       */
+      if (moved.booking.specialistId !== existing.specialistId) {
+        await notifyFreedSpecialist(tx, {
+          organizationId: actor.organizationId,
+          bookingId: moved.booking.id,
+          specialistId: existing.specialistId,
+          startsAt: moved.previous.start,
+          occurrence: String(moved.booking.version),
+          actorUserId: actor.userId,
+        });
+      }
 
       // Section 7.7's "дата, время, мастер или услуга изменены": the client
       // agreed to a time, and the studio changing it is precisely the case

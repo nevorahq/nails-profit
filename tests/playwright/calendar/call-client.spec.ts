@@ -16,9 +16,9 @@ import {
  * The number was printed there to be read aloud and typed into a handset; this
  * is the same number as something to press.
  *
- * It is now four ways rather than one — a call, and the three messengers a
- * client who does not pick up may answer instead — and the number itself is
- * what opens them.
+ * It is now a call and the messengers this client said reach them — the row is
+ * built from what somebody answered, not from what a phone number allows — and
+ * the number itself is what opens them.
  *
  * What has to hold is that the number shown and the number reached are one
  * number. An address behind a link is the one thing on this screen a reader
@@ -31,7 +31,15 @@ test.describe("the client's number on an appointment", () => {
 
   test.beforeAll(async ({ baseURL }, testInfo) => {
     studio = await seedStudio(baseURL!, testInfo);
+    // Tomorrow: a client who answered nothing, which is most of them.
     await requestAppointmentAsClient(baseURL!, studio, { date: daysFromToday(1) });
+    // The day after: one who ticked all three, so the shapes of the messenger
+    // addresses still have somewhere to be asserted.
+    await requestAppointmentAsClient(baseURL!, studio, {
+      date: daysFromToday(2),
+      name: "Client Reach",
+      channels: ["whatsapp", "telegram", "viber"],
+    });
   });
 
   test.afterAll(async () => {
@@ -119,7 +127,8 @@ test.describe("the client's number on an appointment", () => {
     const context = await browser.newContext({ storageState: await studio.owner.storageState() });
     const page = await context.newPage();
 
-    await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);
+    // The client who ticked all three: the only one with four ways to compare.
+    await page.goto(`/app/calendar?date=${isoDate(daysFromToday(2))}`);
     await page.locator(".calendar-entry summary").first().click();
     const number = page.locator(".calendar-call");
     const shown = (await number.textContent())!.trim();
@@ -146,6 +155,40 @@ test.describe("the client's number on an appointment", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator(".client-contact-ways")).toHaveCount(0);
     await expect(page.locator(".calendar-detail")).toBeVisible();
+
+    await context.close();
+  });
+
+  /**
+   * And the row a master sees for everybody else.
+   *
+   * The four marks used to be drawn for every client, the marks changing only
+   * how each one looked — so a client nobody had asked arrived as four ways, of
+   * which two are application schemes that do nothing where the app is not
+   * installed. Presence carries the meaning now: what is here, somebody said
+   * reaches this client.
+   *
+   * The call is the exception and stays. It cannot be ticked — the number is
+   * required to book at all — and it is the one that needs no application.
+   */
+  test("offers the call alone when nobody said where to write", async ({
+    browser,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const page = await context.newPage();
+
+    await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);
+    await page.locator(".calendar-entry summary").first().click();
+    await page.locator(".calendar-call").click();
+
+    const ways = page.locator(".client-contact-way");
+    await expect(ways).toHaveCount(1);
+    await expect(ways).toHaveAttribute("data-channel", "call");
+    for (const channel of ["whatsapp", "telegram", "viber"]) {
+      await expect(page.locator(`.client-contact-way[data-channel="${channel}"]`)).toHaveCount(0);
+    }
 
     await context.close();
   });

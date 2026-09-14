@@ -1,7 +1,7 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { bookingIdempotencyKeys, workplaces } from "@/db/schema";
+import { bookingIdempotencyKeys } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { toZonedParts } from "@/domain/timezone";
 import { loadBookingDraft } from "@/lib/availability-service";
@@ -141,31 +141,11 @@ async function handlePost(
       });
       if (!draft) return { ok: false as const, failure: "not_bookable" as const };
 
-      const workplace = draft.requiresWorkplace
-        ? (
-            await tx
-              .select({ id: workplaces.id })
-              .from(workplaces)
-              .where(
-                and(
-                  eq(workplaces.locationId, access.dto.location.id),
-                  eq(workplaces.status, "active"),
-                ),
-              )
-              .orderBy(asc(workplaces.sortOrder), asc(workplaces.id))
-              .limit(1)
-          )[0]
-        : null;
-      if (draft.requiresWorkplace && !workplace) {
-        return { ok: false as const, failure: "not_bookable" as const };
-      }
-
       const moved = await rescheduleBooking(tx, {
         organizationId: access.organizationId,
         bookingId: access.booking.id,
         interval: { start: startsAt, end: new Date(offered.ends_at) },
         specialistId: parsed.data.specialist_id,
-        workplaceId: workplace?.id ?? null,
         expectedVersion: parsed.data.version,
         actorUserId: null,
         now,

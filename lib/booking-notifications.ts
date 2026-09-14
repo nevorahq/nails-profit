@@ -229,6 +229,143 @@ export async function notifyStaff(
 }
 
 /**
+ * Telling a master that an hour of theirs is no longer theirs.
+ *
+ * Shared by the two events that have that shape — a client moving themselves on
+ * the public page, and the studio moving them from the desk — because
+ * everything except the sentence is the same: one reader, an account their card
+ * may not have, and two facts the booking can no longer be asked for, since by
+ * the time the queue comes round it names the new master and the new time.
+ *
+ * Which sentence decides nothing here and everything for the person reading it:
+ * «Клиент перенёс визит» sent to a master whose owner moved it names the wrong
+ * person, and the difference is whether there is anybody to ask about it.
+ */
+async function queueReleasedMessage(
+  tx: TenantTransaction,
+  input: {
+    organizationId: string;
+    bookingId: string;
+    specialistId: string;
+    startsAt: Date;
+    occurrence: string;
+    template: "booking.staff_released" | "booking.staff_freed";
+    /**
+     * Who moved it, when somebody in the studio did. Null for the client, who
+     * has no account to be — and nobody is written to about their own click.
+     */
+    actorUserId?: string | null;
+  },
+) {
+  const [previous] = await tx
+    .select({ userId: specialists.userId })
+    .from(specialists)
+    .where(eq(specialists.id, input.specialistId))
+    .limit(1);
+  if (!previous?.userId) return;
+  if (input.actorUserId && previous.userId === input.actorUserId) return;
+
+  await insertOutbox(tx, {
+    organizationId: input.organizationId,
+    bookingId: input.bookingId,
+    verificationId: null,
+    channel: "email",
+    template: input.template,
+    occurrence: input.occurrence,
+    payload: {
+      recipient: "previous_specialist",
+      specialistId: input.specialistId,
+      startsAt: input.startsAt.toISOString(),
+    },
+  });
+}
+
+/**
+ * The studio moving an appointment off one master's day and onto another's.
+ *
+ * The mirror of `notifyReleasedSpecialist` below, and it exists because the
+ * client's version of this move has reached the master since it was written
+ * while the studio's version reached nobody: the reschedule route records a
+ * line in the feed — see `staff_rescheduled` there — and stopped at that, so a
+ * master whose owner handed their 14:00 to a colleague found out at their next
+ * sign-in, if at all. The hour is exactly as free either way.
+ *
+ * No feed row here: the route writes one for every move it makes, including the
+ * ones that stay on the same card, and a second would double the line.
+ *
+ * No copy for the owner, for the same reason the client's version has none —
+ * they are told about the move itself by `staff_rescheduled`, and two messages
+ * about one event is how a studio learns to stop reading them. Usually they are
+ * also the person who made it.
+ */
+export async function notifyFreedSpecialist(
+  tx: TenantTransaction,
+  input: {
+    organizationId: string;
+    bookingId: string;
+    specialistId: string;
+    startsAt: Date;
+    occurrence: string;
+    actorUserId: string | null;
+  },
+) {
+  await queueReleasedMessage(tx, { ...input, template: "booking.staff_freed" });
+}
+
+/**
+ * Telling a master that the studio has filled an hour of theirs.
+ *
+ * The public page has told them since `booking.staff_booked` existed. The front
+ * desk had no equivalent at all: creating an appointment was the one booking
+ * event with neither a message nor a kind in the feed, so an owner booking a
+ * regular in with one of their masters changed that master's afternoon and told
+ * them nothing. They met it by opening the calendar, or by the client arriving.
+ *
+ * One reader, and deliberately not three. The owner and the front desk get the
+ * client's bookings because nobody in the studio was present for those; this
+ * one they performed themselves, and a busy salon books all day at the desk.
+ * What is owed is the chair, not the room.
+ *
+ * The line goes in whether or not there is an inbox to write to — see
+ * `notifyReleasedSpecialist` on why the two are not the same question — and
+ * whoever pressed the button is excluded from both halves: from the message
+ * here, and from the feed where it is read.
+ */
+export async function notifyAssignedSpecialist(
+  tx: TenantTransaction,
+  input: {
+    organizationId: string;
+    bookingId: string;
+    specialistId: string;
+    actorUserId: string | null;
+  },
+) {
+  await recordStaffNotice(tx, {
+    organizationId: input.organizationId,
+    bookingId: input.bookingId,
+    kind: "staff_booked",
+    specialistId: input.specialistId,
+    actorUserId: input.actorUserId,
+  });
+
+  const [master] = await tx
+    .select({ userId: specialists.userId })
+    .from(specialists)
+    .where(eq(specialists.id, input.specialistId))
+    .limit(1);
+  if (!master?.userId || master.userId === input.actorUserId) return;
+
+  await insertOutbox(tx, {
+    organizationId: input.organizationId,
+    bookingId: input.bookingId,
+    verificationId: null,
+    channel: "email",
+    template: "booking.staff_assigned",
+    payload: { recipient: "specialist" },
+  });
+}
+
+/**
  * Telling the master a client just moved off.
  *
  * The one message in the product addressed to somebody the appointment no
@@ -273,26 +410,7 @@ export async function notifyReleasedSpecialist(
     previousStartsAt: input.startsAt,
   });
 
-  const [previous] = await tx
-    .select({ userId: specialists.userId })
-    .from(specialists)
-    .where(eq(specialists.id, input.specialistId))
-    .limit(1);
-  if (!previous?.userId) return;
-
-  await insertOutbox(tx, {
-    organizationId: input.organizationId,
-    bookingId: input.bookingId,
-    verificationId: null,
-    channel: "email",
-    template: "booking.staff_released",
-    occurrence: input.occurrence,
-    payload: {
-      recipient: "previous_specialist",
-      specialistId: input.specialistId,
-      startsAt: input.startsAt.toISOString(),
-    },
-  });
+  await queueReleasedMessage(tx, { ...input, template: "booking.staff_released" });
 }
 
 /**

@@ -15,14 +15,10 @@ import { getActiveMembership } from "@/lib/membership";
  * service takes a beginner longer than the master who trained them, and a slot
  * search that ignores the difference either overbooks one or wastes the other's
  * day. Absent, the service's own duration applies.
- *
- * `requires_workplace` sits here rather than on the service because whether a
- * chair is occupied is a property of how the work is done at this studio.
  */
 const entrySchema = z.object({
   service_id: z.uuid(),
   duration_minutes: z.int().positive().max(720).nullable().optional(),
-  requires_workplace: z.boolean().optional(),
 });
 
 const linkSchema = z.object({ services: z.array(entrySchema).max(200) });
@@ -80,7 +76,6 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
           specialistId: specialist.id,
           serviceId: entry.service_id,
           durationOverrideMinutes: entry.duration_minutes ?? null,
-          requiresWorkplace: entry.requires_workplace ?? false,
           createdBy: actor.userId,
           updatedBy: actor.userId,
         })),

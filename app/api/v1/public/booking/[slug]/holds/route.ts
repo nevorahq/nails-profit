@@ -1,7 +1,5 @@
-import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { workplaces } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { toZonedParts } from "@/domain/timezone";
 import { loadBookingDraft, loadSlotContext } from "@/lib/availability-service";
@@ -81,28 +79,10 @@ export async function POST(
       });
       if (!draft) return null;
 
-      const workplace = draft.requiresWorkplace
-        ? (
-            await tx
-              .select({ id: workplaces.id })
-              .from(workplaces)
-              .where(
-                and(
-                  eq(workplaces.locationId, parsed.data.location_id),
-                  eq(workplaces.status, "active"),
-                ),
-              )
-              .orderBy(asc(workplaces.sortOrder), asc(workplaces.id))
-              .limit(1)
-          )[0]
-        : null;
-      if (draft.requiresWorkplace && !workplace) return null;
-
       const held = await holdSlot(tx, {
         organizationId: catalogue.organization.id,
         locationId: parsed.data.location_id,
         specialistId: parsed.data.specialist_id,
-        workplaceId: workplace?.id ?? null,
         interval: { start: startsAt, end: new Date(offered.ends_at) },
         // A verified page asks for a code between holding the slot and
         // confirming it, and five minutes to receive an SMS and type six digits

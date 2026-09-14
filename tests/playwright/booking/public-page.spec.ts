@@ -242,14 +242,19 @@ test.describe("the public booking page", () => {
       "yes",
     );
     /*
-     * And the rest stay unsaid. A client who did not tick Telegram has not said
-     * they lack it, and a screen that drew it as absent would stop the desk
-     * trying something that would have worked.
+     * And the rest are not drawn at all.
+     *
+     * They used to be, marked «неизвестно», on the argument that a client who
+     * did not tick Telegram has not said they lack it. True of the client, and
+     * the row is not about them: it is read by somebody with a client on the
+     * line, and two of the four marks are application schemes that do nothing
+     * where the app is not installed. What is offered is what somebody
+     * answered; the call, which nobody has to answer for, is always there.
      */
-    await expect(staff.locator('.client-contact-way[data-channel="telegram"]')).toHaveAttribute(
-      "data-state",
-      "unknown",
-    );
+    for (const channel of ["telegram", "viber"]) {
+      await expect(staff.locator(`.client-contact-way[data-channel="${channel}"]`)).toHaveCount(0);
+    }
+    await expect(staff.locator('.client-contact-way[data-channel="call"]')).toHaveCount(1);
 
     await context.close();
   });

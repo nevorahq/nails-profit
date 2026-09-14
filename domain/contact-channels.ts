@@ -129,3 +129,36 @@ export function withStudioMark(
 export function isEmptyChannelMarks(marks: ContactChannelMarks): boolean {
   return Object.keys(marks).length === 0;
 }
+
+/**
+ * The ways worth putting in front of a master, which is no longer all of them.
+ *
+ * The row used to be every address a phone number can be turned into, with the
+ * marks changing only how each one looked — a «нет» drawn struck through and
+ * still pressable, on the argument that it was somebody's note from last week
+ * rather than a fact about today. That argument is about the note. The cost is
+ * about the row: four marks, of which two are application schemes that do
+ * nothing at all where the app is not installed, read by somebody mid-
+ * conversation with a client who is late.
+ *
+ * So presence carries the meaning now. A messenger is in the row because
+ * somebody said it reaches this client, and who said so does not enter into it:
+ * the studio's mark comes from having written and got an answer, which is
+ * better evidence than a tick on a form, not worse.
+ *
+ * The call is never filtered out. It is the one channel that cannot be ticked —
+ * the number is required to book at all, so a call and an SMS are possible by
+ * construction — and the only one that needs no application installed. Nothing
+ * writes a mark against it today, and if something ever did, it would still not
+ * take the call away.
+ *
+ * Which makes «nobody has said anything» resolve to the call alone. That is the
+ * studio's decision rather than this function's inference: a client typed in at
+ * the desk has answered no questions, and guessing on their behalf is the habit
+ * this row is being narrowed to break.
+ */
+export function offeredChannels(marks: ContactChannelMarks): readonly ContactChannel[] {
+  return contactChannels.filter(
+    (channel) => channel === "call" || marks[channel]?.state === "yes",
+  );
+}

@@ -812,7 +812,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .specialist-service-list legend { margin-bottom: 10rem; font-weight: 700; }
 .specialist-service-row {
   display: grid;
-  grid-template-columns: minmax(190rem, 1fr) minmax(140rem, 180rem) minmax(180rem, auto);
+  grid-template-columns: minmax(190rem, 1fr) minmax(140rem, 180rem);
   align-items: end;
   gap: 14rem;
   padding: 14rem;

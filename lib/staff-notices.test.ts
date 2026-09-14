@@ -4,10 +4,14 @@ import { groupNotices, type NoticeRow, type StaffNoticeKind } from "@/lib/staff-
 
 const visit = new Date("2026-09-14T08:00:00.000Z");
 
-function row(over: Partial<NoticeRow> & { createdAt: Date; kind: StaffNoticeKind }): NoticeRow {
+function row(over: Partial<NoticeRow> & { createdAt: Date; kind?: StaffNoticeKind }): NoticeRow {
   return {
-    id: `n-${over.createdAt.toISOString()}`,
+    id: `n-${over.bookingId ?? "booking-1"}-${over.createdAt.toISOString()}`,
     bookingId: "booking-1",
+    // The kind is what most of these tests are about and beside the point in
+    // the rest: the ones about order and about who has opened what care only
+    // when each event landed.
+    kind: "client_cancelled",
     previousStartsAt: null,
     clientName: "Ольга",
     specialistId: "spec-1",
@@ -23,6 +27,14 @@ function feed(...rows: NoticeRow[]) {
   return [...rows].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 }
 
+/** Somebody who has opened none of them, which is where every reader starts. */
+const NONE: ReadonlyMap<string, Date> = new Map();
+
+/** The one appointment these fixtures use, opened at a given moment. */
+function readThrough(at: Date): ReadonlyMap<string, Date> {
+  return new Map([["booking-1", at]]);
+}
+
 describe("grouping the bell by appointment", () => {
   const moved = new Date("2026-09-12T09:00:00.000Z");
   const movedAgain = new Date("2026-09-12T10:00:00.000Z");
@@ -34,7 +46,7 @@ describe("grouping the bell by appointment", () => {
         row({ createdAt: moved, kind: "client_rescheduled", previousStartsAt: visit.toISOString() }),
         row({ createdAt: cancelled, kind: "client_cancelled" }),
       ),
-      null,
+      NONE,
     );
 
     expect(groups).toHaveLength(1);
@@ -51,7 +63,7 @@ describe("grouping the bell by appointment", () => {
         row({ createdAt: movedAgain, kind: "staff_rescheduled" }),
         row({ createdAt: cancelled, kind: "client_cancelled" }),
       ),
-      null,
+      NONE,
     );
 
     expect(groups[0].kind).toBe("client_cancelled");
@@ -69,7 +81,7 @@ describe("grouping the bell by appointment", () => {
         row({ bookingId: "booking-1", createdAt: moved, kind: "client_cancelled" }),
         row({ bookingId: "booking-2", createdAt: cancelled, kind: "client_cancelled" }),
       ),
-      null,
+      NONE,
     );
 
     expect(groups.map((group) => group.bookingId)).toEqual(["booking-2", "booking-1"]);
@@ -88,7 +100,7 @@ describe("grouping the bell by appointment", () => {
           previousStartsAt: second.toISOString(),
         }),
       ),
-      null,
+      NONE,
     );
 
     expect(groups[0].previousStartsAt).toBe(first.toISOString());
@@ -98,15 +110,15 @@ describe("grouping the bell by appointment", () => {
 describe("what counts as unread", () => {
   const seen = new Date("2026-09-12T10:00:00.000Z");
 
-  it("is everything for somebody who has never opened the bell", () => {
-    const groups = groupNotices(feed(row({ createdAt: seen, kind: "client_cancelled" })), null);
+  it("is everything for somebody who has opened none of them", () => {
+    const groups = groupNotices(feed(row({ createdAt: seen, kind: "client_cancelled" })), NONE);
     expect(groups[0].unread).toBe(true);
   });
 
-  it("is nothing that happened before they looked", () => {
+  it("is nothing that happened before they opened that appointment", () => {
     const groups = groupNotices(
       feed(row({ createdAt: new Date(seen.getTime() - 60_000), kind: "client_cancelled" })),
-      seen,
+      readThrough(seen),
     );
     expect(groups[0].unread).toBe(false);
   });
@@ -122,9 +134,96 @@ describe("what counts as unread", () => {
         row({ createdAt: new Date(seen.getTime() - 60_000), kind: "client_rescheduled" }),
         row({ createdAt: new Date(seen.getTime() + 60_000), kind: "client_cancelled" }),
       ),
-      seen,
+      readThrough(seen),
     );
 
+    expect(groups[0].unread).toBe(true);
+  });
+
+  /**
+   * The mark is per appointment, which is the whole reason it stopped being one
+   * moment on the reader.
+   *
+   * Opening one line must leave the others exactly where they were — a single
+   * timestamp cannot express that, however it is read, because everything older
+   * than the moment it records goes with it.
+   */
+  it("leaves the appointments they have not opened alone", () => {
+    const groups = groupNotices(
+      feed(
+        row({ bookingId: "b1", createdAt: new Date(seen.getTime() - 60_000) }),
+        row({ bookingId: "b2", createdAt: new Date(seen.getTime() - 120_000) }),
+      ),
+      new Map([["b1", seen]]),
+    );
+
+    expect(groups.find((group) => group.bookingId === "b1")?.unread).toBe(false);
+    expect(groups.find((group) => group.bookingId === "b2")?.unread).toBe(true);
+  });
+});
+
+/**
+ * The order a queue wants, which is not the order a record wants.
+ *
+ * The feed used to be one run of time — right for «что произошло», wrong the
+ * moment the list became «что мне ещё разгрести»: the line opened a minute ago
+ * sat above the three untouched ones purely because it had moved most recently.
+ */
+describe("the order lines are read in", () => {
+  const seen = new Date("2026-09-12T10:00:00.000Z");
+
+  it("puts what is still waiting above what has been dealt with", () => {
+    const groups = groupNotices(
+      feed(
+        // The newest event of the three, and already opened.
+        row({ bookingId: "opened", createdAt: new Date(seen.getTime() + 600_000) }),
+        row({ bookingId: "waiting-older", createdAt: new Date(seen.getTime() - 600_000) }),
+        row({ bookingId: "waiting-newer", createdAt: new Date(seen.getTime() - 60_000) }),
+      ),
+      new Map([["opened", new Date(seen.getTime() + 900_000)]]),
+    );
+
+    expect(groups.map((group) => group.bookingId)).toEqual([
+      "waiting-newer",
+      "waiting-older",
+      "opened",
+    ]);
+  });
+
+  it("keeps newest first inside each half", () => {
+    const groups = groupNotices(
+      feed(
+        row({ bookingId: "read-new", createdAt: new Date(seen.getTime() - 60_000) }),
+        row({ bookingId: "read-old", createdAt: new Date(seen.getTime() - 600_000) }),
+      ),
+      new Map([
+        ["read-new", seen],
+        ["read-old", seen],
+      ]),
+    );
+
+    expect(groups.map((group) => group.bookingId)).toEqual(["read-new", "read-old"]);
+  });
+
+  /**
+   * And the rule that makes sinking safe rather than silencing: anything that
+   * happens on an appointment after it was opened is newer than the mark, so
+   * the line comes back up with its own stripe instead of staying quietly at
+   * the bottom.
+   */
+  it("lifts a line back when something else happens on it", () => {
+    const groups = groupNotices(
+      feed(
+        row({ bookingId: "moved-again", createdAt: new Date(seen.getTime() + 60_000) }),
+        row({ bookingId: "untouched", createdAt: new Date(seen.getTime() - 60_000) }),
+      ),
+      new Map([
+        ["moved-again", seen],
+        ["untouched", new Date(seen.getTime() + 600_000)],
+      ]),
+    );
+
+    expect(groups[0].bookingId).toBe("moved-again");
     expect(groups[0].unread).toBe(true);
   });
 });

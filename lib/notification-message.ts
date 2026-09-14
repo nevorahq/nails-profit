@@ -76,6 +76,40 @@ export const bookingNotificationTemplates = [
    * the hour both come from the queued payload. See `staffFacts`.
    */
   "booking.staff_released",
+  /**
+   * The three above all begin «Клиент…», and that is not an accident of
+   * wording: every message the studio gets was about something done from
+   * outside it. The studio's own actions reached the calendar and stopped
+   * there, which is right for the person who performed them and wrong for
+   * everybody else whose day they changed.
+   *
+   * An hour filled from the desk. The master is the only reader — the owner
+   * usually is the one who booked it, and a studio that books all day at the
+   * desk does not want its own work back as mail. Written in the second person
+   * for that reason: there is exactly one recipient and it is their chair, so
+   * no name has to be said and no solo variant exists.
+   */
+  "booking.staff_assigned",
+  /**
+   * The mirror of `booking.staff_released`, for a move the studio made rather
+   * than the client.
+   *
+   * Same reader, same fact — an hour that is free again — and a different
+   * sentence, because «Клиент перенёс визит» addressed to a master whose owner
+   * moved it is a statement about the wrong person. Which of the two it was
+   * decides whether there is anyone to ask about it.
+   */
+  "booking.staff_freed",
+  /**
+   * A request that ran out of time.
+   *
+   * The client is told — the repair job has queued `booking.cancelled` for them
+   * since the job existed — and the studio was told nothing at all. From the
+   * inside the request simply left «Ждут ответа», which reads exactly like one
+   * that was never made. This is the message that says an hour was asked for
+   * and lost.
+   */
+  "booking.staff_request_expired",
 ] as const;
 
 export type BookingNotificationTemplate = (typeof bookingNotificationTemplates)[number];
@@ -112,6 +146,9 @@ const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.staff_rescheduled": "notify.staffRescheduled",
   "booking.staff_cancelled": "notify.staffCancelled",
   "booking.staff_released": "notify.staffReleased",
+  "booking.staff_assigned": "notify.staffAssigned",
+  "booking.staff_freed": "notify.staffFreed",
+  "booking.staff_request_expired": "notify.staffRequestExpired",
 };
 
 /**
@@ -151,6 +188,13 @@ const SOLO_BODY = {
   "booking.staff_rescheduled": "notify.staffRescheduled.bodySolo",
   "booking.staff_cancelled": "notify.staffCancelled.bodySolo",
   "booking.staff_released": "notify.staffReleased.bodySolo",
+  /*
+   * The fifth, and the only new one that needs it. `staff_assigned` speaks to
+   * its reader directly and names nobody; `staff_freed` names the master the
+   * client went to, which a studio of one has not got. This one names the
+   * master the request was for, and for a studio of one that is the reader.
+   */
+  "booking.staff_request_expired": "notify.staffRequestExpired.bodySolo",
 } as const satisfies Partial<Record<BookingNotificationTemplate, MessageKey>>;
 
 /** Templates whose reader is the studio, not the client. */
@@ -160,6 +204,9 @@ export const staffNotificationTemplates = [
   "booking.staff_rescheduled",
   "booking.staff_cancelled",
   "booking.staff_released",
+  "booking.staff_assigned",
+  "booking.staff_freed",
+  "booking.staff_request_expired",
 ] as const satisfies readonly BookingNotificationTemplate[];
 
 export type StaffNotificationTemplate = (typeof staffNotificationTemplates)[number];

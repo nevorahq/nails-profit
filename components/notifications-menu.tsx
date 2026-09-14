@@ -8,6 +8,16 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { playNotificationChime, unlockNotificationChime } from "@/lib/notification-chime";
+/*
+ * The feed's kinds taken from the writer rather than copied beside it.
+ *
+ * This was a union of its own here, and it fell behind the moment the feed
+ * learned two new kinds: the list arrives as JSON and is cast, so nothing
+ * type-checks against the truth and the only signal would have been a line
+ * rendering as its own key in somebody's topbar. `import type` is erased, so
+ * no server module reaches the browser bundle.
+ */
+import type { StaffNoticeKind as NoticeKind } from "@/lib/staff-notices";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
 type NotificationItem = Readonly<{
@@ -21,14 +31,6 @@ type NotificationItem = Readonly<{
   local_date: string;
   local_time: string;
 }>;
-
-type NoticeKind =
-  | "client_booked"
-  | "client_rescheduled"
-  | "client_cancelled"
-  | "client_released"
-  | "staff_rescheduled"
-  | "staff_cancelled";
 
 /** One appointment's story, however many events it took. */
 type NoticeItem = Readonly<{
@@ -145,24 +147,37 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
   }
 
   /**
-   * Opening the list is what reads it.
+   * Opening one appointment is what reads its line.
    *
-   * The mark is written on the server and taken locally at once rather than
-   * waited for: the dot going out is the answer to a click, and a client that
-   * blinked until a round trip finished would be the interface asking to be
-   * clicked again. A failed write leaves the rows unread, which the next poll
-   * shows honestly.
+   * Opening the panel used to read the whole feed at once, which is the right
+   * shape for «есть ли что-то новое» and the wrong one for what this list has
+   * become: a queue somebody works through. A list that empties itself the
+   * moment you glance at it cannot also be the list of what is left.
+   *
+   * So the line sinks below the ones still waiting — sorted by the server, not
+   * hidden — and the dot on the bell now goes out as lines are dealt with
+   * rather than when the panel is opened.
+   *
+   * Written on the server and taken locally at once rather than waited for: the
+   * count is the answer to a click, and a badge that blinked until a round trip
+   * finished would be the interface asking to be clicked again. A failed write
+   * leaves the line where it was, which the next poll shows honestly.
    */
-  async function markRead() {
-    setData((current) =>
-      current
-        ? { ...current, unread: 0, feed: current.feed.map((row) => ({ ...row, unread: false })) }
-        : current,
-    );
+  async function markSeen(bookingId: string) {
+    setData((current) => {
+      if (!current) return current;
+      const feed = current.feed.map((row) =>
+        row.booking_id === bookingId ? { ...row, unread: false } : row,
+      );
+      return { ...current, feed, unread: feed.filter((row) => row.unread).length };
+    });
     try {
-      await fetch("/api/v1/notifications/read", { method: "POST" });
+      await fetch("/api/v1/notifications/read", {
+        method: "POST",
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
     } catch {
-      /* The dot comes back on the next poll, which is the honest answer. */
+      /* The line comes back on the next poll, which is the honest answer. */
     }
   }
 
@@ -178,10 +193,7 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
         onClick={() => {
           const next = !open;
           setOpen(next);
-          if (next) {
-            void reload();
-            void markRead();
-          }
+          if (next) void reload();
         }}
       >
         <ChromeIcon name="bell" />
@@ -271,7 +283,12 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
                       className={`notifications-item${notice.unread ? " unread" : ""}`}
                       role="menuitem"
                       href={`/app/calendar?date=${notice.link_date}&specialist=${notice.specialist_id}`}
-                      onClick={() => setOpen(false)}
+                      onClick={() => {
+                        setOpen(false);
+                        // Opening the day is seeing what the line was about.
+                        // The two that are not this one keep their place.
+                        void markSeen(notice.booking_id);
+                      }}
                     >
                       <strong>
                         {notice.client_name ?? t("calendar.noClient")}

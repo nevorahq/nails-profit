@@ -7,7 +7,7 @@ import { formatLocalDate, formatLocalTime, toZonedParts } from "@/domain/timezon
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { scopedSpecialistId } from "@/lib/booking-access";
-import { groupNotices, loadNoticeFeed, noticesReadAt } from "@/lib/staff-notices";
+import { groupNotices, loadNoticeFeed, loadNoticeReads } from "@/lib/staff-notices";
 import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
       found,
       lines,
       notices: await loadNoticeFeed(tx, { organizationId: actor.organizationId, actor }),
-      readAt: await noticesReadAt(tx, {
+      reads: await loadNoticeReads(tx, {
         organizationId: actor.organizationId,
         userId: actor.userId,
       }),
@@ -121,13 +121,18 @@ export async function GET(request: Request) {
   /*
    * The second half of the bell: what has already happened.
    *
+   * Waiting first, then dealt with, and newest first inside each — the order a
+   * queue wants rather than the order a record does. A line drops to the bottom
+   * when its appointment is opened, and rises again the moment anything else
+   * happens on it.
+   *
    * Grouped by appointment, because a visit moved twice and then called off is
    * one story and one hole in the day. The hour a notice is about is not always
    * the hour the booking now says — a client who moved to another master left
    * this one an empty slot at the old time — so the line names both, and the
    * link goes to the day the reader can do something on.
    */
-  const feed = groupNotices(rows.notices, rows.readAt).map((group) => {
+  const feed = groupNotices(rows.notices, rows.reads).map((group) => {
     const at = toZonedParts(group.row.startsAt, group.row.timezone);
     const previous = group.previousStartsAt
       ? toZonedParts(new Date(group.previousStartsAt), group.row.timezone)
