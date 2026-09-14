@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isEmptyChannelMarks,
+  offeredChannels,
   parseContactChannels,
   withClientChoice,
   withStudioMark,
@@ -99,5 +100,72 @@ describe("reading the column back", () => {
     }) as ContactChannelMarks;
 
     expect(Object.keys(mixed)).toEqual(["whatsapp"]);
+  });
+});
+
+/**
+ * Which of the four the studio's screen puts in front of a master.
+ *
+ * The row was all of them, with the marks changing only how each one looked.
+ * Two of the four are application schemes that do nothing where the app is not
+ * installed, and the person reading the row has a client on the line — so
+ * presence carries the meaning now, and a messenger appears because somebody
+ * said it reaches this client.
+ */
+describe("the ways worth offering", () => {
+  it("offers the call and nothing else when nobody has said anything", () => {
+    // The client typed in at the desk, and every client who booked before the
+    // question existed. They have answered nothing, and a row that guessed on
+    // their behalf is what this narrowing exists to stop.
+    expect(offeredChannels({})).toEqual(["call"]);
+  });
+
+  it("offers a messenger the client ticked", () => {
+    const marks = withClientChoice({}, ["whatsapp"], now);
+
+    expect(offeredChannels(marks)).toEqual(["call", "whatsapp"]);
+  });
+
+  it("leaves out the messengers nobody spoke about", () => {
+    const marks = withClientChoice({}, ["viber"], now);
+
+    // Telegram was not ticked, which is still not «нет» — it is simply not
+    // something to put in front of somebody mid-conversation.
+    expect(offeredChannels(marks)).not.toContain("telegram");
+    expect(offeredChannels(marks)).toEqual(["call", "viber"]);
+  });
+
+  it("keeps the row in one order however the marks arrived", () => {
+    const marks = withStudioMark(withClientChoice({}, ["viber"], now), "whatsapp", "yes", later);
+
+    // The call first, then the order of `contactChannels` — the one that works
+    // anywhere leads, and the row does not rearrange itself per client.
+    expect(offeredChannels(marks)).toEqual(["call", "whatsapp", "viber"]);
+  });
+
+  it("trusts the studio's mark as readily as the client's tick", () => {
+    // Written after somebody tried and got an answer, which is better evidence
+    // than a box on a form, not worse.
+    const marks = withStudioMark({}, "telegram", "yes", now);
+
+    expect(offeredChannels(marks)).toEqual(["call", "telegram"]);
+  });
+
+  it("drops a messenger the studio found does not reach them", () => {
+    const marks = withStudioMark(withClientChoice({}, ["telegram"], now), "telegram", "no", later);
+
+    expect(offeredChannels(marks)).toEqual(["call"]);
+  });
+
+  it("keeps the call even against a mark saying otherwise", () => {
+    /*
+     * Nothing writes this today: the form offers the three messengers and the
+     * call is not among them, because the number is required and a call is
+     * therefore possible by construction. If something ever does, the one way
+     * that needs no application installed still does not leave the row.
+     */
+    const marks = withStudioMark({}, "call", "no", now);
+
+    expect(offeredChannels(marks)).toEqual(["call"]);
   });
 });

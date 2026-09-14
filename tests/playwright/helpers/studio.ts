@@ -356,6 +356,11 @@ export async function requestAppointmentAsClient(
        itself. */
     phone?: string;
     email?: string;
+    /* Which messengers this client says reach them. Nothing by default, which
+       is the honest shape of most bookings — and, since the calendar's contact
+       row now shows only what somebody said, the difference between a master
+       seeing one link and seeing four. */
+    channels?: readonly ("whatsapp" | "telegram" | "viber")[];
   }> = {
     date: daysFromToday(1),
   },
@@ -404,6 +409,7 @@ export async function requestAppointmentAsClient(
           service_id: studio.serviceId,
           add_on_ids: [],
           name: options.name ?? "Client Chase",
+          contact_channels: options.channels ?? [],
           phone: options.phone ?? `+373 69 ${String(Math.floor(Math.random() * 900_000) + 100_000)}`,
           email: options.email ?? `pw-client-${Math.random().toString(36).slice(2, 8)}@example.com`,
           locale: "en",
