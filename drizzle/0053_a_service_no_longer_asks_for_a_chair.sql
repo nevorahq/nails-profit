@@ -1,0 +1,12 @@
+-- not-backward-compatible: this is the contract step, and it has to run after
+-- the release that stopped reading the column, not with it. Until that build is
+-- live, `loadSpecialistCards` and `loadBookingDraft` still select
+-- `requires_workplace`, and dropping it first takes the specialists page and
+-- public booking down together.
+--
+-- The flag is going because nothing could ever satisfy it: no screen and no
+-- endpoint creates a `workplace` row, so a service marked as needing one was
+-- refused at the hold step with 422 SERVICE_NOT_BOOKABLE. The workplace table
+-- and `booking.workplace_id` stay — they are reachable only from staff APIs
+-- that pass a chair explicitly, and they carry the exclusion constraint.
+ALTER TABLE "specialist_service" DROP COLUMN "requires_workplace";

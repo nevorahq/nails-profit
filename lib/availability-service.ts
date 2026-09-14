@@ -43,7 +43,6 @@ import type { LocalizedText } from "@/i18n/localized-text";
 export type BookingDraft = Readonly<{
   durationMinutes: number;
   priceMinor: number;
-  requiresWorkplace: boolean;
   lines: readonly BookingLineInput[];
 }>;
 
@@ -69,7 +68,6 @@ export async function loadBookingDraft(
   const [assignment] = await tx
     .select({
       durationOverrideMinutes: specialistServices.durationOverrideMinutes,
-      requiresWorkplace: specialistServices.requiresWorkplace,
     })
     .from(specialistServices)
     .where(
@@ -119,7 +117,6 @@ export async function loadBookingDraft(
   return {
     durationMinutes,
     priceMinor,
-    requiresWorkplace: assignment?.requiresWorkplace ?? false,
     lines,
   };
 }

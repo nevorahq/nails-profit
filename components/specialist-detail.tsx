@@ -93,14 +93,6 @@ export function SpecialistDetail({
       ]),
     ),
   );
-  const [workplaceByService, setWorkplaceByService] = useState<Record<string, boolean>>(
-    Object.fromEntries(
-      person.service_assignments.map((assignment) => [
-        assignment.service_id,
-        assignment.requires_workplace,
-      ]),
-    ),
-  );
 
   async function send(url: string, payload: unknown, form?: HTMLFormElement, method = "POST") {
     setPending(true);
@@ -164,7 +156,6 @@ export function SpecialistDetail({
           duration_minutes: durationByService[serviceId]?.trim()
             ? Number(durationByService[serviceId])
             : null,
-          requires_workplace: workplaceByService[serviceId] ?? false,
         })),
       },
       undefined,
@@ -492,9 +483,6 @@ export function SpecialistDetail({
                       {assignment.duration_minutes} {t("common.minutes")}
                     </span>
                   )}
-                  {assignment.requires_workplace && (
-                    <span className="unit-hint">{t("specialists.requiresWorkplace")}</span>
-                  )}
                 </li>
               ))}
             </ul>
@@ -540,20 +528,6 @@ export function SpecialistDetail({
                           })
                         }
                       />
-                    </label>
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        disabled={!ticked}
-                        checked={workplaceByService[service.id] ?? false}
-                        onChange={(event) =>
-                          setWorkplaceByService({
-                            ...workplaceByService,
-                            [service.id]: event.target.checked,
-                          })
-                        }
-                      />
-                      {t("specialists.requiresWorkplace")}
                     </label>
                   </div>
                 );

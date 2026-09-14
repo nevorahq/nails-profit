@@ -877,9 +877,8 @@ const ru = {
     "Если ничего не отмечено, процент начисляется за все услуги. Отметьте — и за остальные мастер не получит ничего; доплата за них задаётся отдельным правилом по услуге.",
   "specialists.offeredServices": "Доступные услуги",
   "specialists.allServices": "Все активные услуги",
-  "specialists.servicesHint": "Пустой выбор означает, что мастер оказывает все активные услуги. Для выбранной услуги можно переопределить длительность и потребность в рабочем месте.",
+  "specialists.servicesHint": "Пустой выбор означает, что мастер оказывает все активные услуги. Для выбранной услуги можно переопределить длительность.",
   "specialists.durationOverride": "Длительность, мин",
-  "specialists.requiresWorkplace": "Нужно рабочее место",
   "specialists.saveServices": "Сохранить услуги",
 
   "closeVisit.title": "Закрыть визит",
@@ -2171,9 +2170,8 @@ const ro: Record<MessageKey, Message> = {
     "Dacă nu este bifat nimic, procentul se calculează pentru toate serviciile. Bifați — și pentru restul maestrul nu primește nimic; plata pentru ele se setează printr-o regulă separată pe serviciu.",
   "specialists.offeredServices": "Servicii disponibile",
   "specialists.allServices": "Toate serviciile active",
-  "specialists.servicesHint": "O selecție goală înseamnă că maestrul oferă toate serviciile active. Pentru un serviciu selectat puteți modifica durata și necesitatea unui post de lucru.",
+  "specialists.servicesHint": "O selecție goală înseamnă că maestrul oferă toate serviciile active. Pentru un serviciu selectat puteți modifica durata.",
   "specialists.durationOverride": "Durata, min",
-  "specialists.requiresWorkplace": "Necesită post de lucru",
   "specialists.saveServices": "Salvează serviciile",
 
   "closeVisit.title": "Finalizează vizita",
@@ -3454,9 +3452,8 @@ const en: Record<MessageKey, Message> = {
     "With nothing ticked the share is paid on every service. Tick some, and the master gets nothing for the rest — pay for those with a per-service rule of its own.",
   "specialists.offeredServices": "Available services",
   "specialists.allServices": "All active services",
-  "specialists.servicesHint": "An empty selection means the specialist offers every active service. A selected service can override its duration and workplace requirement.",
+  "specialists.servicesHint": "An empty selection means the specialist offers every active service. A selected service can override its duration.",
   "specialists.durationOverride": "Duration, min",
-  "specialists.requiresWorkplace": "Requires a workplace",
   "specialists.saveServices": "Save services",
 
   "closeVisit.title": "Close a visit",

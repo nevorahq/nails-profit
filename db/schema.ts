@@ -1623,7 +1623,6 @@ export const specialistServices = pgTable(
       .notNull()
       .references(() => services.id, { onDelete: "restrict" }),
     durationOverrideMinutes: integer("duration_override_minutes"),
-    requiresWorkplace: boolean("requires_workplace").notNull().default(false),
     ...auditColumns,
   },
   (table) => [

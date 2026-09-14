@@ -372,6 +372,13 @@
       "when": 1789304531384,
       "tag": "0052_a_client_says_where_to_write",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789387565616,
+      "tag": "0053_a_service_no_longer_asks_for_a_chair",
+      "breakpoints": true
     }
   ]
 }

@@ -31,7 +31,6 @@ export type SpecialistRow = {
   service_assignments: {
     service_id: string;
     duration_minutes: number | null;
-    requires_workplace: boolean;
   }[];
 };
 
@@ -90,7 +89,6 @@ export async function loadSpecialistCards(
       specialistId: specialistServices.specialistId,
       serviceId: specialistServices.serviceId,
       durationMinutes: specialistServices.durationOverrideMinutes,
-      requiresWorkplace: specialistServices.requiresWorkplace,
     })
     .from(specialistServices)
     .where(inArray(specialistServices.specialistId, ids));
@@ -165,7 +163,6 @@ export async function loadSpecialistCards(
         .map((assignment) => ({
           service_id: assignment.serviceId,
           duration_minutes: assignment.durationMinutes,
-          requires_workplace: assignment.requiresWorkplace,
         })),
     };
   });
