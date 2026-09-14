@@ -905,8 +905,7 @@ const ru = {
   "auth.signInFailed": "Не удалось выполнить вход",
   "auth.signInNoMatch": "Адрес или пароль не подошли. Если аккаунта ещё нет — создайте его ниже.",
   "auth.tooManyAttempts": "Слишком много попыток. Подождите несколько минут и попробуйте снова.",
-  "auth.activeSession":
-    "Сейчас выполнен вход: {email}. Вход в другой аккаунт завершит этот сеанс в текущем браузере. Чтобы работать в двух аккаунтах одновременно, откройте второй в отдельном окне или в приватном режиме.",
+  "auth.activeSession": "Вы вошли как {email}",
   "auth.invitedEmailHint": "Приглашение в «{org}» выдано на этот адрес — аккаунт должен быть на нём.",
   "auth.checkMail": "Проверьте почту",
   "auth.checkMailBody":
@@ -2200,8 +2199,7 @@ const ro: Record<MessageKey, Message> = {
   "auth.signInFailed": "Autentificarea nu a reușit",
   "auth.signInNoMatch": "Adresa sau parola nu se potrivesc. Dacă încă nu aveți cont, creați-l mai jos.",
   "auth.tooManyAttempts": "Prea multe încercări. Așteptați câteva minute și încercați din nou.",
-  "auth.activeSession":
-    "Sunteți autentificat ca {email}. Autentificarea într-un alt cont va încheia sesiunea curentă în acest browser. Pentru a lucra în două conturi simultan, deschideți-l pe al doilea într-o fereastră separată sau în mod privat.",
+  "auth.activeSession": "Sunteți autentificat ca {email}",
   "auth.invitedEmailHint": "Invitația în „{org}” a fost emisă pentru această adresă — contul trebuie să fie pe ea.",
   "auth.checkMail": "Verificați e-mailul",
   "auth.checkMailBody":
@@ -3484,8 +3482,7 @@ const en: Record<MessageKey, Message> = {
   "auth.signInFailed": "Could not sign in",
   "auth.signInNoMatch": "That address and password do not match. If you have no account yet, create one below.",
   "auth.tooManyAttempts": "Too many attempts. Wait a few minutes and try again.",
-  "auth.activeSession":
-    "You are signed in as {email}. Signing in to another account ends the current session in this browser. To use two accounts at once, open the second one in a separate window or in a private window.",
+  "auth.activeSession": "Signed in as {email}",
   "auth.invitedEmailHint": "The invitation to “{org}” was issued for this address — the account has to use it.",
   "auth.checkMail": "Check your email",
   "auth.checkMailBody":
