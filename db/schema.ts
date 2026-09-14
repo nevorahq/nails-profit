@@ -2205,6 +2205,25 @@ export const staffNoticeKind = pgEnum("staff_notice_kind", [
   "client_released",
   "staff_rescheduled",
   "staff_cancelled",
+  /**
+   * An hour filled from the desk rather than from the public page.
+   *
+   * The three `client_` kinds above cover everything a client does, and
+   * `staff_rescheduled`/`staff_cancelled` everything the studio does to an
+   * appointment that already exists. Creating one had no kind at all, which is
+   * why a master booked into by their own owner learned nothing: the event
+   * reached the calendar and no feed.
+   */
+  "staff_booked",
+  /**
+   * A request that ran out of time before anybody answered it.
+   *
+   * Nobody did it, so it has no actor and every reader sees it — which is the
+   * point. The client was told the request lapsed; the studio was told nothing,
+   * and an unanswered request that simply disappears from «Ждут ответа» is
+   * indistinguishable from one that never arrived.
+   */
+  "request_expired",
 ]);
 
 export const staffNotices = pgTable(

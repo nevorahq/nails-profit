@@ -8,6 +8,16 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { playNotificationChime, unlockNotificationChime } from "@/lib/notification-chime";
+/*
+ * The feed's kinds taken from the writer rather than copied beside it.
+ *
+ * This was a union of its own here, and it fell behind the moment the feed
+ * learned two new kinds: the list arrives as JSON and is cast, so nothing
+ * type-checks against the truth and the only signal would have been a line
+ * rendering as its own key in somebody's topbar. `import type` is erased, so
+ * no server module reaches the browser bundle.
+ */
+import type { StaffNoticeKind as NoticeKind } from "@/lib/staff-notices";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
 type NotificationItem = Readonly<{
@@ -21,14 +31,6 @@ type NotificationItem = Readonly<{
   local_date: string;
   local_time: string;
 }>;
-
-type NoticeKind =
-  | "client_booked"
-  | "client_rescheduled"
-  | "client_cancelled"
-  | "client_released"
-  | "staff_rescheduled"
-  | "staff_cancelled";
 
 /** One appointment's story, however many events it took. */
 type NoticeItem = Readonly<{

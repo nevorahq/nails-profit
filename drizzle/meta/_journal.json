@@ -379,6 +379,13 @@
       "when": 1789387565616,
       "tag": "0053_a_service_no_longer_asks_for_a_chair",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789388690687,
+      "tag": "0054_the_studio_hears_its_own_moves",
+      "breakpoints": true
     }
   ]
 }

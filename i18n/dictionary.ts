@@ -45,6 +45,8 @@ const ru = {
   "notifications.kind.client_released": "перенесена к другому мастеру",
   "notifications.kind.staff_rescheduled": "перенесена студией",
   "notifications.kind.staff_cancelled": "отменена студией",
+  "notifications.kind.staff_booked": "записана студией",
+  "notifications.kind.request_expired": "заявка отменилась без ответа",
   "clients.title": "Клиентская база",
   "clients.noAccess": "У вас нет доступа к клиентской базе.",
   "clients.none": "Клиентов пока нет. Добавьте первого.",
@@ -341,6 +343,19 @@ const ru = {
     "Клиент перенёс визит {when} к мастеру {specialist}. Час снова свободен.",
   "notify.staffReleased.bodySolo": "Клиент перенёс визит {when}. Час снова свободен.",
   "notify.staffReleased.cta": "Открыть календарь",
+  "notify.staffAssigned.subject": "Новая запись в вашем расписании — {studio}",
+  "notify.staffAssigned.body": "Вам записали клиента на {when}.",
+  "notify.staffAssigned.cta": "Открыть запись",
+  "notify.staffFreed.subject": "Час освободился в вашем расписании — {studio}",
+  "notify.staffFreed.body":
+    "Визит {when} перенесён к мастеру {specialist}. Час снова свободен.",
+  "notify.staffFreed.cta": "Открыть календарь",
+  "notify.staffRequestExpired.subject": "Заявка отменилась без ответа — {studio}",
+  "notify.staffRequestExpired.body":
+    "Заявка к мастеру {specialist} на {when} не была подтверждена вовремя и отменилась. Окно снова свободно.",
+  "notify.staffRequestExpired.bodySolo":
+    "Заявка на {when} не была подтверждена вовремя и отменилась. Окно снова свободно.",
+  "notify.staffRequestExpired.cta": "Открыть календарь",
   "notify.visitCompleted.subject": "{studio}: спасибо за визит",
   "notify.visitCompleted.body": "Спасибо, что были у нас {when}.",
   "notify.visitCompleted.cta": "Записаться снова",
@@ -1337,6 +1352,8 @@ const ro: Record<MessageKey, Message> = {
   "notifications.kind.client_released": "mutată la alt specialist",
   "notifications.kind.staff_rescheduled": "reprogramată de salon",
   "notifications.kind.staff_cancelled": "anulată de salon",
+  "notifications.kind.staff_booked": "programată de salon",
+  "notifications.kind.request_expired": "cererea s-a anulat fără răspuns",
   "clients.title": "Baza de clienți",
   "clients.noAccess": "Nu aveți acces la baza de clienți.",
   "clients.none": "Niciun client încă. Adăugați primul.",
@@ -1636,6 +1653,19 @@ const ro: Record<MessageKey, Message> = {
   "notify.staffReleased.bodySolo":
     "Un client a mutat vizita din {when}. Ora este din nou liberă.",
   "notify.staffReleased.cta": "Deschideți calendarul",
+  "notify.staffAssigned.subject": "Programare nouă în agenda dumneavoastră — {studio}",
+  "notify.staffAssigned.body": "Un client a fost programat la dumneavoastră pentru {when}.",
+  "notify.staffAssigned.cta": "Deschideți programarea",
+  "notify.staffFreed.subject": "O oră s-a eliberat în agenda dumneavoastră — {studio}",
+  "notify.staffFreed.body":
+    "Vizita de {when} a fost mutată la {specialist}. Ora este din nou liberă.",
+  "notify.staffFreed.cta": "Deschideți calendarul",
+  "notify.staffRequestExpired.subject": "Cererea s-a anulat fără răspuns — {studio}",
+  "notify.staffRequestExpired.body":
+    "Cererea la {specialist} pentru {when} nu a fost confirmată la timp și s-a anulat. Ora este din nou liberă.",
+  "notify.staffRequestExpired.bodySolo":
+    "Cererea pentru {when} nu a fost confirmată la timp și s-a anulat. Ora este din nou liberă.",
+  "notify.staffRequestExpired.cta": "Deschideți calendarul",
   "notify.visitCompleted.subject": "{studio}: vă mulțumim pentru vizită",
   "notify.visitCompleted.body": "Vă mulțumim că ați fost la noi {when}.",
   "notify.visitCompleted.cta": "Programați-vă din nou",
@@ -2628,6 +2658,8 @@ const en: Record<MessageKey, Message> = {
   "notifications.kind.client_released": "moved to another specialist",
   "notifications.kind.staff_rescheduled": "moved by the studio",
   "notifications.kind.staff_cancelled": "cancelled by the studio",
+  "notifications.kind.staff_booked": "booked by the studio",
+  "notifications.kind.request_expired": "request lapsed unanswered",
   "clients.title": "Client database",
   "clients.noAccess": "You do not have access to the client database.",
   "clients.none": "No clients yet. Add the first one.",
@@ -2925,6 +2957,19 @@ const en: Record<MessageKey, Message> = {
   "notify.staffReleased.bodySolo":
     "A client moved their visit on {when}. The hour is free again.",
   "notify.staffReleased.cta": "Open the calendar",
+  "notify.staffAssigned.subject": "A new appointment in your day — {studio}",
+  "notify.staffAssigned.body": "A client was booked with you for {when}.",
+  "notify.staffAssigned.cta": "Open the appointment",
+  "notify.staffFreed.subject": "An hour came free in your day — {studio}",
+  "notify.staffFreed.body":
+    "The {when} visit was moved to {specialist}. The hour is free again.",
+  "notify.staffFreed.cta": "Open the calendar",
+  "notify.staffRequestExpired.subject": "A request lapsed unanswered — {studio}",
+  "notify.staffRequestExpired.body":
+    "The request with {specialist} for {when} was not confirmed in time and has been cancelled. The slot is free again.",
+  "notify.staffRequestExpired.bodySolo":
+    "The request for {when} was not confirmed in time and has been cancelled. The slot is free again.",
+  "notify.staffRequestExpired.cta": "Open the calendar",
   "notify.visitCompleted.subject": "{studio}: thank you for your visit",
   "notify.visitCompleted.body": "Thank you for visiting us on {when}.",
   "notify.visitCompleted.cta": "Book again",

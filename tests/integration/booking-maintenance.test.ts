@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
-import { bookingHolds, bookings, notificationOutbox } from "@/db/schema";
+import { bookingHolds, bookings, notificationOutbox, staffNotices } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { createBooking, holdSlot } from "@/lib/booking-service";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -132,9 +132,14 @@ describe("booking maintenance", () => {
      *
      * One row, not two. The job used to queue both channels for every client,
      * which is the other half of what this asserts.
+     *
+     * Filtered to the client's own message, because the job now writes the
+     * studio's as well: an unanswered request that lapses is news on both sides
+     * of the counter, and the rows for the studio are the next test's subject.
      */
-    expect(queued).toHaveLength(1);
-    expect(queued[0].channel).toBe("sms");
+    const toClient = queued.filter((row) => row.template === "booking.cancelled");
+    expect(toClient).toHaveLength(1);
+    expect(toClient[0].channel).toBe("sms");
 
     // Running it again changes nothing: the same key, the same one message.
     await run("node", ["scripts/booking-maintenance.mjs"], { env: { ...process.env } });
@@ -188,8 +193,97 @@ describe("booking maintenance", () => {
       .from(notificationOutbox)
       .where(eq(notificationOutbox.bookingId, bookingId));
 
-    expect(queued).toHaveLength(1);
-    expect(queued[0].channel).toBe("email");
-    expect(queued[0].template).toBe("booking.cancelled");
+    const toClient = queued.filter((row) => row.template === "booking.cancelled");
+    expect(toClient).toHaveLength(1);
+    expect(toClient[0].channel).toBe("email");
+  });
+
+  /**
+   * The studio's half of a lapse, which for as long as this job existed was
+   * nothing at all.
+   *
+   * The client was told; inside the studio the request left «Ждут ответа» in
+   * silence, and a list something silently leaves reads exactly like a list it
+   * was never on. A master back at their phone three hours later could not tell
+   * "I missed one" from "nobody asked" — and the hour is free again either way,
+   * which is the part somebody could still have sold.
+   */
+  test("tells the studio its unanswered request lapsed", async () => {
+    const past = new Date(Date.now() - 3 * 60 * 60_000);
+    // A card with an account of its own, because whether there is an inbox to
+    // write to is exactly what separates the message from the feed line.
+    const masterUser = await createUser();
+    const master = await createSpecialist(organizationId, { userId: masterUser.id });
+
+    const bookingId = await withTenant(organizationId, async (tx) => {
+      const created = await createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId: master.id,
+        clientId,
+        interval: { start: past, end: new Date(past.getTime() + 90 * 60_000) },
+        source: "public_booking",
+        confirmationMode: "manual",
+        confirmationTtlMinutes: 120,
+        lines: LINES,
+        actorUserId: null,
+        now: new Date(past.getTime() - 60 * 60_000),
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+
+    await run("node", ["scripts/booking-maintenance.mjs"], {
+      env: { ...process.env, MIGRATION_DATABASE_URL: process.env.MIGRATION_DATABASE_URL },
+    });
+
+    // The line first: it is the half that needs only a reader, so it goes in
+    // whether or not any card carries an account.
+    const notices = await adminDb
+      .select()
+      .from(staffNotices)
+      .where(eq(staffNotices.bookingId, bookingId));
+    expect(notices).toHaveLength(1);
+    expect(notices[0].kind).toBe("request_expired");
+    expect(notices[0].specialistId).toBe(master.id);
+    // Nobody did this, so nobody is excluded from seeing it: the deadline did.
+    expect(notices[0].actorUserId).toBeNull();
+
+    /*
+     * And a message each to the two people who can answer a request — the
+     * master whose chair it was, and the owner. One row per person, exactly as
+     * `notifyStaff` writes them, so one can dead-letter without taking the
+     * other with it.
+     */
+    const toStudio = await adminDb
+      .select()
+      .from(notificationOutbox)
+      .where(
+        and(
+          eq(notificationOutbox.bookingId, bookingId),
+          eq(notificationOutbox.template, "booking.staff_request_expired"),
+        ),
+      );
+    expect(toStudio).toHaveLength(2);
+    expect(toStudio.every((row) => row.channel === "email")).toBe(true);
+    expect(toStudio.map((row) => row.payload?.recipient).sort()).toEqual(["owner", "specialist"]);
+
+    // Twice a minute is the schedule this job runs on, and the second run has
+    // to be a no-op on both halves rather than a second telling.
+    await run("node", ["scripts/booking-maintenance.mjs"], { env: { ...process.env } });
+    expect(
+      await adminDb.select().from(staffNotices).where(eq(staffNotices.bookingId, bookingId)),
+    ).toHaveLength(1);
+    expect(
+      await adminDb
+        .select()
+        .from(notificationOutbox)
+        .where(
+          and(
+            eq(notificationOutbox.bookingId, bookingId),
+            eq(notificationOutbox.template, "booking.staff_request_expired"),
+          ),
+        ),
+    ).toHaveLength(2);
   });
 });

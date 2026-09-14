@@ -15,7 +15,11 @@ import {
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist, scopedSpecialistId } from "@/lib/booking-access";
 import { bookingModuleRefusal, bookingPayload } from "@/lib/booking-http";
-import { notifyBooking, scheduleBookingReminder } from "@/lib/booking-notifications";
+import {
+  notifyAssignedSpecialist,
+  notifyBooking,
+  scheduleBookingReminder,
+} from "@/lib/booking-notifications";
 import { bookingLinesOf, createBooking, type BookingStatus } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors, timedRoute } from "@/lib/http";
@@ -285,6 +289,24 @@ async function handlePost(request: Request) {
         locationId: parsed.data.location_id,
         startsAt: interval.start,
         now,
+      });
+
+      /*
+       * And the master whose afternoon this now is.
+       *
+       * Every other way an appointment comes into being tells somebody: a
+       * request summons whoever can answer it, a booking taken on the public
+       * page reaches the master and the owner. This one told no one, and it is
+       * the path a studio uses most — an owner at the desk filling a colleague's
+       * day, who learned of it by opening the calendar or by the client
+       * arriving. Whoever made the booking is excluded from both the message
+       * and the feed; see `notifyAssignedSpecialist`.
+       */
+      await notifyAssignedSpecialist(tx, {
+        organizationId: actor.organizationId,
+        bookingId: created.bookingId,
+        specialistId: parsed.data.specialist_id,
+        actorUserId: actor.userId,
       });
 
       const [booking] = await tx.select().from(bookings).where(eq(bookings.id, created.bookingId)).limit(1);

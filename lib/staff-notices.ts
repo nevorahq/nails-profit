@@ -10,7 +10,9 @@ export type StaffNoticeKind =
   | "client_cancelled"
   | "client_released"
   | "staff_rescheduled"
-  | "staff_cancelled";
+  | "staff_cancelled"
+  | "staff_booked"
+  | "request_expired";
 
 /**
  * How far back the bell looks.

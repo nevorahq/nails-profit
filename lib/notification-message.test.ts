@@ -236,9 +236,27 @@ describe("transactional templates", () => {
      */
     for (const template of staffNotificationTemplates) {
       if (template === "booking.staff_requested") continue;
+      if (template === "booking.staff_assigned") continue;
       for (const locale of supportedLocales) {
         expect(renderNotification({ ...base, locale, template }).body).toContain("Ирина");
       }
+    }
+
+    /*
+     * And the one message in that set with a single reader, which is why it is
+     * the one that names nobody.
+     *
+     * The argument above is about the owner's copy: they read about a chair
+     * that is not theirs and the name is what saves them a trip to the
+     * calendar. A booking made at the desk has no owner's copy — the owner is
+     * usually the person who made it — so the only reader is the master whose
+     * hour it is, and the name in a third-person sentence would be their own.
+     * It says «вам» instead, and still has to say when.
+     */
+    for (const locale of supportedLocales) {
+      const assigned = renderNotification({ ...base, locale, template: "booking.staff_assigned" });
+      expect(assigned.body).not.toContain("Ирина");
+      expect(assigned.body).toContain(base.when);
     }
 
     // A booking the studio made itself has nobody to name: the wording that

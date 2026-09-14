@@ -75,7 +75,7 @@ try {
        where status = 'pending_confirmation'
          and confirmation_due_at is not null
          and confirmation_due_at <= now()
-      returning id, organization_id, client_id, version
+      returning id, organization_id, client_id, specialist_id, version
     `;
 
     /**
@@ -85,7 +85,48 @@ try {
      * — including its idempotency, which is what makes running this twice a
      * minute harmless.
      */
+    /**
+     * The studio's readers, looked up once per organization rather than once
+     * per lapsed request. `notifyStaff` asks the same three questions in
+     * `lib/booking-notifications.ts`, and they are restated here for the reason
+     * the channel rule below the cancellation is: this job writes to the tables
+     * directly, and the two must not drift into disagreeing about who hears.
+     */
+    const studioByOrganization = new Map();
+
+    async function studioReaders(organizationId) {
+      const cached = studioByOrganization.get(organizationId);
+      if (cached) return cached;
+
+      const [owner] = await sql`
+        select user_id from membership
+         where organization_id = ${organizationId} and role = 'owner'
+         order by created_at
+         limit 1
+      `;
+      const [organization] = await sql`
+        select staff_notices from organization where id = ${organizationId}
+      `;
+      // The front desk only where the studio asked for it; see `staffNoticeAudience`.
+      const managers =
+        organization?.staff_notices === "owner_and_managers"
+          ? await sql`
+              select user_id from membership
+               where organization_id = ${organizationId} and role = 'manager'
+               order by created_at
+            `
+          : [];
+
+      const readers = {
+        ownerUserId: owner?.user_id ?? null,
+        managerUserIds: managers.map((row) => row.user_id),
+      };
+      studioByOrganization.set(organizationId, readers);
+      return readers;
+    }
+
     let cancellations = 0;
+    let studioMessages = 0;
     for (const booking of lapsed) {
       const queued = await sql`
         insert into notification_outbox
@@ -128,6 +169,69 @@ try {
            and template = 'booking.reminder'
            and status in ('pending', 'retry')
       `;
+
+      /*
+       * And the studio, which until now learned nothing at all.
+       *
+       * The client has been told since this job existed. Inside the studio the
+       * request simply left the «Ждут ответа» list, and a list something
+       * silently leaves reads exactly like a list it was never on: a master
+       * back at their phone three hours later cannot tell "I missed one" from
+       * "nobody asked". The hour is free again either way, and somebody could
+       * still sell it.
+       *
+       * The line goes in whether or not anyone has an inbox — a card with no
+       * account gets no message and its owner still opens the app — which is
+       * why it is written before the recipients are even looked up. No actor:
+       * the deadline did this, so everybody sees it.
+       */
+      await sql`
+        insert into staff_notice (organization_id, booking_id, kind, specialist_id, actor_user_id)
+        values (${booking.organization_id}, ${booking.id}, 'request_expired',
+                ${booking.specialist_id}, null)
+      `;
+
+      const [card] = await sql`
+        select user_id from specialist where id = ${booking.specialist_id}
+      `;
+      const specialistUserId = card?.user_id ?? null;
+      const { ownerUserId, managerUserIds } = await studioReaders(booking.organization_id);
+
+      /*
+       * One row per person and never two for one address, which is `notifyStaff`'s
+       * rule: a master who is also the owner is written to once, as the master.
+       * The occurrence carries the version so a key is unique per row, exactly
+       * as the application builds it.
+       */
+      const readers = [];
+      if (specialistUserId) {
+        readers.push({ occurrence: String(booking.version), payload: { recipient: "specialist" } });
+      }
+      for (const userId of managerUserIds) {
+        if (userId === specialistUserId || userId === ownerUserId) continue;
+        readers.push({
+          occurrence: `${booking.version}:manager:${userId}`,
+          payload: { recipient: "member", userId },
+        });
+      }
+      if (ownerUserId && ownerUserId !== specialistUserId) {
+        readers.push({ occurrence: `${booking.version}:owner`, payload: { recipient: "owner" } });
+      }
+
+      for (const reader of readers) {
+        const written = await sql`
+          insert into notification_outbox
+                (organization_id, booking_id, channel, template, idempotency_key, payload,
+                 scheduled_at, next_attempt_at)
+          values (${booking.organization_id}, ${booking.id}, 'email',
+                  'booking.staff_request_expired',
+                  ${`${booking.id}:booking.staff_request_expired:email:${reader.occurrence}`},
+                  ${sql.json(reader.payload)}, now(), now())
+          on conflict do nothing
+          returning id
+        `;
+        studioMessages += written.length;
+      }
     }
 
     // A challenge nobody completed keeps a phone number for no reason; section
@@ -151,6 +255,7 @@ try {
       expired_holds: holds.length,
       lapsed_requests: lapsed.length,
       queued_cancellations: cancellations,
+      queued_studio_notices: studioMessages,
       purged_verifications: verifications.length,
       purged_rate_limit_windows: windows.length,
     });
