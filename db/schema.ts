@@ -239,14 +239,15 @@ export const memberships = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     role: memberRole("role").notNull(),
     /**
-     * When this person last opened the studio's notices, which is all the read
-     * state a bell needs: anything newer is unread, and opening the list makes
-     * everything older than that moment read.
+     * Retired, and still here: the moment this person last opened the studio's
+     * notices, which used to be the whole of the bell's read state.
      *
-     * Here rather than in a table of its own because this row is already the
-     * pair it belongs to — one person in one studio — and a second table keyed
-     * on exactly that pair would be the same row with more joins. Null for
-     * somebody who has never opened it, which reads as "everything is new".
+     * Nothing writes it and nothing reads it any more — `staff_notice_read`
+     * answers the finer question the list now asks. It stays because dropping a
+     * column in the release that stops using it is the expand and the contract
+     * in one step, and the version being rolled back to still selects this one:
+     * see `tests/migration-compatibility.test.ts`. A later release drops it,
+     * once no build that reads it is one deploy away.
      */
     noticesReadAt: timestamp("notices_read_at", { withTimezone: true }),
     ...auditColumns,
@@ -2255,6 +2256,67 @@ export const staffNotices = pgTable(
     index("staff_notice_org_created_idx").on(table.organizationId, table.createdAt),
     index("staff_notice_specialist_idx").on(table.specialistId, table.createdAt),
     index("staff_notice_booking_idx").on(table.bookingId),
+  ],
+);
+
+/**
+ * Which lines of the bell a person has already dealt with.
+ *
+ * It replaces a single moment on `membership` — «when did this person last open
+ * the notices» — and the reason it could not stay a moment is the list's new
+ * job. Opening the bell used to mark the whole feed read at once, which answers
+ * «есть ли что-то новое» and nothing else. What the studio asked for is
+ * «что мне ещё разгрести»: a line drops to the bottom of the list once it has
+ * been opened, and the ones still waiting stay on top. One timestamp per person
+ * cannot say «эти три я посмотрел, а ту нет», however it is read.
+ *
+ * So: a row per person per appointment, and the row is still a moment rather
+ * than a receipt per event. A line in the feed is a whole booking's story —
+ * moved, then cancelled, collapsed into one — and what the reader dealt with is
+ * that story as it stood. Anything that happens on the booking afterwards is
+ * newer than this mark, which lifts the line back to the top with its own
+ * unread stripe rather than leaving it quietly at the bottom.
+ *
+ * Note what is deliberately not stored: nothing is ever hidden. The row moves,
+ * so an accidental click costs the reader the position of one line and never
+ * the line itself, and there is nothing to undo.
+ */
+export const staffNoticeReads = pgTable(
+  "staff_notice_read",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    /**
+     * The reader, by account rather than by membership: what a person has
+     * already looked at belongs to them, and follows them to a second device
+     * the way the previous moment on `membership` did.
+     */
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    /** Everything on this booking up to here has been seen by this person. */
+    seenThrough: timestamp("seen_through", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /*
+     * The tenant first, because that is what the policy filters on and what
+     * every read starts from; the pair after it is what makes the row unique.
+     * A booking belongs to one organization, so the last two columns would be
+     * unique on their own — the tenant leads because the index is also the one
+     * the feed's lookup uses.
+     */
+    uniqueIndex("staff_notice_read_reader_idx").on(
+      table.organizationId,
+      table.userId,
+      table.bookingId,
+    ),
   ],
 );
 

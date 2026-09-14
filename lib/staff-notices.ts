@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 
-import { bookings, clients, memberships, specialists, staffNotices } from "@/db/schema";
+import { bookings, clients, specialists, staffNoticeReads, staffNotices } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { scopedSpecialistId, type CalendarActor } from "@/lib/booking-access";
 
@@ -167,13 +167,17 @@ export type NoticeGroup = Readonly<{
  * about reading, and keeping it out of the query is what makes it cheap to
  * change if a flat list turns out to read better.
  */
-export function groupNotices(rows: readonly NoticeRow[], readAt: Date | null): NoticeGroup[] {
+export function groupNotices(
+  rows: readonly NoticeRow[],
+  reads: ReadonlyMap<string, Date>,
+): NoticeGroup[] {
   const groups = new Map<string, NoticeGroup>();
 
   // Newest first, so the first row of a booking is the one the line is about.
   for (const row of rows) {
     const seen = groups.get(row.bookingId);
-    const unread = readAt === null || row.createdAt > readAt;
+    const seenThrough = reads.get(row.bookingId);
+    const unread = seenThrough === undefined || row.createdAt > seenThrough;
 
     if (!seen) {
       groups.set(row.bookingId, {
@@ -201,39 +205,81 @@ export function groupNotices(rows: readonly NoticeRow[], readAt: Date | null): N
     });
   }
 
-  return [...groups.values()].sort((left, right) => right.at.getTime() - left.at.getTime());
+  /*
+   * What is still waiting, then what has been dealt with — and inside each,
+   * newest first.
+   *
+   * The list used to be one run of time, which is right for a record of what
+   * happened and wrong for a queue somebody works through: the line you opened
+   * a minute ago sat above the three you have not, purely because it moved most
+   * recently. Sinking it is the whole of the change, and it is a sort rather
+   * than a filter on purpose — an accidental click costs the reader a line's
+   * position and never the line.
+   */
+  return [...groups.values()].sort((left, right) => {
+    if (left.unread !== right.unread) return left.unread ? -1 : 1;
+    return right.at.getTime() - left.at.getTime();
+  });
 }
 
-/** Everything up to this moment has been seen. */
-export async function markNoticesRead(
+/**
+ * One line of the bell, discharged.
+ *
+ * Written when the reader opens the appointment behind it, which is the moment
+ * they have actually seen what the line was telling them. Opening the panel is
+ * deliberately not that moment any more: it used to mark the whole feed read at
+ * once, and a list that empties itself the moment you glance at it cannot also
+ * be the list of what you still have to work through.
+ *
+ * `seen_through` is now rather than the event's own time, and the difference
+ * only shows in a race: an event landing on this booking while the reader is
+ * opening it is one they have not seen, and `now` is the honest boundary for
+ * that — it leaves the new line unread rather than silently discharging it.
+ */
+export async function markNoticeRead(
   tx: TenantTransaction,
-  input: Readonly<{ organizationId: string; userId: string; now: Date }>,
+  input: Readonly<{ organizationId: string; userId: string; bookingId: string; now: Date }>,
 ): Promise<void> {
   await tx
-    .update(memberships)
-    .set({ noticesReadAt: input.now })
-    .where(
-      and(
-        eq(memberships.organizationId, input.organizationId),
-        eq(memberships.userId, input.userId),
-      ),
-    );
+    .insert(staffNoticeReads)
+    .values({
+      organizationId: input.organizationId,
+      userId: input.userId,
+      bookingId: input.bookingId,
+      seenThrough: input.now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        staffNoticeReads.organizationId,
+        staffNoticeReads.userId,
+        staffNoticeReads.bookingId,
+      ],
+      // Opened again: the boundary moves forward, taking whatever has happened
+      // on this booking since with it.
+      set: { seenThrough: input.now, updatedAt: input.now },
+    });
 }
 
-export async function noticesReadAt(
+/**
+ * What this reader has already dealt with, as a map the feed can ask per line.
+ *
+ * Read in one statement for the whole feed rather than per booking: the list is
+ * fifty groups at most, and fifty round trips to answer "is this one still
+ * waiting" would be fifty more than the question is worth.
+ */
+export async function loadNoticeReads(
   tx: TenantTransaction,
   input: Readonly<{ organizationId: string; userId: string }>,
-): Promise<Date | null> {
-  const [row] = await tx
-    .select({ readAt: memberships.noticesReadAt })
-    .from(memberships)
+): Promise<Map<string, Date>> {
+  const rows = await tx
+    .select({ bookingId: staffNoticeReads.bookingId, seenThrough: staffNoticeReads.seenThrough })
+    .from(staffNoticeReads)
     .where(
       and(
-        eq(memberships.organizationId, input.organizationId),
-        eq(memberships.userId, input.userId),
+        eq(staffNoticeReads.organizationId, input.organizationId),
+        eq(staffNoticeReads.userId, input.userId),
       ),
-    )
-    .limit(1);
+    );
 
-  return row?.readAt ?? null;
+  return new Map(rows.map((row) => [row.bookingId, row.seenThrough]));
 }

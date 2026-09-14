@@ -1,0 +1,11 @@
+-- Rollback for 0055_a_bell_that_can_be_cleared.
+--
+-- Only the new table goes. `membership.notices_read_at` was deliberately left
+-- in place by the migration — dropping a column in the same release that stops
+-- using it is the expand and the contract in one step, and the build being
+-- rolled back to still selects it. So there is nothing here to put back.
+--
+-- What is lost is which lines each person had already dealt with, and the
+-- previous version does not have the question: its bell asks whether anything
+-- is new, and answers that from the column that never left.
+DROP TABLE "staff_notice_read";

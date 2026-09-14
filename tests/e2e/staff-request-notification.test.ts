@@ -760,11 +760,29 @@ describe("the studio's own feed", () => {
     expect(line).toMatchObject({ kind: "client_cancelled", unread: true, earlier: [] });
     expect(bell.unread).toBeGreaterThan(0);
 
-    // And opening it is what reads it: the same line, no longer new.
-    expect((await studio.owner.post("/api/v1/notifications/read", {})).status).toBe(200);
+    /*
+     * And opening the appointment is what reads its line — that one, not the
+     * list. The bell used to mark everything read the moment it was opened,
+     * which is the right shape for «есть ли что-то новое» and the wrong one for
+     * a queue: it emptied itself at a glance.
+     */
+    expect(
+      (await studio.owner.post("/api/v1/notifications/read", { booking_id: booking.id })).status,
+    ).toBe(200);
     const afterReading = await bellOf(studio.owner);
     expect(afterReading.feed.find((row) => row.booking_id === booking.id)?.unread).toBe(false);
-    expect(afterReading.unread).toBe(0);
+    // One line fewer waiting, not all of them.
+    expect(afterReading.unread).toBe(bell.unread - 1);
+
+    /*
+     * And it sank rather than vanished: everything still waiting is above it,
+     * everything already dealt with below. Asserted as the boundary rather than
+     * as a position, so a test added beside this one cannot move it.
+     */
+    const index = afterReading.feed.findIndex((row) => row.booking_id === booking.id);
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(afterReading.feed.slice(0, index).every((row) => row.unread)).toBe(true);
+    expect(afterReading.feed.slice(index + 1).every((row) => !row.unread)).toBe(true);
   });
 
   /**

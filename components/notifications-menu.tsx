@@ -147,24 +147,37 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
   }
 
   /**
-   * Opening the list is what reads it.
+   * Opening one appointment is what reads its line.
    *
-   * The mark is written on the server and taken locally at once rather than
-   * waited for: the dot going out is the answer to a click, and a client that
-   * blinked until a round trip finished would be the interface asking to be
-   * clicked again. A failed write leaves the rows unread, which the next poll
-   * shows honestly.
+   * Opening the panel used to read the whole feed at once, which is the right
+   * shape for «есть ли что-то новое» and the wrong one for what this list has
+   * become: a queue somebody works through. A list that empties itself the
+   * moment you glance at it cannot also be the list of what is left.
+   *
+   * So the line sinks below the ones still waiting — sorted by the server, not
+   * hidden — and the dot on the bell now goes out as lines are dealt with
+   * rather than when the panel is opened.
+   *
+   * Written on the server and taken locally at once rather than waited for: the
+   * count is the answer to a click, and a badge that blinked until a round trip
+   * finished would be the interface asking to be clicked again. A failed write
+   * leaves the line where it was, which the next poll shows honestly.
    */
-  async function markRead() {
-    setData((current) =>
-      current
-        ? { ...current, unread: 0, feed: current.feed.map((row) => ({ ...row, unread: false })) }
-        : current,
-    );
+  async function markSeen(bookingId: string) {
+    setData((current) => {
+      if (!current) return current;
+      const feed = current.feed.map((row) =>
+        row.booking_id === bookingId ? { ...row, unread: false } : row,
+      );
+      return { ...current, feed, unread: feed.filter((row) => row.unread).length };
+    });
     try {
-      await fetch("/api/v1/notifications/read", { method: "POST" });
+      await fetch("/api/v1/notifications/read", {
+        method: "POST",
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
     } catch {
-      /* The dot comes back on the next poll, which is the honest answer. */
+      /* The line comes back on the next poll, which is the honest answer. */
     }
   }
 
@@ -180,10 +193,7 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
         onClick={() => {
           const next = !open;
           setOpen(next);
-          if (next) {
-            void reload();
-            void markRead();
-          }
+          if (next) void reload();
         }}
       >
         <ChromeIcon name="bell" />
@@ -273,7 +283,12 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
                       className={`notifications-item${notice.unread ? " unread" : ""}`}
                       role="menuitem"
                       href={`/app/calendar?date=${notice.link_date}&specialist=${notice.specialist_id}`}
-                      onClick={() => setOpen(false)}
+                      onClick={() => {
+                        setOpen(false);
+                        // Opening the day is seeing what the line was about.
+                        // The two that are not this one keep their place.
+                        void markSeen(notice.booking_id);
+                      }}
                     >
                       <strong>
                         {notice.client_name ?? t("calendar.noClient")}
