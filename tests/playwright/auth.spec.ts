@@ -16,6 +16,48 @@ test.describe("authentication UI", () => {
     await expect(page.getByLabel("Your name")).toHaveCount(0);
   });
 
+  test("an address with no account is refused, and carries over to registration", async ({
+    page,
+    browserErrors,
+  }) => {
+    /*
+     * The screen this suite never watched, and the one every report of «вошёл
+     * несуществующим аккаунтом» is about. A refused sign-in must stay where it
+     * is: /app is reachable only with a session, so a redirect there would mean
+     * an account had just been created or signed into.
+     *
+     * The address carries over rather than the interface jumping to
+     * registration by itself — see `domain/auth-refusal.ts` for why the refusal
+     * is answered without saying which half was wrong.
+     */
+    const address = `no-such-account-${Date.now()}@example.com`;
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(address);
+    await page.getByLabel("Password").fill("orchid-lacquer-42-crown");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    await expect(page.locator(".form-error")).toHaveText(
+      "That address and password do not match. If you have no account yet, create one below.",
+    );
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+
+    await page.getByRole("button", { name: "No account? Create one" }).click();
+    await expect(page.getByLabel("Email")).toHaveValue(address);
+
+    /*
+     * The refusal travels as a 401, and Chromium writes every failed response
+     * to the console — so this is the one test in the suite whose own subject
+     * trips the shared «no browser errors» check. The line is asserted rather
+     * than waved through, everything else must still be empty, and the array is
+     * cleared so the fixture's own assertion sees what it expects.
+     */
+    expect(browserErrors.filter((line) => line.includes("401"))).toHaveLength(1);
+    expect(browserErrors.filter((line) => !line.includes("401"))).toEqual([]);
+    browserErrors.length = 0;
+  });
+
   test("invalid reset link and mismatched passwords are handled in the browser", async ({
     page,
     browserErrors,
