@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
-import { financialSnapshots } from "@/db/schema";
+import { financialSnapshots, users } from "@/db/schema";
 import { dataOf, errorCodeOf, signIn, signUp, type Actor } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { inviteMember } from "../helpers/studio";
@@ -141,5 +141,43 @@ describe("deleting an account", () => {
     expect(snapshot).toBeDefined();
     expect(snapshot.createdBy).toBeNull();
     expect(snapshot.revenueMinor).toBe(60_000);
+  });
+
+  test("refuses when the delete removes nothing", async () => {
+    /*
+     * The failure this endpoint met on 15.09.2026: «аккаунт удалён» on the
+     * screen, the row still in `user`, and the old password still opening /app.
+     *
+     * A `DELETE` that no row survives raises nothing — it removes nobody and
+     * succeeds — so the handler answered from the absence of an exception and
+     * was wrong. Reproduced here in the shape production wears it: a RESTRICTIVE
+     * policy ANDs with the permissive one and names DELETE alone, so the
+     * application still reads the table — the session resolves, the confirmation
+     * matches — and the delete matches nothing.
+     */
+    const leaver = await signUp("blocked-leaver@studio.example");
+
+    await adminDb.execute(
+      sql`CREATE POLICY "user_delete_blocked" ON "user" AS RESTRICTIVE FOR DELETE TO nail_profit_app USING (false)`,
+    );
+
+    try {
+      const refused = await leaver.post("/api/v1/account/delete", {
+        confirmation_email: "blocked-leaver@studio.example",
+      });
+
+      expect(refused.status).toBe(500);
+      expect(errorCodeOf(refused)).toBe("ACCOUNT_DELETE_FAILED");
+    } finally {
+      await adminDb.execute(sql`DROP POLICY "user_delete_blocked" ON "user"`);
+    }
+
+    // What the 200 used to hide: the account is still there, and still opens.
+    const [row] = await adminDb
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, "blocked-leaver@studio.example"));
+    expect(row).toBeDefined();
+    await expect(signIn("blocked-leaver@studio.example")).resolves.toBeDefined();
   });
 });
