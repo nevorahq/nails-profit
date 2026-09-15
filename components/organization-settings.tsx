@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { currencies, type Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { localeNames } from "@/i18n/locale-names";
 import { localeTag } from "@/i18n/translate";
 
 /**
@@ -15,17 +16,6 @@ import { localeTag } from "@/i18n/translate";
  * property of the salon, and two masters looking at the same margin should be
  * reading the same words for it.
  */
-/**
- * Endonyms, deliberately untranslated: someone looking for their own language
- * scans for the word they would write themselves, and a Romanian speaker
- * stranded in a Russian interface is looking for "Română", not "Румынский".
- */
-const localeNames: Record<AppLocale, string> = {
-  ru: "Русский",
-  ro: "Română",
-  en: "English",
-};
-
 /**
  * Currency names come from `Intl`, so they arrive in the reader's language
  * without a row in the dictionary to keep in step — with one exception.

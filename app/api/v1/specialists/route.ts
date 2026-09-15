@@ -1,7 +1,15 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { commissionRuleServices, commissionRules, memberships, services, specialists } from "@/db/schema";
+import {
+  commissionRuleServices,
+  commissionRules,
+  locations,
+  memberships,
+  services,
+  specialistLocations,
+  specialists,
+} from "@/db/schema";
 import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
@@ -285,6 +293,37 @@ export async function POST(request: Request) {
         updatedBy: actor.userId,
       })
       .returning();
+
+    /*
+     * Where the new master works, which until now nothing wrote.
+     *
+     * `specialist_location` is what the public catalogue filters people by
+     * (`publicSpecialistsFor`), and it was created on one screen only —
+     * «Онлайн-запись», two selects deep. So a studio hired somebody, saw them
+     * in the calendar and in every report, and their booking page silently went
+     * on offering one master: the row that makes a person bookable did not
+     * exist, and nothing anywhere said so.
+     *
+     * Every active address, because "which of your addresses does this person
+     * work at" is a question only a studio with more than one has, and they can
+     * answer it by unticking in «Онлайн-запись». For everybody else it was not
+     * a choice — it was a step nobody knew about.
+     */
+    const places = await tx
+      .select({ id: locations.id })
+      .from(locations)
+      .where(eq(locations.status, "active"));
+    if (places.length > 0) {
+      await tx.insert(specialistLocations).values(
+        places.map((place) => ({
+          organizationId: actor.organizationId,
+          specialistId: created.id,
+          locationId: place.id,
+          createdBy: actor.userId,
+          updatedBy: actor.userId,
+        })),
+      );
+    }
 
     if (parsed.data.default_rule) {
       const [rule] = await tx

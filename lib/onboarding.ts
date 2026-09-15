@@ -35,8 +35,8 @@ export type ChecklistProgress<Key extends string> = Readonly<{
   next: ChecklistStep<Key> | null;
 }>;
 
-export type OnboardingStep = ChecklistStep<"specialist" | "service" | "visit">;
-export type OnboardingProgress = ChecklistProgress<"specialist" | "service" | "visit">;
+export type OnboardingStep = ChecklistStep<"specialist" | "service">;
+export type OnboardingProgress = ChecklistProgress<"specialist" | "service">;
 
 /**
  * The second checklist, and the reason there are two.
@@ -80,12 +80,21 @@ function summarize<Key extends string>(steps: readonly ChecklistStep<Key>[]): Ch
  * The steps therefore check for the *usable* thing, not the row. A service with
  * no price does not count as a service here.
  *
- * Three steps, not five. Materials with a purchase price and a recipe per
- * service used to sit at positions two and four, and between them they were
- * most of the work before a studio saw its first number — a catalogue to type
- * in before the product would answer anything. They were removed with the
- * material engine: the entry cost was buying more than the per-visit precision
- * was worth.
+ * Two steps, and both of them are settings. Materials with a purchase price and
+ * a recipe per service used to sit at positions two and four, and between them
+ * they were most of the work before a studio saw its first number; they went
+ * with the material engine.
+ *
+ * «Закройте первый визит» went later and for a different reason. It was not a
+ * setting at all — a visit is something that happens, and a checklist that asks
+ * for one is asking the studio to invent a client to earn a tick. It was here
+ * because it used to be the only way to a number: nothing in the product said
+ * anything until a visit had been closed. That stopped being true when the
+ * setup screen started collecting a rate and priced services, because
+ * `lib/service-costing.ts` answers from those alone — margin, and profit per
+ * hour, per service, before anybody has walked in. So the first number arrives
+ * on its own and the visit is left to be what it is: the studio's work, not its
+ * homework.
  */
 export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingProgress> {
   const now = new Date();
@@ -170,17 +179,6 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
     );
 
   /*
-   * The one step that is a fact of history rather than a state of the data.
-   *
-   * A closed visit happened; archiving the service it was sold under does not
-   * un-close it, and there is no way to delete one — `visit_status` is
-   * `completed | adjusted`. So this ✓ is meant never to come back off, and it
-   * counts the visits themselves rather than their snapshots, which are an
-   * artefact of how the visit was costed.
-   */
-  const [closedVisits] = await tx.select({ value: count() }).from(visits);
-
-  /*
    * Where this step is actually finished, which is not one address.
    *
    * The rule can be written in two places — the add-specialist form on
@@ -212,7 +210,6 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
   const steps: OnboardingStep[] = [
     { key: "specialist", done: withRule.value > 0, href: specialistHref },
     { key: "service", done: usableServices.value > 0, href: "/app/services#add-service" },
-    { key: "visit", done: closedVisits.value > 0, href: "/app/visits/new" },
   ];
 
   return summarize(steps);
@@ -224,28 +221,28 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
  * `loadFirstRun` is the same question with the whole checklist as its answer —
  * what the dashboard needs to name the one thing to do next — and
  * `loadSetupGuide` is the counter the guided window compares against. One
- * `count` decides both, so a studio that has finished setting up pays for a
- * single row and nothing else.
+ * `count` answers the common case, so a studio that has long since started
+ * pays for a single row and nothing else.
  *
- * The guide ends at the first closed visit, which is the answer to «пока не
- * будет закрыт первый визит» and also the cheapest question in this file: one
- * count, paid by every studio that has long finished setting up. Only a studio
- * that has never closed a visit pays for the checklist itself.
+ * Two gates, and they refuse for different reasons.
  *
- * The count it returns is the baseline the window compares against. Without one
- * the first write of a session has nothing to be «a step further» than, and the
- * window would either never open or open on the wrong action.
+ * A studio that has closed a visit is trading, and nothing puts it back into a
+ * guided first run — not a commission rule that expired, not the last service a
+ * rule covered being archived. Those put a ○ back on the dashboard's diagnosis
+ * panel, which is that panel's whole job.
  *
- * Deliberately not `!complete`: a rule that ended or a service archived years
- * later puts a ○ back on the dashboard panel, and that is the panel's business.
- * It must not put a studio that has been trading for a year back into a guided
- * first run.
+ * A studio with nothing left on the checklist is not on a first run either, and
+ * that case is new: the setup screen now writes the rate and the priced
+ * services itself, so an owner can arrive here finished before a single client
+ * has been seen. Sending them to a goal panel with no goal — or worse, to one
+ * invented to fill it — would undo exactly what that screen was for.
  */
 export async function loadFirstRun(tx: TenantTransaction): Promise<OnboardingProgress | null> {
   const [closedVisits] = await tx.select({ value: count() }).from(visits);
   if (closedVisits.value > 0) return null;
 
-  return loadOnboarding(tx);
+  const progress = await loadOnboarding(tx);
+  return progress.complete ? null : progress;
 }
 
 export async function loadSetupGuide(

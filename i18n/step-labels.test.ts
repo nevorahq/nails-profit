@@ -12,7 +12,7 @@ describe("stepMessageKey", () => {
     // The cast the three screens used to make by hand, made in one place —
     // and it has to keep resolving, or a service step comes out blank.
     expect(stepMessageKey("step.goal.service", "solo")).toBe("step.goal.service");
-    expect(stepMessageKey("onboarding.visitHint", "studio")).toBe("onboarding.visitHint");
+    expect(stepMessageKey("onboarding.serviceHint", "studio")).toBe("onboarding.serviceHint");
   });
 
   // That every key it hands back exists in all three dictionaries is swept by

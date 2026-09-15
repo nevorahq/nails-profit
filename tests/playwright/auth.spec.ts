@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "./fixtures";
 
 test.describe("authentication UI", () => {
@@ -5,15 +7,15 @@ test.describe("authentication UI", () => {
     void browserErrors;
     await page.goto("/login");
 
-    await expect(page.getByLabel("Your name")).toHaveCount(0);
+    await expect(page.getByLabel("Studio name")).toHaveCount(0);
     await page.getByRole("button", { name: "No account? Create one" }).click();
     await expect(page.getByRole("heading", { name: "Create an account" })).toBeVisible();
-    await expect(page.getByLabel("Your name")).toBeVisible();
+    await expect(page.getByLabel("Studio name")).toBeVisible();
     await expect(page.getByRole("checkbox")).toBeVisible();
 
     await page.getByRole("button", { name: "Already have an account? Sign in" }).click();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-    await expect(page.getByLabel("Your name")).toHaveCount(0);
+    await expect(page.getByLabel("Studio name")).toHaveCount(0);
   });
 
   test("an address with no account is refused, and carries over to registration", async ({
@@ -77,7 +79,57 @@ test.describe("authentication UI", () => {
     await expect(page.locator(".form-error")).toHaveText("The passwords do not match");
   });
 
-  test("a user can create an account and workspace end to end", async ({
+  test("keeps the consent to one line on the narrowest phone", async ({ page, browserErrors }) => {
+    void browserErrors;
+    /*
+     * 320px, which is the narrowest screen the product claims to work on. The
+     * sentence used to read «Я принимаю условия использования и ознакомился(-ась)
+     * с уведомлением о конфиденциальности» — three lines there, pushing «Создать
+     * аккаунт» off the first screenful. The documents keep their full names in
+     * this card's own footer and on the pages themselves.
+     */
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto("/login?mode=signup");
+    await expect(page.getByLabel("Studio name")).toBeVisible();
+
+    const consent = page.locator('label[for="legalAccepted"]');
+    const box = await consent.boundingBox();
+    const lineHeight = await consent.evaluate((element) =>
+      parseFloat(getComputedStyle(element).lineHeight),
+    );
+    expect(Math.round((box?.height ?? 0) / lineHeight)).toBe(1);
+
+    // Both documents still reachable from the consent itself.
+    await expect(consent.getByRole("link")).toHaveCount(2);
+
+    // The rule under the studio name is held to the same width: it used to
+    // spell out «A–Z, digits, space and hyphen», which is what a refused field
+    // says for itself through `title`.
+    const rule = page.locator(".field-hint").first();
+    const ruleBox = await rule.boundingBox();
+    const ruleLine = await rule.evaluate((element) =>
+      parseFloat(getComputedStyle(element).lineHeight),
+    );
+    expect(Math.round((ruleBox?.height ?? 0) / ruleLine)).toBe(1);
+  });
+
+  /** Registration, up to the one question the setup screen still asks. */
+  async function signUpAndAddress(page: Page, suffix: string, studioName = "Browser Studio") {
+    await page.goto("/login?mode=signup");
+    // The studio, not the person: it is the name a client reads on a booking
+    // link, and nothing in the product ever showed the owner's own.
+    await page.getByLabel("Studio name").fill(studioName);
+    await page.getByLabel("Email").fill(`playwright-${suffix}@example.com`);
+    await page.getByLabel("Password").fill("orchid-lacquer-42-crown");
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Create account" }).click();
+
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+    await page.getByLabel("Address").fill("10 Test Street, Chisinau");
+  }
+
+  test("somebody working alone is set up and costed by one press", async ({
     page,
     browserErrors,
   }, testInfo) => {
@@ -86,21 +138,99 @@ test.describe("authentication UI", () => {
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, "-");
 
-    await page.goto("/login?mode=signup");
-    await page.getByLabel("Your name").fill("Browser Owner");
-    await page.getByLabel("Email").fill(`playwright-${suffix}@example.com`);
-    await page.getByLabel("Password").fill("orchid-lacquer-42-crown");
-    await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "Create account" }).click();
+    await signUpAndAddress(page, suffix, `Solo Studio ${Date.now()}`);
 
-    await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
-    await page.getByLabel("Name").fill(`Browser Studio ${Date.now()}`);
-    await page.getByLabel("Address").fill("10 Test Street, Chisinau");
-    await page.getByRole("radio", { name: "Studio" }).check();
-    await page.getByLabel("Currency").selectOption("MDL");
+    /*
+     * The address is the whole of it. A name, a rate, a price list and a
+     * working week were all asked for here once; every one of them had an
+     * answer the product could supply, so it supplies them.
+     */
+    await expect(page.getByLabel("Name")).toHaveCount(0);
+    await expect(page.getByText("Services and prices")).toHaveCount(0);
+    await expect(page.getByText("Working hours")).toHaveCount(0);
+
+    // Online booking is on unless somebody says otherwise — safe to default
+    // because every request waits for the owner's answer.
+    await expect(page.getByRole("checkbox", { name: "Accept online bookings" })).toBeChecked();
+
     await page.getByRole("button", { name: "Continue" }).click();
 
+    /*
+     * No checklist, no «add a specialist», no first visit to invent: the owner
+     * is catalogued with the workspace, and what the product owes them — what
+     * an hour of work is worth — is on the screen that follows, computed from
+     * the defaults registration wrote.
+     */
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByRole("heading", { level: 2, name: "Your figures" })).toBeVisible();
+    const manicure = page.getByRole("row", { name: /Manicure/ });
+    // 200.00 at 40%: 80.00 to the person doing the work, 120.00 kept — and the
+    // hour is the hour, so the hourly is the same figure.
+    await expect(manicure).toContainText("200");
+    await expect(manicure).toContainText("80");
+    await expect(manicure).toContainText("120");
+
+    /*
+     * And the page clients book on is already live, with its address on the
+     * same screen. It used to be two switches deep in «Онлайн-запись» — a
+     * screen a studio has no reason to open in its first week — and until they
+     * were flipped, `/book/<slug>` answered 404.
+     */
+    await expect(page.getByRole("heading", { name: "Your booking page" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^\/book\// })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Copy the link" })).toBeVisible();
+  });
+
+  test("a studio whose owner works is costed like anybody else", async ({
+    page,
+    browserErrors,
+  }, testInfo) => {
+    void browserErrors;
+    const suffix = `${testInfo.project.name}-works-${Date.now()}-${testInfo.workerIndex}`
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
+
+    await signUpAndAddress(page, suffix);
+    await page.getByRole("radio", { name: "Studio" }).check();
+
+    // The owner keeps the tick, so she is catalogued as a master herself — and
+    // says who she is, because the studio's own name would be a strange thing
+    // for a client to pick out of a list of three people.
+    await expect(page.getByRole("checkbox", { name: /I take clients/ })).toBeChecked();
+    await page.getByLabel("Your name").fill("Irina");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.getByRole("heading", { level: 2, name: "Your figures" })).toBeVisible();
+  });
+
+  test("a studio is left with the one thing only it can answer: who works there", async ({
+    page,
+    browserErrors,
+  }, testInfo) => {
+    void browserErrors;
+    const suffix = `${testInfo.project.name}-studio-${Date.now()}-${testInfo.workerIndex}`
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
+
+    await signUpAndAddress(page, suffix);
+    await page.getByRole("radio", { name: "Studio" }).check();
+    await page.getByLabel("Currency").selectOption("MDL");
+
+    /*
+     * The owner is assumed to take clients — in the pilot the woman who owns
+     * the studio is usually also standing at a table — and this one says she
+     * does not. There is then nobody for the rate to belong to.
+     */
+    const takesClients = page.getByRole("checkbox", { name: /I take clients/ });
+    await takesClients.uncheck();
+    // And the question of what to call her card goes with it.
+    await expect(page.getByLabel("Your name")).toHaveCount(0);
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    /*
+     * So the single step left is the one thing the product must not guess:
+     * who works here.
+     */
     await expect(page).toHaveURL(/\/app$/);
     await expect(
       page.getByRole("heading", { level: 2, name: "Add a specialist and their commission rule" }),

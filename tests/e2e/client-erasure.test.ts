@@ -64,7 +64,7 @@ describe("single-client privacy erasure", () => {
     });
 
     const locationId = dataOf<{ id: string }>(
-      await studio.owner.post("/api/v1/locations", { name: "Privacy room", slug: "erasure-studio" }),
+      await studio.owner.post("/api/v1/locations", { name: "Privacy room", slug: "erasure-room" }),
     ).id;
     await studio.owner.put(`/api/v1/specialists/${studio.specialistId}/locations`, {
       location_ids: [locationId],

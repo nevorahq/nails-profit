@@ -33,7 +33,7 @@ test.describe("landing experience", () => {
     await page.getByRole("link", { name: "Start costing" }).first().click();
     await expect(page).toHaveURL(/\/login\?mode=signup$/);
     await expect(page.getByRole("heading", { name: "Create an account" })).toBeVisible();
-    await expect(page.getByLabel("Your name")).toBeVisible();
+    await expect(page.getByLabel("Studio name")).toBeVisible();
   });
 
   test("pricing switches every card between prepay periods", async ({ page, browserErrors }) => {

@@ -424,6 +424,17 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 }
 .workspace-card { width: min(100%, 520rem); }
 
+/*
+ * The language picker, which sits above the card's own heading rather than
+ * inside the form: it changes the screen the reader is on, not a value they are
+ * filling in.
+ */
+.setup-language { display: flex; align-items: center; justify-content: flex-end; gap: 10rem; margin-bottom: 10rem; }
+.setup-language select { width: auto; margin-top: 0; }
+
+/* The booking address and the button that puts it on the clipboard, in one row. */
+.booking-link { display: flex; align-items: center; gap: 12rem; flex-wrap: wrap; margin: 8rem 0 0; }
+
 .app-header h1 { font-size: 42rem; margin: 10rem 0 0; }
 .role-badge { padding: 8rem 12rem; border-radius: 4rem; background: var(--sage); text-transform: capitalize; font-size: 13rem; font-weight: 700; }
 .empty-state { max-width: 680rem; margin: 12vh auto 0; text-align: center; background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: 54rem 36rem; box-shadow: var(--shadow); }

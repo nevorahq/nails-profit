@@ -11,11 +11,10 @@ import {
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, canManageCatalogue } from "@/domain/rbac";
+import { can } from "@/domain/rbac";
 import { VisitCloseForm, type CloseFormAddOn, type CloseFormService } from "@/components/visit-close-form";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator, type Translate } from "@/i18n/t";
-import { loadSetupGuide } from "@/lib/onboarding";
 import { requireWorkspace } from "@/lib/workspace";
 
 async function loadCatalogue(
@@ -68,7 +67,7 @@ async function loadCatalogue(
 }
 
 export default async function NewVisitPage() {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
+  const { membership, locale, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "bookings", "write")) {
@@ -78,15 +77,6 @@ export default async function NewVisitPage() {
       </main>
     );
   }
-
-  /*
-   * The last stop of the guided run, and the only one where the window says
-   * «готово» rather than «осталось». Null for anybody who has closed a visit
-   * before — including, one moment later, this very studio.
-   */
-  const setupGuide = canManageCatalogue(membership.role, "services")
-    ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
-    : null;
 
   const data = await withTenant(membership.organizationId, async (tx) => {
     const { catalogue, options, unusableServices } = await loadCatalogue(tx, locale, t);
@@ -173,8 +163,6 @@ export default async function NewVisitPage() {
         paymentMethods={data.methods}
         currency={currency}
         locale={locale}
-      businessType={businessType}
-        setupGuide={setupGuide}
       />
     </main>
   );

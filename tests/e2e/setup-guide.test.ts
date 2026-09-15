@@ -9,9 +9,9 @@ import { inviteMember } from "../helpers/studio";
  *
  * `tests/integration/onboarding.test.ts` proves what each step measures; this
  * proves the loop the interface is built on — that the count moves by exactly
- * one per finished step, and that «выполнено» arrives at the same moment the
- * product stops refusing to close a visit. The window opens on nothing else:
- * it compares this number before and after each write.
+ * one per finished step, and that «выполнено» arrives as soon as the studio can
+ * be costed rather than after it has sold something. The window opens on
+ * nothing else: it compares this number before and after each write.
  */
 type Progress = {
   done: number;
@@ -63,7 +63,7 @@ describe("the guided setup", () => {
     specialistId = cards[0].id;
 
     const empty = await progress();
-    expect(empty).toMatchObject({ done: 0, total: 3, complete: false, next: "specialist" });
+    expect(empty).toMatchObject({ done: 0, total: 2, complete: false, next: "specialist" });
     // The card, not the hiring form. The panel's first link pointed at
     // «Настройки» for as long as the panel existed, then at `#add-specialist`
     // — which is a form for taking somebody on, and the studio of one has
@@ -89,14 +89,22 @@ describe("the guided setup", () => {
       }),
     ).id;
 
-    expect(await progress()).toMatchObject({ done: 2, complete: false, next: "visit" });
+    // The second step and the last one: the studio can now be costed, so the
+    // window reports «готово» instead of «осталось» — before a single client
+    // has walked in.
+    expect(await progress()).toMatchObject({ done: 2, total: 2, complete: true, next: null });
 
     expect((await owner.post("/api/v1/visits", { service_id: serviceId, specialist_id: specialistId })).status)
       .toBe(201);
 
-    // The third step, and the end of the guided run: this is the state the
-    // window reports as «готово» instead of «осталось».
-    expect(await progress()).toMatchObject({ done: 3, total: 3, complete: true, next: null });
+    /*
+     * And the visit changes nothing here, which is the point of it no longer
+     * being a step. «Закройте первый визит» used to be the third one: a
+     * checklist asking the studio to invent a client to earn a tick, on the
+     * grounds that nothing in the product said a number until one existed.
+     * Something does now — the costing of the catalogue above.
+     */
+    expect(await progress()).toMatchObject({ done: 2, total: 2, complete: true, next: null });
   });
 
   test("has nothing left for «это я» to say in a studio of one", async () => {

@@ -3,33 +3,186 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { memberships, organizations, specialists } from "@/db/schema";
+import { memberships, organizations } from "@/db/schema";
 import { currencies } from "@/domain/money";
 import { SLUG_MAX_LENGTH, slugCandidatesFor } from "@/domain/slug";
+import { catalogueEntry } from "@/domain/service-catalogue";
+import { isSupportedTimezone, parseLocalTime } from "@/domain/timezone";
 import { auth } from "@/lib/auth";
 import {
   isLatinOrganizationName,
+  latinizeOrganizationName,
   ORGANIZATION_NAME_MESSAGE,
 } from "@/domain/organization-name";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { announceStudioLead } from "@/lib/studio-lead-notice";
+import { provisionWorkspace, type WorkspacePlan } from "@/lib/workspace-provisioning";
 
+/**
+ * A service the setup screen ticked, priced by the owner.
+ *
+ * A catalogue key rather than a name: the three languages of it are in
+ * `domain/service-catalogue.ts`, and a request that carried its own name could
+ * only carry one of them.
+ */
+const setupServiceSchema = z.object({
+  key: z.string().trim().min(1).max(40),
+  price_minor: z.int().min(0),
+  duration_minutes: z.int().positive().max(24 * 60),
+});
+
+const setupWorkweekSchema = z.object({
+  weekdays: z.array(z.int().min(1).max(7)).min(1).max(7),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+/**
+ * Everything the workspace form asks, which is everything the product used to
+ * ask afterwards.
+ *
+ * Only `name` and `type` are required, and that is on purpose: this endpoint is
+ * older than the setup screen and is called by a dozen tests and fixtures with
+ * the four original fields. Every addition below is optional, so a request that
+ * knows nothing about them creates exactly the workspace it created before.
+ */
 const createOrganizationSchema = z.object({
-  // Latin script, the same rule the workspace form states under its own field
-  // — see `domain/organization-name.ts` for why it is a naming decision rather
-  // than a limit of the slug.
+  /**
+   * Latin script — see `domain/organization-name.ts` for why it is a naming
+   * decision rather than a limit of the slug.
+   *
+   * Optional, because the setup form stopped asking: an account has just been
+   * created under somebody's own name, and typing «Irina Popescu» a second time
+   * two minutes later is a question the product can answer for itself. A
+   * request that sends nothing is named after the account below; one that sends
+   * a name is still held to the rule, since this endpoint and the settings one
+   * are reachable without a browser.
+   */
   name: z
     .string()
     .trim()
     .min(2)
     .max(100)
-    .refine(isLatinOrganizationName, { message: ORGANIZATION_NAME_MESSAGE }),
+    .refine(isLatinOrganizationName, { message: ORGANIZATION_NAME_MESSAGE })
+    .optional(),
   type: z.enum(["solo", "studio"]),
   currency: z.enum(currencies).default("MDL"),
   locale: z.enum(["ru", "ro", "en"]).default("ru"),
+  address: z.string().trim().max(300).optional(),
+  /** The registering browser's own zone; the studio's hours are read in it. */
+  timezone: z.string().trim().max(64).optional(),
+  /** The default rate every card created here is paid by. 4000 = 40%. */
+  commission_basis_points: z.int().min(0).max(10_000).optional(),
+  /**
+   * Whether the owner takes clients themselves.
+   *
+   * Absent means «as the format says», which is what every caller written
+   * before this field sends: a solo workspace is somebody working alone, a
+   * studio is not asked. The setup form asks outright, so a studio whose owner
+   * stands at a table is finally describable.
+   */
+  owner_works: z.boolean().optional(),
+  /**
+   * What to call the owner's own card, when it is not the studio's own name.
+   *
+   * Sign-up asks for the studio, so the account carries «Studio Belle» — right
+   * for a solo workspace, where the studio is the person, and wrong for a
+   * studio of three, where a client would be offered «Studio Belle» standing
+   * beside «Ana» and «Maria».
+   */
+  owner_name: z.string().trim().min(2).max(200).optional(),
+  /**
+   * Whether the studio's public booking page goes live with the workspace.
+   *
+   * Two rows say so — `booking_access` here and `public_status` on the
+   * address's settings — and until both do, `/book/<slug>` is a 404 the owner
+   * has to go and fix in a screen they have no reason to open.
+   */
+  publish_booking: z.boolean().optional(),
+  /** Other people who work here, named on the form. */
+  masters: z.array(z.string().trim().min(2).max(200)).max(20).optional(),
+  services: z.array(setupServiceSchema).max(20).optional(),
+  workweek: setupWorkweekSchema.optional(),
+  rent_minor: z.int().min(0).optional(),
 });
+
+type CreateOrganizationBody = z.infer<typeof createOrganizationSchema>;
+
+/**
+ * The half of the request zod cannot judge on shape alone, turned into the plan
+ * `provisionWorkspace` writes — or into the fields that were wrong.
+ *
+ * Checked here rather than inside the transaction because a refusal has to be
+ * something the owner can fix on the form: once the transaction has begun, the
+ * only honest answer to a bad interval is to roll the whole registration back,
+ * and the second attempt is met with MEMBERSHIP_EXISTS.
+ */
+function planFor(
+  body: CreateOrganizationBody,
+): { plan: WorkspacePlan } | { fieldErrors: { field: string; code: string; message: string }[] } {
+  const fieldErrors: { field: string; code: string; message: string }[] = [];
+
+  if (body.timezone !== undefined && !isSupportedTimezone(body.timezone)) {
+    fieldErrors.push({ field: "timezone", code: "unknown", message: "Unknown IANA timezone" });
+  }
+
+  for (const [index, service] of (body.services ?? []).entries()) {
+    if (!catalogueEntry(service.key)) {
+      fieldErrors.push({
+        field: `services.${index}.key`,
+        code: "unknown",
+        message: "Not a service kind the catalogue knows",
+      });
+    }
+  }
+
+  let workweek: WorkspacePlan["workweek"];
+  if (body.workweek) {
+    const startMinute = parseLocalTime(body.workweek.start);
+    // 24:00 is a legal end and nothing else is — the same rule the rota
+    // endpoint applies, so a week saved here and a week saved there cannot
+    // disagree about midnight.
+    const endMinute = body.workweek.end === "24:00" ? 24 * 60 : parseLocalTime(body.workweek.end);
+    if (startMinute === null || endMinute === null || startMinute >= endMinute) {
+      fieldErrors.push({
+        field: "workweek",
+        code: "invalid_interval",
+        message: "An interval must start before it ends",
+      });
+    } else {
+      workweek = {
+        // Deduplicated, because the check constraint would not notice a day
+        // sent twice and the calendar would show the shift twice.
+        weekdays: [...new Set(body.workweek.weekdays)],
+        startMinute,
+        endMinute,
+      };
+    }
+  }
+
+  if (fieldErrors.length > 0) return { fieldErrors };
+
+  return {
+    plan: {
+      address: body.address,
+      ownerWorks: body.owner_works ?? body.type === "solo",
+      ownerName: body.owner_name,
+      publishBooking: body.publish_booking,
+      timezone: body.timezone,
+      commissionBasisPoints: body.commission_basis_points,
+      masters: body.masters,
+      services: (body.services ?? []).map((service) => ({
+        key: service.key,
+        priceMinor: service.price_minor,
+        durationMinutes: service.duration_minutes,
+      })),
+      workweek,
+      rentMinor: body.rent_minor,
+    },
+  };
+}
 
 async function currentUser() {
   return auth.api.getSession({ headers: await headers() });
@@ -71,6 +224,29 @@ export async function POST(request: Request) {
     });
   }
 
+  /*
+   * What the studio is called when the form did not ask.
+   *
+   * The account's own name, latinised — «Ирина Попеску» becomes «Irina
+   * Popesku», which is what a client reads on the booking link. Then the local
+   * part of the address, for an account named in a script the table does not
+   * know; then a word, because a studio must have a name and none of the three
+   * steps above can be allowed to fail a registration. Every one of them is
+   * editable in Настройки the minute the owner disagrees.
+   */
+  const name =
+    parsed.data.name ??
+    latinizeOrganizationName(session.user.name ?? "") ??
+    latinizeOrganizationName(session.user.email.split("@")[0]) ??
+    "Studio";
+
+  const planned = planFor(parsed.data);
+  if ("fieldErrors" in planned) {
+    return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
+      fieldErrors: planned.fieldErrors,
+    });
+  }
+
   const createOrganization = () =>
     db.transaction(async (tx) => {
       // A client that goes away mid-transaction must not hold the lock below
@@ -106,7 +282,7 @@ export async function POST(request: Request) {
        * reads across tenants on purpose — an address is unique to the whole
        * application, not to a tenant.
        */
-      const candidates = slugCandidatesFor(parsed.data.name);
+      const candidates = slugCandidatesFor(name);
       const taken = new Set(
         (
           await tx
@@ -129,9 +305,27 @@ export async function POST(request: Request) {
       const [created] = await tx
         .insert(organizations)
         .values({
-          ...parsed.data,
+          name,
+          type: parsed.data.type,
+          currency: parsed.data.currency,
+          locale: parsed.data.locale,
           slug,
-          timezone: "Europe/Chisinau",
+          /*
+           * The zone the studio's hours are read in, taken from the browser
+           * that registered rather than assumed.
+           *
+           * It was `Europe/Chisinau` for everybody, which is right for the
+           * pilot and quietly wrong for the first studio outside it: the rota
+           * would be written in one zone and the working day read in another,
+           * and nothing on any screen would say so. The setup form sends
+           * `Intl.DateTimeFormat().resolvedOptions().timeZone`; a request
+           * without one keeps the pilot's zone, which is what every existing
+           * caller of this endpoint sends.
+           */
+          timezone: parsed.data.timezone ?? "Europe/Chisinau",
+          // The public half of «принимать записи онлайн»; the address's own
+          // settings are written beside it in `provisionWorkspace`.
+          ...(planned.plan.publishBooking ? { bookingAccess: "public" as const } : {}),
           createdBy: session.user.id,
           updatedBy: session.user.id,
         })
@@ -172,20 +366,23 @@ export async function POST(request: Request) {
        * the owner stands at a table at all, is exactly what `organization.type`
        * cannot answer (`db/schema.ts` says so on the column itself).
        */
-      if (created.type === "solo") {
-        await tx.insert(specialists).values({
-          organizationId: created.id,
-          userId: session.user.id,
-          // The address is a poor name for a person, but it is a name; an
-          // account with a blank one still has to appear somewhere in the
-          // calendar. `POST /specialists` falls back the same way.
-          name: session.user.name?.trim() || session.user.email.split("@")[0],
-          cooperationType: "commission",
-          isPrincipal: true,
-          createdBy: session.user.id,
-          updatedBy: session.user.id,
-        });
-      }
+      /*
+       * The people, the address, the rate, the catalogue, the week and the rent
+       * — whatever of them the form was given, written here rather than asked
+       * for again one screen at a time. `lib/workspace-provisioning.ts` says
+       * why they belong in this transaction and not in five later ones.
+       */
+      await provisionWorkspace(tx, {
+        organization: {
+          id: created.id,
+          name: created.name,
+          currency: created.currency,
+          locale: created.locale,
+          timezone: created.timezone,
+        },
+        actor: { userId: session.user.id },
+        plan: planned.plan,
+      });
 
       await recordPilotProductEvent(tx, {
         organizationId: created.id,

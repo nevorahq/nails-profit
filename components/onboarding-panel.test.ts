@@ -11,12 +11,12 @@ import { stepMessageKey } from "@/i18n/step-labels";
  * type system on its way to `t()`. So the one guarantee `tsc` gives everywhere
  * else in this dictionary does not hold here, and a step renamed in
  * `lib/onboarding.ts` would reach a pilot's screen as the literal
- * `onboarding.visitHint` instead of a sentence.
+ * `onboarding.serviceHint` instead of a sentence.
  *
  * Three screens build keys this way: the first-run checklist on the dashboard,
  * the goal panels (`step.goal.` and `step.action.`), and the guided window,
  * which borrows both to name the button that carries somebody onward. A step
- * renamed without them would put `step.action.visit` on a button.
+ * renamed without them would put `step.action.service` on a button.
  *
  * The two runs need different strings, which is why they are listed apart. The
  * first run is drawn as a checklist and needs a heading, a progress line and a
@@ -36,7 +36,7 @@ import { stepMessageKey } from "@/i18n/step-labels";
  * twice, once in each shape of business.
  */
 const STEPS: Readonly<Record<"onboarding" | "monthSetup", readonly string[]>> = {
-  onboarding: ["specialist", "service", "visit"],
+  onboarding: ["specialist", "service"],
   monthSetup: ["overhead", "rota"],
 };
 
