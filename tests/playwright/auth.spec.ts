@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import { PASSWORD, signUp, uniqueSuffix } from "./helpers/studio";
 
 test.describe("authentication UI", () => {
   test("sign-in and sign-up modes expose the right fields", async ({ page, browserErrors }) => {
@@ -239,5 +240,78 @@ test.describe("authentication UI", () => {
       "href",
       "/app/specialists#add-specialist",
     );
+  });
+
+  test("somebody arriving from an invitation is asked for herself, not for a studio", async ({
+    page,
+    browser,
+    browserErrors,
+    baseURL,
+  }, testInfo) => {
+    void browserErrors;
+    const suffix = uniqueSuffix(testInfo);
+    const invitedEmail = `pw-invited-${suffix}@example.com`;
+
+    // A studio with an invitation waiting on it, made the way a studio makes
+    // one: registration, then the owner's own «Пригласить» call.
+    const owner = await signUp(baseURL!, {
+      email: `pw-inviter-${suffix}@example.com`,
+      name: `PW Invite ${suffix}`.slice(0, 60),
+    });
+
+    try {
+      await owner.post("/api/v1/organizations", {
+        name: `PW Invite ${suffix}`.slice(0, 60),
+        type: "studio",
+        currency: "MDL",
+        locale: "en",
+        address: "10 Test Street, Chisinau",
+      });
+      const invitation = await owner.post<{ token: string }>("/api/v1/invitations", {
+        email: invitedEmail,
+        role: "master",
+      });
+
+      await page.goto(`/join?token=${encodeURIComponent(invitation.token)}`);
+      await page.getByRole("link", { name: "Create an account" }).click();
+
+      /*
+       * The registration this form used to draw for her asked «Название
+       * студии» — for the studio that had just invited her, named on the card
+       * she pressed to get here, which she does not own and cannot rename.
+       * What she typed became `users.name`.
+       */
+      await expect(page.getByLabel("Studio name")).toHaveCount(0);
+      const name = page.getByLabel("Your name");
+      await expect(name).toBeVisible();
+      // The address is the invitation's own: no other one can accept it.
+      await expect(page.getByLabel("Email")).toHaveValue(invitedEmail);
+
+      // Cyrillic, which the studio-name rule refused outright — in the
+      // browser's language, to a woman whose name is Ирина.
+      await name.fill("Ирина Попеску");
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("checkbox").check();
+      await page.getByRole("button", { name: "Create account" }).click();
+
+      // Registered and joined in one press, with no second trip through /join.
+      await expect(page).toHaveURL(/\/app$/);
+
+      /*
+       * And the studio calls her by her own name. This list is «Мастера,
+       * которым нужна карточка», and the button beside it creates that card
+       * with the very name asked for above (`components/specialist-manager.tsx`).
+       */
+      const ownerContext = await browser.newContext({ storageState: await owner.storageState() });
+      try {
+        const ownerPage = await ownerContext.newPage();
+        await ownerPage.goto("/app/specialists");
+        await expect(ownerPage.getByText("Ирина Попеску")).toBeVisible();
+      } finally {
+        await ownerContext.close();
+      }
+    } finally {
+      await owner.dispose();
+    }
   });
 });

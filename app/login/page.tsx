@@ -42,6 +42,12 @@ export default async function LoginPage({
    * that cannot accept it. Typing it again is a step that can only go wrong, so
    * it is filled in for them.
    *
+   * The same answer decides what else the form asks. A live invitation means
+   * this registration joins a studio rather than founds one, and the two want
+   * different things: `components/login-form.tsx` asks whoever is joining for
+   * their own name, in their own alphabet, instead of for a studio name they
+   * have no say in.
+   *
    * The address is resolved here, from the token already carried by `next`,
    * rather than passed along in a query parameter: an email in a URL ends up in
    * access logs, browser history and `Referer` headers, and this one belongs to
@@ -57,8 +63,12 @@ export default async function LoginPage({
         locale={pendingInvitation?.locale ?? (await resolveLocale())}
         next={next}
         activeEmail={session?.user.email ?? null}
-        presetEmail={pendingInvitation?.email ?? null}
-        inviteOrganization={pendingInvitation?.organizationName ?? null}
+        invitation={
+          pendingInvitation && {
+            email: pendingInvitation.email,
+            organizationName: pendingInvitation.organizationName,
+          }
+        }
       />
     </main>
   );

@@ -15,8 +15,7 @@ export function LoginForm({
   locale,
   next,
   activeEmail = null,
-  presetEmail = null,
-  inviteOrganization = null,
+  invitation = null,
 }: {
   initialMode?: "signin" | "signup";
   locale: AppLocale;
@@ -24,13 +23,16 @@ export function LoginForm({
   /** Who is signed in in this browser already, and about to be replaced. */
   activeEmail?: string | null;
   /**
-   * The address a live invitation was issued for. Present only when this form
-   * was reached from one, and then it is the only address that leads anywhere:
-   * the account has to match it for the invitation to be acceptable.
+   * The live invitation this form was reached from, when it was.
+   *
+   * One object rather than an address beside a studio name, because the two
+   * are one fact and must not be able to disagree: its presence is what makes
+   * this registration a joining rather than a founding, and everything that
+   * differs between the two reads it — the address, fixed to the one the link
+   * was mailed to because no other leads anywhere, and the name, which belongs
+   * to a person here and to a studio otherwise.
    */
-  presetEmail?: string | null;
-  /** The inviting studio, so the fixed address is explained rather than imposed. */
-  inviteOrganization?: string | null;
+  invitation?: { email: string; organizationName: string } | null;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
@@ -94,9 +96,10 @@ export function LoginForm({
      * That screen would offer one button, "принять приглашение", to a person
      * who has already pressed «Создать аккаунт» under a card naming the studio
      * and the role — consent given twice, the second time to something that can
-     * only go one way. The address makes it safe to skip: `presetEmail` is the
-     * invitation's own, fixed and unchangeable in this form, so an account
-     * created from this link always matches the invitation it came from.
+     * only go one way. The address makes it safe to skip: `invitation.email`
+     * is the invitation's own, fixed and unchangeable in this form, so an
+     * account created from this link always matches the invitation it came
+     * from.
      *
      * A POST, not a page visit. Joining a studio is a mutation, and `/join` is
      * a GET that a prefetch or a mail scanner can make on its own.
@@ -132,34 +135,63 @@ export function LoginForm({
         <div className="warning-banner">{t("auth.activeSession", { email: activeEmail })}</div>
       )}
       <form onSubmit={submit}>
-        {mode === "signup" && (
-          <label>
-            {t("auth.studioName")}
-            {/*
-              The studio, not the person. It used to ask «Ваше имя», and the
-              account's name was then quietly turned into the studio's — which
-              is the name a client reads on a booking link, so the owner was
-              choosing it without being told they were. Nothing else in the
-              product ever showed the person's own name.
+        {mode === "signup" &&
+          (invitation ? (
+            <label>
+              {t("auth.personName")}
+              {/*
+                A person, because this one is joining a studio that already has
+                a name — the card she pressed «Создать аккаунт» on says which,
+                and the line under the address below says it again. Asked for
+                «Название студии» she had nothing to answer, and no way to know
+                that what she typed would become her own name: `users.name` is
+                what the studio then reads on «Мастера» and what her specialist
+                card is created with.
 
-              Latin only, refused by the field rather than by the server.
-              Transliteration copes — `domain/organization-name.ts` turns
-              «Студия» into «Studiya» — so this is a naming decision, not a
-              technical limit, and it is stated under the field instead of
-              arriving as a mysterious refusal one screen later.
-            */}
-            <input
-              name="name"
-              required
-              minLength={2}
-              maxLength={100}
-              pattern={String.raw`[A-Za-zĂÂÎȘȚăâîșț0-9 &'’.\-]{2,}`}
-              title={t("auth.studioNameLatin")}
-              placeholder={t("auth.studioNamePlaceholder")}
-            />
-            <span className="field-hint">{t("auth.studioNameLatin")}</span>
-          </label>
-        )}
+                No Latin rule here either. That one is about the name a client
+                reads on a booking link (`domain/organization-name.ts`), and
+                this field does not write one — it refused «Ирина» to a woman
+                whose name is Ирина, in the browser's language, over a rule that
+                was never about her.
+              */}
+              <input
+                name="name"
+                required
+                minLength={2}
+                maxLength={100}
+                autoComplete="name"
+                placeholder={t("auth.personNamePlaceholder")}
+              />
+              <span className="field-hint">{t("auth.personNameHint")}</span>
+            </label>
+          ) : (
+            <label>
+              {t("auth.studioName")}
+              {/*
+                The studio, not the person. It used to ask «Ваше имя», and the
+                account's name was then quietly turned into the studio's — which
+                is the name a client reads on a booking link, so the owner was
+                choosing it without being told they were. Nothing else in the
+                product ever showed the person's own name.
+
+                Latin only, refused by the field rather than by the server.
+                Transliteration copes — `domain/organization-name.ts` turns
+                «Студия» into «Studiya» — so this is a naming decision, not a
+                technical limit, and it is stated under the field instead of
+                arriving as a mysterious refusal one screen later.
+              */}
+              <input
+                name="name"
+                required
+                minLength={2}
+                maxLength={100}
+                pattern={String.raw`[A-Za-zĂÂÎȘȚăâîșț0-9 &'’.\-]{2,}`}
+                title={t("auth.studioNameLatin")}
+                placeholder={t("auth.studioNamePlaceholder")}
+              />
+              <span className="field-hint">{t("auth.studioNameLatin")}</span>
+            </label>
+          ))}
         <label>
           {t("auth.email")}
           {/*
@@ -174,12 +206,14 @@ export function LoginForm({
             autoComplete="email"
             required
             key={refusedEmail ?? "email"}
-            defaultValue={presetEmail ?? refusedEmail ?? undefined}
-            readOnly={presetEmail !== null}
+            defaultValue={invitation?.email ?? refusedEmail ?? undefined}
+            readOnly={invitation !== null}
           />
         </label>
-        {presetEmail !== null && inviteOrganization !== null && (
-          <p className="muted">{t("auth.invitedEmailHint", { org: inviteOrganization })}</p>
+        {invitation && (
+          <p className="muted">
+            {t("auth.invitedEmailHint", { org: invitation.organizationName })}
+          </p>
         )}
         <label>
           {t("auth.password")}
