@@ -3,6 +3,7 @@ import { asc, eq, isNull } from "drizzle-orm";
 import { BillingSettings, type CheckoutConfig, type SubscriptionStatusRow } from "@/components/billing-settings";
 import { DataManagement } from "@/components/data-management";
 import { LaborCostManager, type LaborCostRow } from "@/components/labor-cost-manager";
+import { OrganizationLogo } from "@/components/organization-logo";
 import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
 import { PaymentMethodManager, type PaymentMethodRow } from "@/components/payment-method-manager";
@@ -22,6 +23,7 @@ import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
+import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { monthBounds, monthOf } from "@/lib/period";
@@ -58,6 +60,15 @@ export default async function SettingsPage() {
   const canReadData = can(membership.role, "data_export", "read");
   const canReadFinancialSettings = can(membership.role, "expenses", "read");
   const canReadLabour = SHOW_ADVANCED_FINANCIAL_SETTINGS && canReadFinancialSettings;
+
+  /*
+   * The studio's own mark, which stands where `BrandMark`'s flower does until
+   * a logo exists. Only the version is read: it decides whether the preview
+   * draws the flower or an `<img>`, and it is the cache key in that image's
+   * URL. Memoized per request, so the topbar above this page and the block
+   * below share one query.
+   */
+  const logoVersion = canReadOrg ? await loadOrganizationLogoVersion(membership.organizationId) : null;
 
   /*
    * The labour rules, whom they are for, and what the owner has already booked
@@ -261,6 +272,13 @@ export default async function SettingsPage() {
           currency={currency}
           staffNotices={staffNotices}
           canEdit={can(membership.role, "organization_settings", "write")}
+        />
+      )}
+      {canReadOrg && (
+        <OrganizationLogo
+          version={logoVersion}
+          canEdit={can(membership.role, "organization_settings", "write")}
+          locale={locale}
         />
       )}
       {canReadOrg && (

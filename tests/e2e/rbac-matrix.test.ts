@@ -266,6 +266,29 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/organizations/settings", body: { locale: "ro" } }),
   },
   {
+    route: "/api/v1/organizations/logo",
+    method: "GET",
+    allowed: ALL_ROLES,
+    // The fixture's studio has no logo, so a permitted caller gets a 404 —
+    // which is not 401 and not 403, and is the whole claim this row makes.
+    note: "The mark is drawn in the topbar of every signed-in screen",
+    request: async () => ({ path: "/api/v1/organizations/logo" }),
+  },
+  {
+    route: "/api/v1/organizations/logo",
+    method: "POST",
+    allowed: ["owner"],
+    note: "organization_settings: setting the studio's mark is editing the studio",
+    request: async () => ({ path: "/api/v1/organizations/logo" }),
+  },
+  {
+    route: "/api/v1/organizations/logo",
+    method: "DELETE",
+    allowed: ["owner"],
+    note: "organization_settings: removing the mark is the same decision as setting it",
+    request: async () => ({ path: "/api/v1/organizations/logo" }),
+  },
+  {
     route: "/api/v1/organizations/export",
     method: "GET",
     allowed: ["owner"],

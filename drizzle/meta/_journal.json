@@ -393,6 +393,13 @@
       "when": 1789404977827,
       "tag": "0055_a_bell_that_can_be_cleared",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1789501207268,
+      "tag": "0056_a_studio_puts_its_own_mark_in_the_topbar",
+      "breakpoints": true
     }
   ]
 }

@@ -696,6 +696,33 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* Inline beside the name, not a banner across the row. */
 .specialist-photo .form-error { padding: 4rem 8rem; font-size: 12rem; justify-self: start; }
 
+/* Настройки → логотип студии: the mark as it stands today, and what changes it.
+   The preview is a circle at the size of a thumbnail rather than the 30rem the
+   topbar draws, because here the picture is the subject rather than a mark
+   beside a name — an owner deciding whether a photo reads at all needs to see
+   more of it than the corner of the screen shows. */
+.studio-logo { display: flex; align-items: center; gap: 18rem; flex-wrap: wrap; margin-top: 18rem; }
+.studio-logo-preview {
+  display: grid;
+  place-items: center;
+  width: 72rem;
+  height: 72rem;
+  flex: none;
+  overflow: hidden;
+  border: 1rem solid var(--line);
+  border-radius: 999rem;
+  background: var(--surface-strong);
+  color: var(--accent);
+}
+.studio-logo-preview img { width: 100%; height: 100%; object-fit: cover; }
+/* The flower inside the preview, drawn to the circle rather than to the topbar. */
+.studio-logo-preview .brand-mark { width: 42rem; height: 42rem; }
+.studio-logo-actions { display: flex; align-items: center; gap: 14rem; flex-wrap: wrap; min-width: 0; }
+/* A label cannot be disabled, only the input inside it — so the state the
+   picker is actually in is read off that input and drawn on the label. */
+.studio-logo-actions label:has(input:disabled) { opacity: 0.6; cursor: default; }
+.studio-logo-actions .form-error { padding: 4rem 8rem; font-size: 12rem; }
+
 /* The two facts a master's card states rather than asks about: how they are
    paid, and at what rate. A definition list because that is what they are, and
    because a two-column table for two rows would be a table for the sake of one. */
@@ -2022,6 +2049,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .topbar-brand { display: flex; align-items: center; gap: 10rem; flex: none; text-decoration: none; }
 .brand-mark { width: 30rem; height: 30rem; flex: none; color: var(--accent); }
+/* A studio that has uploaded its own mark gets it in the same 30rem square the
+   flower occupies, cropped to a circle the way every other picture here is. */
+.brand-logo { border-radius: 999rem; object-fit: cover; }
 
 /* Hidden below the desktop breakpoint: at phone widths the bottom bar already
    names the section, so the brand's own subtitle would repeat it. */

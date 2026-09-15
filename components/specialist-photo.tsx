@@ -4,9 +4,10 @@ import { useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { AVATAR_EDGE_PIXELS, avatarUrl, squareCrop } from "@/domain/avatar-image";
+import { avatarUrl } from "@/domain/avatar-image";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { squareImage } from "@/lib/square-image";
 
 /**
  * The face on a master's card, and the two controls that set it.
@@ -67,7 +68,7 @@ export function SpecialistPhoto({
     setPending(true);
     setError(null);
 
-    const squared = await square(file).catch(() => null);
+    const squared = await squareImage(file, "avatar").catch(() => null);
     if (!squared) {
       setError(t("specialists.photoNotAnImage"));
       setPending(false);
@@ -167,43 +168,4 @@ export function SpecialistPhoto({
       </div>
     </div>
   );
-}
-
-/**
- * The centre square of a picture, at the size a circle actually shows.
- *
- * WebP first because it is a third of the bytes at the same quality, PNG when
- * the browser cannot encode one — `toBlob` answers with a PNG rather than
- * failing when it does not know the type asked for, so the result is checked
- * instead of assumed. Both are formats the endpoint reads from the signature,
- * so whichever arrives is stored as what it is.
- */
-async function square(file: File): Promise<File> {
-  const bitmap = await createImageBitmap(file);
-  const crop = squareCrop(bitmap.width, bitmap.height);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = AVATAR_EDGE_PIXELS;
-  canvas.height = AVATAR_EDGE_PIXELS;
-
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("This browser has no 2d canvas");
-  context.drawImage(
-    bitmap,
-    crop.x,
-    crop.y,
-    crop.size,
-    crop.size,
-    0,
-    0,
-    AVATAR_EDGE_PIXELS,
-    AVATAR_EDGE_PIXELS,
-  );
-  bitmap.close();
-
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.85));
-  if (!blob) throw new Error("This browser encoded nothing");
-
-  const extension = blob.type === "image/webp" ? "webp" : "png";
-  return new File([blob], `avatar.${extension}`, { type: blob.type });
 }

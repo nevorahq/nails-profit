@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { avatarImageTypeOf, avatarUrl, squareCrop } from "@/domain/avatar-image";
+import { avatarImageTypeOf, avatarUrl, organizationLogoUrl, squareCrop } from "@/domain/avatar-image";
 
 function bytes(...values: number[]): Uint8Array {
   return new Uint8Array(values);
@@ -81,5 +81,24 @@ describe("avatarUrl", () => {
   test("carries the version, so a replacement is not the cached one", () => {
     expect(avatarUrl("6f2b", 3)).toBe("/api/v1/specialists/6f2b/avatar?v=3");
     expect(avatarUrl("6f2b", 3)).not.toBe(avatarUrl("6f2b", 4));
+  });
+});
+
+describe("organizationLogoUrl", () => {
+  test("a studio with no mark has no address, which is what draws the flower", () => {
+    expect(organizationLogoUrl(null)).toBeNull();
+  });
+
+  test("carries the version, so a replaced mark is not the cached one", () => {
+    expect(organizationLogoUrl(2)).toBe("/api/v1/organizations/logo?v=2");
+    expect(organizationLogoUrl(2)).not.toBe(organizationLogoUrl(3));
+  });
+
+  // Unlike a face, which is addressed by the card it belongs to, this address
+  // carries no studio at all: the route reads the organization from the
+  // session, so there is no id here for a caller to swap for someone else's.
+  test("names no studio — the session alone decides whose mark is served", () => {
+    const [path] = (organizationLogoUrl(9) as string).split("?");
+    expect(path).toBe("/api/v1/organizations/logo");
   });
 });

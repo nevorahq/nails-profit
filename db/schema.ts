@@ -569,6 +569,48 @@ export const specialistAvatars = pgTable(
   ],
 );
 
+/**
+ * The studio's own mark, where the flower would otherwise be.
+ *
+ * `BrandMark` in `components/icons.tsx` draws a flower next to the studio's
+ * name in the topbar, and it is the product's mark rather than the studio's —
+ * every salon in the deployment has the same one. This is how a studio puts its
+ * own there; with no row the flower stays, which is what makes uploading
+ * optional and removing a logo a complete action rather than a hole.
+ *
+ * Stored the way a master's face is, for the same reasons written above
+ * `specialistAvatars`: bytes in Postgres because there is no object store, in a
+ * table of its own because `organization` is read with a bare `select()` by
+ * `requireWorkspace`, the layout, the export and a dozen endpoints — a column
+ * here would have put the picture into every one of them.
+ *
+ * `organization_id` is the primary key and the tenant column at once: one mark
+ * per studio, and the column `scripts/verify-rls.sql` looks for when it hunts
+ * for tables nobody protected.
+ */
+export const organizationLogos = pgTable(
+  "organization_logo",
+  {
+    organizationId: uuid("organization_id")
+      .primaryKey()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    mimeType: text("mime_type").notNull(),
+    bytes: bytea("bytes").notNull(),
+    ...auditColumns,
+  },
+  (table) => [
+    /* The same two limits the avatar states, and for the same reasons. */
+    check(
+      "organization_logo_mime",
+      sql`${table.mimeType} in ('image/webp', 'image/jpeg', 'image/png')`,
+    ),
+    check(
+      "organization_logo_size",
+      sql`octet_length(${table.bytes}) between 1 and 524288`,
+    ),
+  ],
+);
+
 export const commissionType = pgEnum("commission_type", commissionTypes);
 export const commissionBase = pgEnum("commission_base", commissionBases);
 

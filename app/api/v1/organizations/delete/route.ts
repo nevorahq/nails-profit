@@ -12,6 +12,7 @@ import {
   laborCostRules,
   memberships,
   organizations,
+  organizationLogos,
   specialistAvatars,
   specialists,
 } from "@/db/schema";
@@ -132,6 +133,17 @@ export async function POST(request: Request) {
       .where(eq(specialistAvatars.organizationId, actor.organizationId))
       .returning({ id: specialistAvatars.specialistId });
 
+    /*
+     * The studio's mark goes the same way and for the same reason: a logo is a
+     * picture, and a picture cannot be anonymized. The topbar falls back to the
+     * brand flower on its own, so nothing is left pointing at a row that is no
+     * longer there.
+     */
+    const erasedLogo = await tx
+      .delete(organizationLogos)
+      .where(eq(organizationLogos.organizationId, actor.organizationId))
+      .returning({ id: organizationLogos.organizationId });
+
     const anonymizedSpecialists = await tx
       .update(specialists)
       .set({
@@ -212,6 +224,7 @@ export async function POST(request: Request) {
         clients_anonymized: anonymizedClients.length,
         specialists_anonymized: anonymizedSpecialists.length,
         avatars_erased: erasedAvatars.length,
+        logo_erased: erasedLogo.length === 1,
         expenses_anonymized: anonymizedExpenses.length,
       },
       requestId: id,
@@ -234,6 +247,7 @@ export async function POST(request: Request) {
       clients_anonymized: anonymizedClients.length,
       specialists_anonymized: anonymizedSpecialists.length,
       avatars_erased: erasedAvatars.length,
+      logo_erased: erasedLogo.length === 1,
       expenses_anonymized: anonymizedExpenses.length,
     };
   });

@@ -3,9 +3,11 @@ import { eq } from "drizzle-orm";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
+import { organizationLogoUrl } from "@/domain/avatar-image";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { getActiveMembership } from "@/lib/membership";
+import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { readPreviewCookie } from "@/lib/preview-request";
 
 /**
@@ -39,6 +41,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .where(eq(organizations.id, caller.membership.organizationId))
     .limit(1);
 
+  /*
+   * The studio's own mark for the topbar, or null — in which case the brand
+   * flower stays where it has always been. Read separately from the row above
+   * because the logo lives in its own table behind the tenant policy; memoized
+   * per request, so the settings page's own preview costs no second query.
+   */
+  const logoVersion = await loadOrganizationLogoVersion(caller.membership.organizationId);
+
   const { preview } = caller.membership;
   // A selection the membership check refused: the colleague left the team, or
   // the cookie outlived the account that set it. The shell renders owner mode
@@ -51,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       role={caller.membership.role}
       businessType={(organization?.type ?? "solo") as BusinessType}
       organizationName={organization?.name ?? ""}
+      organizationLogo={organizationLogoUrl(logoVersion)}
       userEmail={caller.membership.userEmail}
       preview={
         preview && {
