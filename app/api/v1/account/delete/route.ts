@@ -96,14 +96,45 @@ export async function POST(request: Request) {
    * carries a code, and the reason lands in the log with the request id beside
    * it.
    */
+  let deleted: { id: string }[];
   try {
-    await db.delete(users).where(eq(users.id, session.user.id));
+    deleted = await db
+      .delete(users)
+      .where(eq(users.id, session.user.id))
+      .returning({ id: users.id });
   } catch (error) {
     logEvent(
       "error",
       "account.delete_failed",
       { requestId: id, userId: session.user.id },
       { reason: error instanceof Error ? error.message : String(error) },
+    );
+    return apiError(500, "ACCOUNT_DELETE_FAILED", "The account could not be deleted", id);
+  }
+
+  /*
+   * A delete that removed nothing is not a deletion, and it used to be reported
+   * as one.
+   *
+   * PostgreSQL raises nothing when no row survives row level security: the
+   * statement succeeds, removes nobody, and the only thing that differs from a
+   * real deletion is a count this handler never read. What followed was the
+   * worst possible answer — «аккаунт удалён», the browser signed out, the
+   * person returned to the landing page — while the row, the password and the
+   * taken address all stayed exactly where they were. That is the pair of dead
+   * ends this endpoint was written to close, wearing the opposite disguise, and
+   * it is invisible from the outside: the only way to notice is to sign in
+   * again with the account that no longer exists and arrive at /app.
+   *
+   * `returning` rather than the driver's row count: it is the same round trip,
+   * and it answers with the row that went rather than with a number.
+   */
+  if (deleted.length === 0) {
+    logEvent(
+      "error",
+      "account.delete_failed",
+      { requestId: id, userId: session.user.id },
+      { reason: "the delete matched no row" },
     );
     return apiError(500, "ACCOUNT_DELETE_FAILED", "The account could not be deleted", id);
   }
