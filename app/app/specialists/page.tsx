@@ -4,14 +4,12 @@ import { ToolIcon } from "@/components/icons";
 import { db } from "@/db";
 import { memberships, services, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { bookabilityOf } from "@/domain/bookability";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { SpecialistManager } from "@/components/specialist-manager";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { loadSetupGuide } from "@/lib/onboarding";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
-import { factsFor, loadBookabilityFacts } from "@/lib/specialist-bookability";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
@@ -39,7 +37,7 @@ export default async function SpecialistsPage() {
    */
   const showsPay = seesIndividualPay(membership.role);
 
-  const { people, catalogue, unbookable } = await withTenant(membership.organizationId, async (tx) => {
+  const { people, catalogue } = await withTenant(membership.organizationId, async (tx) => {
     const cards = await loadSpecialistCards(tx, {
       ...(ownOnly ? { ownedBy: membership.userId } : {}),
       withoutPay: !showsPay,
@@ -52,27 +50,14 @@ export default async function SpecialistsPage() {
       .orderBy(asc(services.createdAt));
 
     /*
-     * Who a client cannot reach yet. The two rows that decide it are written
-     * on «Онлайн-запись»; this list is where the studio looks after hiring
-     * somebody, and it answered four questions about a person without ever
-     * answering that one.
+     * Whether a client can reach each of them is answered on their own card
+     * (`app/app/specialists/[id]/page.tsx`), beside the rota it sends them to,
+     * rather than as a pill in this list — the card now arrives with the
+     * studio's addresses and its default week, so the answer is «yes» until
+     * the studio decides otherwise.
      */
-    const bookability = await loadBookabilityFacts(tx);
-    const cannot = new Set(
-      cards
-        .filter(
-          (person) =>
-            bookabilityOf({
-              publishedLocationIds: bookability.publishedLocationIds,
-              ...factsFor(bookability.places.get(person.id)),
-            }) !== "bookable",
-        )
-        .map((person) => person.id),
-    );
-
     return {
       people: cards,
-      unbookable: bookability.publishedLocationIds.length > 0 ? cannot : new Set<string>(),
       catalogue: serviceRows.map((service) => ({
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
@@ -150,7 +135,6 @@ export default async function SpecialistsPage() {
         locale={locale}
         businessType={businessType}
         showsPay={showsPay}
-        unbookable={unbookable}
         canManage={canManage}
         hasOwnCard={people.some((person) => person.user_id === membership.userId)}
         setupGuide={setupGuide}

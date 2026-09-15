@@ -124,8 +124,16 @@ describe("configuring a bookable studio", () => {
       ],
     });
 
+    /*
+     * This address only. A card is created at every active address with the
+     * studio's own week on it (`POST /api/v1/specialists`), so an unscoped read
+     * also answers for the one registration made — and the pattern under test
+     * is the one just saved here.
+     */
     const rules = dataOf<RuleRow[]>(
-      await studio.owner.get(`/api/v1/availability/rules?specialist_id=${studio.specialistId}`),
+      await studio.owner.get(
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&location_id=${locationId}`,
+      ),
     );
 
     expect(rules).toHaveLength(2);
@@ -192,7 +200,7 @@ describe("configuring a bookable studio", () => {
 
     const all = dataOf<RuleRow[]>(
       await studio.owner.get(
-        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&include_expired=true`,
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&location_id=${locationId}&include_expired=true`,
       ),
     );
 
@@ -218,7 +226,7 @@ describe("configuring a bookable studio", () => {
 
     const all = dataOf<RuleRow[]>(
       await studio.owner.get(
-        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&include_expired=true`,
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&location_id=${locationId}&include_expired=true`,
       ),
     );
 
@@ -253,7 +261,7 @@ describe("configuring a bookable studio", () => {
     // today would leave this one with no working hours to remove an hour from.
     const rules = dataOf<RuleRow[]>(
       await studio.owner.get(
-        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&include_expired=true`,
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&location_id=${locationId}&include_expired=true`,
       ),
     );
 
