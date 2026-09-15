@@ -81,6 +81,9 @@ const TABLES_IN_DELETE_ORDER = [
   "import_job",
   "audit_event",
   "membership",
+  // Before the studio it stands for: the reference is `restrict`, the same
+  // order the organization delete route takes.
+  "organization_logo",
   "organization",
   "verification",
   "session",

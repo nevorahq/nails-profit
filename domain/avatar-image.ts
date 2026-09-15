@@ -73,3 +73,16 @@ export function squareCrop(width: number, height: number): { x: number; y: numbe
 export function avatarUrl(specialistId: string, version: number | null): string | null {
   return version === null ? null : `/api/v1/specialists/${specialistId}/avatar?v=${version}`;
 }
+
+/**
+ * Where the studio's own mark is fetched from, or null when it has none.
+ *
+ * Beside the face rather than in a module of its own, because it is the same
+ * picture problem answered the same way: bytes in a row, a signature-checked
+ * type, a centre square the browser cuts, and a version in the query string so
+ * that replacing the mark replaces the one the browser is holding. Null is the
+ * flower — `BrandMark` is what the topbar draws when a studio has set nothing.
+ */
+export function organizationLogoUrl(version: number | null): string | null {
+  return version === null ? null : `/api/v1/organizations/logo?v=${version}`;
+}

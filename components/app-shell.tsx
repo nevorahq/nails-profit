@@ -36,6 +36,7 @@ export function AppShell({
   role,
   businessType,
   organizationName,
+  organizationLogo = null,
   userEmail,
   preview = null,
   stalePreview = false,
@@ -46,6 +47,13 @@ export function AppShell({
   /** Which heading «Мастера» sits under; see `groupOf` in `nav-items.ts`. */
   businessType: BusinessType;
   organizationName: string;
+  /**
+   * The studio's own mark, or null when it has not set one — in which case the
+   * brand flower stands in, as it has for every studio since the topbar was
+   * written. `/app/settings` is where a studio replaces it; see
+   * `components/organization-logo.tsx`.
+   */
+  organizationLogo?: string | null;
   userEmail: string;
   /**
    * Set while an owner is looking at a colleague's interface. Everything else
@@ -80,7 +88,12 @@ export function AppShell({
         */}
         <div className="topbar-brand-cell">
           <Link className="topbar-brand" href="/app">
-            <BrandMark />
+            {organizationLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a studio's own picture, not a build-time asset.
+              <img className="brand-mark brand-logo" src={organizationLogo} alt="" aria-hidden="true" />
+            ) : (
+              <BrandMark />
+            )}
             <span className="topbar-brand-text">
               <strong>Nail Profit OS</strong>
               <small>{organizationName}</small>
