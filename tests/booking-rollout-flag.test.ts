@@ -121,6 +121,22 @@ const OUTSIDE_THE_FLAG = [
    * pass that anonymizes the cards cannot reach it and it is a person's name.
    */
   join(API_ROOT, "organizations", "delete", "route.ts"),
+  /*
+   * Hiring somebody is a team operation, exactly as removing them is — the
+   * exception directly above the visit one, and for the same reason. Gating it
+   * would mean a studio with the booking module off could not add a master at
+   * all.
+   *
+   * It reaches `specialist_location` for one row per active address, written
+   * with the card. That row is not a publication: it says where a person works,
+   * and what it prevents is the failure that used to follow every hire — the
+   * public catalogue filters people by it, so a master complete by every other
+   * measure was silently missing from the booking page until somebody found the
+   * assignment two selects deep in «Онлайн-запись». A studio whose module is
+   * off publishes nothing either way; when it is switched on, the people who
+   * work there are already there.
+   */
+  join(API_ROOT, "specialists", "route.ts"),
 ];
 
 function routeFiles(directory: string, found: string[] = []): string[] {
