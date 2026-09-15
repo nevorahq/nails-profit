@@ -69,9 +69,12 @@ describe("configuring a bookable studio", () => {
   });
 
   test("a location arrives with a usable booking configuration", async () => {
-    const [location] = dataOf<{ id: string; timezone: string; public_status: string; slot_step_minutes: number }[]>(
-      await studio.owner.get("/api/v1/locations"),
-    );
+    // Found by id rather than taken as the first row: a studio is registered
+    // with an address of its own, so this one — added afterwards — is the
+    // second in the list.
+    const location = dataOf<
+      { id: string; timezone: string; public_status: string; slot_step_minutes: number }[]
+    >(await studio.owner.get("/api/v1/locations")).find((row) => row.id === locationId);
 
     expect(location).toMatchObject({
       id: locationId,

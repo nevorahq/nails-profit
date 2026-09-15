@@ -73,13 +73,18 @@ describe("onboarding progress over real data", () => {
     });
   });
 
-  it("completes once a service and a closed visit exist", async () => {
-    const service = await createService(organizationId);
-    await createVisit(organizationId, { specialistId, serviceId: service.id });
+  it("completes on a rate and a priced service, with nothing sold yet", async () => {
+    /*
+     * No visit anywhere in this test, and that is the point. «Закройте первый
+     * визит» used to be the third step, so a studio that had set everything up
+     * was still told it was unfinished until it invented a client. Setup is
+     * settings; the visit is work.
+     */
+    await createService(organizationId);
 
     const result = await progress();
 
-    expect(result.done).toBe(3);
+    expect(result.done).toBe(2);
     expect(result.complete).toBe(true);
     expect(result.next).toBeNull();
   });
@@ -150,7 +155,14 @@ describe("onboarding progress over real data", () => {
     expect((await step("service")).done).toBe(false);
   });
 
-  it("keeps the closed visit ticked after the catalogue is deleted", async () => {
+  it("un-ticks everything when the catalogue it measures is archived", async () => {
+    /*
+     * Both steps describe present state, and deletion here is archival — so a
+     * studio whose master and services are gone is a studio that has to set up
+     * again, however long it has been trading. That is the diagnosis panel's
+     * whole job; the first-run screen is kept away from it by its own gate in
+     * `loadFirstRun`.
+     */
     const service = await createService(organizationId);
     await createVisit(organizationId, { specialistId, serviceId: service.id });
 
@@ -163,10 +175,7 @@ describe("onboarding progress over real data", () => {
 
     const result = await progress();
 
-    // The visit happened. Everything that describes present state is gone.
-    expect(result.steps.filter((candidate) => candidate.done).map((candidate) => candidate.key)).toEqual([
-      "visit",
-    ]);
+    expect(result.steps.filter((candidate) => candidate.done)).toEqual([]);
     expect(result.next?.key).toBe("specialist");
   });
 });

@@ -22,11 +22,23 @@ import type { LocalizedText } from "@/i18n/localized-text";
 export type ServiceCatalogueEntry = Readonly<{
   key: string;
   name: LocalizedText & { ru: string };
+  /**
+   * How long this kind of work takes, in minutes — the figure the setup screen
+   * fills its duration field in with.
+   *
+   * A guess, and deliberately one: duration is half of «прибыль в час», and
+   * asking for it beside the price doubles the typing on the one screen that
+   * exists to reduce it. Every value here is editable in «Услуги» the moment
+   * the owner disagrees, and a wrong hour is a visibly wrong hourly figure —
+   * which is a better teacher than an empty field that silently withholds the
+   * calculation.
+   */
+  durationMinutes: number;
 }>;
 
 export const serviceCatalogue: readonly ServiceCatalogueEntry[] = [
-  { key: "manicure", name: { ru: "Маникюр", ro: "Manichiură", en: "Manicure" } },
-  { key: "coating", name: { ru: "Покрытие", ro: "Acoperire", en: "Coating" } },
+  { key: "manicure", name: { ru: "Маникюр", ro: "Manichiură", en: "Manicure" }, durationMinutes: 60 },
+  { key: "coating", name: { ru: "Покрытие", ro: "Acoperire", en: "Coating" }, durationMinutes: 60 },
   {
     key: "reinforcement",
     name: {
@@ -34,9 +46,18 @@ export const serviceCatalogue: readonly ServiceCatalogueEntry[] = [
       ro: "Întărire și modelare",
       en: "Reinforcement and sculpting",
     },
+    durationMinutes: 90,
   },
-  { key: "extension", name: { ru: "Наращивание", ro: "Extensie", en: "Extensions" } },
-  { key: "repair", name: { ru: "Ремонт ногтей", ro: "Repararea unghiilor", en: "Nail repair" } },
+  {
+    key: "extension",
+    name: { ru: "Наращивание", ro: "Extensie", en: "Extensions" },
+    durationMinutes: 120,
+  },
+  {
+    key: "repair",
+    name: { ru: "Ремонт ногтей", ro: "Repararea unghiilor", en: "Nail repair" },
+    durationMinutes: 30,
+  },
   {
     key: "removal",
     name: {
@@ -44,15 +65,30 @@ export const serviceCatalogue: readonly ServiceCatalogueEntry[] = [
       ro: "Îndepărtarea acoperirii / materialului",
       en: "Coating and material removal",
     },
+    durationMinutes: 30,
   },
-  { key: "nail_art", name: { ru: "Дизайн", ro: "Design", en: "Nail art" } },
-  { key: "pedicure", name: { ru: "Педикюр", ro: "Pedichiură", en: "Pedicure" } },
+  { key: "nail_art", name: { ru: "Дизайн", ro: "Design", en: "Nail art" }, durationMinutes: 30 },
+  {
+    key: "pedicure",
+    name: { ru: "Педикюр", ro: "Pedichiură", en: "Pedicure" },
+    durationMinutes: 90,
+  },
   {
     key: "men",
     name: { ru: "Мужские услуги", ro: "Servicii pentru bărbați", en: "Men's services" },
+    durationMinutes: 60,
   },
-  { key: "spa", name: { ru: "SPA и уход", ro: "SPA și îngrijire", en: "Spa and care" } },
+  {
+    key: "spa",
+    name: { ru: "SPA и уход", ro: "SPA și îngrijire", en: "Spa and care" },
+    durationMinutes: 45,
+  },
 ];
+
+/** The entry a key names, or null — the one place a stored key is trusted. */
+export function catalogueEntry(key: string): ServiceCatalogueEntry | null {
+  return serviceCatalogue.find((entry) => entry.key === key) ?? null;
+}
 
 /**
  * Folds away the differences that should not affect a match: case, the

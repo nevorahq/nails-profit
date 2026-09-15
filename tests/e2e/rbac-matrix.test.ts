@@ -1067,7 +1067,7 @@ describe("RBAC and tenant isolation", () => {
     ).id;
 
     const locationId = dataOf<{ id: string }>(
-      await studio.owner.post("/api/v1/locations", { name: "Главный зал", slug: "matrix-studio" }),
+      await studio.owner.post("/api/v1/locations", { name: "Главный зал", slug: "matrix-hall" }),
     ).id;
 
     // The lifecycle endpoints need something to act on. It belongs to the

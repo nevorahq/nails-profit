@@ -134,8 +134,30 @@ export function LoginForm({
       <form onSubmit={submit}>
         {mode === "signup" && (
           <label>
-            {t("auth.name")}
-            <input name="name" autoComplete="name" required minLength={2} />
+            {t("auth.studioName")}
+            {/*
+              The studio, not the person. It used to ask «Ваше имя», and the
+              account's name was then quietly turned into the studio's — which
+              is the name a client reads on a booking link, so the owner was
+              choosing it without being told they were. Nothing else in the
+              product ever showed the person's own name.
+
+              Latin only, refused by the field rather than by the server.
+              Transliteration copes — `domain/organization-name.ts` turns
+              «Студия» into «Studiya» — so this is a naming decision, not a
+              technical limit, and it is stated under the field instead of
+              arriving as a mysterious refusal one screen later.
+            */}
+            <input
+              name="name"
+              required
+              minLength={2}
+              maxLength={100}
+              pattern={String.raw`[A-Za-zĂÂÎȘȚăâîșț0-9 &'’.\-]{2,}`}
+              title={t("auth.studioNameLatin")}
+              placeholder={t("auth.studioNamePlaceholder")}
+            />
+            <span className="field-hint">{t("auth.studioNameLatin")}</span>
           </label>
         )}
         <label>
@@ -176,9 +198,17 @@ export function LoginForm({
         {mode === "signup" && (
           <div className="consent-field">
             <input id="legalAccepted" name="legalAccepted" type="checkbox" required />
+            {/*
+              One line, including on a phone, where the full sentence — «Я
+              принимаю условия использования и ознакомился(-ась) с уведомлением
+              о конфиденциальности» — ran to three and pushed the button below
+              the fold. The documents keep their full names two rows down, in
+              the footer of this same card, and on the pages themselves; the
+              consent says what is being consented to and links to both.
+            */}
             <label htmlFor="legalAccepted">
-              {t("auth.legalPrefix")} <Link href="/terms">{t("legal.termsLink")}</Link>{" "}
-              {t("auth.legalAnd")} <Link href="/privacy">{t("legal.privacyLink")}</Link>.
+              {t("auth.legalPrefix")} <Link href="/terms">{t("auth.legalTermsShort")}</Link>{" "}
+              {t("auth.legalAnd")} <Link href="/privacy">{t("auth.legalPrivacyShort")}</Link>
             </label>
           </div>
         )}

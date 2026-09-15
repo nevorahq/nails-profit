@@ -86,7 +86,7 @@ export function OnboardingPanel({
   locale,
   businessType,
 }: {
-  progress: ChecklistProgress<"specialist" | "service" | "visit">;
+  progress: ChecklistProgress<"specialist" | "service">;
   locale: AppLocale;
   businessType: BusinessType;
 }) {

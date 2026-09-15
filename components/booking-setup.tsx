@@ -10,6 +10,7 @@ import {
 } from "@/components/setup-guide";
 import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
+import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
@@ -95,18 +96,6 @@ const SLOT_STEPS = [60, 90, 120, 150] as const;
  * "Chisinau" is refused by the API, and one typed as "Europe/Kiev" is accepted
  * and quietly wrong by an hour twice a year.
  */
-/**
- * The week the guided setup offers with one press, and the one the rota form
- * arrives pre-filled with.
- *
- * Five days rather than seven and 08:00–18:00 rather than anything cleverer:
- * the point is not to guess a studio's hours but to spare the first-time owner
- * fourteen inputs before they have seen a single slot. Offered, never saved
- * behind their back — these are the hours break-even is computed from and the
- * hours clients are shown free slots in. Every day of it is editable in the
- * rota below, and a rota that already exists is always answered with itself.
- */
-const DEFAULT_WORKWEEK = { weekdays: [1, 2, 3, 4, 5] as const, start: "08:00", end: "18:00" };
 
 /** The order of the first address's steps, and the order they are drawn in. */
 const SETUP_STEPS = ["location", "rota"] as const;

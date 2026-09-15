@@ -139,7 +139,12 @@ describe("setting booking up from an empty studio", () => {
     // mean Thursday off — not Thursday twice.
     await studio.owner.put("/api/v1/availability/rules", {
       specialist_id: studio.specialistId,
-      location_id: dataOf<{ id: string }[]>(await studio.owner.get("/api/v1/locations"))[0].id,
+      // The address this suite configured, not the one the studio was
+      // registered with: saving a rota against the wrong location would leave
+      // the first one standing and read back as two.
+      location_id: dataOf<{ id: string; slug: string }[]>(
+        await studio.owner.get("/api/v1/locations"),
+      ).find((row) => row.slug === "setup-centru")!.id,
       effective_from: new Date().toISOString().slice(0, 10),
       intervals: [{ weekday: 3, start: "10:00", end: "16:00" }],
     });

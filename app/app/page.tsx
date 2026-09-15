@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FirstNumbers } from "@/components/first-numbers";
 import { FirstRun } from "@/components/first-run";
 import { MetricIcon } from "@/components/icons";
 import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
@@ -15,7 +16,7 @@ import { memberships, organizations, pilotEnrollments, specialists } from "@/db/
 import { withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
-import { isPilotAccessEnforced } from "@/env";
+import { isPilotAccessEnforced, isPublicBookingEnabled } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -27,7 +28,8 @@ import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
 import { monthOf } from "@/lib/period";
-import { loadFirstRun, loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
+import { loadStartScreen } from "@/lib/first-numbers";
+import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 
 /**
  * A period card for the reports page's top row. The formula still exists —
@@ -106,7 +108,9 @@ export default async function AppPage({
   if (!membership) {
     // No organization yet, so its language does not exist to ask: the browser's
     // preference is the only signal, and it becomes the new workspace's locale.
-    return <WorkspaceSetup locale={await resolveLocale()} />;
+    return (
+      <WorkspaceSetup locale={await resolveLocale()} bookingAvailable={isPublicBookingEnabled()} />
+    );
   }
 
   const locale = membership.organization.locale as AppLocale;
@@ -148,28 +152,60 @@ export default async function AppPage({
   const filters = await searchParams;
 
   /*
-   * The first run, which replaces this page rather than being drawn on top of
-   * it: a studio with no closed visit has no revenue, no margin and no profit
-   * per hour, and every card below would be a zero with a checklist pinned
-   * above it.
+   * What a studio sees before it has sold anything, which replaces this page
+   * rather than being drawn on top of it: with no closed visit there is no
+   * revenue, no margin and no profit per hour, and every card below would be a
+   * zero.
+   *
+   * Two answers, decided by `loadStartScreen`. A studio that is still missing a
+   * rate or a priced service gets the one goal that would fix it. A studio that
+   * has both — which, since the setup screen started collecting them, is most
+   * studios on their first day — gets what its catalogue is already worth per
+   * service. Neither is a checklist: the first is one step, and the second is
+   * the product's own answer, arriving before the first client rather than
+   * after a week of typing visits in.
    *
    * Placed before `loadDashboard` on purpose. Those queries would compute a
-   * screenful of zeroes at full price; `loadFirstRun` is one `count` for a
-   * studio that has long since started, and answers null for it.
+   * screenful of zeroes at full price; this is one `count` for a studio that
+   * has long since started, and answers null for it.
    *
-   * Only for a role that can advance a step — all three are catalogue work, so
+   * Only for a role that can advance a step — both steps are catalogue work, so
    * for a master this would be a door they cannot open, and they get the
    * dashboard as before.
    */
   if (canManageCatalogue(membership.role, "services")) {
-    const firstRun = await withTenant(membership.organization.id, (tx) => loadFirstRun(tx));
-    if (firstRun?.next) {
+    const start = await withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale));
+    if (start?.kind === "goal" && start.progress.next) {
       return (
         <FirstRun
-          progress={firstRun}
-          next={firstRun.next}
+          progress={start.progress}
+          next={start.progress.next}
           locale={locale}
           businessType={businessType}
+        />
+      );
+    }
+    if (start?.kind === "numbers") {
+      return (
+        <FirstNumbers
+          rows={start.rows}
+          locale={locale}
+          businessType={businessType}
+          currency={membership.organization.currency}
+          /*
+           * Three conditions have to hold before an address can be handed to
+           * clients, and they live in three places: the deployment's own flag,
+           * the organization's rung on the rollout ladder, and the address's
+           * own settings. Any one of them saying no makes `/book/<slug>` a 404,
+           * and a link to that is worse than no link.
+           */
+          bookingSlug={
+            isPublicBookingEnabled() &&
+            membership.organization.bookingAccess === "public" &&
+            start.bookingPublished
+              ? membership.organization.slug
+              : null
+          }
         />
       );
     }

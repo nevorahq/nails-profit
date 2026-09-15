@@ -64,7 +64,7 @@ describe("Owner data export and erasure", () => {
      * sent. Written directly for the same reason the consent fields above are.
      */
     const locationId = dataOf<{ id: string }>(
-      await studio.owner.post("/api/v1/locations", { name: "Privacy room", slug: "privacy-studio" }),
+      await studio.owner.post("/api/v1/locations", { name: "Privacy room", slug: "privacy-room" }),
     ).id;
     await studio.owner.put(`/api/v1/specialists/${studio.specialistId}/locations`, {
       location_ids: [locationId],

@@ -4,13 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 
-import {
-  SetupGuideDialog,
-  useSetupGuide,
-  type SetupGuideBaseline,
-} from "@/components/setup-guide";
 import type { AppLocale } from "@/i18n/messages";
-import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
@@ -63,8 +57,6 @@ export function VisitCloseForm({
   paymentMethods,
   currency,
   locale,
-  businessType,
-  setupGuide = null,
 }: {
   services: CloseFormService[];
   /** Catalogue rows left out above, so their absence can be explained. */
@@ -76,18 +68,9 @@ export function VisitCloseForm({
   paymentMethods: { id: string; name: string; is_default: boolean }[];
   currency: string;
   locale: AppLocale;
-  /** Passed through to the guided window, which names the step ahead. */
-  businessType: BusinessType;
-  /**
-   * Where «Первый расчёт» stood when this page was drawn, or null once the
-   * studio has closed a visit — which, on this screen, is the state one
-   * successful save away.
-   */
-  setupGuide?: SetupGuideBaseline;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
-  const guide = useSetupGuide(setupGuide);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   /*
    * Controlled, unlike the client and the payment method, because the pair
@@ -167,17 +150,14 @@ export function VisitCloseForm({
     setPending(false);
 
     /*
-     * The end of the guided run, and the one place the window replaces a
-     * redirect rather than sitting on top of one. This visit is the third step:
-     * closing it completes the checklist, so what opens says «готово» and
-     * offers the report. Everybody else — every studio that has closed a visit
-     * before — goes straight to the list, exactly as before.
+     * Straight to the list, for everybody.
+     *
+     * A guided window used to open here instead: closing a visit was the third
+     * step of «Первый расчёт», so the first one completed the checklist and was
+     * congratulated. The step is gone — a visit is work, not setup, and the
+     * product no longer waits for one to show a studio its figures — so this
+     * screen is an ordinary screen again.
      */
-    if (await guide.check()) {
-      router.refresh();
-      return;
-    }
-
     router.push("/app/visits");
     router.refresh();
   }
@@ -203,18 +183,6 @@ export function VisitCloseForm({
 
   return (
     <form onSubmit={submit}>
-      <SetupGuideDialog
-        guide={guide}
-        locale={locale}
-        businessType={businessType}
-        onStay={() => {
-          // «Остаться здесь» would be a lie on this screen: the visit is
-          // written and the form behind the window is a spent one.
-          router.push("/app/visits");
-          router.refresh();
-        }}
-      />
-
       <section className="panel">
         <div className="inline-form">
           <label>

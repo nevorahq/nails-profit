@@ -10,7 +10,13 @@
  * is never derived from one: a studio picks its own, and the reserved list
  * keeps it from colliding with a path the application already owns.
  */
-const TRANSLITERATION: Record<string, string> = {
+/**
+ * Also read by `domain/organization-name.ts`, which latinises a person's name
+ * into the studio name registration no longer asks for. One table, so a studio
+ * called «Ирина» and its address `/book/irina` cannot come to disagree about
+ * what the letters are.
+ */
+export const TRANSLITERATION: Record<string, string> = {
   а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i",
   й: "i", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
   у: "u", ф: "f", х: "h", ц: "c", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "",
