@@ -6,6 +6,7 @@ import {
   DEFAULT_WORKWEEK,
 } from "@/domain/workspace-defaults";
 import { currencies } from "@/domain/money";
+import { parseLocalTime } from "@/domain/timezone";
 
 describe("the currency a browser's zone implies", () => {
   it("keeps the leu where the pilot is", () => {
@@ -60,6 +61,20 @@ describe("the defaults the setup screen arrives with", () => {
     for (const value of [DEFAULT_WORKWEEK.start, DEFAULT_WORKWEEK.end]) {
       expect(value).toMatch(/^\d{2}:\d{2}$/);
     }
+  });
+
+  it("says the same week in both of the shapes its callers want", () => {
+    /*
+     * Пн–Пт 08:00–16:00, in clock strings for the forms that show it and in
+     * minutes for the rows `schedule_rule` holds — registration and
+     * `POST /api/v1/specialists` write those rows without asking anybody. Two
+     * literals could drift apart, and a master would then be put on the rota at
+     * an hour no screen had ever offered.
+     */
+    expect(DEFAULT_WORKWEEK.start).toBe("08:00");
+    expect(DEFAULT_WORKWEEK.end).toBe("16:00");
+    expect(parseLocalTime(DEFAULT_WORKWEEK.start)).toBe(DEFAULT_WORKWEEK.startMinute);
+    expect(parseLocalTime(DEFAULT_WORKWEEK.end)).toBe(DEFAULT_WORKWEEK.endMinute);
   });
 
   it("suggests a rate that is a rate", () => {

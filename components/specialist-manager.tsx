@@ -36,7 +36,6 @@ export function SpecialistManager({
   locale,
   businessType,
   showsPay,
-  unbookable,
   canManage,
   hasOwnCard = false,
   setupGuide = null,
@@ -58,13 +57,6 @@ export function SpecialistManager({
    * describe the studio instead of describing what was withheld.
    */
   showsPay: boolean;
-  /**
-   * Ids a client cannot reach on the studio's page — no published address of
-   * their own, or an address with no hours in it. Empty while the studio has
-   * published nothing, where «опубликуйте адрес» is already the instruction
-   * and this would restate it as an accusation about each person.
-   */
-  unbookable: ReadonlySet<string>;
   canManage: boolean;
   /**
    * Whether the person on this screen is already catalogued as a master.
@@ -244,16 +236,26 @@ export function SpecialistManager({
    * question.
    */
   /*
-   * Anybody without a rule — and only for a reader who can tell.
+   * Anybody without a rule — for a reader who can tell, and only while the
+   * studio is still being set up.
    *
    * `showsPay` is what an analyst is refused, and their rows arrive with every
    * rule redacted to null. Counted without that guard, this banner would tell
    * them the whole studio is unpaid: a sentence about the studio, invented by
    * the redaction that was supposed to say nothing about it.
+   *
+   * `setupGuide` is the second guard and the newer one. It is null once the
+   * first run is over — a visit closed, or a checklist with nothing left on it
+   * — and a banner across the top of the page is the voice of a setup in
+   * progress, not of a studio that is working. Nothing is hidden by it: the
+   * rate column says «не задана» on the one row it is true of and links to the
+   * form that sets it, and a visit that cannot be closed for want of a rule
+   * says so where it is being closed (`closeVisit.noRule`).
    */
-  const withoutRule = showsPay
-    ? specialists.filter((person) => person.default_rule === null)
-    : [];
+  const withoutRule =
+    showsPay && setupGuide !== null
+      ? specialists.filter((person) => person.default_rule === null)
+      : [];
 
   /*
    * A solo studio nobody in it is the owner of — the rule itself is
@@ -269,6 +271,14 @@ export function SpecialistManager({
       businessType,
       specialists.map((person) => person.is_principal),
     );
+
+  /**
+   * What the studio calls this card's account, when there is one and the reader
+   * is allowed the list. A master reading their own row is not: `members` is
+   * empty for them, and the row simply says how they are paid.
+   */
+  const roleOf = (userId: string | null) =>
+    userId ? members.find((member) => member.user_id === userId)?.role : undefined;
 
   // One account belongs to one specialist, so an account already linked is not
   // offered again — the database refuses it anyway, and a dropdown that lists
@@ -522,40 +532,64 @@ export function SpecialistManager({
                   locale={locale}
                 />
                 {/*
-                  Said in the row that lists them, because this is the screen a
-                  studio opens after hiring somebody — and «Онлайн-запись», the
-                  only page that knew, is not.
+                  No «нельзя записать» here. It said one true thing about the
+                  first hour of a master's life and then went on saying it: the
+                  card arrives with the studio's own addresses and its default
+                  week (`POST /api/v1/specialists`), so a row that cannot be
+                  booked is now a studio's own decision rather than a step it
+                  has not found yet. Their own card still answers the question,
+                  beside the rota it would send them to.
                 */}
-                {unbookable.has(person.id) && (
-                  <span className="badge-warning">{t("specialists.notBookable")}</span>
-                )}
               </td>
               {/*
-                The principal mark reads beside the cooperation type because it
-                answers the same question — how this person is paid.
-                `badge-accent`, not `badge-warning`: it states a fact, it is not
-                something to go and fix.
+                Who this is in the studio, beside how they are paid — the two
+                halves of the same question, and the row used to answer only
+                half of it. «Владелец» was printed for the principal mark and
+                nothing at all for anybody else, so a studio of three read
+                «процент», «процент», «процент» and had to open a card to find
+                out which of them was the woman who owns the place.
+
+                The account's own role, because that is what the studio decided
+                when it invited them; the principal mark stands in when a card
+                has no account behind it. `badge-accent`, not `badge-warning`:
+                it states a fact, it is not something to go and fix.
               */}
               <td>
                 {t(`cooperation.${person.cooperation_type}` as MessageKey)}
-                {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
+                {roleOf(person.user_id) ? (
+                  <span className="badge-accent badge-role">
+                    {t(`roles.${roleOf(person.user_id)}` as MessageKey)}
+                  </span>
+                ) : (
+                  person.is_principal && (
+                    <span className="badge-accent">{t("specialists.principal")}</span>
+                  )
+                )}
               </td>
               {showsPay && (
               <td>
                 {person.default_rule ? (
-                  <>
-                    {describeRule(person.default_rule, currency, t)}
-                    {/*
-                      The rate means something different for a principal, and
-                      the difference is the whole point of the mark: it is what
-                      a hired master would have cost, not money that leaves.
-                    */}
-                    {person.is_principal && (
-                      <span className="unit-hint">{t("specialists.imputedLabour")}</span>
-                    )}
-                  </>
+                  /*
+                    The rate, and nothing under it. «Вменённая стоимость вашего
+                    труда» explained what the figure means for the owner's own
+                    row — true, and a sentence to read in every table cell of
+                    every hired master's neighbour. The mark beside the
+                    cooperation type already says whose row this is, and the
+                    card itself (`components/specialist-detail.tsx`) is where
+                    the meaning is spelled out.
+                  */
+                  describeRule(person.default_rule, currency, t)
                 ) : (
-                  <span className="badge-warning">{t("specialists.notSet")}</span>
+                  /*
+                    A link, because «не задана» is the one cell on this screen
+                    that is a job rather than a fact — the banner above says
+                    services cannot be costed until it is done, and the form
+                    that does it is on this person's own card. It used to be a
+                    dead pill beside a name that was itself the way in.
+                  */
+                  <a className="badge-warning badge-link" href={`/app/specialists/${person.id}`}>
+                    {t("specialists.notSet")}
+                  </a>
                 )}
               </td>
               )}

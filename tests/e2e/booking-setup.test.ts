@@ -27,6 +27,21 @@ describe("setting booking up from an empty studio", () => {
   let studio: Studio;
   const previousFlag = process.env.PUBLIC_BOOKING_ENABLED;
 
+  /*
+   * The address this suite sets up, resolved the way the screen resolves it.
+   *
+   * Every rota read below is scoped to it. A card arrives at every active
+   * address with the studio's own week already on it
+   * (`POST /api/v1/specialists`), so a specialist-wide read answers for two
+   * addresses at once — the one registration created and the one configured
+   * here — and the question these tests ask is about this one.
+   */
+  async function centruId(): Promise<string> {
+    return dataOf<{ id: string; slug: string }[]>(
+      await studio.owner.get("/api/v1/locations"),
+    ).find((row) => row.slug === "setup-centru")!.id;
+  }
+
   function nextWednesday() {
     const day = new Date();
     day.setUTCHours(9, 0, 0, 0);
@@ -127,7 +142,11 @@ describe("setting booking up from an empty studio", () => {
     // what decides whether reopening the page shows Wednesday or an empty form.
     const rules = dataOf<
       { weekday: number; start_minute: number; end_minute: number; location_id: string }[]
-    >(await studio.owner.get(`/api/v1/availability/rules?specialist_id=${studio.specialistId}`));
+    >(
+      await studio.owner.get(
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&location_id=${await centruId()}`,
+      ),
+    );
 
     expect(rules.map((rule) => rule.weekday)).toEqual([3, 4]);
     // 09:00 and 18:00 as the minutes since local midnight the form converts to.
@@ -142,15 +161,15 @@ describe("setting booking up from an empty studio", () => {
       // The address this suite configured, not the one the studio was
       // registered with: saving a rota against the wrong location would leave
       // the first one standing and read back as two.
-      location_id: dataOf<{ id: string; slug: string }[]>(
-        await studio.owner.get("/api/v1/locations"),
-      ).find((row) => row.slug === "setup-centru")!.id,
+      location_id: await centruId(),
       effective_from: new Date().toISOString().slice(0, 10),
       intervals: [{ weekday: 3, start: "10:00", end: "16:00" }],
     });
 
     const rules = dataOf<{ weekday: number; start_minute: number }[]>(
-      await studio.owner.get(`/api/v1/availability/rules?specialist_id=${studio.specialistId}`),
+      await studio.owner.get(
+        `/api/v1/availability/rules?specialist_id=${studio.specialistId}&location_id=${await centruId()}`,
+      ),
     );
 
     expect(rules.map((rule) => rule.weekday)).toEqual([3]);

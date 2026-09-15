@@ -111,8 +111,8 @@ describe("the order a studio puts its masters in", () => {
     expect(cards.map((card) => card.id)).toEqual([studio.specialistId, secondId]);
 
     // Given an order, the card lands where it was put rather than where it was
-    // created. She stays for the rest of the suite, with no address of her own
-    // — which is also what keeps her out of the public answers below.
+    // created. She stays for the rest of the suite as a name in the list and
+    // nothing more.
     const third = dataOf<Card>(
       await studio.owner.post("/api/v1/specialists", {
         name: "Третья",
@@ -121,6 +121,19 @@ describe("the order a studio puts its masters in", () => {
       }),
     );
     expect(third.sort_order).toBe(7);
+
+    /*
+     * And taken off the addresses, which is now something to say rather than
+     * something to leave out: a card is created at every active address with
+     * the studio's own week already on it, so a master nobody has decided
+     * anything about is bookable. The tests below need a third name no client
+     * is offered, and «Онлайн-запись» — this call — is how a studio arranges
+     * that.
+     */
+    expect(
+      (await studio.owner.put(`/api/v1/specialists/${third.id}/locations`, { location_ids: [] }))
+        .status,
+    ).toBe(200);
 
     const withThird = dataOf<Card[]>(await studio.owner.get("/api/v1/specialists"));
     expect(withThird.map((card) => card.name)).toEqual(["Мастер", "Вторая", "Третья"]);

@@ -453,8 +453,6 @@ const ru = {
   "specialists.value": "Значение",
   "specialists.none": "Мастеров пока нет.",
   "specialists.type": "Тип",
-  "specialists.exceptionHint":
-    "Правило для конкретной услуги имеет приоритет над комиссией по умолчанию. Прошлые расчёты не меняются — создаётся новая версия правила.",
   "specialists.readOnlyNote": "Ваша роль видит только собственный результат и не может менять правила комиссии.",
   "specialists.aggregatesNote":
     "Ваша роль читает цифры студии целиком, но без разбивки по людям: ставка каждого мастера и аккаунт за карточкой скрыты.",
@@ -668,7 +666,6 @@ const ru = {
   "specialists.isMe": "Это я — принимаю клиентов",
   "specialists.principalSet": "Отметить владельцем",
   "specialists.principalUnset": "Снять отметку",
-  "specialists.imputedLabour": "вменённая стоимость вашего труда",
   "specialists.isMeHint":
     "Отметит карточку вашей: визиты и уведомления пойдут на ваш аккаунт, а комиссия по этим визитам вернётся в прибыль месяца — из бизнеса она не уходит.",
   "specialists.soloNoPrincipal":
@@ -851,10 +848,6 @@ const ru = {
   "specialists.whereNoHours": "часов нет",
   "specialists.whereDraft": "адрес не опубликован",
   "specialists.openRota": "Открыть график",
-  "specialists.orderTitle": "Очерёдность",
-  "specialists.order": "Порядок в списке",
-  "specialists.orderHint":
-    "Меньше — выше. Решает, в каком порядке мастера стоят в онлайн-записи и кому «Любой доступный» отдаёт время, когда оба одинаково свободны. Как только у одного появляется запись, время уходит более свободному — очерёдность важна только при равной загрузке.",
   "specialists.notBookable": "нельзя записать",
   "specialists.unlink": "Отвязать",
   "specialists.deleteConfirm": "Подтвердить удаление",
@@ -890,7 +883,6 @@ const ru = {
     "Если ничего не отмечено, процент начисляется за все услуги. Отметьте — и за остальные мастер не получит ничего; доплата за них задаётся отдельным правилом по услуге.",
   "specialists.offeredServices": "Доступные услуги",
   "specialists.allServices": "Все активные услуги",
-  "specialists.servicesHint": "Пустой выбор означает, что мастер оказывает все активные услуги. Для выбранной услуги можно переопределить длительность.",
   "specialists.durationOverride": "Длительность, мин",
   "specialists.saveServices": "Сохранить услуги",
 
@@ -1779,8 +1771,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.value": "Valoare",
   "specialists.none": "Încă nu există maeștri.",
   "specialists.type": "Tip",
-  "specialists.exceptionHint":
-    "Regula pentru un serviciu anume are prioritate față de comisionul implicit. Calculele anterioare nu se schimbă — se creează o nouă versiune a regulii.",
   "specialists.readOnlyNote": "Rolul dvs. vede doar rezultatul propriu și nu poate schimba regulile de comision.",
   "specialists.aggregatesNote":
     "Rolul dvs. citește cifrele studioului în ansamblu, dar fără defalcare pe persoane: tariful fiecărui maestru și contul din spatele fișei sunt ascunse.",
@@ -1994,7 +1984,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.isMe": "Sunt eu — primesc clienți",
   "specialists.principalSet": "Marchează ca proprietar",
   "specialists.principalUnset": "Scoate marcajul",
-  "specialists.imputedLabour": "costul imputat al muncii dvs.",
   "specialists.isMeHint":
     "Marchează fișa ca fiind a dvs.: vizitele și notificările merg către contul dvs., iar comisionul acestor vizite se întoarce în profitul lunii — din afacere el nu pleacă.",
   "specialists.soloNoPrincipal":
@@ -2177,10 +2166,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.whereNoHours": "fără ore",
   "specialists.whereDraft": "adresa nu este publicată",
   "specialists.openRota": "Deschideți programul",
-  "specialists.orderTitle": "Ordinea",
-  "specialists.order": "Poziția în listă",
-  "specialists.orderHint":
-    "Mai mic — mai sus. Decide în ce ordine apar maeștrii în programarea online și cui îi dă «Oricare disponibil» ora, când ambii sunt la fel de liberi. De îndată ce unul are o programare, ora merge la cel mai liber — ordinea contează doar la încărcare egală.",
   "specialists.notBookable": "nu poate fi programat",
   "specialists.unlink": "Dezleagă",
   "specialists.deleteConfirm": "Confirmă ștergerea",
@@ -2216,7 +2201,6 @@ const ro: Record<MessageKey, Message> = {
     "Dacă nu este bifat nimic, procentul se calculează pentru toate serviciile. Bifați — și pentru restul maestrul nu primește nimic; plata pentru ele se setează printr-o regulă separată pe serviciu.",
   "specialists.offeredServices": "Servicii disponibile",
   "specialists.allServices": "Toate serviciile active",
-  "specialists.servicesHint": "O selecție goală înseamnă că maestrul oferă toate serviciile active. Pentru un serviciu selectat puteți modifica durata.",
   "specialists.durationOverride": "Durata, min",
   "specialists.saveServices": "Salvează serviciile",
 
@@ -3099,8 +3083,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.value": "Value",
   "specialists.none": "No specialists yet.",
   "specialists.type": "Type",
-  "specialists.exceptionHint":
-    "A rule for a specific service takes precedence over the default commission. Past calculations do not change — a new version of the rule is created.",
   "specialists.readOnlyNote": "Your role sees only its own result and cannot change commission rules.",
   "specialists.aggregatesNote":
     "Your role reads the studio's figures as a whole, but not broken down by person: each master's rate and the account behind the card are hidden.",
@@ -3312,7 +3294,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.isMe": "This is me — I take clients",
   "specialists.principalSet": "Mark as owner",
   "specialists.principalUnset": "Remove the mark",
-  "specialists.imputedLabour": "imputed cost of your own work",
   "specialists.isMeHint":
     "Marks the card as yours: visits and notifications go to your account, and the commission on those visits comes back into the month's profit — it never leaves the business.",
   "specialists.soloNoPrincipal":
@@ -3492,10 +3473,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.whereNoHours": "no hours",
   "specialists.whereDraft": "address not published",
   "specialists.openRota": "Open the rota",
-  "specialists.orderTitle": "Order",
-  "specialists.order": "Position in the list",
-  "specialists.orderHint":
-    "Lower is first. It decides the order masters appear in online booking, and who «Any available» gives the hour to when both are equally free. As soon as one has a booking the hour goes to the freer of the two — the order only matters at equal load.",
   "specialists.notBookable": "cannot be booked",
   "specialists.unlink": "Unlink",
   "specialists.deleteConfirm": "Confirm deletion",
@@ -3531,7 +3508,6 @@ const en: Record<MessageKey, Message> = {
     "With nothing ticked the share is paid on every service. Tick some, and the master gets nothing for the rest — pay for those with a per-service rule of its own.",
   "specialists.offeredServices": "Available services",
   "specialists.allServices": "All active services",
-  "specialists.servicesHint": "An empty selection means the specialist offers every active service. A selected service can override its duration.",
   "specialists.durationOverride": "Duration, min",
   "specialists.saveServices": "Save services",
 

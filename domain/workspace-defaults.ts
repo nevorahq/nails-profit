@@ -1,4 +1,5 @@
 import type { Currency } from "@/domain/money";
+import { formatLocalTime } from "@/domain/timezone";
 
 /**
  * What the setup screen fills itself in with, so that a studio can be created
@@ -20,11 +21,23 @@ import type { Currency } from "@/domain/money";
  * break-even is computed from and the hours clients are shown free slots in,
  * and registration now writes them without asking — so «График» is where they
  * are read and corrected, and it shows exactly what was written.
+ *
+ * Two shapes of one week. `schedule_rule` stores minutes from midnight and a
+ * rota form shows `HH:MM`, and both are wanted by callers here — registration
+ * and `POST /api/v1/specialists` write rows, the setup and booking screens fill
+ * in fields. The minutes are the source and the clock strings are derived from
+ * them, so a default week cannot put somebody on the rota at an hour no screen
+ * ever offered.
  */
+const START_MINUTE = 8 * 60;
+const END_MINUTE = 16 * 60;
+
 export const DEFAULT_WORKWEEK = {
   weekdays: [1, 2, 3, 4, 5] as const,
-  start: "08:00",
-  end: "16:00",
+  start: formatLocalTime(START_MINUTE),
+  end: formatLocalTime(END_MINUTE),
+  startMinute: START_MINUTE,
+  endMinute: END_MINUTE,
 };
 
 /**

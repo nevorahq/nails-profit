@@ -10,6 +10,7 @@ import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { WEEKDAY_KEYS } from "@/components/booking-setup";
 import { bookabilityOf } from "@/domain/bookability";
+import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
 import type { Weekday } from "@/domain/timezone";
 import { factsFor, type SpecialistPlace } from "@/lib/specialist-bookability";
 import { describeRule, ruleFromForm } from "@/lib/commission-rule";
@@ -76,6 +77,12 @@ export function SpecialistDetail({
 }) {
   const t = getTranslator(locale);
   const router = useRouter();
+  /*
+   * Addresses this card is at and has no week for. One is enough to offer the
+   * studio's own: a master who works Tuesdays at one address and nothing at all
+   * at the other is invisible to every client looking at the second.
+   */
+  const placesWithoutHours = places.filter((place) => place.weekdays.length === 0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -84,7 +91,6 @@ export function SpecialistDetail({
   const [selected, setSelected] = useState<string[]>(
     person.service_assignments.map((assignment) => assignment.service_id),
   );
-  const [order, setOrder] = useState(String(person.sort_order));
   const [durationByService, setDurationByService] = useState<Record<string, string>>(
     Object.fromEntries(
       person.service_assignments.map((assignment) => [
@@ -116,16 +122,38 @@ export function SpecialistDetail({
   }
 
   /**
-   * The order, saved on its own rather than folded into the rota screen.
+   * The studio's own week, for a card that has none.
    *
-   * Not passed to `send` as a form, because the reset would put the field back
-   * to the number that was there before the save while the refresh is still in
-   * flight — a control that flickers back to the old answer reads as a save
-   * that did not take.
+   * A card created now is given it outright (`POST /api/v1/specialists`), which
+   * leaves exactly one case: everybody hired before that, whose card says
+   * «часов нет» and whose only remedy was a rota editor on another screen, two
+   * selects deep. Same week, same wording as «Онлайн-запись» — this is the
+   * missing press, not a second rota editor.
+   *
+   * Only the addresses that have no hours, one request each: the endpoint takes
+   * one pair at a time, and a rota somebody has actually written — at the other
+   * address, or last winter — is not something a button offering a default may
+   * overwrite. From today, so nothing that has already happened is re-answered.
    */
-  async function saveOrder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await send(`/api/v1/specialists/${person.id}`, { sort_order: Number(order) }, undefined, "PATCH");
+  async function setDefaultWeek() {
+    for (const place of placesWithoutHours) {
+      const written = await send(
+        "/api/v1/availability/rules",
+        {
+          specialist_id: person.id,
+          location_id: place.locationId,
+          effective_from: new Date().toISOString().slice(0, 10),
+          intervals: DEFAULT_WORKWEEK.weekdays.map((weekday) => ({
+            weekday,
+            start: DEFAULT_WORKWEEK.start,
+            end: DEFAULT_WORKWEEK.end,
+          })),
+        },
+        undefined,
+        "PUT",
+      );
+      if (!written) return;
+    }
   }
 
   async function saveRule(event: FormEvent<HTMLFormElement>) {
@@ -228,7 +256,19 @@ export function SpecialistDetail({
           {showsPay && (
             <div>
               <dt>{t("specialists.defaultRule")}</dt>
-              <dd>{rule ?? <span className="badge-warning">{t("specialists.notSet")}</span>}</dd>
+              <dd>
+                {rule ?? (
+                  /*
+                    The list makes this pill a link to this page; here it goes
+                    to the form itself, which is far enough down that «не
+                    задана» and the field that answers it were never on screen
+                    together.
+                  */
+                  <a className="badge-warning badge-link" href="#commission">
+                    {t("specialists.notSet")}
+                  </a>
+                )}
+              </dd>
             </div>
           )}
         </dl>
@@ -331,52 +371,33 @@ export function SpecialistDetail({
             ))}
           </ul>
         )}
+        {canManage && placesWithoutHours.length > 0 && (
+          <>
+            <p className="muted">
+              {t("bookingSetup.setupWorkweek", {
+                from: DEFAULT_WORKWEEK.start,
+                to: DEFAULT_WORKWEEK.end,
+              })}
+            </p>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={pending}
+              onClick={setDefaultWeek}
+            >
+              {pending ? t("common.saving") : t("bookingSetup.setupWorkweekAction")}
+            </button>
+          </>
+        )}
         <p className="muted">{t("specialists.whereHint")}</p>
         <Link className="text-link" href="/app/booking">
           {t("specialists.openRota")}
         </Link>
       </section>
 
-      {/*
-        Where this card stands among the others.
-
-        Its own panel rather than a field on the one above, which states the
-        rota and deliberately does not edit it. The order is the opposite case:
-        `specialist.sort_order` was read in three places from the day it was
-        added — the public list, the assignment under «Любой доступный», and
-        «Онлайн-запись» — and written by nothing at all, so every card kept the
-        default and the tie between two equally free masters fell through to
-        comparing UUIDs. This is the control that was missing, not a second one.
-      */}
-      {canManage && (
-        <section className="panel">
-          <h2>{t("specialists.orderTitle")}</h2>
-          <form className="inline-form" onSubmit={saveOrder}>
-            <label>
-              {t("specialists.order")}
-              <input
-                name="sort_order"
-                type="number"
-                min="0"
-                max="1000"
-                step="1"
-                required
-                value={order}
-                onChange={(event) => setOrder(event.target.value)}
-              />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("common.save")}
-            </button>
-          </form>
-          <p className="muted">{t("specialists.orderHint")}</p>
-        </section>
-      )}
-
       {showsPay && (
-      <section className="panel">
+      <section className="panel" id="commission">
         <h2>{t("specialists.commission")}</h2>
-        <p className="muted">{t("specialists.exceptionHint")}</p>
         {person.service_exceptions.length > 0 && (
           <ul className="compact-list">
             {person.service_exceptions.map((exception) => (
@@ -468,7 +489,6 @@ export function SpecialistDetail({
 
       <section className="panel">
         <h2>{t("specialists.offeredServices")}</h2>
-        <p className="muted">{t("specialists.servicesHint")}</p>
         {!canManage || services.length === 0 ? (
           person.service_assignments.length === 0 ? (
             <p className="muted">{t("specialists.allServices")}</p>

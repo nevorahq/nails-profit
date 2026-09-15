@@ -6,6 +6,7 @@ import {
   commissionRules,
   locations,
   memberships,
+  scheduleRules,
   services,
   specialistLocations,
   specialists,
@@ -14,6 +15,7 @@ import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
 import { commissionBases, commissionTypes } from "@/domain/costing";
+import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -322,6 +324,41 @@ export async function POST(request: Request) {
           createdBy: actor.userId,
           updatedBy: actor.userId,
         })),
+      );
+
+      /*
+       * And when they work, which had the same hole in the same shape.
+       *
+       * An address without hours in it makes nobody bookable — `bookabilityOf`
+       * calls it «no_hours» and the public page offers no slot — so a studio
+       * that hired somebody, gave them a rate and watched them appear in the
+       * calendar still had one step left that only «Онлайн-запись» knew about,
+       * two selects deep. Registration has written the same week for the people
+       * it creates since it started provisioning workspaces; a person hired
+       * afterwards had to be found by hand.
+       *
+       * Пн–Пт 08:00–16:00, the studio's own default (`DEFAULT_WORKWEEK`) and
+       * the same hours registration wrote — not a guess about this person, but
+       * the week the studio already said it works. From today, and closing
+       * nothing: this card has no rota to hand over from. «График» on
+       * «Онлайн-запись» is where it is corrected, and a PUT from the day this
+       * one starts replaces it outright rather than layering on top of it.
+       */
+      const effectiveFrom = new Date().toISOString().slice(0, 10);
+      await tx.insert(scheduleRules).values(
+        places.flatMap((place) =>
+          DEFAULT_WORKWEEK.weekdays.map((weekday) => ({
+            organizationId: actor.organizationId,
+            specialistId: created.id,
+            locationId: place.id,
+            weekday,
+            startMinute: DEFAULT_WORKWEEK.startMinute,
+            endMinute: DEFAULT_WORKWEEK.endMinute,
+            effectiveFrom,
+            createdBy: actor.userId,
+            updatedBy: actor.userId,
+          })),
+        ),
       );
     }
 
