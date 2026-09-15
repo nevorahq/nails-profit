@@ -25,9 +25,16 @@ export function AccountDeletion({
   locale,
   email,
   variant = "button",
+  blockedByStudio = false,
 }: {
   locale: AppLocale;
   email: string;
+  /**
+   * Whether this person owns a studio that still exists. They cannot leave
+   * until it is erased, so they are told the order rather than offered the
+   * action — see the branch below.
+   */
+  blockedByStudio?: boolean;
   /**
    * How loudly to offer it. On the settings screen this is one action among
    * others and looks like one; on the workspace form it is a footnote — that
@@ -76,6 +83,29 @@ export function AccountDeletion({
     await authClient.signOut().catch(() => undefined);
     router.replace("/");
     router.refresh();
+  }
+
+  /*
+   * An owner of a live studio cannot leave, and until now the only way to find
+   * that out was to open the panel, type the address back and press the red
+   * button: the refusal arrives from the server after the whole ritual, which
+   * is a strange moment to be told which of two actions comes first. It is
+   * named here instead, in place of a control whose only possible outcome is a
+   * 409 — and it points at the section that does come first rather than
+   * describing it.
+   *
+   * This decides what the screen shows, not what the server allows. Somebody
+   * who owns a second studio elsewhere still meets the endpoint's own refusal,
+   * because the endpoint asks about every organization and this screen knows
+   * about one.
+   */
+  if (blockedByStudio) {
+    return (
+      <p className="account-deletion-trigger muted">
+        {t("settings.accountBlocked")}{" "}
+        <a href="#data-management-title">{t("settings.dataTitle")}</a>
+      </p>
+    );
   }
 
   /*

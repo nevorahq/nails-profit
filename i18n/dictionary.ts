@@ -120,6 +120,8 @@ const ru = {
   "settings.accountTitle": "Удаление аккаунта",
   "settings.accountHint":
     "Удаляет вход, сессии и сам аккаунт. Адрес освобождается — им можно зарегистрироваться заново. Данные студии удаляются отдельно и раньше: владелец не может уйти, оставив студию без владельца.",
+  "settings.accountBlocked":
+    "Удалить аккаунт можно после того, как удалены данные студии — иначе она останется без владельца. Это раздел выше:",
   "settings.confirmEmail": "Ваш адрес почты",
   "settings.accountAction": "Удалить аккаунт",
   "settings.accountFailed": "Не удалось удалить аккаунт",
@@ -1427,6 +1429,8 @@ const ro: Record<MessageKey, Message> = {
   "settings.accountTitle": "Ștergerea contului",
   "settings.accountHint":
     "Șterge autentificarea, sesiunile și contul însuși. Adresa se eliberează — cu ea vă puteți înregistra din nou. Datele studioului se șterg separat și înainte: proprietarul nu poate pleca lăsând studioul fără proprietar.",
+  "settings.accountBlocked":
+    "Contul poate fi șters după ce datele studioului au fost șterse — altfel studioul rămâne fără proprietar. Este secțiunea de mai sus:",
   "settings.confirmEmail": "Adresa dumneavoastră de e-mail",
   "settings.accountAction": "Șterge contul",
   "settings.accountFailed": "Contul nu a putut fi șters",
@@ -2733,6 +2737,8 @@ const en: Record<MessageKey, Message> = {
   "settings.accountTitle": "Delete account",
   "settings.accountHint":
     "Deletes the sign-in, the sessions and the account itself. The address is freed and can register again. A studio's data is deleted separately and first: an owner cannot leave a studio with no owner.",
+  "settings.accountBlocked":
+    "The account can be deleted once the studio's data is gone — otherwise the studio is left with no owner. That is the section above:",
   "settings.confirmEmail": "Your email address",
   "settings.accountAction": "Delete account",
   "settings.accountFailed": "The account could not be deleted",

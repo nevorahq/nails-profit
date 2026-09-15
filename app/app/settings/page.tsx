@@ -341,10 +341,20 @@ export default async function SettingsPage() {
       {/*
         Leaving, which is a different act from deleting the studio and belongs
         to everybody rather than to the owner. An owner is refused by the
-        endpoint until the studio itself is gone — and that refusal names the
-        order of the two, which is the part nobody could work out from here.
+        endpoint until the studio itself is gone, and the order of the two is
+        the part nobody could work out from here — so it is said before the
+        action rather than by the refusal afterwards.
+
+        A membership on this screen is a membership in a live organization:
+        erasing a studio removes every one of them, which is how an owner ends
+        up with no settings screen at all. So the role alone answers the same
+        question the endpoint asks of the database.
       */}
-      <AccountDeletion locale={locale} email={membership.userEmail} />
+      <AccountDeletion
+        locale={locale}
+        email={membership.userEmail}
+        blockedByStudio={membership.role === "owner"}
+      />
     </main>
   );
 }
