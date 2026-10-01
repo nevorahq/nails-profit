@@ -106,6 +106,30 @@ describe("configuring a bookable studio", () => {
     expect(errorCodeOf(taken)).toBe("SLUG_TAKEN");
   });
 
+  /**
+   * What the screen sends now: a name and no slug.
+   *
+   * The «Добавить адрес» form asked for «Адрес в ссылке» and promised it went
+   * into the link — it goes into none, the booking page lives at the studio's
+   * own slug — so the field is gone and the endpoint keys the address by its
+   * name. A second address of the same name is a different place, not a
+   * conflict the owner has to resolve in a field they were never shown.
+   */
+  test("an address sent without a slug is keyed by its name, and a namesake is not refused", async () => {
+    const first = await studio.owner.post("/api/v1/locations", { name: "Ботаника" });
+    expect(first.status).toBe(201);
+    expect(dataOf<{ slug: string }>(first).slug).toBe("botanika");
+
+    const namesake = await studio.owner.post("/api/v1/locations", { name: "Ботаника" });
+    expect(namesake.status).toBe(201);
+    expect(dataOf<{ slug: string }>(namesake).slug).toBe("botanika-2");
+
+    // Too short to transliterate into a usable key, which still has to be one.
+    const short = await studio.owner.post("/api/v1/locations", { name: "Ж1" });
+    expect(short.status).toBe(201);
+    expect(dataOf<{ slug: string }>(short).slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+
   test("the rota stored is the rota the engine reads back", async () => {
     await studio.owner.put(`/api/v1/specialists/${studio.specialistId}/locations`, {
       location_ids: [locationId],
