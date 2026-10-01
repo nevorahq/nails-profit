@@ -16,7 +16,7 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 | Dashboard p95 | 10 minutes | >1.5 s | >2 s | Run the performance integration test |
 | Rate-limit events | 10 minutes | ≥20 per bucket | ≥100 per bucket | Check abuse versus a broken retry loop |
 | Database connections | 5 minutes | ≥70% pool/plan | ≥90% pool/plan | Stop nonessential jobs and inspect slow queries |
-| Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check that `ops:booking-maintenance` is running each minute |
+| Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check that the Netlify `notifications` function runs every 5 minutes (`notifications.cron_ran`) and that `OPS_API_TOKEN` is set |
 | Booking slot conflicts | 10 minutes | ≥10 `booking.slot_conflict` | ≥50 | Normal under load; a spike with no traffic means stale availability |
 | Notification job lag | 5 minutes | >120 seconds | >300 seconds | Check `ops:notifications`, provider health and the oldest due row |
 | Notification dead letters | 10 minutes | ≥1 new | ≥5 new | Classify provider response; do not retry permanent address failures blindly |
@@ -39,7 +39,7 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 - `bot_challenge.unavailable`, the same failure for the proof-of-work state: suspicion stops being counted and a solved nonce stops being claimable, so the challenge is off and replayable while it lasts;
 - `booking.slot_conflict` and `booking.exclusion_violation` from booking creation and rescheduling;
 - `booking.confirmed`, `booking.cancelled`, `booking.no_show` and `booking.completed` from the lifecycle endpoints, which carry the booking id and nothing about the client;
-- `booking.maintenance_completed` from the hold sweep, which must appear every minute;
+- `booking.maintenance_completed` from the deployed cron (`source: "cron"`), which must appear every 5 minutes, and from `ops:booking-maintenance` when an operator runs it by hand. A `booking.maintenance_failed` line names a studio whose sweep failed; the others still ran;
 - `notification.delivered`, `notification.dispatched`, `notification.dead_letter`, signed `notification.webhook_received`/rejected events and the operator job's `notification.dispatch_completed` summary;
 - `http.timing` for the six Gate 7 routes; fleet percentiles are calculated with `npm run ops:booking-latency`;
 - `health.database_failed` from the public health check;

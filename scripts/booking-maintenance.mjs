@@ -19,6 +19,13 @@ import { openOperatorConnection } from "./ops-connection.mjs";
  * Idempotent by construction — it only moves rows whose deadline has passed, so
  * running it twice a minute or once an hour differ in latency, not in effect.
  *
+ * The deployment no longer depends on anybody running it. The scheduled
+ * function behind `POST /api/v1/ops/notifications` lapses requests and sweeps
+ * holds itself, through `lib/booking-maintenance.ts`, every five minutes. This
+ * stays for an operator who wants a sweep now, and for the two purges below
+ * that the cron does not do. The two writers agree on every message key, so
+ * whichever runs second finds nothing left to say.
+ *
  *   node scripts/booking-maintenance.mjs [--dry-run]
  */
 const dryRun = process.argv.includes("--dry-run");

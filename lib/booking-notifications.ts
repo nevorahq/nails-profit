@@ -95,11 +95,16 @@ export async function enqueueBookingNotification(
  * `booking.staff_requested` is deliberately absent: an unanswered request is
  * already the bell's first group, and a request that appeared in both would be
  * closed in one and left standing in the other.
+ *
+ * A lapse is the opposite case: the request leaves «Ждут ответа» when it runs
+ * out of time, and without a line of its own it would simply vanish from the
+ * bell. Nobody did it, so the notice has no actor, as with a client's change.
  */
 const STAFF_NOTICE_KIND: Partial<Record<StaffNotificationTemplate, StaffNoticeKind>> = {
   "booking.staff_booked": "client_booked",
   "booking.staff_rescheduled": "client_rescheduled",
   "booking.staff_cancelled": "client_cancelled",
+  "booking.staff_request_expired": "request_expired",
 };
 
 export async function notifyStaff(

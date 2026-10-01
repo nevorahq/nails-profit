@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { getOpsApiToken } from "@/env";
+import { runBookingMaintenance, sweepBookingMaintenance } from "@/lib/booking-maintenance";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { dispatchDueNotifications, sweepDueNotifications } from "@/lib/notification-dispatch";
 import { logEvent } from "@/lib/logger";
@@ -23,6 +24,13 @@ import { logEvent } from "@/lib/logger";
  * the application would need a connection that bypasses RLS, and that
  * connection is exactly what the tenant boundary is built to avoid handing to
  * request-serving code.
+ *
+ * The same call lapses the requests nobody answered before it drains the queue.
+ * That job had no scheduler in the deployment at all — only an operator command
+ * — and running it here, first, means the messages it writes go out in the same
+ * run rather than five minutes later. It runs whether or not delivery is
+ * switched on: a lapsed request has to stop holding the slot either way, and the
+ * messages wait in the queue like any other.
  */
 /**
  * `organization_id` is optional so one call can drain every tenant: that is the
@@ -63,6 +71,10 @@ export async function POST(request: Request) {
     });
   }
 
+  const maintenance = parsed.data.organization_id
+    ? await runBookingMaintenance({ organizationId: parsed.data.organization_id })
+    : await sweepBookingMaintenance();
+
   const summary = parsed.data.organization_id
     ? await dispatchDueNotifications({
         organizationId: parsed.data.organization_id,
@@ -76,6 +88,8 @@ export async function POST(request: Request) {
       sent: summary.sent,
       retried: summary.retried,
       dead_lettered: summary.deadLettered,
+      expired_holds: maintenance.expiredHolds,
+      lapsed_requests: maintenance.lapsedRequests,
     },
     id,
   );

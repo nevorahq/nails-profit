@@ -651,9 +651,15 @@ export async function bookingLinesOf(tx: TenantTransaction, bookingId: string) {
 /**
  * Bookings whose confirmation window has passed, section 7.4: a manual request
  * the studio never answered stops holding the slot.
+ *
+ * Returns what it moved rather than how many: whoever lapses a request owes the
+ * client and the studio a message about it, and the message key is built from
+ * the version this update wrote. Only rows this statement actually moved come
+ * back, so a second caller racing the first — another cron run, or the
+ * operator's script — finds nothing left to tell anybody about.
  */
 export async function expireUnconfirmedBookings(tx: TenantTransaction, now: Date) {
-  const expired = await tx
+  return tx
     .update(bookings)
     .set({
       status: "cancelled",
@@ -670,7 +676,5 @@ export async function expireUnconfirmedBookings(tx: TenantTransaction, now: Date
         lte(bookings.confirmationDueAt, now),
       ),
     )
-    .returning({ id: bookings.id });
-
-  return expired.length;
+    .returning({ id: bookings.id, version: bookings.version });
 }

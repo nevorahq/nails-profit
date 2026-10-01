@@ -19,6 +19,10 @@
  * than a few hours. The endpoint is idempotent — messages are claimed with
  * `for update skip locked` — so an overlapping run splits the queue instead of
  * sending twice.
+ *
+ * The same run lapses the booking requests nobody answered in time (see
+ * `lib/booking-maintenance.ts`). The shortest answer window a studio can set is
+ * fifteen minutes, so five minutes late is the right order of precision for it.
  */
 export default async function handler() {
   const token = process.env.OPS_API_TOKEN;
@@ -51,7 +55,14 @@ export default async function handler() {
   });
 
   const body = (await response.json().catch(() => null)) as {
-    data?: { claimed: number; sent: number; retried: number; dead_lettered: number };
+    data?: {
+      claimed: number;
+      sent: number;
+      retried: number;
+      dead_lettered: number;
+      expired_holds: number;
+      lapsed_requests: number;
+    };
     error?: { code: string };
   } | null;
 

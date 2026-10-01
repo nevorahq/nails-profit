@@ -140,18 +140,20 @@ ALLOW_BACKUP_RESTORE_DRILL=1 npm run ops:backup-drill
 
 ### 3. Jobs и наблюдаемость
 
-В scheduler должны выполняться не реже раза в минуту:
+В деплое обе задачи выполняет Netlify Scheduled Function `netlify/functions/notifications.mts`: каждые 5 минут она вызывает `POST /api/v1/ops/notifications` **без** `organization_id`, и эндпоинт обходит всех арендаторов сам, каждого в его tenant-транзакции. Сначала он отменяет заявки, на которые студия не ответила до `confirmation_due_at` (`cancelled`, причина `confirmation_expired`, сообщения клиенту и студии), и освобождает истёкшие holds (`lib/booking-maintenance.ts`), затем разбирает очередь уведомлений — поэтому сообщения об отмене уходят в том же прогоне. Ответ и строка `notifications.cron_ran` несут `lapsed_requests` и `expired_holds`. Функции нужны только `OPS_API_TOKEN` и `NEXT_PUBLIC_APP_URL`; строки подключения к базе у неё нет и быть не должно.
+
+Те же задачи можно запустить вручную с машины оператора — под операторской ролью, по всем арендаторам сразу:
 
 ```bash
 npm run ops:booking-maintenance
 npm run ops:notifications
 ```
 
-Обе команды ходят в базу под операторской ролью, поэтому запускаются с машины оператора, а не из деплоя. Для самого деплоя очередь уведомлений разбирает Netlify Scheduled Function `netlify/functions/notifications.mts` — каждые 5 минут она вызывает `POST /api/v1/ops/notifications` **без** `organization_id`, и эндпоинт обходит всех арендаторов сам, каждого в его tenant-транзакции. Функции нужны только `OPS_API_TOKEN` и `NEXT_PUBLIC_APP_URL`; строки подключения к базе у неё нет и быть не должно.
+`ops:booking-maintenance` дополнительно чистит истёкшие коды проверки и старые окна rate limit — этого cron не делает. Скрипт и cron безопасны вместе: каждый отменяет только то, что ещё ждёт ответа, и пишет сообщения с теми же ключами идемпотентности.
 
 Без `OPS_API_TOKEN` эндпоинт отвечает 404, функция пишет `notifications.cron_not_configured` и ничего не делает — очередь при этом продолжает наполняться, а не теряется. Признак, что планировщика нет вообще: строки `notification_outbox` со статусом `pending`, чей `scheduled_at` старше нескольких минут.
 
-Проверить `/api/health`, тестовый alert и наличие событий `booking.maintenance_completed`. У очереди не должно быть растущего backlog, `dead_letter` или job lag более 300 секунд. Пороговые значения: [Monitoring and alerts](./monitoring.md).
+Проверить `/api/health`, тестовый alert и наличие событий `booking.maintenance_completed` (от cron — каждые 5 минут, с `source: "cron"`). У очереди не должно быть растущего backlog, `dead_letter` или job lag более 300 секунд. Пороговые значения: [Monitoring and alerts](./monitoring.md).
 
 ### 4. Evidence из логов
 

@@ -4,8 +4,9 @@ import { promisify } from "node:util";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
-import { bookingHolds, bookings, notificationOutbox, staffNotices } from "@/db/schema";
+import { bookingHolds, bookings, notificationOutbox, organizations, staffNotices } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { runBookingMaintenance, sweepBookingMaintenance } from "@/lib/booking-maintenance";
 import { createBooking, holdSlot } from "@/lib/booking-service";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
@@ -25,6 +26,10 @@ import {
  * in production would be slots nobody can book and clients nobody told.
  */
 const run = promisify(execFile);
+
+afterAll(async () => {
+  await closeTestConnections();
+});
 
 const LINES = [
   {
@@ -52,10 +57,6 @@ describe("booking maintenance", () => {
     clientId = (
       await createClient(organizationId, { normalizedPhone: "+37369123456", email: null })
     ).id;
-  });
-
-  afterAll(async () => {
-    await closeTestConnections();
   });
 
   test("expires abandoned holds, lapses unanswered requests and tells the client", async () => {
@@ -285,5 +286,197 @@ describe("booking maintenance", () => {
           ),
         ),
     ).toHaveLength(2);
+  });
+});
+
+/**
+ * The same repair, run by the deployment through `lib/booking-maintenance.ts`.
+ *
+ * The script above is an operator command, and nothing in the deployment ran
+ * it: an unanswered request stayed `pending_confirmation` past its deadline,
+ * holding the slot, until somebody remembered. The scheduled function now runs
+ * this instead — through `withTenant`, under the application role, so these
+ * tests also prove the policies let it do its work.
+ */
+describe("booking maintenance on the deployed cron", () => {
+  let organizationId: string;
+  let ownerId: string;
+  let specialistId: string;
+  let locationId: string;
+  let clientId: string;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    ownerId = (await createUser()).id;
+    organizationId = (await createOrganization({ ownerId })).id;
+    locationId = (await createLocation(organizationId)).id;
+    const masterUser = await createUser();
+    specialistId = (await createSpecialist(organizationId, { userId: masterUser.id })).id;
+    clientId = (
+      await createClient(organizationId, { normalizedPhone: "+37369123456", email: null })
+    ).id;
+  });
+
+  /** A manual request whose answer window closes `dueInMinutes` from now. */
+  async function request(dueInMinutes: number, hoursAhead = 24) {
+    const start = new Date(Date.now() + hoursAhead * 60 * 60_000);
+    const ttl = 120;
+    return withTenant(organizationId, async (tx) => {
+      const created = await createBooking(tx, {
+        organizationId,
+        locationId,
+        specialistId,
+        clientId,
+        interval: { start, end: new Date(start.getTime() + 90 * 60_000) },
+        source: "public_booking",
+        confirmationMode: "manual",
+        confirmationTtlMinutes: ttl,
+        lines: LINES,
+        actorUserId: null,
+        // The deadline is `now + ttl`, so this sets it where the test asks.
+        now: new Date(Date.now() + (dueInMinutes - ttl) * 60_000),
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+  }
+
+  async function outboxOf(bookingId: string) {
+    return adminDb.select().from(notificationOutbox).where(eq(notificationOutbox.bookingId, bookingId));
+  }
+
+  test("lapses an unanswered request and tells the client and the studio", async () => {
+    const bookingId = await request(-10);
+
+    const summary = await runBookingMaintenance({ organizationId });
+    expect(summary.lapsedRequests).toBe(1);
+
+    const [booking] = await adminDb.select().from(bookings).where(eq(bookings.id, bookingId));
+    expect(booking.status).toBe("cancelled");
+    expect(booking.cancelledBy).toBe("system");
+    expect(booking.cancellationReason).toBe("confirmation_expired");
+
+    const queued = await outboxOf(bookingId);
+    // By SMS: this client left only a phone, and a lapse is not their doing.
+    const toClient = queued.filter((row) => row.template === "booking.cancelled");
+    expect(toClient.map((row) => row.channel)).toEqual(["sms"]);
+
+    const toStudio = queued.filter((row) => row.template === "booking.staff_request_expired");
+    expect(toStudio.map((row) => row.payload?.recipient).sort()).toEqual(["owner", "specialist"]);
+
+    const notices = await adminDb.select().from(staffNotices).where(eq(staffNotices.bookingId, bookingId));
+    expect(notices.map((row) => row.kind)).toEqual(["request_expired"]);
+    expect(notices[0].actorUserId).toBeNull();
+  });
+
+  test("leaves a request whose answer window is still open", async () => {
+    const bookingId = await request(30);
+
+    const summary = await runBookingMaintenance({ organizationId });
+    expect(summary.lapsedRequests).toBe(0);
+
+    const [booking] = await adminDb.select().from(bookings).where(eq(bookings.id, bookingId));
+    expect(booking.status).toBe("pending_confirmation");
+    expect((await outboxOf(bookingId)).map((row) => row.template)).not.toContain("booking.cancelled");
+  });
+
+  test("a request the studio confirmed in time is not lapsed afterwards", async () => {
+    const bookingId = await request(-10);
+    await adminDb
+      .update(bookings)
+      .set({ status: "confirmed", confirmationDueAt: null })
+      .where(eq(bookings.id, bookingId));
+
+    expect((await runBookingMaintenance({ organizationId })).lapsedRequests).toBe(0);
+    const [booking] = await adminDb.select().from(bookings).where(eq(bookings.id, bookingId));
+    expect(booking.status).toBe("confirmed");
+  });
+
+  test("a second run tells nobody twice", async () => {
+    const bookingId = await request(-10);
+    await runBookingMaintenance({ organizationId });
+    const first = await outboxOf(bookingId);
+
+    expect((await runBookingMaintenance({ organizationId })).lapsedRequests).toBe(0);
+    expect(await outboxOf(bookingId)).toHaveLength(first.length);
+    expect(
+      await adminDb.select().from(staffNotices).where(eq(staffNotices.bookingId, bookingId)),
+    ).toHaveLength(1);
+  });
+
+  /**
+   * The operator script stays, and the two can meet: an operator sweeping by
+   * hand right after the cron. The script lapses nothing left, and the keys the
+   * cron wrote are the keys the script would have written.
+   */
+  test("agrees with the operator script on what has already been said", async () => {
+    const bookingId = await request(-10);
+    await runBookingMaintenance({ organizationId });
+    const fromCron = await outboxOf(bookingId);
+
+    await run("node", ["scripts/booking-maintenance.mjs"], {
+      env: { ...process.env, MIGRATION_DATABASE_URL: process.env.MIGRATION_DATABASE_URL },
+    });
+
+    expect(await outboxOf(bookingId)).toHaveLength(fromCron.length);
+    expect(
+      await adminDb.select().from(staffNotices).where(eq(staffNotices.bookingId, bookingId)),
+    ).toHaveLength(1);
+  });
+
+  test("expires a hold nobody came back for", async () => {
+    const holdId = await withTenant(organizationId, async (tx) => {
+      const start = new Date(Date.now() + 48 * 60 * 60_000);
+      const held = await holdSlot(tx, {
+        organizationId,
+        locationId,
+        specialistId,
+        interval: { start, end: new Date(start.getTime() + 60 * 60_000) },
+        ttlMinutes: 5,
+        now: new Date(Date.now() - 60 * 60_000),
+      });
+      if (!held.ok) throw new Error("fixture hold was refused");
+      return held.holdId;
+    });
+
+    expect((await runBookingMaintenance({ organizationId })).expiredHolds).toBe(1);
+    const [hold] = await adminDb.select().from(bookingHolds).where(eq(bookingHolds.id, holdId));
+    expect(hold.status).toBe("expired");
+  });
+
+  test("the sweep walks every live studio and skips a deleted one", async () => {
+    const lapsed = await request(-10);
+
+    const otherOwner = await createUser();
+    const other = (await createOrganization({ ownerId: otherOwner.id })).id;
+    const otherLocation = (await createLocation(other)).id;
+    const otherSpecialist = (await createSpecialist(other)).id;
+    const otherBooking = await withTenant(other, async (tx) => {
+      const start = new Date(Date.now() + 24 * 60 * 60_000);
+      const created = await createBooking(tx, {
+        organizationId: other,
+        locationId: otherLocation,
+        specialistId: otherSpecialist,
+        clientId: null,
+        interval: { start, end: new Date(start.getTime() + 90 * 60_000) },
+        source: "public_booking",
+        confirmationMode: "manual",
+        confirmationTtlMinutes: 120,
+        lines: LINES,
+        actorUserId: null,
+        now: new Date(Date.now() - 130 * 60_000),
+      });
+      if (!created.ok) throw new Error("fixture booking was refused");
+      return created.bookingId;
+    });
+    await adminDb.update(organizations).set({ deletedAt: new Date() }).where(eq(organizations.id, other));
+
+    const summary = await sweepBookingMaintenance();
+    expect(summary.lapsedRequests).toBe(1);
+
+    const [mine] = await adminDb.select().from(bookings).where(eq(bookings.id, lapsed));
+    expect(mine.status).toBe("cancelled");
+    const [theirs] = await adminDb.select().from(bookings).where(eq(bookings.id, otherBooking));
+    expect(theirs.status).toBe("pending_confirmation");
   });
 });

@@ -335,7 +335,7 @@ describe("unanswered requests", () => {
     const expired = await withTenant(organizationId, (tx) =>
       expireUnconfirmedBookings(tx, new Date(now.getTime() + 3 * 60 * 60_000)),
     );
-    expect(expired).toBe(1);
+    expect(expired).toHaveLength(1);
 
     const afterwards = await withTenant(organizationId, (tx) =>
       createBooking(tx, {

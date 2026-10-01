@@ -227,6 +227,72 @@ describe("a request nobody in the studio has seen", () => {
     }
   });
 
+  /**
+   * The same call lapses a request whose answer window has closed.
+   *
+   * Before, only an operator command did this, and nothing in the deployment
+   * ran it: the request went on holding the slot and the client went on
+   * waiting. Asserted through the cron's own call, with no organization named,
+   * and then through an operator naming one — the endpoint's two branches.
+   */
+  // Both on week 2, the one Wednesday no other test books: each case lapses
+  // its own request, so the hour it took is free again for the next.
+  test.each([
+    ["the cron, naming no studio", false],
+    ["an operator naming the studio", true],
+  ])("lapses an unanswered request when called by %s", async (_who, named) => {
+    const week = 2;
+    const previousToken = process.env.OPS_API_TOKEN;
+    process.env.OPS_API_TOKEN = "cron-token-that-is-long-enough-to-pass-32";
+    try {
+      const booking = await requestAppointment(studio.specialistId, week);
+      await adminDb
+        .update(bookings)
+        .set({ confirmationDueAt: new Date(Date.now() - 60_000) })
+        .where(eq(bookings.id, booking.id));
+      capturingProvider();
+
+      const response = await anonymous.post(
+        "/api/v1/ops/notifications",
+        // A full batch, so rows the earlier tests left due cannot crowd these out.
+        named ? { organization_id: studio.organizationId, limit: 100 } : { limit: 100 },
+        { authorization: `Bearer ${process.env.OPS_API_TOKEN}` },
+      );
+
+      expect(response.status).toBe(200);
+      expect(dataOf<{ lapsed_requests: number }>(response).lapsed_requests).toBe(1);
+
+      const [after] = await adminDb.select().from(bookings).where(eq(bookings.id, booking.id));
+      expect(after.status).toBe("cancelled");
+      expect(after.cancellationReason).toBe("confirmation_expired");
+
+      // Written and sent in the same run: the lapse comes before the drain.
+      const templates = (
+        await adminDb
+          .select({ template: notificationOutbox.template, status: notificationOutbox.status })
+          .from(notificationOutbox)
+          .where(eq(notificationOutbox.bookingId, booking.id))
+      ).filter((row) =>
+        ["booking.cancelled", "booking.staff_request_expired"].includes(row.template),
+      );
+      expect(templates.map((row) => row.template)).toEqual(
+        expect.arrayContaining(["booking.cancelled", "booking.staff_request_expired"]),
+      );
+      expect(templates.every((row) => row.status === "sent")).toBe(true);
+
+      // And the hour is free again for the next client.
+      const slots = dataOf<{ slots: { starts_at: string }[] }>(
+        await anonymous.get(
+          `/api/v1/public/booking/notify-studio/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=${studio.specialistId}&date=${wednesdayAhead(week)}`,
+        ),
+      );
+      expect(slots.slots.map((slot) => slot.starts_at)).toContain(booking.startsAt);
+    } finally {
+      if (previousToken === undefined) delete process.env.OPS_API_TOKEN;
+      else process.env.OPS_API_TOKEN = previousToken;
+    }
+  });
+
   test("reaches the master and the owner once the card carries an account", async () => {
     const master = await inviteMember(studio.owner, "notify-master@studio.example", "master");
     await studio.owner.patch(`/api/v1/specialists/${studio.specialistId}`, {
