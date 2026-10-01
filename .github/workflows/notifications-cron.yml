@@ -1,0 +1,79 @@
+name: Notification cron
+
+# The timer that drains the notification outbox, moved here from a Netlify
+# Scheduled Function.
+#
+# It used to be `netlify/functions/notifications.mts`, and on Netlify's credit
+# plan it was paid for twice every five minutes: once for the scheduled
+# function, which did nothing but wait for an HTTP answer, and once for the
+# endpoint doing the work. On a public repository a GitHub-hosted runner costs
+# nothing, so the waiting half moves here and Netlify bills only the endpoint.
+#
+# What it calls is unchanged: `POST /api/v1/ops/notifications` with no
+# organization, which walks every tenant inside the application's own RLS
+# boundary. The same call first lapses the booking requests nobody answered in
+# time and releases expired holds (`lib/booking-maintenance.ts`), so this
+# schedule is also what keeps an unanswered request from holding a slot. This job holds a URL and one shared secret and no database
+# credentials, for the reason the function did — a scheduler with the
+# production connection string is a far larger thing to get wrong than a late
+# message.
+#
+# GitHub's schedule is best effort: under load a run starts minutes late and
+# occasionally not at all. That is the right order of precision for this queue
+# — the shortest window a studio gives itself to answer a request is fifteen
+# minutes — and the endpoint is idempotent, so a late or doubled run sends
+# nothing twice.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  # By hand from the Actions tab, for an operator who does not want to wait.
+  workflow_dispatch:
+
+# One at a time. Overlap would be harmless — messages are claimed with
+# `for update skip locked` — but there is no reason to queue a second run
+# behind a slow first one rather than let it go.
+concurrency:
+  group: notifications-cron
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Drain the outbox
+        env:
+          # A repository variable, not a secret: the address is public anyway.
+          APP_URL: ${{ vars.APP_URL }}
+          OPS_API_TOKEN: ${{ secrets.OPS_API_TOKEN }}
+        run: |
+          # Not an error to retry: the repository has not been given what the
+          # job needs, and saying so once per run is how that becomes visible.
+          # The queue keeps filling meanwhile; nothing is lost.
+          if [ -z "$APP_URL" ] || [ -z "$OPS_API_TOKEN" ]; then
+            echo "::warning title=Notification cron not configured::Set the APP_URL variable and the OPS_API_TOKEN secret in the repository settings."
+            exit 0
+          fi
+
+          # The repository is public and so are these logs: only the summary
+          # counts are printed, never the body of a failure beyond its code.
+          rm -f response.json
+          status=$(curl --silent --show-error --max-time 120 \
+            --retry 2 --retry-connrefused --retry-delay 10 \
+            --output response.json --write-out '%{http_code}' \
+            --request POST "${APP_URL%/}/api/v1/ops/notifications" \
+            --header "authorization: Bearer ${OPS_API_TOKEN}" \
+            --header "content-type: application/json" \
+            --data '{}') || status=000
+
+          if [ "$status" != "200" ]; then
+            # No body at all when the server was never reached.
+            code=$(jq -r '.error.code // "none"' response.json 2>/dev/null || echo none)
+            echo "::error title=Notification cron failed::HTTP ${status}, code ${code}"
+            exit 1
+          fi
+
+          jq -c '.data' response.json

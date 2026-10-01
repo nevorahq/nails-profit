@@ -21,7 +21,8 @@ import { logEvent } from "@/lib/logger";
  * answer by: the slot stayed taken, the client heard nothing, and «Ждут ответа»
  * kept showing a request whose time had run out.
  *
- * So the scheduled function that drains the notification outbox calls this
+ * So the cron that drains the notification outbox
+ * (`.github/workflows/notifications-cron.yml`) calls this
  * first, through the same operator endpoint. Inside `withTenant` and through the
  * application's own notification helpers, which is what the script could not
  * do: it restates the channel rules in SQL, and the two are kept in agreement
@@ -77,7 +78,7 @@ export async function runBookingMaintenance(input: {
 }
 
 /**
- * Every live tenant in turn, for the scheduled function.
+ * Every live tenant in turn, for the cron.
  *
  * The same shape as `sweepDueNotifications`, and for the same reason: the
  * organization list is readable by the application role, so nothing here needs

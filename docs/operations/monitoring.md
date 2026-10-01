@@ -16,9 +16,9 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 | Dashboard p95 | 10 minutes | >1.5 s | >2 s | Run the performance integration test |
 | Rate-limit events | 10 minutes | ≥20 per bucket | ≥100 per bucket | Check abuse versus a broken retry loop |
 | Database connections | 5 minutes | ≥70% pool/plan | ≥90% pool/plan | Stop nonessential jobs and inspect slow queries |
-| Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check that the Netlify `notifications` function runs every 5 minutes (`notifications.cron_ran`) and that `OPS_API_TOKEN` is set |
+| Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check the latest «Notification cron» run in GitHub Actions (it prints `expired_holds`) and that `APP_URL`/`OPS_API_TOKEN` are set |
 | Booking slot conflicts | 10 minutes | ≥10 `booking.slot_conflict` | ≥50 | Normal under load; a spike with no traffic means stale availability |
-| Notification job lag | 5 minutes | >120 seconds | >300 seconds | Check `ops:notifications`, provider health and the oldest due row |
+| Notification job lag | 5 minutes | >120 seconds | >300 seconds | Check the latest «Notification cron» run in GitHub Actions (disabled schedule, missing `APP_URL`/`OPS_API_TOKEN`), provider health and the oldest due row |
 | Notification dead letters | 10 minutes | ≥1 new | ≥5 new | Classify provider response; do not retry permanent address failures blindly |
 | Notification provider acceptance | 30 minutes | <97% with ≥20 finished | <95% with ≥20 finished | Pause rollout; inspect retries/dead letters and Resend API health |
 | Notification mail-server delivery | 30 minutes | <97% with ≥20 outcomes | <95% with ≥20 outcomes | Inspect bounce/failed/suppressed mix and Resend delivery events |

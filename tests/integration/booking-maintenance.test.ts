@@ -294,7 +294,7 @@ describe("booking maintenance", () => {
  *
  * The script above is an operator command, and nothing in the deployment ran
  * it: an unanswered request stayed `pending_confirmation` past its deadline,
- * holding the slot, until somebody remembered. The scheduled function now runs
+ * holding the slot, until somebody remembered. The deployed cron now runs
  * this instead — through `withTenant`, under the application role, so these
  * tests also prove the policies let it do its work.
  */

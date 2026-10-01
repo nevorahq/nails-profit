@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { PublicAddressEditor } from "@/components/public-address-editor";
 import { currencies, type Currency } from "@/domain/money";
+import { ORGANIZATION_NAME_PATTERN } from "@/domain/organization-name";
+import { checkSlug, slugify } from "@/domain/slug";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { localeNames } from "@/i18n/locale-names";
@@ -40,23 +43,73 @@ function currencyName(code: Currency, locale: AppLocale, t: Translate): string {
 type StaffNotices = "owner" | "owner_and_managers";
 
 export function OrganizationSettings({
+  name,
+  slug,
   locale,
   currency,
   staffNotices,
   canEdit,
+  startOpen = false,
 }: {
+  /** What clients read on the booking page and the studio reads in the topbar. */
+  name: string;
+  /** The booking page's address, `/book/<slug>`. */
+  slug: string | null;
   locale: AppLocale;
   currency: string;
   /** Who besides the working master hears about a booking. */
   staffNotices: StaffNotices;
   canEdit: boolean;
+  startOpen?: boolean;
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Open from the start when «Изменить название студии» on «Онлайн-запись»
+  // sent the owner here: a link that lands on a folded panel lands nowhere.
+  const [settingsOpen, setSettingsOpen] = useState(startOpen);
+  /**
+   * The link a rename suggests, offered rather than applied.
+   *
+   * Sign-up derives the booking link from the name, so somebody fixing a name
+   * typed in a hurry expects the link to follow — and it must not do that by
+   * itself, because the old link may already be on an Instagram profile. The
+   * question is put once, after the rename, with the warning beside it.
+   */
+  const [suggestedSlug, setSuggestedSlug] = useState<string | null>(null);
+
+  async function rename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = String(new FormData(event.currentTarget).get("studio_name") ?? "").trim();
+    setPending(true);
+    setError(null);
+    setSaved(false);
+
+    const response = await fetch("/api/v1/organizations/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: next }),
+    });
+    setPending(false);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setError(
+        body?.error?.code === "VALIDATION_ERROR"
+          ? t("settings.studioNameInvalid")
+          : (body?.error?.message ?? t("common.saveFailed")),
+      );
+      return;
+    }
+
+    setSaved(true);
+    if (next === name) return;
+    const candidate = slugify(next);
+    setSuggestedSlug(candidate !== slug && checkSlug(candidate) === null ? candidate : null);
+    router.refresh();
+  }
 
   async function change(patch: {
     locale?: AppLocale;
@@ -102,6 +155,53 @@ export function OrganizationSettings({
         <div className="add-form-inner">
     <section className="panel">
       <h2>{t("settings.title")}</h2>
+
+      {/*
+        The studio's own name, which sign-up asks for and which nothing let
+        anybody change afterwards. The «Название» on an address card in
+        «Онлайн-запись» looked like the place, and renamed only that address.
+        Same rule as at sign-up: Latin, because clients read it on the link's
+        page, and the browser refuses the rest before the server has to.
+      */}
+      <form id="studio-name" className="inline-form" onSubmit={rename}>
+        <label>
+          {t("settings.studioName")}
+          {/* Uncontrolled, and read from the form on submit: a name typed
+              before the page finished loading is still the name sent. Keyed
+              on the saved name so a rename resets it to what was stored. */}
+          <input
+            key={name}
+            name="studio_name"
+            defaultValue={name}
+            required
+            minLength={2}
+            maxLength={100}
+            pattern={ORGANIZATION_NAME_PATTERN.source.slice(1, -1)}
+            title={t("auth.studioNameLatin")}
+            disabled={!canEdit || pending}
+          />
+          <span className="field-hint">{t("auth.studioNameLatin")}</span>
+        </label>
+        <button
+          className="secondary-button"
+          type="submit"
+          disabled={!canEdit || pending}
+        >
+          {t("settings.studioNameSave")}
+        </button>
+      </form>
+      {suggestedSlug && slug && (
+        <div>
+          <p className="muted">{t("settings.slugSuggestion", { link: `/book/${slug}` })}</p>
+          <PublicAddressEditor
+            slug={slug}
+            locale={locale}
+            canEdit={canEdit}
+            suggested={suggestedSlug}
+            onDone={() => setSuggestedSlug(null)}
+          />
+        </div>
+      )}
 
       <div className="inline-form">
         <label>

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
@@ -8,13 +9,13 @@ import {
   useSetupGuide,
   type SetupGuideBaseline,
 } from "@/components/setup-guide";
-import { SLUG_MIN_LENGTH, slugify } from "@/domain/slug";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { PublicAddressEditor } from "@/components/public-address-editor";
 import { localeTag } from "@/i18n/translate";
 import type { MemberRole } from "@/domain/rbac";
 
@@ -404,8 +405,9 @@ export function BookingSetup({
       "/api/v1/locations",
       "POST",
       {
+        // No slug: the server derives one from the name. It is the address's
+        // key inside the studio and appears in no link a client sees.
         name: String(data.get("name") ?? "").trim(),
-        slug: String(data.get("slug") ?? "").trim(),
         address: String(data.get("address") ?? "").trim() || undefined,
         timezone: String(data.get("timezone") ?? ""),
       },
@@ -416,26 +418,21 @@ export function BookingSetup({
   /**
    * The first address, from the two facts a person can answer without thinking.
    *
-   * The slug is derived from the name and the timezone from the browser: both
-   * are required by the endpoint, neither is a decision the owner has an
-   * opinion about on their first minute, and both stay editable in the address
-   * row afterwards. `slugify` is the same function the studio's own public
-   * address is suggested with, so a Cyrillic name produces a link that works.
+   * The timezone is taken from the browser, which is not a decision the owner
+   * has an opinion about on their first minute and stays editable in the
+   * address row afterwards. The slug is not sent at all: the endpoint derives
+   * it from the name, as it does for every address the screen creates.
    */
   async function createFirstLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     const name = String(data.get("name") ?? "").trim();
-    const suggested = slugify(name);
     await send(
       "/api/v1/locations",
       "POST",
       {
         name,
-        // Short names transliterate to something the endpoint refuses; the
-        // address still needs one, and a studio never sees this field again.
-        slug: suggested.length >= SLUG_MIN_LENGTH ? suggested : `${suggested}-1`,
         address: String(data.get("address") ?? "").trim() || undefined,
         timezone: localTimezone(timezones),
       },
@@ -663,7 +660,7 @@ export function BookingSetup({
           {setupStep === "location" && (
             <form className="inline-form" onSubmit={createFirstLocation}>
               <label>
-                {t("bookingSetup.name")}
+                {t("bookingSetup.locationName")}
                 <input
                   name="name"
                   required
@@ -677,8 +674,8 @@ export function BookingSetup({
                 {t("bookingSetup.address")}
                 <input name="address" maxLength={300} />
               </label>
-              {/* The link and the timezone are derived and shown, not asked:
-                  both are editable in the address row the moment this is done. */}
+              {/* The timezone is derived and shown, not asked: it is editable
+                  in the address row the moment this is done. */}
               <p className="muted">{t("bookingSetup.setupDerived", { zone: localTimezone(timezones) })}</p>
               <button type="submit" className="primary-button" disabled={pending}>
                 {pending ? t("common.saving") : t("bookingSetup.setupNext")}
@@ -827,29 +824,14 @@ export function BookingSetup({
         <h2>{t("bookingSetup.locationsTitle")}</h2>
 
         {/*
-          The address of the public page, and no longer a field.
-          
-          It used to be typed here, on a screen a new studio had no reason to
-          open, and until it was the published booking page existed at no
-          address at all. It is now derived from the studio's name when the
-          organization is created — see `slugCandidatesFor` — so what is left to
-          show is where the page is, which is the one thing the owner came here
-          to find out.
+          The address of the public page, derived from the studio's name when
+          the organization is created and changeable here, beside the addresses
+          it publishes. The editor was once removed in favour of the derived
+          link alone, which left a studio named in a hurry at sign-up with
+          `/book/some-one` and no screen that could move it.
         */}
-        {publicPageHref && (
-          <p className="muted">
-            {/* The label is built as an expression rather than written as JSX
-                text on purpose. `tests/accessibility.test.ts` refuses any
-                literal on this screen that the dictionary does not own, and it
-                is right to: everything a client or an owner reads here has to
-                exist in three languages. A URL is the exception the rule cannot
-                see — «/book/» is a path, not a sentence, and translating it
-                would break the link. */}
-            {t("bookingSetup.publicPageLabel")}{" "}
-            <a className="text-link" href={publicPageHref} target="_blank" rel="noreferrer">
-              {publicPageHref}
-            </a>
-          </p>
+        {(publicPageHref || canPublish) && (
+          <PublicAddressEditor slug={organizationSlug} locale={locale} canEdit={canPublish} />
         )}
         {locations.length === 0 && <p className="muted">{t("bookingSetup.noLocations")}</p>}
 
@@ -866,7 +848,11 @@ export function BookingSetup({
             <h3>{t("bookingSetup.editLocation")}</h3>
             <form onSubmit={(event) => updateLocation(event, place.id)} className="inline-form">
               <label>
-                {t("bookingSetup.name")}
+                {/* «Название адреса», not «Название»: the field starts out
+                    holding the studio's own name, and saving a new one here
+                    used to read as renaming the studio — which it never did,
+                    nor did it move the link above. */}
+                {t("bookingSetup.locationName")}
                 <input name="name" defaultValue={place.name} required minLength={2} maxLength={120} />
               </label>
               <label>
@@ -893,6 +879,17 @@ export function BookingSetup({
               <button type="submit" className="secondary-button" disabled={!canPublish || pending}>
                 {t("common.save")}
               </button>
+              <p className="muted field-note">
+                {t("bookingSetup.locationNameHint")}
+                {canPublish && (
+                  <>
+                    {" "}
+                    <Link className="text-link" href="/app/settings?edit=name#studio-name">
+                      {t("bookingSetup.renameStudio")}
+                    </Link>
+                  </>
+                )}
+              </p>
             </form>
 
             {canPublish && (
@@ -972,7 +969,7 @@ export function BookingSetup({
           <h3>{t("bookingSetup.addLocation")}</h3>
           <form onSubmit={createLocation} className="inline-form">
             <label>
-              {t("bookingSetup.name")}
+              {t("bookingSetup.locationName")}
               {/* Only while there is nothing to compare it against: a second
                   address is a different place and needs its own name. */}
               <input
@@ -982,10 +979,6 @@ export function BookingSetup({
                 maxLength={120}
                 defaultValue={locations.length === 0 ? organizationName : undefined}
               />
-            </label>
-            <label>
-              {t("bookingSetup.slug")}
-              <input name="slug" required maxLength={40} pattern="[a-z0-9-]+" />
             </label>
             <label>
               {t("bookingSetup.address")}
@@ -1004,11 +997,6 @@ export function BookingSetup({
             <button type="submit" className="primary-button" disabled={pending}>
               {t("bookingSetup.addLocation")}
             </button>
-            {/* A full-width row under the fields rather than a cell among them.
-                Inside the label it made that one column taller than the rest,
-                and with the row aligned on its baseline every other input rose
-                out of line with it. */}
-            <p className="muted field-note">{t("bookingSetup.slugHint")}</p>
           </form>
           </>
         )}

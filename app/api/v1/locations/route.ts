@@ -1,10 +1,10 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { bookingSettings, locations, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
-import { checkSlug } from "@/domain/slug";
+import { checkSlug, slugCandidatesFor } from "@/domain/slug";
 import { isSupportedTimezone } from "@/domain/timezone";
 import { recordAuditEvent } from "@/lib/audit";
 import { bookingModuleRefusal } from "@/lib/booking-http";
@@ -28,7 +28,16 @@ import { getActiveMembership } from "@/lib/membership";
  */
 const createLocationSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  slug: z.string().trim().toLowerCase().max(40),
+  /**
+   * Optional, and absent from every screen: derived from `name` when not sent.
+   *
+   * It is the address's key inside the studio and appears in no public URL —
+   * the booking page lives at the organization's slug — yet the «Добавить
+   * адрес» form used to ask for it under «Адрес в ссылке» with a promise that it
+   * «входит в ссылку и потом не меняется». Neither half was true. A caller that
+   * does send one is still held to `checkSlug` and to uniqueness.
+   */
+  slug: z.string().trim().toLowerCase().max(40).optional(),
   address: z.string().trim().max(300).optional(),
   timezone: z.string().trim().max(64).optional(),
   sort_order: z.int().min(0).max(1_000).optional(),
@@ -102,7 +111,8 @@ export async function POST(request: Request) {
     });
   }
 
-  const slugProblem = checkSlug(parsed.data.slug);
+  const chosenSlug = parsed.data.slug;
+  const slugProblem = chosenSlug === undefined ? null : checkSlug(chosenSlug);
   if (slugProblem) {
     return apiError(422, "INVALID_SLUG", "The slug cannot be used", id, {
       fieldErrors: [{ field: "slug", code: slugProblem, message: "The slug cannot be used" }],
@@ -119,19 +129,38 @@ export async function POST(request: Request) {
     });
   }
 
-  try {
-    const created = await withTenant(actor.organizationId, async (tx) => {
+  const createLocation = () =>
+    withTenant(actor.organizationId, async (tx) => {
       const [organization] = await tx
         .select({ timezone: organizations.timezone })
         .from(organizations)
         .where(eq(organizations.id, actor.organizationId))
         .limit(1);
 
+      // The first candidate this studio's other addresses have not taken: a
+      // second «Central» becomes `central-2` rather than a refusal over a field
+      // nobody was shown.
+      let slug = chosenSlug;
+      if (slug === undefined) {
+        const candidates = slugCandidatesFor(parsed.data.name);
+        const taken = new Set(
+          (
+            await tx
+              .select({ slug: locations.slug })
+              .from(locations)
+              .where(inArray(locations.slug, candidates))
+          ).map((row) => row.slug),
+        );
+        slug =
+          candidates.find((candidate) => !taken.has(candidate)) ??
+          `${candidates[0].slice(0, 31)}-${crypto.randomUUID().slice(0, 8)}`;
+      }
+
       const [location] = await tx
         .insert(locations)
         .values({
           organizationId: actor.organizationId,
-          slug: parsed.data.slug,
+          slug,
           name: parsed.data.name,
           address: parsed.data.address ?? null,
           timezone: timezone ?? organization.timezone,
@@ -160,6 +189,22 @@ export async function POST(request: Request) {
 
       return location;
     });
+
+  try {
+    // A derived slug can lose a race to a second address created with the same
+    // name in the same instant; asking again picks the next candidate. A slug
+    // the caller chose is theirs to change, so that one is refused at once.
+    let created: Awaited<ReturnType<typeof createLocation>>;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        created = await createLocation();
+        break;
+      } catch (error) {
+        const derived = chosenSlug === undefined;
+        if (derived && attempt < 2 && isUniqueViolation(error, "location_org_slug_idx")) continue;
+        throw error;
+      }
+    }
 
     return apiSuccess(
       {
