@@ -45,10 +45,18 @@ import { requireWorkspace } from "@/lib/workspace";
  */
 const SHOW_ADVANCED_FINANCIAL_SETTINGS = false;
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string }>;
+}) {
+  // `?edit=name` is how «Изменить название студии» on «Онлайн-запись» asks for
+  // the studio's panel to arrive unfolded at its name.
+  const { edit } = await searchParams;
   const {
     membership,
     organizationName,
+    organizationSlug,
     locale,
     currency,
     businessType,
@@ -268,6 +276,9 @@ export default async function SettingsPage() {
     <main className="app-shell">
       {canReadOrg && (
         <OrganizationSettings
+          name={organizationName}
+          slug={organizationSlug}
+          startOpen={edit === "name"}
           locale={locale}
           currency={currency}
           staffNotices={staffNotices}

@@ -106,6 +106,11 @@ const ru = {
   "settings.staffNotices.owner_and_managers": "Владельцу и управляющим",
   "currency.rub": "рубль",
   "settings.saved": "Сохранено",
+  "settings.studioName": "Название студии",
+  "settings.studioNameSave": "Сохранить название",
+  "settings.studioNameInvalid": "Название пишется латиницей: буквы, цифры, пробел и - . & '",
+  "settings.slugSuggestion": "Ссылка на запись осталась прежней: {link}. Можно сменить её под новое название.",
+  "settings.slugKeep": "Оставить как есть",
   "settings.logoTitle": "Логотип студии",
   "settings.logoHint":
     "Стоит в шапке кабинета рядом с названием студии. Пока логотипа нет, там рисуется цветок. Подойдут JPEG, PNG и WebP до 512 КБ — картинку обрежем по центру в квадрат.",
@@ -1246,7 +1251,7 @@ const ru = {
   "bookingSetup.setupStep.location": "Адрес студии",
   "bookingSetup.setupStep.rota": "Кто работает и когда",
   "bookingSetup.setupDerived":
-    "Ссылку для адреса подберём из названия, часовой пояс — {zone}. И то, и другое можно изменить позже.",
+    "Часовой пояс — {zone}. Его можно изменить позже в карточке адреса.",
   "bookingSetup.setupNext": "Дальше",
   "bookingSetup.setupWorkweek": "Поставим рабочую неделю: понедельник–пятница, {from}–{to}. Дни и часы правятся дальше в графике.",
   "bookingSetup.setupWorkweekAction": "Задать рабочую неделю",
@@ -1267,6 +1272,19 @@ const ru = {
     "График задан, но записаться в ближайшие две недели не на что. Проверьте, те ли дни недели отмечены и с какой даты график действует.",
   "bookingSetup.nearestSlot": "Ближайшее свободное время — {date}.",
   "bookingSetup.publicPageLabel": "Онлайн-запись —",
+  "bookingSetup.publicAddressChange": "Изменить ссылку",
+  "bookingSetup.publicAddressLabel": "Адрес ссылки",
+  "bookingSetup.publicAddressHint": "Латиница в нижнем регистре, цифры и дефис, от 3 до 40 символов.",
+  "bookingSetup.publicAddressWarning":
+    "Старая ссылка перестанет работать: у тех, кто её сохранил, откроется «страница не найдена». Обновите её в соцсетях и на визитках.",
+  "bookingSetup.publicAddressSave": "Сохранить ссылку",
+  "bookingSetup.publicAddressTaken": "Этот адрес уже занят. Выберите другой.",
+  "bookingSetup.publicAddressInvalid":
+    "Такой адрес не подходит: только латиница в нижнем регистре, цифры и дефис, от 3 до 40 символов, без дефиса в начале и в конце.",
+  "bookingSetup.publicAddressReserved": "Это служебное слово, адресом его взять нельзя. Выберите другой.",
+  "bookingSetup.locationName": "Название адреса",
+  "bookingSetup.locationNameHint": "Так эта точка подписана на странице записи. На название студии и ссылку оно не влияет.",
+  "bookingSetup.renameStudio": "Изменить название студии",
   "bookingSetup.openPublic": "Открыть онлайн-запись",
   "bookingSetup.openPublicHint":
     "Адрес опубликован, но страница студии ещё закрыта. Откройте её — и по ссылке ниже клиенты смогут записываться сами.",
@@ -1285,9 +1303,6 @@ const ru = {
   "bookingSetup.deleteWhilePublished":
     "Адрес опубликован. Сначала снимите его с публикации — тогда его можно будет удалить вместе с графиком и настройками.",
   "bookingSetup.addLocation": "Добавить адрес",
-  "bookingSetup.name": "Название",
-  "bookingSetup.slug": "Адрес в ссылке",
-  "bookingSetup.slugHint": "Латиница, цифры и дефис. Входит в ссылку и потом не меняется.",
   "bookingSetup.address": "Адрес",
   "bookingSetup.timezone": "Часовой пояс",
   "bookingSetup.status": "Состояние",
@@ -1430,6 +1445,11 @@ const ro: Record<MessageKey, Message> = {
   "settings.staffNotices.owner_and_managers": "Proprietarului și managerilor",
   "currency.rub": "rublă",
   "settings.saved": "Salvat",
+  "settings.studioName": "Denumirea salonului",
+  "settings.studioNameSave": "Salvează denumirea",
+  "settings.studioNameInvalid": "Denumirea se scrie cu litere latine: litere, cifre, spațiu și - . & '",
+  "settings.slugSuggestion": "Linkul de programare a rămas același: {link}. Îl puteți schimba după noua denumire.",
+  "settings.slugKeep": "Lasă cum este",
   "settings.logoTitle": "Logoul studioului",
   "settings.logoHint":
     "Apare în antetul contului, lângă numele studioului. Cât timp nu există un logo, acolo este desenată o floare. Se acceptă JPEG, PNG și WebP până la 512 KB — imaginea va fi decupată pătrat, din centru.",
@@ -2571,7 +2591,7 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.setupStep.location": "Adresa studioului",
   "bookingSetup.setupStep.rota": "Cine lucrează și când",
   "bookingSetup.setupDerived":
-    "Linkul adresei îl compunem din denumire, fusul orar — {zone}. Ambele pot fi schimbate mai târziu.",
+    "Fusul orar — {zone}. Îl puteți schimba mai târziu în fișa adresei.",
   "bookingSetup.setupNext": "Mai departe",
   "bookingSetup.setupWorkweek": "Setăm săptămâna de lucru: luni–vineri, {from}–{to}. Zilele și orele se ajustează mai jos, în program.",
   "bookingSetup.setupWorkweekAction": "Setați săptămâna de lucru",
@@ -2592,6 +2612,19 @@ const ro: Record<MessageKey, Message> = {
     "Programul este setat, dar în următoarele două săptămâni nu există niciun interval liber. Verificați ce zile ale săptămânii sunt bifate și de la ce dată se aplică programul.",
   "bookingSetup.nearestSlot": "Cel mai apropiat interval liber — {date}.",
   "bookingSetup.publicPageLabel": "Programare online —",
+  "bookingSetup.publicAddressChange": "Modifică linkul",
+  "bookingSetup.publicAddressLabel": "Adresa linkului",
+  "bookingSetup.publicAddressHint": "Litere latine mici, cifre și cratimă, între 3 și 40 de caractere.",
+  "bookingSetup.publicAddressWarning":
+    "Linkul vechi nu va mai funcționa: cine l-a salvat va vedea „pagina nu a fost găsită”. Actualizați-l pe rețelele sociale și pe cărțile de vizită.",
+  "bookingSetup.publicAddressSave": "Salvează linkul",
+  "bookingSetup.publicAddressTaken": "Această adresă este deja ocupată. Alegeți alta.",
+  "bookingSetup.publicAddressInvalid":
+    "Adresa nu se potrivește: doar litere latine mici, cifre și cratimă, între 3 și 40 de caractere, fără cratimă la început sau la sfârșit.",
+  "bookingSetup.publicAddressReserved": "Este un cuvânt rezervat și nu poate fi folosit ca adresă. Alegeți alta.",
+  "bookingSetup.locationName": "Denumirea adresei",
+  "bookingSetup.locationNameHint": "Așa este semnat acest punct pe pagina de programare. Nu schimbă denumirea salonului și nici linkul.",
+  "bookingSetup.renameStudio": "Modifică denumirea salonului",
   "bookingSetup.openPublic": "Deschide programarea online",
   "bookingSetup.openPublicHint":
     "Adresa este publicată, dar pagina studioului este încă închisă. Deschideți-o — și clienții se vor putea programa singuri prin linkul de mai jos.",
@@ -2610,9 +2643,6 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.deleteWhilePublished":
     "Adresa este publicată. Retrageți-o mai întâi de pe pagina publică — apoi poate fi ștearsă împreună cu programul și setările.",
   "bookingSetup.addLocation": "Adăugați o adresă",
-  "bookingSetup.name": "Denumire",
-  "bookingSetup.slug": "Adresa din link",
-  "bookingSetup.slugHint": "Litere latine, cifre și cratimă. Intră în link și nu se mai schimbă.",
   "bookingSetup.address": "Adresă",
   "bookingSetup.timezone": "Fus orar",
   "bookingSetup.status": "Stare",
@@ -2753,6 +2783,11 @@ const en: Record<MessageKey, Message> = {
   "settings.staffNotices.owner_and_managers": "The owner and the managers",
   "currency.rub": "rouble",
   "settings.saved": "Saved",
+  "settings.studioName": "Studio name",
+  "settings.studioNameSave": "Save the name",
+  "settings.studioNameInvalid": "Write the name in Latin letters: letters, digits, spaces and - . & '",
+  "settings.slugSuggestion": "The booking link is still {link}. You can change it to match the new name.",
+  "settings.slugKeep": "Keep it",
   "settings.logoTitle": "The studio's logo",
   "settings.logoHint":
     "It stands in the topbar beside the studio's name. While there is no logo, a flower is drawn there instead. JPEG, PNG and WebP up to 512 KB work — the picture is cropped square from its centre.",
@@ -3881,7 +3916,7 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.setupStep.location": "The studio's address",
   "bookingSetup.setupStep.rota": "Who works, and when",
   "bookingSetup.setupDerived":
-    "The address link is taken from the name, the timezone is {zone}. Both stay editable afterwards.",
+    "The timezone is {zone}. You can change it later on the address card.",
   "bookingSetup.setupNext": "Next",
   "bookingSetup.setupWorkweek": "We will set a working week: Monday–Friday, {from}–{to}. Days and hours are adjusted in the rota below.",
   "bookingSetup.setupWorkweekAction": "Set the working week",
@@ -3902,6 +3937,19 @@ const en: Record<MessageKey, Message> = {
     "The rota is set, but there is nothing to book in the next two weeks. Check which weekdays are marked and the date the rota starts from.",
   "bookingSetup.nearestSlot": "The soonest free time is {date}.",
   "bookingSetup.publicPageLabel": "Online booking —",
+  "bookingSetup.publicAddressChange": "Change the link",
+  "bookingSetup.publicAddressLabel": "Link address",
+  "bookingSetup.publicAddressHint": "Lowercase Latin letters, digits and hyphens, 3 to 40 characters.",
+  "bookingSetup.publicAddressWarning":
+    "The old link will stop working: anyone who saved it will see “page not found”. Update it on social media and business cards.",
+  "bookingSetup.publicAddressSave": "Save the link",
+  "bookingSetup.publicAddressTaken": "This address is already taken. Choose another one.",
+  "bookingSetup.publicAddressInvalid":
+    "This address will not work: lowercase Latin letters, digits and hyphens only, 3 to 40 characters, no hyphen at either end.",
+  "bookingSetup.publicAddressReserved": "This word is reserved and cannot be an address. Choose another one.",
+  "bookingSetup.locationName": "Address name",
+  "bookingSetup.locationNameHint": "This is how the place is labelled on the booking page. It does not change the studio name or the link.",
+  "bookingSetup.renameStudio": "Rename the studio",
   "bookingSetup.openPublic": "Open online booking",
   "bookingSetup.openPublicHint":
     "The address is published, but the studio's page is still closed. Open it and clients can book themselves through the link below.",
@@ -3920,9 +3968,6 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.deleteWhilePublished":
     "The address is published. Take it off the public page first, and it can then be deleted along with its rota and settings.",
   "bookingSetup.addLocation": "Add an address",
-  "bookingSetup.name": "Name",
-  "bookingSetup.slug": "Address in the link",
-  "bookingSetup.slugHint": "Latin letters, digits and hyphens. It becomes part of the link and does not change.",
   "bookingSetup.address": "Address",
   "bookingSetup.timezone": "Timezone",
   "bookingSetup.status": "State",
