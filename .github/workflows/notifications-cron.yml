@@ -11,7 +11,9 @@ name: Notification cron
 #
 # What it calls is unchanged: `POST /api/v1/ops/notifications` with no
 # organization, which walks every tenant inside the application's own RLS
-# boundary. This job holds a URL and one shared secret and no database
+# boundary. The same call first lapses the booking requests nobody answered in
+# time and releases expired holds (`lib/booking-maintenance.ts`), so this
+# schedule is also what keeps an unanswered request from holding a slot. This job holds a URL and one shared secret and no database
 # credentials, for the reason the function did — a scheduler with the
 # production connection string is a far larger thing to get wrong than a late
 # message.

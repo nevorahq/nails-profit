@@ -423,7 +423,14 @@ describe("the availability engine, on generated input", () => {
     });
   });
 
-  it("only ever suggests dates that really have room", () => {
+  /*
+   * A limit of its own, because this property alone searches a fortnight per
+   * scenario — every generated scenario, fourteen days of slots each. The work
+   * is fixed by the seed; only the machine varies. It takes about two seconds
+   * under coverage on a laptop and twice that on a GitHub runner, which put it
+   * against the default five and failed CI on runs that changed nothing here.
+   */
+  it("only ever suggests dates that really have room", { timeout: 30_000 }, () => {
     // Section 7.8 shows the soonest dates instead of an empty calendar, and the
     // one thing that promise cannot survive is suggesting a day with nothing on
     // it.
