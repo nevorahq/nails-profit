@@ -147,9 +147,14 @@ npm run ops:booking-maintenance
 npm run ops:notifications
 ```
 
-Обе команды ходят в базу под операторской ролью, поэтому запускаются с машины оператора, а не из деплоя. Для самого деплоя очередь уведомлений разбирает Netlify Scheduled Function `netlify/functions/notifications.mts` — каждые 5 минут она вызывает `POST /api/v1/ops/notifications` **без** `organization_id`, и эндпоинт обходит всех арендаторов сам, каждого в его tenant-транзакции. Функции нужны только `OPS_API_TOKEN` и `NEXT_PUBLIC_APP_URL`; строки подключения к базе у неё нет и быть не должно.
+Обе команды ходят в базу под операторской ролью, поэтому запускаются с машины оператора, а не из деплоя. Для самого деплоя очередь уведомлений разбирает GitHub Actions workflow `.github/workflows/notifications-cron.yml` — каждые 5 минут он вызывает `POST /api/v1/ops/notifications` **без** `organization_id`, и эндпоинт обходит всех арендаторов сам, каждого в его tenant-транзакции. До 01.10.2026 это делала Netlify Scheduled Function; её убрали, потому что на кредитном тарифе Netlify она оплачивалась вдвойне (функция-триггер ждала ответа эндпоинта), а раннер GitHub для публичного репозитория бесплатен. Workflow нужны только переменная репозитория `APP_URL` (адрес прода) и секрет `OPS_API_TOKEN` — тот же, что в переменных Netlify; строки подключения к базе у него нет и быть не должно.
 
-Без `OPS_API_TOKEN` эндпоинт отвечает 404, функция пишет `notifications.cron_not_configured` и ничего не делает — очередь при этом продолжает наполняться, а не теряется. Признак, что планировщика нет вообще: строки `notification_outbox` со статусом `pending`, чей `scheduled_at` старше нескольких минут.
+```bash
+gh variable set APP_URL --body "https://nailsprofit.nevorahq.com"
+gh secret set OPS_API_TOKEN
+```
+
+Без них прогон завершается с предупреждением «Notification cron not configured» и ничего не делает — очередь при этом продолжает наполняться, а не теряется. Ошибка эндпоинта (не 200) роняет прогон с HTTP-статусом и кодом ошибки — тело ответа в публичный лог не печатается. Расписание GitHub выполняется по возможности: прогон может опоздать на несколько минут, а у публичного репозитория без коммитов 60 дней GitHub выключает расписание сам — тогда его нужно включить на вкладке Actions. Запустить прогон вручную: Actions → Notification cron → Run workflow. Признак, что планировщика нет вообще: строки `notification_outbox` со статусом `pending`, чей `scheduled_at` старше нескольких минут.
 
 Проверить `/api/health`, тестовый alert и наличие событий `booking.maintenance_completed`. У очереди не должно быть растущего backlog, `dead_letter` или job lag более 300 секунд. Пороговые значения: [Monitoring and alerts](./monitoring.md).
 
