@@ -138,7 +138,14 @@ describe("booking metrics report", () => {
   test("walks the funnel a visit left behind and times it", async () => {
     const visit = crypto.randomUUID();
     const other = crypto.randomUUID();
-    const at = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
+    /*
+     * On the real clock, an hour ago. The report reads the last thirty days
+     * by the database's own `now()`, so events stamped with the fixture's
+     * fixed date fell out of its window a month after this was written and
+     * the funnel came back empty.
+     */
+    const start = Date.now() - 60 * 60_000;
+    const at = (minutes: number) => new Date(start + minutes * 60_000);
 
     await withTenant(organizationId, async (tx) => {
       // One visit that booked, one that looked and left. The funnel has to see
