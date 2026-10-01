@@ -107,7 +107,7 @@ export async function dispatchDueNotifications(input: {
  * `scripts/notifications.mjs` answers "which organizations have something due"
  * with one cross-tenant statement over the operator connection, which is right
  * for an operator's laptop and wrong for a cron job in the deployment: it would
- * mean the production superuser credentials living in a scheduled function. The
+ * mean the production superuser credentials living in a scheduler. The
  * organization list is readable by the application role — `organization` carries
  * no tenant column and its policy says so — and everything after that happens
  * inside `withTenant`, so nothing here steps outside the RLS boundary.

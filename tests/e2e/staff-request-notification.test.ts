@@ -200,7 +200,8 @@ describe("a request nobody in the studio has seen", () => {
   });
 
   /**
-   * What the scheduled function calls. The queue is drained by an operator
+   * What `.github/workflows/notifications-cron.yml` calls every five minutes.
+   * The queue is drained by an operator
    * endpoint, and until something called it on a timer the whole outbox was a
    * list of messages nobody sent — so the call the cron makes, with no
    * organization named, is worth a test of its own.

@@ -18,7 +18,7 @@ The pilot can run without a vendor-specific SDK. The hosting platform must colle
 | Database connections | 5 minutes | ≥70% pool/plan | ≥90% pool/plan | Stop nonessential jobs and inspect slow queries |
 | Expired holds not swept | 5 minutes | >20 active holds past `expires_at` | >100 | Check that `ops:booking-maintenance` is running each minute |
 | Booking slot conflicts | 10 minutes | ≥10 `booking.slot_conflict` | ≥50 | Normal under load; a spike with no traffic means stale availability |
-| Notification job lag | 5 minutes | >120 seconds | >300 seconds | Check `ops:notifications`, provider health and the oldest due row |
+| Notification job lag | 5 minutes | >120 seconds | >300 seconds | Check the latest «Notification cron» run in GitHub Actions (disabled schedule, missing `APP_URL`/`OPS_API_TOKEN`), provider health and the oldest due row |
 | Notification dead letters | 10 minutes | ≥1 new | ≥5 new | Classify provider response; do not retry permanent address failures blindly |
 | Notification provider acceptance | 30 minutes | <97% with ≥20 finished | <95% with ≥20 finished | Pause rollout; inspect retries/dead letters and Resend API health |
 | Notification mail-server delivery | 30 minutes | <97% with ≥20 outcomes | <95% with ≥20 outcomes | Inspect bounce/failed/suppressed mix and Resend delivery events |
