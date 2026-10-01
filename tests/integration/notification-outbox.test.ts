@@ -401,7 +401,11 @@ describe("notification outbox", () => {
       handleVerifiedResendWebhook(event("email.bounced", "2026-09-01T09:01:00.000Z"), "evt-bounced-old"),
     ).resolves.toBe("recorded");
 
-    const [after] = await rows();
+    // The email row by its id: `rows()` has no order, and this template also
+    // writes an SMS row the webhook never touches. Whichever the heap returned
+    // first used to decide the test — green on a fresh database, red on one
+    // the suite had already churned through.
+    const after = (await rows()).find((row) => row.id === email.id)!;
     expect(after.providerStatus).toBe("delivered");
     expect(after.providerEventAt?.toISOString()).toBe("2026-09-01T09:02:00.000Z");
     expect(await adminDb.select().from(notificationProviderEvents)).toHaveLength(2);
