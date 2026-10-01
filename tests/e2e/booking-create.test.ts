@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
+import { localToUtc, parseLocalDate, parseLocalTime } from "@/domain/timezone";
 import { dataOf, errorCodeOf, type Actor, type ApiResponse } from "../helpers/api";
+import { wednesdayAhead } from "../helpers/calendar";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
@@ -13,7 +15,24 @@ import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/stu
  * attempts, one booking. This checks the same rules through the endpoint,
  * where the idempotency key and the error envelope live.
  */
-const SLOT = "2026-09-02T07:00:00.000Z";
+/**
+ * A Wednesday `week` weeks ahead, at a wall-clock time in the studio's zone.
+ *
+ * The file used to name September 2026 outright. Staff may book the past, so
+ * most of it went on passing — until the overlap test, whose alternatives are
+ * searched forward from the date asked for and stop at today, found nothing
+ * left to offer once September was over. Local time rather than UTC, because
+ * the rota is local and Chisinau moves from +3 to +2 at the end of October.
+ */
+function wednesdayAt(week: number, time: string): string {
+  return localToUtc(
+    parseLocalDate(wednesdayAhead(week))!,
+    parseLocalTime(time)!,
+    "Europe/Chisinau",
+  ).toISOString();
+}
+
+const SLOT = wednesdayAt(1, "10:00");
 
 function key(label: string) {
   return `${label}-${crypto.randomUUID()}`;
@@ -57,7 +76,7 @@ describe("staff bookings", () => {
     await studio.owner.put("/api/v1/availability/rules", {
       specialist_id: studio.specialistId,
       location_id: locationId,
-      // Wednesdays, which 2 September 2026 is.
+      // Wednesdays, the only day `wednesdayAt` books.
       intervals: [{ weekday: 3, start: "09:00", end: "18:00" }],
       effective_from: "2026-08-01",
     });
@@ -87,9 +106,9 @@ describe("staff bookings", () => {
 
   test("the same request with the same key is answered, not booked twice", async () => {
     const retryKey = key("retry");
-    const first = dataOf<{ id: string }>(await book(studio.owner, request("2026-09-02T11:00:00.000Z"), retryKey));
+    const first = dataOf<{ id: string }>(await book(studio.owner, request(wednesdayAt(1, "14:00")), retryKey));
     const again = dataOf<{ id: string; replayed: boolean }>(
-      await book(studio.owner, request("2026-09-02T11:00:00.000Z"), retryKey),
+      await book(studio.owner, request(wednesdayAt(1, "14:00")), retryKey),
     );
 
     // A client tapping "confirm" twice on a slow connection is not asking for
@@ -100,9 +119,9 @@ describe("staff bookings", () => {
 
   test("the same key for a different request is refused", async () => {
     const reused = key("reused");
-    await book(studio.owner, request("2026-09-02T13:00:00.000Z"), reused);
+    await book(studio.owner, request(wednesdayAt(1, "16:00")), reused);
 
-    const response = await book(studio.owner, request("2026-09-02T15:00:00.000Z"), reused);
+    const response = await book(studio.owner, request(wednesdayAt(1, "18:00")), reused);
     expect(response.status).toBe(409);
     // Answering with the first booking would hand back an appointment at a time
     // nobody asked for.
@@ -110,14 +129,14 @@ describe("staff bookings", () => {
   });
 
   test("a create without a key is refused outright", async () => {
-    const response = await studio.owner.post("/api/v1/bookings", request("2026-09-09T07:00:00.000Z"));
+    const response = await studio.owner.post("/api/v1/bookings", request(wednesdayAt(2, "10:00")));
     expect(response.status).toBe(422);
     expect(errorCodeOf(response)).toBe("IDEMPOTENCY_KEY_REQUIRED");
   });
 
   test("an overlapping booking is refused with the next free times", async () => {
-    // 07:00–08:30 is taken by the first test; 08:00 overlaps it.
-    const response = await book(studio.owner, request("2026-09-02T08:00:00.000Z"), key("overlap"));
+    // 10:00–11:30 is taken by the first test; 11:00 overlaps it.
+    const response = await book(studio.owner, request(wednesdayAt(1, "11:00")), key("overlap"));
 
     expect(response.status).toBe(409);
     expect(errorCodeOf(response)).toBe("SLOT_UNAVAILABLE");
@@ -131,14 +150,14 @@ describe("staff bookings", () => {
   });
 
   test("back-to-back bookings are not a conflict", async () => {
-    const response = await book(studio.owner, request("2026-09-02T08:30:00.000Z"), key("adjacent"));
+    const response = await book(studio.owner, request(wednesdayAt(1, "11:30")), key("adjacent"));
     expect(response.status).toBe(201);
   });
 
   test("simultaneous requests for one slot produce one booking", async () => {
     const attempts = await Promise.all(
       Array.from({ length: 20 }, (_, index) =>
-        book(studio.owner, request("2026-09-16T07:00:00.000Z"), key(`race-${index}`)),
+        book(studio.owner, request(wednesdayAt(3, "10:00")), key(`race-${index}`)),
       ),
     );
 
@@ -160,7 +179,7 @@ describe("staff bookings", () => {
         location_id: elsewhere,
         specialist_id: studio.specialistId,
         service_id: studio.serviceId,
-        starts_at: "2026-09-23T07:00:00.000Z",
+        starts_at: wednesdayAt(4, "10:00"),
       },
       key("elsewhere"),
     );
@@ -170,7 +189,7 @@ describe("staff bookings", () => {
   });
 
   test("a master books their own calendar and sees only it", async () => {
-    const own = await book(master, request("2026-09-30T07:00:00.000Z"), key("master-own"));
+    const own = await book(master, request(wednesdayAt(5, "10:00")), key("master-own"));
     expect(own.status).toBe(201);
 
     const other = dataOf<{ id: string }>(
@@ -183,7 +202,7 @@ describe("staff bookings", () => {
         location_id: locationId,
         specialist_id: other,
         service_id: studio.serviceId,
-        starts_at: "2026-09-30T11:00:00.000Z",
+        starts_at: wednesdayAt(5, "14:00"),
       },
       key("master-other"),
     );
