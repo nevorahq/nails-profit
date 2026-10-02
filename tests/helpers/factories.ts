@@ -202,6 +202,7 @@ export async function createVisit(
     commissionType?: CommissionType;
     commissionBasisPoints?: number | null;
     commissionFixedAmountMinor?: number | null;
+    tipMinor?: number;
   },
 ) {
   const { visits } = await import("@/db/schema");
@@ -221,6 +222,7 @@ export async function createVisit(
         commissionType === "fixed" ? null : (options.commissionBasisPoints ?? 4_000),
       commissionFixedAmountMinor:
         commissionType === "fixed" ? (options.commissionFixedAmountMinor ?? 10_000) : null,
+      ...(options.tipMinor === undefined ? {} : { tipMinor: options.tipMinor }),
     })
     .returning();
   return visit;

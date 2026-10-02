@@ -84,6 +84,15 @@ describe("visit snapshots", () => {
     );
   });
 
+  it("refuses a negative tip and reads a visit without one as no tip", async () => {
+    await expectDatabaseError(
+      createVisit(organizationId, { specialistId, tipMinor: -1 }),
+      { code: PG_ERROR.check, constraint: "visit_tip_non_negative" },
+    );
+    const visit = await createVisit(organizationId, { specialistId });
+    expect(visit.tipMinor).toBe(0);
+  });
+
   it("takes a line's own commission rule only whole and well-formed", async () => {
     const visit = await createVisit(organizationId, { specialistId });
     const line = {
