@@ -80,3 +80,54 @@ export function PaidField({
     </label>
   );
 }
+
+/** A tip as typed: empty is none, anything unreadable is null. */
+export function tipMinorOf(input: string): number | null {
+  return input.trim() === "" ? 0 : toMinorUnits(input);
+}
+
+/**
+ * «Чаевые» — beside «Клиент заплатил» on every screen that closes or corrects a
+ * visit.
+ *
+ * Its own field rather than more of the amount paid, because the difference is
+ * the whole point: what is typed here is the master's, and the line under it
+ * says so, so nobody adds a tip to «Клиент заплатил» and books it as revenue.
+ */
+export function TipField({
+  id,
+  value,
+  currency,
+  locale,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  currency: string;
+  locale: AppLocale;
+  onChange: (value: string) => void;
+}) {
+  const t = getTranslator(locale);
+  const hintId = `${id}-hint`;
+  const unreadable = tipMinorOf(value) === null;
+
+  return (
+    <label htmlFor={id}>
+      {t("closeVisit.tip", { currency })}
+      <input
+        id={id}
+        name="tip"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="0"
+        value={value}
+        aria-invalid={unreadable}
+        aria-describedby={hintId}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <span id={hintId} className={unreadable ? "form-error" : "field-hint"}>
+        {unreadable ? t("closeVisit.paidInvalid") : t("closeVisit.tipHint")}
+      </span>
+    </label>
+  );
+}

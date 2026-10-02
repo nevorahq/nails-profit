@@ -15,7 +15,7 @@ import {
 } from "@/components/calendar-free-time";
 import { ServiceLinesField, toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
-import { PaidField, toMajorUnits, toMinorUnits } from "@/components/paid-field";
+import { PaidField, TipField, tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { ToolIcon } from "@/components/icons";
 import {
@@ -203,6 +203,7 @@ export function CalendarBoard({
   const [previews, setPreviews] = useState<Record<string, BookingPreview | "loading" | "error">>({});
   /** «Клиент заплатил» per appointment, as typed; absent until somebody types. */
   const [paidInputs, setPaidInputs] = useState<Record<string, string>>({});
+  const [tipInputs, setTipInputs] = useState<Record<string, string>>({});
   // The alternatives arrive as UTC instants and have to be read back in the
   // zone of the location they belong to, so the zone travels with them.
   const [alternatives, setAlternatives] = useState<{ zone: string; entries: Alternative[] }>({
@@ -440,11 +441,14 @@ export function CalendarBoard({
     // to the server; a typed amount is sent as typed.
     const typed = paidInputs[booking.id];
     const paidMinor = typed === undefined ? null : toMinorUnits(typed);
+    const tipMinor = tipMinorOf(tipInputs[booking.id] ?? "");
+    if (tipMinor === null) return;
 
     const payload = {
       version: booking.version,
       ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
       ...(paidMinor !== null ? { paid_minor: paidMinor } : {}),
+      ...(tipMinor ? { tip_minor: tipMinor } : {}),
     };
     await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
       key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
@@ -1276,6 +1280,15 @@ export function CalendarBoard({
                                       setPaidInputs((previous) => ({ ...previous, [booking.id]: value }))
                                     }
                                   />
+                                  <TipField
+                                    id={`tip-${booking.id}`}
+                                    value={tipInputs[booking.id] ?? ""}
+                                    currency={currency}
+                                    locale={locale}
+                                    onChange={(value) =>
+                                      setTipInputs((previous) => ({ ...previous, [booking.id]: value }))
+                                    }
+                                  />
                                   {(() => {
                                     const r = previews[booking.id];
                                     const dur = typeof r === "object" && r !== null ? r.durationMinutes : undefined;
@@ -1299,7 +1312,8 @@ export function CalendarBoard({
                                     disabled={
                                       pending ||
                                       (paidInputs[booking.id] !== undefined &&
-                                        toMinorUnits(paidInputs[booking.id]) === null)
+                                        toMinorUnits(paidInputs[booking.id]) === null) ||
+                                      tipMinorOf(tipInputs[booking.id] ?? "") === null
                                     }
                                   >
                                     {pending ? t("common.saving") : t("calendar.complete")}

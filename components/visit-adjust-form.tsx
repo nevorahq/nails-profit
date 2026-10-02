@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { TipField, tipMinorOf, toMajorUnits } from "@/components/paid-field";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -22,6 +23,7 @@ export function VisitAdjustForm({
   currency,
   plannedDurationMinutes,
   actualDurationMinutes,
+  tipMinor,
   locale,
 }: {
   visitId: string;
@@ -29,6 +31,8 @@ export function VisitAdjustForm({
   currency: string;
   plannedDurationMinutes: number;
   actualDurationMinutes: number | null;
+  /** The tip as it stands, so the field opens on it rather than on nothing. */
+  tipMinor: number;
   locale: AppLocale;
 }) {
   const router = useRouter();
@@ -36,6 +40,8 @@ export function VisitAdjustForm({
   const localeCode = localeTag(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [tipInput, setTipInput] = useState(tipMinor > 0 ? toMajorUnits(tipMinor) : "");
+  const nextTip = tipMinorOf(tipInput);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +67,9 @@ export function VisitAdjustForm({
       body: JSON.stringify({
         refunds,
         ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
+        // Sent only when it changed: a correction of a refund alone must not
+        // be recorded as somebody touching the tip.
+        ...(nextTip !== null && nextTip !== tipMinor ? { tip_minor: nextTip } : {}),
       }),
     });
 
@@ -90,6 +99,14 @@ export function VisitAdjustForm({
             defaultValue={actualDurationMinutes ?? undefined}
           />
         </label>
+
+        <TipField
+          id={`tip-${visitId}`}
+          value={tipInput}
+          currency={currency}
+          locale={locale}
+          onChange={setTipInput}
+        />
 
         {lines.length > 0 && (
           <table className="data-table">
@@ -128,7 +145,7 @@ export function VisitAdjustForm({
           </div>
         )}
 
-        <button className="primary-button" type="submit" disabled={pending}>
+        <button className="primary-button" type="submit" disabled={pending || nextTip === null}>
           {pending ? t("common.saving") : t("common.save")}
         </button>
       </form>

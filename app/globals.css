@@ -518,6 +518,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   color: var(--muted);
 }
 .visit-card-revenue strong { color: var(--ink); font-size: 15rem; }
+/* Beside the client, not in the revenue row: the master's money, not the studio's. */
+.visit-card-tip { margin: -6rem 0 10rem; color: var(--muted); font-size: 13rem; }
+.visit-card-tip strong { color: var(--ink); }
 
 .visit-card-warning { display: grid; gap: 10rem; }
 .visit-card-warning .badge-warning { margin-left: 0; }

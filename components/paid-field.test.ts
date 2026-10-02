@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toMajorUnits, toMinorUnits } from "@/components/paid-field";
+import { tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 
 describe("toMinorUnits", () => {
   it("reads whole amounts and both decimal separators", () => {
@@ -28,5 +28,19 @@ describe("toMajorUnits", () => {
     for (const minor of [0, 1, 99, 45_000, 45_050]) {
       expect(toMinorUnits(toMajorUnits(minor))).toBe(minor);
     }
+  });
+});
+
+describe("tipMinorOf", () => {
+  it("reads an empty field as no tip and an amount as minor units", () => {
+    expect(tipMinorOf("")).toBe(0);
+    expect(tipMinorOf("   ")).toBe(0);
+    expect(tipMinorOf("50")).toBe(5_000);
+    expect(tipMinorOf("50,5")).toBe(5_050);
+  });
+
+  it("refuses what is not an amount", () => {
+    expect(tipMinorOf("-5")).toBeNull();
+    expect(tipMinorOf("пять")).toBeNull();
   });
 });

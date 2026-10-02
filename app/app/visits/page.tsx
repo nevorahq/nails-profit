@@ -116,6 +116,8 @@ export default async function VisitsPage({
 
   const totalRevenue = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.revenueMinor ?? 0), 0);
   const totalCommission = data.detailed.reduce((sum, { snapshot }) => sum + (snapshot?.commissionMinor ?? 0), 0);
+  // Beside the earnings, never inside them or the revenue: the master's, whole.
+  const totalTips = data.detailed.reduce((sum, { visit }) => sum + visit.tipMinor, 0);
 
   const canAddVisit = can(membership.role, "bookings", "write");
   /*
@@ -250,6 +252,11 @@ export default async function VisitsPage({
                       )}
                     </p>
                     <p className="visit-card-client">{clientName ?? <span className="muted">—</span>}</p>
+                    {visit.tipMinor > 0 && (
+                      <p className="visit-card-tip">
+                        <span>{t("visits.tips")}</span> <strong>{money(visit.tipMinor)}</strong>
+                      </p>
+                    )}
 
                     {/*
                       Only an incomplete visit says anything about money in
@@ -277,6 +284,7 @@ export default async function VisitsPage({
                             currency={currency}
                             plannedDurationMinutes={visit.plannedDurationMinutes}
                             actualDurationMinutes={visit.actualDurationMinutes}
+                            tipMinor={visit.tipMinor}
                             locale={locale}
                           />
                         </div>
@@ -295,6 +303,7 @@ export default async function VisitsPage({
                         currency={currency}
                         plannedDurationMinutes={visit.plannedDurationMinutes}
                         actualDurationMinutes={visit.actualDurationMinutes}
+                        tipMinor={visit.tipMinor}
                         locale={locale}
                       />
                     )}
@@ -324,6 +333,11 @@ export default async function VisitsPage({
           <span>
             {t(businessLabel.visitEarnings[businessType])}: <strong>{money(totalCommission)}</strong>
           </span>
+          {totalTips > 0 && (
+            <span>
+              {t("visits.tips")}: <strong>{money(totalTips)}</strong>
+            </span>
+          )}
         </div>
       )}
     </main>
