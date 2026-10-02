@@ -29,8 +29,14 @@ export type Commission =
  * refinement of `costing-v2` — the same visit costs strictly more under it,
  * because what the materials used to take off the margin is simply not
  * subtracted any more. Nothing recomputes an older snapshot into it.
+ *
+ * `costing-v4` takes the master's commission per rule rather than per visit,
+ * because a visit can now hold services paid under different rules — see
+ * `domain/visit-commission.ts`. It is a generalisation, not a re-cut: a visit
+ * whose lines share one rule, which is every visit closed before it, costs
+ * exactly what `costing-v3` made of it.
  */
-export const CURRENT_FORMULA_VERSION = "costing-v3";
+export const CURRENT_FORMULA_VERSION = "costing-v4";
 export type FormulaVersion = typeof CURRENT_FORMULA_VERSION;
 
 /**

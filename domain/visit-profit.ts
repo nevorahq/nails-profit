@@ -6,6 +6,7 @@ import {
   type TaxRates,
 } from "@/domain/costing";
 import type { Currency } from "@/domain/money";
+import { commissionOfLines, type CommissionTerms } from "@/domain/visit-commission";
 
 /**
  * Profit of a completed visit, spec section 8.8.1.
@@ -38,6 +39,13 @@ export type VisitLineSnapshot = Readonly<{
    * them all, which is every rule written before this existed.
    */
   commissionable?: boolean;
+  /**
+   * The rule this line is paid under, when the visit's services fell under
+   * different ones. Absent means the visit's own `commission` and
+   * `commissionBase` — every line written before a visit could hold two
+   * services. See `domain/visit-commission.ts`.
+   */
+  commissionTerms?: CommissionTerms | null;
 }>;
 
 export type VisitProfitInput = Readonly<{
@@ -100,34 +108,34 @@ export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
   const refundedMinor = input.lines.reduce((total, line) => total + (line.refundMinor ?? 0), 0);
   const revenueMinor = chargedMinor - refundedMinor;
 
-  /*
-   * What the master's percentage applies to.
-   *
-   * Two independent questions, answered here because this is where the lines
-   * are. Which lines count is a filter the rule set at closing time — «5% but
-   * only on colouring». What counts on a line is the base: the sticker price,
-   * or what the client actually paid after a discount and a refund. Neither is
-   * something the costing engine could work out from the single revenue figure
-   * it takes.
-   *
-   * A rule that names no services and takes the default base produces exactly
-   * `revenueMinor`, which is what every visit before this was costed on.
-   */
-  const commissionable = input.lines.filter((line) => line.commissionable !== false);
-  const commissionBaseMinor =
-    input.commissionBase === "full_price"
-      ? commissionable.reduce((total, line) => total + line.priceMinor, 0)
-      : commissionable.reduce(
-          (total, line) => total + line.priceMinor - line.discountMinor - (line.refundMinor ?? 0),
-          0,
-        );
-
   const reasons: VisitIncompleteReason[] = [];
   if (revenueMinor <= 0) reasons.push("no_revenue");
 
   if (reasons.length > 0) {
     return { status: "incomplete", revenueMinor, reasons };
   }
+
+  /*
+   * What the master is paid.
+   *
+   * Two independent questions per rule, answered here because this is where
+   * the lines are. Which lines count is a filter the rule set at closing time —
+   * «5% but only on colouring». What counts on a line is the base: the sticker
+   * price, or what the client actually paid after a discount and a refund.
+   * Neither is something the costing engine could work out from the single
+   * revenue figure it takes, so it is handed the sum as an amount.
+   *
+   * Lines without terms of their own fall under the visit's rule, as one group:
+   * exactly the figure every visit before per-line rules was costed at.
+   */
+  const commission = commissionOfLines(
+    input.lines.map((line) => ({ ...line, terms: line.commissionTerms ?? null })),
+    {
+      ruleKey: "visit",
+      commission: input.commission,
+      base: input.commissionBase ?? "after_discount",
+    },
+  );
 
   // Section 8.8.1: with no actual duration the planned one stands in, and the
   // profit per hour it produces is marked an estimate rather than withheld.
@@ -138,8 +146,7 @@ export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
     priceMinor: revenueMinor,
     durationMinutes,
     currency: input.currency,
-    commission: input.commission,
-    commissionBaseMinor,
+    commission: { type: "fixed", amountMinor: commission.totalMinor },
     ...(input.payment ? { payment: { ...input.payment, chargedMinor } } : {}),
     ...(input.taxes ? { taxes: input.taxes } : {}),
   });
