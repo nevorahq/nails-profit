@@ -17,8 +17,11 @@ import type { Currency } from "@/domain/money";
  */
 
 export type VisitLineSnapshot = Readonly<{
-  /** What was sold: the service itself or one of its add-ons. */
-  kind: "service" | "add_on";
+  /**
+   * What was sold: the service itself, one of its add-ons, or what the client
+   * paid above the price list.
+   */
+  kind: "service" | "add_on" | "surcharge";
   priceMinor: number;
   discountMinor: number;
   /**

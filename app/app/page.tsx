@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { CloseDayPanel } from "@/components/close-day-panel";
 import { FirstNumbers } from "@/components/first-numbers";
 import { FirstRun } from "@/components/first-run";
 import { MetricIcon } from "@/components/icons";
@@ -30,6 +31,7 @@ import { getActiveMembership } from "@/lib/membership";
 import { monthOf } from "@/lib/period";
 import { loadStartScreen } from "@/lib/first-numbers";
 import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
+import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 
 /**
  * A period card for the reports page's top row. The formula still exists —
@@ -152,6 +154,33 @@ export default async function AppPage({
   const filters = await searchParams;
 
   /*
+   * Appointments that happened and were never closed into a visit — money no
+   * report has seen. Asked before the start screen is chosen, because a studio
+   * whose only work so far is unclosed bookings is still on that screen. Read
+   * as the person being viewed, so a preview shows their own list.
+   */
+  const unclosed = can(membership.role, "bookings", "write")
+    ? await withTenant(membership.organization.id, (tx) =>
+        loadUnclosedBookings(
+          tx,
+          { userId: effectiveUserId, role: membership.role },
+          { now: new Date(), locale, limit: 5 },
+        ),
+      )
+    : null;
+  const closeDay =
+    unclosed && unclosed.count > 0 ? (
+      <CloseDayPanel
+        items={unclosed.items}
+        count={unclosed.count}
+        totalMinor={unclosed.totalMinor}
+        currency={membership.organization.currency}
+        locale={locale}
+        showSpecialist={businessType === "studio" && membership.role !== "master"}
+      />
+    ) : null;
+
+  /*
    * What a studio sees before it has sold anything, which replaces this page
    * rather than being drawn on top of it: with no closed visit there is no
    * revenue, no margin and no profit per hour, and every card below would be a
@@ -192,6 +221,7 @@ export default async function AppPage({
           locale={locale}
           businessType={businessType}
           currency={membership.organization.currency}
+          closeDay={closeDay}
           /*
            * Three conditions have to hold before an address can be handed to
            * clients, and they live in three places: the deployment's own flag,
@@ -448,6 +478,7 @@ export default async function AppPage({
 
   return (
     <main className="app-shell">
+      {closeDay}
       <span className="eyebrow report-period">
         {t("dashboard.eyebrow")} · {period}
       </span>

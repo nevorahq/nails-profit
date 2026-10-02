@@ -55,6 +55,8 @@ type Notifications = Readonly<{
   pending: readonly NotificationItem[];
   feed: readonly NoticeItem[];
   unread: number;
+  /** Past appointments never closed into a visit. Not news, so no chime. */
+  unclosed: number;
 }>;
 
 /**
@@ -199,7 +201,7 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
         <ChromeIcon name="bell" />
         {/* A dot for either half: a request nobody has answered, or something
             that happened since this person last looked. */}
-        {data !== null && (data.pending.length > 0 || data.unread > 0) && (
+        {data !== null && (data.pending.length > 0 || data.unread > 0 || data.unclosed > 0) && (
           <span className="topbar-notifications-badge" aria-hidden="true" />
         )}
       </button>
@@ -216,8 +218,27 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
 
           {failed && <p className="notifications-empty">{loadFailed}</p>}
           {!failed && data === null && <p className="notifications-empty">{t("notifications.loading")}</p>}
-          {!failed && data !== null && data.pending.length === 0 && data.feed.length === 0 && (
-            <p className="notifications-empty">{t("notifications.empty")}</p>
+          {!failed &&
+            data !== null &&
+            data.pending.length === 0 &&
+            data.feed.length === 0 &&
+            data.unclosed === 0 && <p className="notifications-empty">{t("notifications.empty")}</p>}
+
+          {/* First, because it is the one line here that is money: an
+              appointment nobody closed is revenue no report has counted. */}
+          {data !== null && data.unclosed > 0 && (
+            <ul className="notifications-list">
+              <li>
+                <Link
+                  className="notifications-item unread"
+                  role="menuitem"
+                  href="/app#close-day"
+                  onClick={() => setOpen(false)}
+                >
+                  <strong>{t("notifications.unclosed", { count: data.unclosed })}</strong>
+                </Link>
+              </li>
+            </ul>
           )}
 
           {data !== null && data.pending.length > 0 && (

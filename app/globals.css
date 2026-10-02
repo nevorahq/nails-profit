@@ -2196,6 +2196,26 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   box-shadow: 0 0 0 2rem var(--surface-strong);
 }
 
+/*
+ * «Закройте прошедшие записи». A list of decisions rather than of facts, so
+ * each row keeps its buttons beside it and wraps under the name on a phone
+ * instead of shrinking them.
+ */
+.close-day-list { display: grid; gap: 12rem; margin: 12rem 0 0; padding: 0; list-style: none; }
+.close-day-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10rem 16rem;
+  padding-top: 12rem;
+  border-top: 1rem solid var(--line);
+}
+.close-day-what { display: grid; gap: 2rem; min-width: 0; }
+.close-day-what strong { overflow-wrap: anywhere; }
+.close-day-what small { color: var(--muted); font-size: 12rem; }
+.close-day-item .button-row { align-items: center; }
+
 .notifications-panel { min-width: 280rem; }
 .notifications-empty { padding: 10rem 12rem; color: var(--muted); font-size: 13rem; }
 .notifications-list { display: grid; gap: 2rem; max-height: 360rem; overflow-y: auto; }

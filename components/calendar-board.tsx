@@ -14,6 +14,7 @@ import {
   type Span,
 } from "@/components/calendar-free-time";
 import { ClientContact } from "@/components/client-contact";
+import { PaidField, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { ToolIcon } from "@/components/icons";
 import {
@@ -191,6 +192,8 @@ export function CalendarBoard({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, BookingPreview | "loading" | "error">>({});
+  /** «Клиент заплатил» per appointment, as typed; absent until somebody types. */
+  const [paidInputs, setPaidInputs] = useState<Record<string, string>>({});
   // The alternatives arrive as UTC instants and have to be read back in the
   // zone of the location they belong to, so the zone travels with them.
   const [alternatives, setAlternatives] = useState<{ zone: string; entries: Alternative[] }>({
@@ -422,10 +425,15 @@ export function CalendarBoard({
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const durationRaw = String(data.get("actual_duration") ?? "").trim();
+    // Untouched means the booking's «Итого», which is what omitting it means
+    // to the server; a typed amount is sent as typed.
+    const typed = paidInputs[booking.id];
+    const paidMinor = typed === undefined ? null : toMinorUnits(typed);
 
     const payload = {
       version: booking.version,
       ...(durationRaw ? { actual_duration_minutes: Number(durationRaw) } : {}),
+      ...(paidMinor !== null ? { paid_minor: paidMinor } : {}),
     };
     await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
       key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
@@ -1219,8 +1227,23 @@ export function CalendarBoard({
                               <details
                                 className="calendar-subform"
                               >
-                                <summary>{t("closeVisit.modifyDuration")}</summary>
+                                <summary>{t("calendar.modifyClose")}</summary>
                                 <form className="inline-form" onSubmit={(e) => complete(booking, e)}>
+                                  <PaidField
+                                    id={`paid-${booking.id}`}
+                                    value={paidInputs[booking.id] ?? toMajorUnits(booking.priceMinor)}
+                                    priceMinor={booking.priceMinor}
+                                    paidMinor={
+                                      paidInputs[booking.id] === undefined
+                                        ? null
+                                        : toMinorUnits(paidInputs[booking.id])
+                                    }
+                                    currency={currency}
+                                    locale={locale}
+                                    onChange={(value) =>
+                                      setPaidInputs((previous) => ({ ...previous, [booking.id]: value }))
+                                    }
+                                  />
                                   {(() => {
                                     const r = previews[booking.id];
                                     const dur = typeof r === "object" && r !== null ? r.durationMinutes : undefined;
@@ -1238,7 +1261,15 @@ export function CalendarBoard({
                                       </label>
                                     );
                                   })()}
-                                  <button className="primary-button" type="submit" disabled={pending}>
+                                  <button
+                                    className="primary-button"
+                                    type="submit"
+                                    disabled={
+                                      pending ||
+                                      (paidInputs[booking.id] !== undefined &&
+                                        toMinorUnits(paidInputs[booking.id]) === null)
+                                    }
+                                  >
                                     {pending ? t("common.saving") : t("calendar.complete")}
                                   </button>
                                 </form>

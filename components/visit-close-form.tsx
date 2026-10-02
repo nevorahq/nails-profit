@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 
+import { PaidField, toMajorUnits, toMinorUnits } from "@/components/paid-field";
+
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
@@ -79,6 +81,12 @@ export function VisitCloseForm({
    */
   const [specialistId, setSpecialistId] = useState(specialists[0]?.id ?? "");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  /*
+   * What the client paid, as typed. Null until somebody types: the field then
+   * shows the price list and follows every change of service and add-on, so the
+   * usual visit — paid exactly the price — is still a single tap.
+   */
+  const [paidInput, setPaidInput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const completionKey = useRef<string | null>(null);
@@ -89,7 +97,12 @@ export function VisitCloseForm({
   const availableAddOns = addOns.filter((addOn) => addOn.serviceIds.includes(serviceId));
   const chosen = availableAddOns.filter((addOn) => selectedAddOns.includes(addOn.id));
 
-  const price = (service?.price_minor ?? 0) + chosen.reduce((total, a) => total + a.price_delta_minor, 0);
+  // Never below zero: an add-on that lowers the price can only take it to free.
+  const price = Math.max(
+    0,
+    (service?.price_minor ?? 0) + chosen.reduce((total, a) => total + a.price_delta_minor, 0),
+  );
+  const paidMinor = paidInput === null ? null : toMinorUnits(paidInput);
   const duration =
     (service?.duration_minutes ?? 0) + chosen.reduce((total, a) => total + a.duration_delta_minutes, 0);
 
@@ -134,6 +147,9 @@ export function VisitCloseForm({
         client_id: clientId === "" ? null : clientId,
         add_on_ids: selectedAddOns,
         ...(actualDuration ? { actual_duration_minutes: Number(actualDuration) } : {}),
+        // Sent only once it was touched: an untouched field is the price list,
+        // which is what leaving it out has always meant to the server.
+        ...(paidMinor !== null ? { paid_minor: paidMinor } : {}),
         ...(paymentMethods.length > 0
           ? { payment_method_id: paymentMethodId === "" ? null : paymentMethodId }
           : {}),
@@ -193,6 +209,7 @@ export function VisitCloseForm({
               onChange={(event) => {
                 setServiceId(event.target.value);
                 setSelectedAddOns([]);
+                setPaidInput(null);
               }}
             >
               {services.map((item) => (
@@ -285,13 +302,14 @@ export function VisitCloseForm({
                 <input
                   type="checkbox"
                   checked={selectedAddOns.includes(addOn.id)}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setSelectedAddOns(
                       event.target.checked
                         ? [...selectedAddOns, addOn.id]
                         : selectedAddOns.filter((value) => value !== addOn.id),
-                    )
-                  }
+                    );
+                    setPaidInput(null);
+                  }}
                 />{" "}
                 {addOn.displayName}
               </label>
@@ -302,6 +320,16 @@ export function VisitCloseForm({
         <p className="muted">
           {t("closeVisit.dueLine", { amount: money(price), duration })}
         </p>
+
+        <PaidField
+          id="visit-paid"
+          value={paidInput ?? toMajorUnits(price)}
+          priceMinor={price}
+          paidMinor={paidMinor}
+          currency={currency}
+          locale={locale}
+          onChange={setPaidInput}
+        />
 
         {unusableServices > 0 && (
           <p className="muted">
@@ -330,7 +358,11 @@ export function VisitCloseForm({
 
       {error && <div className="form-error" role="alert">{error}</div>}
 
-      <button className="primary-button" type="submit" disabled={pending || !payable}>
+      <button
+        className="primary-button"
+        type="submit"
+        disabled={pending || !payable || (paidInput !== null && paidMinor === null)}
+      >
         {pending ? t("common.saving") : t("closeVisit.title")}
       </button>
     </form>
