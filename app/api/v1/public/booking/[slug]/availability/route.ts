@@ -14,7 +14,26 @@ const querySchema = z.object({
   add_on_ids: z.string().default(""),
   specialist_id: z.union([z.uuid(), z.literal("any")]).default("any"),
   date: z.string(),
+  /**
+   * Every service of an appointment being moved, as `service:addOn:addOn|service`.
+   *
+   * Only the manage page sends it, for an appointment the studio booked with
+   * more than one service: the slots it is offered must fit the whole sitting,
+   * or the move it then asks for is refused. The public page books one service
+   * and never sends it. Characters a UUID never contains, so no escaping.
+   */
+  services: z
+    .string()
+    .regex(/^[0-9a-f-]{36}(:[0-9a-f-]{36})*(\|[0-9a-f-]{36}(:[0-9a-f-]{36})*){0,9}$/i)
+    .optional(),
 });
+
+function parseServices(value: string | undefined) {
+  return value?.split("|").map((item) => {
+    const [serviceId, ...addOnIds] = item.split(":");
+    return { serviceId, addOnIds };
+  });
+}
 
 async function handleGet(
   request: Request,
@@ -50,6 +69,7 @@ async function handleGet(
     addOnIds: parsed.data.add_on_ids ? parsed.data.add_on_ids.split(",").filter(Boolean) : [],
     specialistId: parsed.data.specialist_id === "any" ? null : parsed.data.specialist_id,
     date,
+    items: parseServices(parsed.data.services),
     now: new Date(),
   });
   if (!result) return publicNotFound(id);

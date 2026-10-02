@@ -33,6 +33,8 @@ type BookingView = {
   price_minor: number;
   service_id: string | null;
   add_on_ids: string[];
+  /** Every service of the sitting; more than one only for an appointment the studio booked. */
+  services?: { service_id: string; add_on_ids: string[] }[] | null;
   lines: { kind: string; name: string; price_minor: number; duration_minutes: number }[];
 };
 type Slot = { starts_at: string; ends_at: string; specialist_id: string; specialist_name: string };
@@ -254,6 +256,14 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
       specialist_id: "any",
       date,
     });
+    // An appointment of several services, booked by the studio: the times
+    // offered have to fit all of it, not only the first service.
+    if (booking.services && booking.services.length > 1) {
+      query.set(
+        "services",
+        booking.services.map((item) => [item.service_id, ...item.add_on_ids].join(":")).join("|"),
+      );
+    }
     const response = await fetch(
       `/api/v1/public/booking/${booking.organization_slug}/availability?${query.toString()}`,
     );

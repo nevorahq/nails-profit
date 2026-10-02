@@ -13,6 +13,7 @@ import { parseBookingToken } from "@/domain/booking-token";
 import { isPublicBookingEnabled } from "@/env";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
+import { bookingServicesOf } from "@/lib/visit-service";
 
 export async function loadPublicBookingAccess(rawToken: string, now = new Date()) {
   // The rollback of section 7 turns off the public surface with one flag, and a
@@ -118,6 +119,17 @@ export async function loadPublicBookingAccess(rawToken: string, now = new Date()
         price_minor: lines.reduce((total, line) => total + line.priceMinor, 0),
         service_id: lines.find((line) => line.kind === "service")?.serviceId ?? null,
         add_on_ids: lines.flatMap((line) => (line.addOnId ? [line.addOnId] : [])),
+        /*
+         * Every service of the sitting with its own add-ons, which moving it
+         * has to find room for. One entry for anything booked on this page;
+         * more for an appointment the studio made at the desk. Null when a
+         * service's catalogue row is gone, as `service_id` is.
+         */
+        services:
+          bookingServicesOf(lines)?.items.map((item) => ({
+            service_id: item.serviceId,
+            add_on_ids: [...item.addOnIds],
+          })) ?? null,
         lines: lines.map((line) => ({
           kind: line.kind,
           name: resolveLocalizedText(line.nameSnapshot, locale, locale) ?? "—",
