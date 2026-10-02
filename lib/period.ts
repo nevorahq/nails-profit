@@ -71,17 +71,21 @@ function buildMasterBreakdown(rows: Awaited<ReturnType<typeof loadDashboard>>["r
       compensationMinor: 0,
       rules: [],
     };
-    const rule = {
-      type: row.commissionType ?? "unknown",
-      basisPoints: row.commissionBasisPoints ?? null,
-      fixedAmountMinor: row.commissionFixedAmountMinor ?? null,
-    };
-    const ruleKey = `${rule.type}:${rule.basisPoints ?? ""}:${rule.fixedAmountMinor ?? ""}`;
-    const rules = existing.rules.some(
-      (item) => `${item.type}:${item.basisPoints ?? ""}:${item.fixedAmountMinor ?? ""}` === ruleKey,
-    )
-      ? existing.rules
-      : [...existing.rules, rule];
+    // Every rule the visit paid under: one for a visit of one service, one per
+    // rule for a visit whose services fell under different ones.
+    const visitRules = row.lineRules ?? [
+      {
+        type: row.commissionType ?? "unknown",
+        basisPoints: row.commissionBasisPoints ?? null,
+        fixedAmountMinor: row.commissionFixedAmountMinor ?? null,
+      },
+    ];
+    const keyOf = (item: MasterPeriodBreakdown["rules"][number]) =>
+      `${item.type}:${item.basisPoints ?? ""}:${item.fixedAmountMinor ?? ""}`;
+    const rules = [...existing.rules];
+    for (const rule of visitRules) {
+      if (!rules.some((item) => keyOf(item) === keyOf(rule))) rules.push(rule);
+    }
     grouped.set(row.specialistId, {
       ...existing,
       visits: existing.visits + 1,

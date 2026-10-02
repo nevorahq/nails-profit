@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { financialSnapshots, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { loadDashboard } from "@/lib/dashboard";
+import { loadPeriodPL, monthOf } from "@/lib/period";
 
 import { dataOf, errorCodeOf } from "../helpers/api";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
@@ -213,5 +215,77 @@ describe("a visit of several services", () => {
     });
     expect(response.status).toBe(404);
     expect(errorCodeOf(response)).toBe("SERVICE_NOT_FOUND");
+  });
+
+  test("the ranking counts each service of a visit, and the month counts what was paid", async () => {
+    const ranked = await createCanonicalStudio("several-ranking@studio.example", "Ranking Studio");
+    const pedicure = dataOf<{ id: string }>(
+      await ranked.owner.post("/api/v1/services", {
+        name: { ru: "Педикюр" },
+        price_minor: PEDICURE_PRICE,
+        duration_minutes: PEDICURE_MINUTES,
+      }),
+    ).id;
+    await createCommissionRule(ranked.organizationId, ranked.specialistId, {
+      type: "fixed",
+      fixedAmountMinor: FLAT,
+      serviceId: pedicure,
+      activeFrom: new Date(Date.now() - 24 * 60 * 60_000),
+    });
+    const record = async (body: Record<string, unknown>) =>
+      dataOf<{ id: string }>(
+        await ranked.owner.post("/api/v1/visits", {
+          specialist_id: ranked.specialistId,
+          actual_duration_minutes: 150,
+          ...body,
+        }),
+      ).id;
+
+    await record({
+      services: [
+        { service_id: ranked.serviceId, add_on_ids: [] },
+        { service_id: pedicure, add_on_ids: [] },
+      ],
+      paid_minor: 110_000,
+    });
+    const alone = await record({ service_id: ranked.serviceId, paid_minor: 55_000, actual_duration_minutes: 90 });
+    // 50 MDL given back afterwards: the month must not count it.
+    const [line] = await withTenant(ranked.organizationId, (tx) =>
+      tx.select().from(visitLines).where(eq(visitLines.visitId, alone)),
+    );
+    expect(
+      (await ranked.owner.post(`/api/v1/visits/${alone}/adjust`, { refunds: [{ line_id: line.id, refund_minor: 5_000 }] }))
+        .status,
+    ).toBe(201);
+
+    const { metrics } = await withTenant(ranked.organizationId, (tx) => loadDashboard(tx, {}, "ru"));
+    const manicure = metrics.ranking.find((entry) => entry.serviceId === ranked.serviceId)!;
+    const pedicureRow = metrics.ranking.find((entry) => entry.serviceId === pedicure)!;
+
+    expect(manicure.visits).toBe(2);
+    expect(pedicureRow.visits).toBe(1);
+    // 660 of the pair (its 60 of surcharge included) and the 500 kept from the other.
+    expect(manicure.revenueMinor).toBe(66_000 + 50_000);
+    expect(pedicureRow.revenueMinor).toBe(44_000);
+    expect(pedicureRow.commissionMinor).toBe(FLAT);
+    // The rows add up to the totals they sit under.
+    expect(manicure.revenueMinor + pedicureRow.revenueMinor).toBe(metrics.revenueMinor);
+    expect(manicure.contributionMarginMinor + pedicureRow.contributionMarginMinor).toBe(
+      metrics.contributionMarginMinor,
+    );
+    expect(manicure.commissionMinor + pedicureRow.commissionMinor).toBe(metrics.labourCostMinor);
+
+    const report = await withTenant(ranked.organizationId, (tx) =>
+      loadPeriodPL(tx, { month: monthOf(new Date()), currency: "MDL", organizationId: ranked.organizationId }, "ru"),
+    );
+    // What the clients paid, less what was given back.
+    expect(report.pl.revenueMinor).toBe(110_000 + 55_000 - 5_000);
+    const master = report.masterBreakdown.find((entry) => entry.specialistId === ranked.specialistId)!;
+    expect(master.rules).toEqual(
+      expect.arrayContaining([
+        { type: "percentage", basisPoints: 4_000, fixedAmountMinor: null },
+        { type: "fixed", basisPoints: null, fixedAmountMinor: FLAT },
+      ]),
+    );
   });
 });

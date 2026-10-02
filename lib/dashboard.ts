@@ -2,7 +2,9 @@ import { and, desc, eq, gte, lte } from "drizzle-orm";
 
 import { financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
+import { toCommission } from "@/domain/commission";
 import { aggregateVisitMetrics, type DashboardMetrics, type VisitMetricRow } from "@/domain/dashboard-metrics";
+import { splitVisitByService, type SplitLine } from "@/domain/visit-split";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 
@@ -68,6 +70,7 @@ export async function loadDashboard(
       commissionType: visits.commissionType,
       commissionBasisPoints: visits.commissionBasisPoints,
       commissionFixedAmountMinor: visits.commissionFixedAmountMinor,
+      commissionBase: visits.commissionBase,
     })
     .from(financialSnapshots)
     .innerJoin(visits, eq(visits.id, financialSnapshots.visitId))
@@ -75,32 +78,134 @@ export async function loadDashboard(
     .where(where)
     .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
 
-  const serviceLines = await tx
-    .selectDistinctOn([visitLines.visitId], {
+  /*
+   * Every line, not one per visit: a visit of several services is split
+   * between them in the ranking, and the split needs what each line charged,
+   * which rule it was paid under and how long it was planned to take. Still
+   * one query for the whole period.
+   */
+  const lines = await tx
+    .select({
       visitId: visitLines.visitId,
+      kind: visitLines.kind,
+      serviceId: visitLines.serviceId,
       nameSnapshot: visitLines.nameSnapshot,
+      priceMinor: visitLines.priceMinor,
+      discountMinor: visitLines.discountMinor,
+      refundMinor: visitLines.refundMinor,
+      commissionable: visitLines.commissionable,
+      commissionRuleId: visitLines.commissionRuleId,
+      commissionType: visitLines.commissionType,
+      commissionBasisPoints: visitLines.commissionBasisPoints,
+      commissionFixedAmountMinor: visitLines.commissionFixedAmountMinor,
+      commissionBase: visitLines.commissionBase,
+      durationMinutes: visitLines.durationMinutes,
     })
     .from(visitLines)
     .innerJoin(visits, eq(visits.id, visitLines.visitId))
-    .where(where ? and(where, eq(visitLines.kind, "service")) : eq(visitLines.kind, "service"))
-    .orderBy(visitLines.visitId);
+    .where(where)
+    .orderBy(visitLines.visitId, visitLines.createdAt, visitLines.id);
 
-  const nameByVisit = new Map(serviceLines.map((line) => [line.visitId, line.nameSnapshot]));
+  const linesByVisit = new Map<string, typeof lines>();
+  for (const line of lines) {
+    linesByVisit.set(line.visitId, [...(linesByVisit.get(line.visitId) ?? []), line]);
+  }
+
+  // The name is read from the visit's own snapshot, so an archived or renamed
+  // service still shows what was actually sold.
+  const nameOf = (nameSnapshot: Record<string, string> | null | undefined) =>
+    nameSnapshot ? (resolveLocalizedText(nameSnapshot, locale, locale) ?? "Без названия") : "Без названия";
+
+  const termsOf = (line: (typeof lines)[number]) =>
+    line.commissionRuleId !== null && line.commissionType !== null && line.commissionBase !== null
+      ? {
+          ruleKey: line.commissionRuleId,
+          commission: toCommission({
+            id: line.commissionRuleId,
+            serviceId: null,
+            type: line.commissionType,
+            basisPoints: line.commissionBasisPoints,
+            fixedAmountMinor: line.commissionFixedAmountMinor,
+            activeFrom: new Date(0),
+            activeTo: null,
+          }),
+          base: line.commissionBase,
+        }
+      : null;
+
+  // The rules a visit's lines name, once each; undefined when they name none,
+  // which is every visit closed before rules moved onto lines.
+  const distinctRules = (own: typeof lines) => {
+    const seen = new Map<string, { type: string; basisPoints: number | null; fixedAmountMinor: number | null }>();
+    for (const line of own) {
+      if (line.commissionType === null) continue;
+      const rule = {
+        type: line.commissionType,
+        basisPoints: line.commissionBasisPoints,
+        fixedAmountMinor: line.commissionFixedAmountMinor,
+      };
+      seen.set(`${rule.type}:${rule.basisPoints ?? ""}:${rule.fixedAmountMinor ?? ""}`, rule);
+    }
+    return seen.size > 0 ? [...seen.values()] : undefined;
+  };
 
   const rows: VisitMetricRow[] = snapshots
     // Newest visit first, as the per-visit read never guaranteed but the screen
     // has always shown.
     .sort((left, right) => right.completedAt.getTime() - left.completedAt.getTime())
     .map((snapshot) => {
-      const nameSnapshot = nameByVisit.get(snapshot.visitId);
+      const own = linesByVisit.get(snapshot.visitId) ?? [];
+      const serviceLines = own.filter((line) => line.kind === "service");
+      const parts =
+        snapshot.contributionMarginMinor !== null && new Set(serviceLines.map((line) => line.serviceId)).size > 1
+          ? splitVisitByService(
+              {
+                revenueMinor: snapshot.revenueMinor,
+                commissionMinor: snapshot.commissionMinor ?? 0,
+                vatMinor: snapshot.vatMinor ?? 0,
+                turnoverTaxMinor: snapshot.turnoverTaxMinor ?? 0,
+                payrollTaxMinor: snapshot.payrollTaxMinor ?? 0,
+                paymentCommissionMinor: snapshot.paymentCommissionMinor ?? 0,
+                durationMinutes: snapshot.durationMinutes ?? 0,
+              },
+              own.map(
+                (line): SplitLine => ({
+                  serviceId: line.serviceId,
+                  priceMinor: line.priceMinor,
+                  discountMinor: line.discountMinor,
+                  refundMinor: line.refundMinor,
+                  commissionable: line.commissionable,
+                  commissionTerms: termsOf(line),
+                  durationMinutes: line.durationMinutes,
+                }),
+              ),
+              {
+                ruleKey: "visit",
+                commission: toCommission({
+                  id: snapshot.visitId,
+                  serviceId: null,
+                  type: snapshot.commissionType,
+                  basisPoints: snapshot.commissionBasisPoints,
+                  fixedAmountMinor: snapshot.commissionFixedAmountMinor,
+                  activeFrom: new Date(0),
+                  activeTo: null,
+                }),
+                base: snapshot.commissionBase ?? "after_discount",
+              },
+            )
+          : null;
       return {
         visitId: snapshot.visitId,
         serviceId: snapshot.serviceId,
-        // The name is read from the visit's own snapshot, so an archived or
-        // renamed service still shows what was actually sold.
-        serviceName: nameSnapshot
-          ? (resolveLocalizedText(nameSnapshot, locale, locale) ?? "Без названия")
-          : "Без названия",
+        serviceName:
+          serviceLines.length > 0
+            ? serviceLines.map((line) => nameOf(line.nameSnapshot)).join(" + ")
+            : nameOf(null),
+        lineRules: distinctRules(own),
+        serviceParts: parts?.map((part) => ({
+          ...part,
+          serviceName: nameOf(serviceLines.find((line) => line.serviceId === part.serviceId)?.nameSnapshot),
+        })),
         revenueMinor: snapshot.revenueMinor,
         commissionMinor: snapshot.commissionMinor,
         contributionMarginMinor: snapshot.contributionMarginMinor,

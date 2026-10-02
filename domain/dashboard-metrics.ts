@@ -1,4 +1,5 @@
 import { roundRatio } from "@/domain/money";
+import type { ServicePart } from "@/domain/visit-split";
 
 /**
  * Dashboard aggregates, spec section 8.9.1.
@@ -51,6 +52,18 @@ export type VisitMetricRow = Readonly<{
   commissionType?: string;
   commissionBasisPoints?: number | null;
   commissionFixedAmountMinor?: number | null;
+  /**
+   * The visit split between its services, when it had more than one — see
+   * `domain/visit-split.ts`. Absent for a visit of one service, which the
+   * ranking counts whole under `serviceId`, as it always has.
+   */
+  serviceParts?: readonly (ServicePart & Readonly<{ serviceName: string }>)[] | null;
+  /**
+   * Every rule the visit's lines were paid under, when they were not all the
+   * visit's own — a pedicure's flat amount beside a manicure's percentage.
+   * Absent means the `commission*` fields above say it all.
+   */
+  lineRules?: readonly Readonly<{ type: string; basisPoints: number | null; fixedAmountMinor: number | null }>[];
 }>;
 
 export type ServiceRanking = Readonly<{
@@ -186,8 +199,21 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
  * than a quick one — and seeing both is the point.
  */
 function rankServices(costed: readonly VisitMetricRow[]): ServiceRanking[] {
-  const groups = new Map<string, VisitMetricRow[]>();
-  for (const row of costed) {
+  type Entry = Readonly<{
+    serviceId: string | null;
+    serviceName: string;
+    revenueMinor: number;
+    commissionMinor: number | null;
+    contributionMarginMinor: number | null;
+    durationMinutes: number | null;
+  }>;
+
+  // A visit of several services counts once for each of them, with its share;
+  // a visit of one counts whole, as it always has.
+  const entries: Entry[] = costed.flatMap((row): Entry[] => [...(row.serviceParts ?? [row])]);
+
+  const groups = new Map<string, Entry[]>();
+  for (const row of entries) {
     const key = row.serviceId ?? `name:${row.serviceName}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }

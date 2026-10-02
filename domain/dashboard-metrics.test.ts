@@ -191,3 +191,46 @@ describe("buildProfitTrend", () => {
     expect(buildProfitTrend([])).toEqual({ granularity: "day", points: [] });
   });
 });
+
+describe("ranking a visit of several services", () => {
+  it("counts the visit once for each service, with its share", () => {
+    const metrics = aggregateVisitMetrics([
+      row({ visitId: "single", contributionMarginMinor: 36_000 }),
+      row({
+        visitId: "both",
+        serviceName: "Маникюр + Педикюр",
+        revenueMinor: 100_000,
+        contributionMarginMinor: 61_000,
+        durationMinutes: 150,
+        serviceParts: [
+          {
+            serviceId: "service-a",
+            serviceName: "Маникюр",
+            revenueMinor: 60_000,
+            commissionMinor: 24_000,
+            contributionMarginMinor: 36_000,
+            durationMinutes: 90,
+          },
+          {
+            serviceId: "service-b",
+            serviceName: "Педикюр",
+            revenueMinor: 40_000,
+            commissionMinor: 15_000,
+            contributionMarginMinor: 25_000,
+            durationMinutes: 60,
+          },
+        ],
+      }),
+    ]);
+
+    expect(metrics.ranking).toEqual([
+      expect.objectContaining({ serviceName: "Маникюр", visits: 2, revenueMinor: 120_000, contributionMarginMinor: 72_000 }),
+      expect.objectContaining({ serviceName: "Педикюр", visits: 1, revenueMinor: 40_000, profitPerHourMinor: 25_000 }),
+    ]);
+    // The totals still count the visit once.
+    expect(metrics.visits).toBe(2);
+    expect(metrics.revenueMinor).toBe(160_000);
+    expect(metrics.contributionMarginMinor).toBe(97_000);
+  });
+});
+
