@@ -132,7 +132,16 @@ export function LoginForm({
       </Link>
       <h1>{mode === "signup" ? t("auth.signUpTitle") : t("auth.welcomeBack")}</h1>
       {activeEmail && (
-        <div className="warning-banner">{t("auth.activeSession", { email: activeEmail })}</div>
+        /*
+         * The session this banner names is alive — the page read it on the
+         * server — so going on as that account needs no password, only the
+         * address a sign-in would have led to. The form below stays for
+         * whoever came here to switch accounts.
+         */
+        <Link className="warning-banner session-link" href={redirectTo}>
+          {t("auth.activeSession", { email: activeEmail })}
+          <strong>{t("auth.continueAsActive")}</strong>
+        </Link>
       )}
       <form onSubmit={submit}>
         {mode === "signup" &&

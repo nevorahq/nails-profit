@@ -61,6 +61,42 @@ test.describe("authentication UI", () => {
     browserErrors.length = 0;
   });
 
+  test("a live session is one press back into the app, and only a live one", async ({
+    page,
+    browserErrors,
+    baseURL,
+  }, testInfo) => {
+    void browserErrors;
+
+    // Nobody signed in: nothing to go on as, so nothing to press.
+    await page.goto("/login");
+    await expect(page.locator(".session-link")).toHaveCount(0);
+
+    const account = await signUp(baseURL!, { email: `pw-returning-${uniqueSuffix(testInfo)}@example.com` });
+    try {
+      await page.context().addCookies((await account.storageState()).cookies);
+
+      // Arriving with somewhere to go: the banner leads there, as a sign-in would.
+      await page.goto("/login?next=/app/settings");
+      await expect(page.getByRole("link", { name: `Signed in as ${account.email}` })).toHaveAttribute(
+        "href",
+        "/app/settings",
+      );
+
+      await page.goto("/login");
+      const banner = page.getByRole("link", { name: `Signed in as ${account.email}` });
+      await expect(banner).toContainText("Continue");
+      // The form is still there for whoever came to switch accounts.
+      await expect(page.getByLabel("Password")).toBeVisible();
+
+      await banner.click();
+      await expect(page).toHaveURL(/\/app$/);
+      await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+    } finally {
+      await account.dispose();
+    }
+  });
+
   test("invalid reset link and mismatched passwords are handled in the browser", async ({
     page,
     browserErrors,
