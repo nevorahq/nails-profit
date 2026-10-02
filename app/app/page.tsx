@@ -466,7 +466,9 @@ export default async function AppPage({
   }));
 
   const rankingTotals = {
-    visits: metrics.ranking.reduce((s, e) => s + e.visits, 0),
+    // The visits the ranking was built from, once each: a visit of a manicure
+    // and a pedicure is a row in both, and summing the rows would count it twice.
+    visits: metrics.costedVisits,
     revenueMinor: metrics.ranking.reduce((s, e) => s + e.revenueMinor, 0),
     contributionMarginMinor: metrics.ranking.reduce((s, e) => s + e.contributionMarginMinor, 0),
     commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),

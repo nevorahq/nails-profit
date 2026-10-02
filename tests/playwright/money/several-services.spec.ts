@@ -75,6 +75,12 @@ for (const width of [null, 375] as const) {
       // 40% of both: one default rule covers the two services.
       await expect(total).toContainText("MDL 400.00");
       await noSidewaysScroll(page);
+
+      // The ranking has a row for each service, and its total counts the visit once.
+      await page.goto("/app");
+      const ranking = page.locator("table.data-table").filter({ has: page.locator("tfoot") }).last();
+      await expect(ranking.locator("tbody tr")).toHaveCount(2);
+      await expect(ranking.locator("tfoot td").first()).toHaveText("1");
       await context.close();
     });
 
