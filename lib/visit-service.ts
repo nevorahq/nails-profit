@@ -24,7 +24,8 @@ import { hasAnyTax, selectTaxRates } from "@/domain/tax-rules";
 import type { Currency } from "@/domain/money";
 import type { MemberRole } from "@/domain/rbac";
 import { calculateVisitProfit, type VisitProfit } from "@/domain/visit-profit";
-import { applyPaidAmount, spreadDiscount } from "@/domain/visit-payment";
+import type { CommissionTerms } from "@/domain/visit-commission";
+import { applyPaidAmount, spreadDiscount, surchargeByService } from "@/domain/visit-payment";
 import { supportedLocales } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { recordAuditEvent } from "@/lib/audit";
@@ -38,34 +39,53 @@ import { recordPilotProductEvent } from "@/lib/pilot-events";
  * price change or commission change cannot reach it.
  */
 
+/** The commission rule a line is paid under, copied from the rule table. */
+export type LineRule = Readonly<{
+  id: string;
+  type: Commission["type"];
+  basisPoints: number | null;
+  fixedAmountMinor: number | null;
+  base: CommissionBase;
+}>;
+
 export type VisitDraftLine = Readonly<{
   /**
    * `surcharge` is what the client paid above the price list — a line of its
    * own, so the sticker price stays readable next to what the work fetched.
    */
   kind: "service" | "add_on" | "surcharge";
+  /**
+   * The service the line was sold with: its own on a service line, and the
+   * service it rides on for an add-on or a surcharge. What a report needs to
+   * attribute the line, and what the rule covering it was chosen for.
+   */
   serviceId: string | null;
   addOnId: string | null;
   nameSnapshot: Record<string, string>;
   priceMinor: number;
   discountMinor: number;
   durationMinutes: number;
+  /** Null only while the line's service has no rule, which refuses the visit. */
+  rule: LineRule | null;
+  /** Whether the rule's percentage applies to this line; see `recordCompletedVisit`. */
+  commissionable: boolean;
 }>;
 
 export type VisitDraft = Readonly<{
   lines: VisitDraftLine[];
   plannedDurationMinutes: number;
+  /**
+   * The first service's rule, copied onto the visit itself as before — the
+   * columns are required, and every reader written before a visit could hold
+   * two services reads them. The costing reads the rule on each line. Null
+   * when any service has no rule: a visit whose commission would read as zero
+   * for part of it is refused, not recorded.
+   */
   commission: {
     type: Commission["type"];
     basisPoints: number | null;
     fixedAmountMinor: number | null;
     base: CommissionBase;
-    /**
-     * The services the rule covers, empty when it covers all of them. Used to
-     * mark each line commissionable at closing time, so a later edit of the
-     * rule cannot change which lines a closed visit paid on.
-     */
-    serviceIds: readonly string[];
   } | null;
   currency: Currency;
   /**
@@ -85,6 +105,23 @@ export type VisitDraft = Readonly<{
   masterIsPrincipal: boolean;
 }>;
 
+/** The shape the costing engine takes a line's rule in. */
+function termsOf(rule: LineRule): CommissionTerms {
+  return {
+    ruleKey: rule.id,
+    commission: toCommission({
+      id: rule.id,
+      serviceId: null,
+      type: rule.type,
+      basisPoints: rule.basisPoints,
+      fixedAmountMinor: rule.fixedAmountMinor,
+      activeFrom: new Date(0),
+      activeTo: null,
+    }),
+    base: rule.base,
+  };
+}
+
 /**
  * Previews a draft with the same domain function used after persistence.
  * Keeping this here prevents the calendar from growing a second, UI-only
@@ -99,9 +136,8 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
       kind: line.kind,
       priceMinor: line.priceMinor,
       discountMinor: line.discountMinor,
-      commissionable:
-        draft.commission!.serviceIds.length === 0 ||
-        draft.commission!.serviceIds.includes(line.serviceId ?? draft.lines[0]?.serviceId ?? ""),
+      commissionable: line.commissionable,
+      commissionTerms: line.rule ? termsOf(line.rule) : null,
     })),
     commission: toCommission({
       id: "draft",
@@ -122,30 +158,69 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
   });
 }
 
-/** The prices a booking quoted, by line: the service, and each add-on by id. */
+/** One service of a visit, with the add-ons chosen for it. */
+export type VisitServiceItem = Readonly<{ serviceId: string; addOnIds: readonly string[] }>;
+
+/**
+ * Which services a visit is made of: a list, or the one service every caller
+ * written before a visit could hold two still passes.
+ */
+export type VisitServices =
+  | Readonly<{ items: readonly VisitServiceItem[] }>
+  | Readonly<{ serviceId: string; addOnIds: readonly string[] }>;
+
+function itemsOf(input: VisitServices): readonly VisitServiceItem[] {
+  return "items" in input ? input.items : [{ serviceId: input.serviceId, addOnIds: input.addOnIds }];
+}
+
+/**
+ * The prices a booking quoted, per service: the service itself, and each of its
+ * add-ons by id.
+ */
 export type QuotedPrices = Readonly<{
-  serviceMinor: number;
-  addOnMinor: Readonly<Record<string, number>>;
+  services: Readonly<
+    Record<string, Readonly<{ priceMinor: number; addOnMinor: Readonly<Record<string, number>> }>>
+  >;
+}>;
+
+type BookingLineLike = Readonly<{
+  kind: string;
+  serviceId: string | null;
+  addOnId: string | null;
+  priceMinor: number;
 }>;
 
 /**
- * Reads the quote off a booking's own lines.
+ * Reads the services, their add-ons and the quote off a booking's own lines.
  *
- * The sum of these is the «Итого» the client saw on the booking, which is
- * what closing the appointment «по прайсу» now records.
+ * The sum of the quote is the «Итого» the client saw on the booking, which is
+ * what closing the appointment «по прайсу» records. Null when a service line no
+ * longer names its catalogue row: the booking keeps its own name and price, but
+ * a visit needs the commission rule behind them, and guessing which service it
+ * used to be would be worse than refusing.
+ *
+ * An add-on line written before add-ons named their service belongs to the
+ * first service — the only one a booking could hold then.
  */
-export function quotedPricesOf(
-  lines: readonly Readonly<{ kind: string; addOnId: string | null; priceMinor: number }>[],
-): QuotedPrices {
-  const service = lines.find((line) => line.kind === "service");
-  return {
-    serviceMinor: service?.priceMinor ?? 0,
-    addOnMinor: Object.fromEntries(
-      lines
-        .filter((line) => line.addOnId !== null)
-        .map((line) => [line.addOnId as string, line.priceMinor]),
-    ),
-  };
+export function bookingServicesOf(
+  lines: readonly BookingLineLike[],
+): { items: VisitServiceItem[]; quoted: QuotedPrices } | null {
+  const serviceLines = lines.filter((line) => line.kind === "service");
+  if (serviceLines.length === 0 || serviceLines.some((line) => !line.serviceId)) return null;
+
+  const first = serviceLines[0].serviceId!;
+  const items = serviceLines.map((line) => ({ serviceId: line.serviceId!, addOnIds: [] as string[] }));
+  const quoted: Record<string, { priceMinor: number; addOnMinor: Record<string, number> }> = {};
+  for (const line of serviceLines) quoted[line.serviceId!] = { priceMinor: line.priceMinor, addOnMinor: {} };
+
+  for (const line of lines) {
+    if (!line.addOnId) continue;
+    const owner = line.serviceId && quoted[line.serviceId] ? line.serviceId : first;
+    items.find((item) => item.serviceId === owner)!.addOnIds.push(line.addOnId);
+    quoted[owner].addOnMinor[line.addOnId] = line.priceMinor;
+  }
+
+  return { items, quoted: { services: quoted } };
 }
 
 /** The surcharge line's name, in every language a snapshot may be read in. */
@@ -156,14 +231,12 @@ function surchargeName(): Record<string, string> {
 }
 
 /**
- * Turns a service, its chosen add-ons and a specialist into the rows a visit
- * will own.
+ * Turns the services, their chosen add-ons and a specialist into the rows a
+ * visit will own.
  */
 export async function buildVisitDraft(
   tx: TenantTransaction,
-  input: {
-    serviceId: string;
-    addOnIds: readonly string[];
+  input: VisitServices & {
     specialistId: string;
     at: Date;
     /**
@@ -182,73 +255,17 @@ export async function buildVisitDraft(
     paidMinor?: number;
   },
 ): Promise<VisitDraft | null> {
-  const [service] = await tx.select().from(services).where(eq(services.id, input.serviceId)).limit(1);
-  if (!service) return null;
+  const items = itemsOf(input);
+  if (items.length === 0) return null;
 
-  const chosen =
-    input.addOnIds.length > 0
-      ? await tx.select().from(addOns).where(inArray(addOns.id, [...input.addOnIds]))
-      : [];
+  const serviceIds = [...new Set(items.map((item) => item.serviceId))];
+  const found = await tx.select().from(services).where(inArray(services.id, serviceIds));
+  if (found.length !== serviceIds.length) return null;
+  const serviceById = new Map(found.map((service) => [service.id, service]));
 
-  const priced: VisitDraftLine[] = [
-    {
-      kind: "service",
-      serviceId: service.id,
-      addOnId: null,
-      nameSnapshot: (service.name ?? {}) as Record<string, string>,
-      priceMinor: input.quoted?.serviceMinor ?? service.priceMinor ?? 0,
-      discountMinor: 0,
-      durationMinutes: service.durationMinutes ?? 0,
-    },
-    ...chosen.map((addOn) => ({
-      kind: "add_on" as const,
-      serviceId: null,
-      addOnId: addOn.id,
-      nameSnapshot: (addOn.name ?? {}) as Record<string, string>,
-      priceMinor: input.quoted?.addOnMinor[addOn.id] ?? Math.max(0, addOn.priceDeltaMinor),
-      discountMinor: 0,
-      durationMinutes: addOn.durationDeltaMinutes,
-    })),
-  ];
-
-  /*
-   * An add-on that makes the visit cheaper — a short length — is a discount on
-   * what the visit charges, not a line of its own.
-   *
-   * It used to be written as a zero-price line carrying the whole reduction as
-   * its discount, which the `visit_line_discount_within_price` check refuses:
-   * closing any visit with such an add-on failed with a 500. Spread over the
-   * priced lines instead, the reduction lands where a discount can be taken
-   * from, and `full_price` commission still ignores it exactly as it did.
-   *
-   * Not applied to a quote: the booking already decided what each line costs.
-   */
-  const reduction = input.quoted
-    ? 0
-    : chosen.reduce((total, addOn) => total + Math.max(0, -addOn.priceDeltaMinor), 0);
-  const discounted = spreadDiscount(priced, reduction);
-
-  const paid = input.paidMinor === undefined ? null : applyPaidAmount(discounted, input.paidMinor);
-  const lines: VisitDraftLine[] = paid ? [...paid.lines] : discounted;
-  if (paid && paid.surchargeMinor > 0) {
-    lines.push({
-      kind: "surcharge",
-      // Rides on the service it was earned with, so a rule that pays only on
-      // some services pays on this exactly when it pays on the service.
-      serviceId: service.id,
-      addOnId: null,
-      nameSnapshot: surchargeName(),
-      priceMinor: paid.surchargeMinor,
-      discountMinor: 0,
-      durationMinutes: 0,
-    });
-  }
-
-  const [person] = await tx
-    .select({ isPrincipal: specialists.isPrincipal })
-    .from(specialists)
-    .where(eq(specialists.id, input.specialistId))
-    .limit(1);
+  const addOnIds = [...new Set(items.flatMap((item) => item.addOnIds))];
+  const addOnRows = addOnIds.length > 0 ? await tx.select().from(addOns).where(inArray(addOns.id, addOnIds)) : [];
+  const addOnById = new Map(addOnRows.map((addOn) => [addOn.id, addOn]));
 
   const rules = await tx
     .select({
@@ -264,18 +281,135 @@ export async function buildVisitDraft(
     .from(commissionRules)
     .where(eq(commissionRules.specialistId, input.specialistId));
 
-  const rule = selectCommissionRule(rules, service.id, input.at);
+  // Each service's own rule: an exception for the pedicure is the pedicure's,
+  // whatever else was done in the same visit.
+  const ruleByService = new Map(
+    serviceIds.map((serviceId) => [serviceId, selectCommissionRule(rules, serviceId, input.at)]),
+  );
 
-  // Which services the chosen rule covers. No rows means every service, which
+  // Which services each chosen rule covers. No rows means every service, which
   // is what every rule written before `commission_rule_service` existed does.
-  const covered = rule
-    ? (
-        await tx
-          .select({ serviceId: commissionRuleServices.serviceId })
+  const ruleIds = [
+    ...new Set([...ruleByService.values()].filter((rule) => rule !== null).map((rule) => rule!.id)),
+  ];
+  const coverage =
+    ruleIds.length > 0
+      ? await tx
+          .select({
+            ruleId: commissionRuleServices.commissionRuleId,
+            serviceId: commissionRuleServices.serviceId,
+          })
           .from(commissionRuleServices)
-          .where(eq(commissionRuleServices.commissionRuleId, rule.id))
-      ).map((row) => row.serviceId)
-    : [];
+          .where(inArray(commissionRuleServices.commissionRuleId, ruleIds))
+      : [];
+
+  /*
+   * Which lines the master's percentage applies to, decided once and stored.
+   *
+   * A rule that names no services covers everything. When it does name some,
+   * an add-on rides on the service it was sold with: the client bought one
+   * appointment, and paying the master for the manicure but not for the design
+   * that came with it is not an arrangement anybody makes.
+   */
+  const covers = (serviceId: string) => {
+    const rule = ruleByService.get(serviceId);
+    if (!rule) return false;
+    const named = coverage.filter((row) => row.ruleId === rule.id);
+    return named.length === 0 || named.some((row) => row.serviceId === serviceId);
+  };
+
+  const ruleOf = (serviceId: string): LineRule | null => {
+    const rule = ruleByService.get(serviceId);
+    return rule
+      ? {
+          id: rule.id,
+          type: rule.type,
+          basisPoints: rule.basisPoints,
+          fixedAmountMinor: rule.fixedAmountMinor,
+          base: rule.base,
+        }
+      : null;
+  };
+
+  const lineOf = (
+    serviceId: string,
+    line: Pick<VisitDraftLine, "kind" | "addOnId" | "nameSnapshot" | "priceMinor" | "durationMinutes">,
+  ): VisitDraftLine => ({
+    ...line,
+    serviceId,
+    discountMinor: 0,
+    rule: ruleOf(serviceId),
+    commissionable: covers(serviceId),
+  });
+
+  const discounted: VisitDraftLine[] = [];
+  for (const item of items) {
+    const service = serviceById.get(item.serviceId)!;
+    const quote = input.quoted?.services[service.id];
+    const chosen = item.addOnIds.map((id) => addOnById.get(id)).filter((addOn) => addOn !== undefined);
+
+    const priced: VisitDraftLine[] = [
+      lineOf(service.id, {
+        kind: "service",
+        addOnId: null,
+        nameSnapshot: (service.name ?? {}) as Record<string, string>,
+        priceMinor: quote?.priceMinor ?? service.priceMinor ?? 0,
+        durationMinutes: service.durationMinutes ?? 0,
+      }),
+      ...chosen.map((addOn) =>
+        lineOf(service.id, {
+          kind: "add_on",
+          addOnId: addOn.id,
+          nameSnapshot: (addOn.name ?? {}) as Record<string, string>,
+          priceMinor: quote?.addOnMinor[addOn.id] ?? Math.max(0, addOn.priceDeltaMinor),
+          durationMinutes: addOn.durationDeltaMinutes,
+        }),
+      ),
+    ];
+
+    /*
+     * An add-on that makes the visit cheaper — a short length — is a discount
+     * on what its service charges, not a line of its own.
+     *
+     * It used to be written as a zero-price line carrying the whole reduction
+     * as its discount, which the `visit_line_discount_within_price` check
+     * refuses: closing any visit with such an add-on failed with a 500. Spread
+     * over the priced lines of its own service instead, the reduction lands
+     * where a discount can be taken from, and `full_price` commission still
+     * ignores it exactly as it did.
+     *
+     * Not applied to a quote: the booking already decided what each line costs.
+     */
+    const reduction = input.quoted
+      ? 0
+      : chosen.reduce((total, addOn) => total + Math.max(0, -addOn.priceDeltaMinor), 0);
+    discounted.push(...spreadDiscount(priced, reduction));
+  }
+
+  const paid = input.paidMinor === undefined ? null : applyPaidAmount(discounted, input.paidMinor);
+  const lines: VisitDraftLine[] = paid ? [...paid.lines] : discounted;
+  if (paid && paid.surchargeMinor > 0) {
+    // Split between the services in proportion to what each charges, and each
+    // part rides on its own service — so a rule that pays only on some
+    // services pays on its part exactly when it pays on the service.
+    for (const part of surchargeByService(discounted, paid.surchargeMinor)) {
+      lines.push(
+        lineOf(part.serviceId, {
+          kind: "surcharge",
+          addOnId: null,
+          nameSnapshot: surchargeName(),
+          priceMinor: part.amountMinor,
+          durationMinutes: 0,
+        }),
+      );
+    }
+  }
+
+  const [person] = await tx
+    .select({ isPrincipal: specialists.isPrincipal })
+    .from(specialists)
+    .where(eq(specialists.id, input.specialistId))
+    .limit(1);
 
   /*
    * Explicit null means cash and is obeyed; undefined asks for the studio's
@@ -313,19 +447,23 @@ export async function buildVisitDraft(
     .from(taxRules);
   const rates = selectTaxRates(taxRows, input.at);
 
+  const firstService = serviceById.get(items[0].serviceId)!;
+  const firstRule = ruleByService.get(firstService.id);
+  const everyServiceHasRule = serviceIds.every((serviceId) => ruleByService.get(serviceId) !== null);
+
   return {
     lines,
     plannedDurationMinutes: lines.reduce((total, line) => total + line.durationMinutes, 0),
-    commission: rule
-      ? {
-          type: rule.type,
-          basisPoints: rule.basisPoints,
-          fixedAmountMinor: rule.fixedAmountMinor,
-          base: rule.base,
-          serviceIds: covered,
-        }
-      : null,
-    currency: (service.currency ?? "MDL") as Currency,
+    commission:
+      firstRule && everyServiceHasRule
+        ? {
+            type: firstRule.type,
+            basisPoints: firstRule.basisPoints,
+            fixedAmountMinor: firstRule.fixedAmountMinor,
+            base: firstRule.base,
+          }
+        : null,
+    currency: (firstService.currency ?? "MDL") as Currency,
     masterIsPrincipal: person?.isPrincipal ?? false,
     payment: paymentMethod
       ? {
@@ -340,28 +478,27 @@ export async function buildVisitDraft(
   };
 }
 
-export type RecordVisitInput = Readonly<{
-  organizationId: string;
-  actor: Readonly<{ userId: string; role: MemberRole }>;
-  serviceId: string;
-  specialistId: string;
-  clientId: string | null;
-  addOnIds: readonly string[];
-  /** Set when the visit closes a booking, section 7.4. Null for a manual entry. */
-  bookingId?: string | null;
-  completedAt: Date;
-  actualDurationMinutes: number | null;
-  /** Omitted takes the studio's default method; explicit null means cash. */
-  paymentMethodId?: string | null;
-  /** The booking's own prices, when the visit closes one. */
-  quoted?: QuotedPrices;
-  /** What the client actually paid; omitted means the price list or the quote. */
-  paidMinor?: number;
-  requestId: string;
-  /** Optional for server-to-server callers; the browser always sends one. */
-  completionKey?: string;
-  completionFingerprint?: string;
-}>;
+export type RecordVisitInput = VisitServices &
+  Readonly<{
+    organizationId: string;
+    actor: Readonly<{ userId: string; role: MemberRole }>;
+    specialistId: string;
+    clientId: string | null;
+    /** Set when the visit closes a booking, section 7.4. Null for a manual entry. */
+    bookingId?: string | null;
+    completedAt: Date;
+    actualDurationMinutes: number | null;
+    /** Omitted takes the studio's default method; explicit null means cash. */
+    paymentMethodId?: string | null;
+    /** The booking's own prices, when the visit closes one. */
+    quoted?: QuotedPrices;
+    /** What the client actually paid; omitted means the price list or the quote. */
+    paidMinor?: number;
+    requestId: string;
+    /** Optional for server-to-server callers; the browser always sends one. */
+    completionKey?: string;
+    completionFingerprint?: string;
+  }>;
 
 export type RecordVisitResult =
   | Readonly<{
@@ -414,9 +551,9 @@ export async function recordCompletedVisit(
   tx: TenantTransaction,
   input: RecordVisitInput,
 ): Promise<RecordVisitResult> {
+  const items = itemsOf(input);
   const draft = await buildVisitDraft(tx, {
-    serviceId: input.serviceId,
-    addOnIds: input.addOnIds,
+    items,
     specialistId: input.specialistId,
     at: input.completedAt,
     paymentMethodId: input.paymentMethodId,
@@ -435,7 +572,9 @@ export async function recordCompletedVisit(
       organizationId: input.organizationId,
       clientId: input.clientId,
       specialistId: input.specialistId,
-      serviceId: input.serviceId,
+      // The first service, as the one a visit used to hold: what every reader
+      // written before a visit could hold two goes on reading.
+      serviceId: items[0].serviceId,
       bookingId: input.bookingId ?? null,
       completionKey: input.completionKey ?? null,
       completionFingerprint: input.completionFingerprint ?? null,
@@ -478,18 +617,6 @@ export async function recordCompletedVisit(
     return { ok: true, visit: existing, snapshot, replayed: true };
   }
 
-  /*
-   * Which lines the master's percentage applies to, decided once and stored.
-   *
-   * A rule that names no services covers everything. When it does name some,
-   * an add-on rides on the service it was sold with: the client bought one
-   * appointment, and paying the master for the manicure but not for the design
-   * that came with it is not an arrangement anybody makes.
-   */
-  const covers = new Set(draft.commission.serviceIds);
-  const commissionable = (line: VisitDraftLine) =>
-    covers.size === 0 || covers.has(line.serviceId ?? input.serviceId);
-
   await tx.insert(visitLines).values(
     draft.lines.map((line) => ({
       organizationId: input.organizationId,
@@ -500,7 +627,13 @@ export async function recordCompletedVisit(
       nameSnapshot: line.nameSnapshot,
       priceMinor: line.priceMinor,
       discountMinor: line.discountMinor,
-      commissionable: commissionable(line),
+      commissionable: line.commissionable,
+      // Every line has its rule once the draft has a commission at all.
+      commissionRuleId: line.rule!.id,
+      commissionType: line.rule!.type,
+      commissionBasisPoints: line.rule!.basisPoints,
+      commissionFixedAmountMinor: line.rule!.fixedAmountMinor,
+      commissionBase: line.rule!.base,
       durationMinutes: line.durationMinutes,
       createdBy: input.actor.userId,
       updatedBy: input.actor.userId,
@@ -607,6 +740,18 @@ export async function recalculateVisitProfit(
       discountMinor: line.discountMinor,
       refundMinor: line.refundMinor,
       commissionable: line.commissionable,
+      // Null on every line closed before rules moved onto lines: it then falls
+      // under the visit's rule below, which is what it was costed on.
+      commissionTerms:
+        line.commissionRuleId !== null && line.commissionType !== null && line.commissionBase !== null
+          ? termsOf({
+              id: line.commissionRuleId,
+              type: line.commissionType,
+              basisPoints: line.commissionBasisPoints,
+              fixedAmountMinor: line.commissionFixedAmountMinor,
+              base: line.commissionBase,
+            })
+          : null,
     })),
     /*
      * Read off the visit, never resolved afresh. A studio that signs a cheaper

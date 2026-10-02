@@ -12,7 +12,7 @@ import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { fingerprintOf } from "@/lib/idempotency";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
-import { quotedPricesOf, recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
+import { bookingServicesOf, recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 
 /**
  * Closing an appointment into a visit, roadmap section 7.6.
@@ -87,13 +87,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
 
       const lines = await bookingLinesOf(tx, existing.id);
-      const service = lines.find((line) => line.kind === "service");
-      if (!service?.serviceId) {
-        // The catalogue row is gone. The booking keeps its own name and price,
-        // but a visit needs the commission rule behind them, and guessing which
-        // service it used to be would be worse than refusing.
-        return { ok: false as const, failure: "service_not_found" as const };
-      }
+      // Null when a service's catalogue row is gone; see `bookingServicesOf`.
+      const booked = bookingServicesOf(lines);
+      if (!booked) return { ok: false as const, failure: "service_not_found" as const };
 
       const loadRecordedVisit = async () => {
         const [visit] = await tx
@@ -181,11 +177,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const recorded = await recordCompletedVisit(tx, {
         organizationId: actor.organizationId,
         actor: { userId: actor.userId, role: actor.role },
-        serviceId: service.serviceId,
+        items: booked.items,
         specialistId: existing.specialistId,
         clientId: existing.clientId,
-        addOnIds: lines.filter((line) => line.addOnId).map((line) => line.addOnId!),
-        quoted: quotedPricesOf(lines),
+        quoted: booked.quoted,
         paidMinor: parsed.data.paid_minor,
         bookingId: existing.id,
         completedAt,
