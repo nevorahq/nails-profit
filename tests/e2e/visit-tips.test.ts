@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { auditEvents, bookings, financialSnapshots, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { loadPeriodPL, monthOf } from "@/lib/period";
 
 import { dataOf, errorCodeOf, type Actor } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -221,4 +222,45 @@ describe("tips", () => {
     const refused = await master.post(`/api/v1/visits/${theirs}/adjust`, { tip_minor: 1 });
     expect(refused.status).toBe(403);
   });
+
+  test("the month counts tips in the cash flow and in the master's line, never in the revenue", async () => {
+    const report = await withTenant(studio.organizationId, (tx) =>
+      loadPeriodPL(tx, { month: monthOf(new Date()), currency: "MDL", organizationId: studio.organizationId }, "ru"),
+    );
+    const tipsOnVisits = await withTenant(studio.organizationId, (tx) => tx.select().from(visits));
+    const tips = tipsOnVisits.reduce((sum, visit) => sum + visit.tipMinor, 0);
+    expect(tips).toBeGreaterThan(0);
+
+    // Every visit here was 600 at the price list but two paid 550 — and the
+    // revenue is that, without a unit of the tips.
+    expect(report.pl.revenueMinor).toBe(tipsOnVisits.length * CANONICAL.servicePriceMinor - 2 * 5_000);
+
+    // In, and handed back out: neither master is a principal.
+    expect(report.cashFlow.tipsMinor).toBe(tips);
+    expect(report.cashFlow.tipsPaidOutMinor).toBe(tips);
+
+    const ownTips = tipsOnVisits
+      .filter((visit) => visit.specialistId === studio.specialistId)
+      .reduce((sum, visit) => sum + visit.tipMinor, 0);
+    const line = report.masterBreakdown.find((entry) => entry.specialistId === studio.specialistId)!;
+    expect(line.tipsMinor).toBe(ownTips);
+    expect(report.masterBreakdown.find((entry) => entry.specialistId === colleagueId)!.tipsMinor).toBe(9_900);
+  });
+
+  test("a principal's tips stay on the account", async () => {
+    await studio.owner.patch(`/api/v1/specialists/${colleagueId}`, { is_principal: true });
+    await studio.owner.post("/api/v1/visits", {
+      service_id: studio.serviceId,
+      specialist_id: colleagueId,
+      tip_minor: 1_100,
+    });
+
+    const report = await withTenant(studio.organizationId, (tx) =>
+      loadPeriodPL(tx, { month: monthOf(new Date()), currency: "MDL", organizationId: studio.organizationId }, "ru"),
+    );
+    // Only the new 11: whether the master was a principal is copied when a visit
+    // closes, so the 99 left while they were hired was handed on and stays so.
+    expect(report.cashFlow.tipsMinor - report.cashFlow.tipsPaidOutMinor).toBe(1_100);
+  });
 });
+

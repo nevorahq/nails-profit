@@ -64,6 +64,8 @@ export type VisitMetricRow = Readonly<{
    * Absent means the `commission*` fields above say it all.
    */
   lineRules?: readonly Readonly<{ type: string; basisPoints: number | null; fixedAmountMinor: number | null }>[];
+  /** What the client left on top: the master's, and in no figure above. Absent means none. */
+  tipMinor?: number;
 }>;
 
 export type ServiceRanking = Readonly<{
@@ -125,6 +127,14 @@ export type DashboardMetrics = Readonly<{
    * would report a studio as idle because a price was missing.
    */
   bookedDurationMinutes: number;
+  /**
+   * Tips on every visit of the period, costed or not — a visit whose margin
+   * could not be computed was still tipped. Outside revenue and margin; the
+   * monthly cash flow is where they count.
+   */
+  tipsMinor: number;
+  /** The part of `tipsMinor` left to a principal, which stays on the account. */
+  principalTipsMinor: number;
   /** DSH-008: what stops the remaining visits from being costed. */
   incompleteVisits: number;
   incompleteRevenueMinor: number;
@@ -186,6 +196,10 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
         : roundRatio(contributionMarginMinor * 60, costedDurationMinutes),
     costedDurationMinutes,
     bookedDurationMinutes: rows.reduce((total, row) => total + row.workedMinutes, 0),
+    tipsMinor: rows.reduce((total, row) => total + (row.tipMinor ?? 0), 0),
+    principalTipsMinor: rows
+      .filter((row) => row.masterIsPrincipal === true)
+      .reduce((total, row) => total + (row.tipMinor ?? 0), 0),
     incompleteVisits: incomplete.length,
     incompleteRevenueMinor: incomplete.reduce((total, row) => total + row.revenueMinor, 0),
     incompleteReasonCounts,

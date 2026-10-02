@@ -234,3 +234,19 @@ describe("ranking a visit of several services", () => {
   });
 });
 
+
+describe("tips in the dashboard's figures", () => {
+  it("sums tips on every visit, costed or not, and stays out of revenue and margin", () => {
+    const metrics = aggregateVisitMetrics([
+      row({ visitId: "hired", tipMinor: 5_000 }),
+      row({ visitId: "principal", tipMinor: 2_000, masterIsPrincipal: true }),
+      row({ visitId: "uncosted", tipMinor: 1_000, contributionMarginMinor: null, incompleteReasons: ["no_revenue"] }),
+      row({ visitId: "untipped" }),
+    ]);
+
+    expect(metrics.tipsMinor).toBe(8_000);
+    expect(metrics.principalTipsMinor).toBe(2_000);
+    expect(metrics.revenueMinor).toBe(4 * 60_000);
+    expect(metrics.contributionMarginMinor).toBe(3 * 34_000);
+  });
+});

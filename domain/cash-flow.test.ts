@@ -149,3 +149,31 @@ describe("buildCashFlow", () => {
     );
   });
 });
+
+describe("buildCashFlow with tips", () => {
+  it("takes tips in and hands a hired master's back out, leaving the cash as it was", () => {
+    const without = buildCashFlow(flow());
+    const result = buildCashFlow(flow({ tipsMinor: 5_000, tipsPaidOutMinor: 5_000 }));
+
+    expect(result.tipsMinor).toBe(5_000);
+    expect(result.tipsPaidOutMinor).toBe(5_000);
+    expect(result.netCashMinor).toBe(without.netCashMinor);
+    // The profit never saw them, so neither does the gap.
+    expect(result.profitToCashGapMinor).toBe(without.profitToCashGapMinor);
+  });
+
+  it("keeps a principal's tips on the account", () => {
+    const without = buildCashFlow(flow());
+    const result = buildCashFlow(flow({ tipsMinor: 5_000, tipsPaidOutMinor: 1_000 }));
+
+    expect(result.netCashMinor).toBe(without.netCashMinor + 4_000);
+    // The account grew faster than the business earned, by exactly that.
+    expect(result.profitToCashGapMinor).toBe(without.profitToCashGapMinor - 4_000);
+  });
+
+  it("reads absent tips as none", () => {
+    const result = buildCashFlow(flow());
+    expect(result.tipsMinor).toBe(0);
+    expect(result.tipsPaidOutMinor).toBe(0);
+  });
+});

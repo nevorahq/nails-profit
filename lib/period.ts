@@ -52,6 +52,8 @@ export type MasterPeriodBreakdown = Readonly<{
   visits: number;
   revenueMinor: number;
   compensationMinor: number;
+  /** Left for this master by clients, on top of what they were paid for the work. */
+  tipsMinor: number;
   rules: readonly Readonly<{
     type: string;
     basisPoints: number | null;
@@ -69,6 +71,7 @@ function buildMasterBreakdown(rows: Awaited<ReturnType<typeof loadDashboard>>["r
       visits: 0,
       revenueMinor: 0,
       compensationMinor: 0,
+      tipsMinor: 0,
       rules: [],
     };
     // Every rule the visit paid under: one for a visit of one service, one per
@@ -91,6 +94,7 @@ function buildMasterBreakdown(rows: Awaited<ReturnType<typeof loadDashboard>>["r
       visits: existing.visits + 1,
       revenueMinor: existing.revenueMinor + row.revenueMinor,
       compensationMinor: existing.compensationMinor + (row.commissionMinor ?? 0),
+      tipsMinor: existing.tipsMinor + (row.tipMinor ?? 0),
       rules,
     });
   }
@@ -254,6 +258,9 @@ export async function loadPeriodPL(
       salariedLabourMinor: pl.salariedLabourMinor,
       expenses: expensesForMonth(inCurrency, options.month),
       ownerDrawsMinor,
+      tipsMinor: dashboard.metrics.tipsMinor,
+      // A principal's tips stay on the account; a hired master's are handed on.
+      tipsPaidOutMinor: dashboard.metrics.tipsMinor - dashboard.metrics.principalTipsMinor,
       operatingProfitMinor: pl.operatingProfitMinor,
     }),
     currency: options.currency,

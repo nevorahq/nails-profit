@@ -71,6 +71,7 @@ export async function loadDashboard(
       commissionBasisPoints: visits.commissionBasisPoints,
       commissionFixedAmountMinor: visits.commissionFixedAmountMinor,
       commissionBase: visits.commissionBase,
+      tipMinor: visits.tipMinor,
     })
     .from(financialSnapshots)
     .innerJoin(visits, eq(visits.id, financialSnapshots.visitId))
@@ -202,6 +203,7 @@ export async function loadDashboard(
             ? serviceLines.map((line) => nameOf(line.nameSnapshot)).join(" + ")
             : nameOf(null),
         lineRules: distinctRules(own),
+        tipMinor: snapshot.tipMinor,
         serviceParts: parts?.map((part) => ({
           ...part,
           serviceName: nameOf(serviceLines.find((line) => line.serviceId === part.serviceId)?.nameSnapshot),
