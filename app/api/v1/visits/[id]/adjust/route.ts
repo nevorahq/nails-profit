@@ -33,6 +33,12 @@ const adjustSchema = z.object({
     .array(z.object({ line_id: z.uuid(), refund_minor: z.int().min(0) }))
     .max(50)
     .default([]),
+  /**
+   * The tip, as it should now stand. Tips are often left after the visit was
+   * closed — paid by transfer the next day — so correcting one is the ordinary
+   * case, and the terminal's fee on it moves with it in the new snapshot.
+   */
+  tip_minor: z.int().min(0).max(10_000_000).optional(),
   reason: z.string().trim().max(500).optional(),
 });
 
@@ -100,24 +106,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         .where(and(eq(visitLines.visitId, visit.id), eq(visitLines.id, entry.line_id)));
     }
 
-    if (parsed.data.actual_duration_minutes !== undefined) {
-      await tx
-        .update(visits)
-        .set({
-          actualDurationMinutes: parsed.data.actual_duration_minutes,
-          // The status records that this visit is no longer as first closed.
-          status: "adjusted",
-          updatedBy: actor.userId,
-          updatedAt: new Date(),
-          version: sql`${visits.version} + 1`,
-        })
-        .where(eq(visits.id, visit.id));
-    } else {
-      await tx
-        .update(visits)
-        .set({ status: "adjusted", updatedBy: actor.userId, updatedAt: new Date(), version: sql`${visits.version} + 1` })
-        .where(eq(visits.id, visit.id));
-    }
+    await tx
+      .update(visits)
+      .set({
+        ...(parsed.data.actual_duration_minutes !== undefined
+          ? { actualDurationMinutes: parsed.data.actual_duration_minutes }
+          : {}),
+        ...(parsed.data.tip_minor !== undefined ? { tipMinor: parsed.data.tip_minor } : {}),
+        // The status records that this visit is no longer as first closed.
+        status: "adjusted",
+        updatedBy: actor.userId,
+        updatedAt: new Date(),
+        version: sql`${visits.version} + 1`,
+      })
+      .where(eq(visits.id, visit.id));
 
     const after = await recalculateVisitProfit(tx, visit.id);
     const afterRefunds = await tx
@@ -141,12 +143,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         contribution_margin_minor:
           before?.profit.status === "complete" ? before.profit.costing.contributionMarginMinor : null,
         refunds: beforeRefunds,
+        tip_minor: visit.tipMinor,
       },
       after: {
         contribution_margin_minor: snapshot.contributionMarginMinor,
         snapshot_version: snapshot.snapshotVersion,
         reason: parsed.data.reason ?? null,
         refunds: afterRefunds,
+        tip_minor: after!.visit.tipMinor,
       },
       requestId: requestIdentifier,
     });
