@@ -59,6 +59,11 @@ for (const width of [null, 375] as const) {
       await page.locator(".visit-card").first().getByText("Duration, refund or tip").click();
       const later = page.locator(".visit-card").first().getByLabel("Tip, MDL");
       await expect(later).toHaveValue("50");
+      // Open, the correction stays inside the card on the narrowest screen.
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
       await later.fill("80");
       await page.locator(".visit-card").first().getByRole("button", { name: "Save" }).click();
       await expect(total).toContainText("Tips: MDL 80.00");
