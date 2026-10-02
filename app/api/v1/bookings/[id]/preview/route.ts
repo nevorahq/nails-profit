@@ -3,7 +3,7 @@ import { mayActOnSpecialist } from "@/lib/booking-access";
 import { requireCalendarCaller } from "@/lib/booking-http";
 import { bookingLinesOf, loadBooking } from "@/lib/booking-service";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
-import { buildVisitDraft, calculateVisitDraftProfit } from "@/lib/visit-service";
+import { buildVisitDraft, calculateVisitDraftProfit, quotedPricesOf } from "@/lib/visit-service";
 
 /**
  * What an appointment would earn if it were closed now.
@@ -46,6 +46,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       addOnIds: lines.filter((line) => line.addOnId).map((line) => line.addOnId!),
       specialistId: booking.specialistId,
       at: new Date(),
+      // Costed at the prices the booking quoted, as closing it will be.
+      quoted: quotedPricesOf(lines),
     });
     if (!draft) return unknown;
 

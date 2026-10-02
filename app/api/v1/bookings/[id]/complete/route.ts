@@ -12,7 +12,7 @@ import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { fingerprintOf } from "@/lib/idempotency";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
-import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
+import { quotedPricesOf, recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 
 /**
  * Closing an appointment into a visit, roadmap section 7.6.
@@ -25,12 +25,19 @@ import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
  * to guarantee that is for there to be one code path.
  *
  * What still has to be supplied is what only the appointment itself knows: how
- * long it actually took.
+ * long it actually took, and — when it differs from the booking's «Итого» —
+ * what the client actually paid. The lines are priced from the booking, not
+ * from today's catalogue: the client was quoted those prices.
  */
 const completeSchema = z.object({
   completed_at: z.iso.datetime().optional(),
   actual_duration_minutes: z.int().positive().nullable().optional(),
   version: z.int().positive().optional(),
+  /**
+   * What the client actually paid. Omitted means the booking's own «Итого» —
+   * the prices the client was quoted, not today's price list.
+   */
+  paid_minor: z.int().min(0).max(100_000_000).optional(),
 });
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -178,6 +185,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         specialistId: existing.specialistId,
         clientId: existing.clientId,
         addOnIds: lines.filter((line) => line.addOnId).map((line) => line.addOnId!),
+        quoted: quotedPricesOf(lines),
+        paidMinor: parsed.data.paid_minor,
         bookingId: existing.id,
         completedAt,
         actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,

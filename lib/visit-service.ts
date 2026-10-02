@@ -24,6 +24,9 @@ import { hasAnyTax, selectTaxRates } from "@/domain/tax-rules";
 import type { Currency } from "@/domain/money";
 import type { MemberRole } from "@/domain/rbac";
 import { calculateVisitProfit, type VisitProfit } from "@/domain/visit-profit";
+import { applyPaidAmount, spreadDiscount } from "@/domain/visit-payment";
+import { supportedLocales } from "@/i18n/messages";
+import { getTranslator } from "@/i18n/t";
 import { recordAuditEvent } from "@/lib/audit";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 
@@ -36,7 +39,11 @@ import { recordPilotProductEvent } from "@/lib/pilot-events";
  */
 
 export type VisitDraftLine = Readonly<{
-  kind: "service" | "add_on";
+  /**
+   * `surcharge` is what the client paid above the price list — a line of its
+   * own, so the sticker price stays readable next to what the work fetched.
+   */
+  kind: "service" | "add_on" | "surcharge";
   serviceId: string | null;
   addOnId: string | null;
   nameSnapshot: Record<string, string>;
@@ -115,6 +122,39 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
   });
 }
 
+/** The prices a booking quoted, by line: the service, and each add-on by id. */
+export type QuotedPrices = Readonly<{
+  serviceMinor: number;
+  addOnMinor: Readonly<Record<string, number>>;
+}>;
+
+/**
+ * Reads the quote off a booking's own lines.
+ *
+ * The sum of these is the «Итого» the client saw on the booking, which is
+ * what closing the appointment «по прайсу» now records.
+ */
+export function quotedPricesOf(
+  lines: readonly Readonly<{ kind: string; addOnId: string | null; priceMinor: number }>[],
+): QuotedPrices {
+  const service = lines.find((line) => line.kind === "service");
+  return {
+    serviceMinor: service?.priceMinor ?? 0,
+    addOnMinor: Object.fromEntries(
+      lines
+        .filter((line) => line.addOnId !== null)
+        .map((line) => [line.addOnId as string, line.priceMinor]),
+    ),
+  };
+}
+
+/** The surcharge line's name, in every language a snapshot may be read in. */
+function surchargeName(): Record<string, string> {
+  return Object.fromEntries(
+    supportedLocales.map((locale) => [locale, getTranslator(locale)("visits.surcharge")]),
+  );
+}
+
 /**
  * Turns a service, its chosen add-ons and a specialist into the rows a visit
  * will own.
@@ -132,6 +172,14 @@ export async function buildVisitDraft(
      * usually takes cards records the one client who paid in notes.
      */
     paymentMethodId?: string | null;
+    /**
+     * The prices the client was quoted, when the visit closes a booking. The
+     * booking already told the client what the appointment costs, and a price
+     * list raised in the meantime must not bill them the new figure.
+     */
+    quoted?: QuotedPrices;
+    /** What the client actually paid. Undefined means the price list (or the quote). */
+    paidMinor?: number;
   },
 ): Promise<VisitDraft | null> {
   const [service] = await tx.select().from(services).where(eq(services.id, input.serviceId)).limit(1);
@@ -142,13 +190,13 @@ export async function buildVisitDraft(
       ? await tx.select().from(addOns).where(inArray(addOns.id, [...input.addOnIds]))
       : [];
 
-  const lines: VisitDraftLine[] = [
+  const priced: VisitDraftLine[] = [
     {
       kind: "service",
       serviceId: service.id,
       addOnId: null,
       nameSnapshot: (service.name ?? {}) as Record<string, string>,
-      priceMinor: service.priceMinor ?? 0,
+      priceMinor: input.quoted?.serviceMinor ?? service.priceMinor ?? 0,
       discountMinor: 0,
       durationMinutes: service.durationMinutes ?? 0,
     },
@@ -157,11 +205,44 @@ export async function buildVisitDraft(
       serviceId: null,
       addOnId: addOn.id,
       nameSnapshot: (addOn.name ?? {}) as Record<string, string>,
-      priceMinor: Math.max(0, addOn.priceDeltaMinor),
-      discountMinor: Math.max(0, -addOn.priceDeltaMinor),
+      priceMinor: input.quoted?.addOnMinor[addOn.id] ?? Math.max(0, addOn.priceDeltaMinor),
+      discountMinor: 0,
       durationMinutes: addOn.durationDeltaMinutes,
     })),
   ];
+
+  /*
+   * An add-on that makes the visit cheaper — a short length — is a discount on
+   * what the visit charges, not a line of its own.
+   *
+   * It used to be written as a zero-price line carrying the whole reduction as
+   * its discount, which the `visit_line_discount_within_price` check refuses:
+   * closing any visit with such an add-on failed with a 500. Spread over the
+   * priced lines instead, the reduction lands where a discount can be taken
+   * from, and `full_price` commission still ignores it exactly as it did.
+   *
+   * Not applied to a quote: the booking already decided what each line costs.
+   */
+  const reduction = input.quoted
+    ? 0
+    : chosen.reduce((total, addOn) => total + Math.max(0, -addOn.priceDeltaMinor), 0);
+  const discounted = spreadDiscount(priced, reduction);
+
+  const paid = input.paidMinor === undefined ? null : applyPaidAmount(discounted, input.paidMinor);
+  const lines: VisitDraftLine[] = paid ? [...paid.lines] : discounted;
+  if (paid && paid.surchargeMinor > 0) {
+    lines.push({
+      kind: "surcharge",
+      // Rides on the service it was earned with, so a rule that pays only on
+      // some services pays on this exactly when it pays on the service.
+      serviceId: service.id,
+      addOnId: null,
+      nameSnapshot: surchargeName(),
+      priceMinor: paid.surchargeMinor,
+      discountMinor: 0,
+      durationMinutes: 0,
+    });
+  }
 
   const [person] = await tx
     .select({ isPrincipal: specialists.isPrincipal })
@@ -272,6 +353,10 @@ export type RecordVisitInput = Readonly<{
   actualDurationMinutes: number | null;
   /** Omitted takes the studio's default method; explicit null means cash. */
   paymentMethodId?: string | null;
+  /** The booking's own prices, when the visit closes one. */
+  quoted?: QuotedPrices;
+  /** What the client actually paid; omitted means the price list or the quote. */
+  paidMinor?: number;
   requestId: string;
   /** Optional for server-to-server callers; the browser always sends one. */
   completionKey?: string;
@@ -335,6 +420,8 @@ export async function recordCompletedVisit(
     specialistId: input.specialistId,
     at: input.completedAt,
     paymentMethodId: input.paymentMethodId,
+    quoted: input.quoted,
+    paidMinor: input.paidMinor,
   });
 
   if (!draft) return { ok: false, failure: "service_not_found" };
@@ -512,7 +599,10 @@ export async function recalculateVisitProfit(
     // every correction afterwards in MDL.
     currency: visit.currency,
     lines: lines.map((line) => ({
-      kind: line.kind === "add_on" ? ("add_on" as const) : ("service" as const),
+      kind:
+        line.kind === "add_on" || line.kind === "surcharge"
+          ? line.kind
+          : ("service" as const),
       priceMinor: line.priceMinor,
       discountMinor: line.discountMinor,
       refundMinor: line.refundMinor,

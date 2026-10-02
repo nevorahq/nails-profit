@@ -29,6 +29,12 @@ const createVisitSchema = z.object({
    * recordable without a fee the bank never charged.
    */
   payment_method_id: z.uuid().nullable().optional(),
+  /**
+   * What the client actually paid, in minor units. Omitted means the price
+   * list; less becomes discount, more becomes a surcharge line. Capped well
+   * above any manicure so a slipped finger cannot book a fortune.
+   */
+  paid_minor: z.int().min(0).max(100_000_000).optional(),
 });
 
 export async function GET(request: Request) {
@@ -176,6 +182,7 @@ export async function POST(request: Request) {
       // Passed straight through, undefined included: the service tells the two
       // apart, and collapsing them here would lose the difference.
       paymentMethodId: parsed.data.payment_method_id,
+      paidMinor: parsed.data.paid_minor,
       requestId: id,
       completionKey,
       completionFingerprint: completionKey ? fingerprintOf(parsed.data) : undefined,
