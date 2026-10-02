@@ -419,6 +419,13 @@ export default async function MonthReportPage({
               </tbody>
             </table>
             <p className="pl-note">{t("cash.hint")}</p>
+            {/* Part of why the account outgrew the profit, named rather than
+                left to read as a cost that has not gone out yet. */}
+            {cash.tipsMinor > cash.tipsPaidOutMinor && (
+              <p className="pl-note">
+                {t("cash.principalTips", { amount: money(cash.tipsMinor - cash.tipsPaidOutMinor) })}
+              </p>
+            )}
             {cash.ledgerPayrollMinor > 0 && (
               <p className="pl-note">
                 {t("cash.payrollExcluded", { amount: money(cash.ledgerPayrollMinor) })}

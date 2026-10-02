@@ -575,6 +575,8 @@ const ru = {
   "cash.visitLabour": "Оплата труда за визиты",
   "cash.tips": "Чаевые от клиентов",
   "cash.tipsPaidOut": "Чаевые переданы мастерам",
+  "cash.principalTips":
+    "Чаевые, оставленные вам ({amount}), остаются на счёте: это не прибыль бизнеса и не расход. Если вы их забираете — внесите это как изъятие владельца.",
   "cash.spent": "Оплачено по реестру расходов",
   "cash.ownerDraws": "Вы взяли себе",
   "cash.net": "Чистый денежный поток",
@@ -1952,6 +1954,8 @@ const ro: Record<MessageKey, Message> = {
   "cash.visitLabour": "Plata muncii pentru vizite",
   "cash.tips": "Bacșiș de la clienți",
   "cash.tipsPaidOut": "Bacșiș dat maeștrilor",
+  "cash.principalTips":
+    "Bacșișul lăsat dvs. ({amount}) rămâne în cont: nu este profit al afacerii și nici cheltuială. Dacă îl luați, înregistrați-l ca retragere a proprietarului.",
   "cash.spent": "Plătit după registrul de cheltuieli",
   "cash.ownerDraws": "Ați luat pentru dumneavoastră",
   "cash.net": "Flux net de numerar",
@@ -3321,6 +3325,8 @@ const en: Record<MessageKey, Message> = {
   "cash.visitLabour": "Pay for visits",
   "cash.tips": "Tips from clients",
   "cash.tipsPaidOut": "Tips handed to specialists",
+  "cash.principalTips":
+    "Tips left for you ({amount}) stay on the account: they are neither the business's profit nor a cost. If you take them, record it as an owner's draw.",
   "cash.spent": "Paid from the expense ledger",
   "cash.ownerDraws": "You took for yourself",
   "cash.net": "Net cash",
