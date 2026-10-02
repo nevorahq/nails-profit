@@ -155,6 +155,7 @@ export function CalendarBoard({
   buffers,
   canWrite,
   canFilterBySpecialist,
+  focusBookingId = null,
   businessType,
   currency,
   localeTag,
@@ -175,6 +176,12 @@ export function CalendarBoard({
   clients: readonly Option[];
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
+  /**
+   * An appointment to open on arrival, with its «Другая сумма или
+   * длительность» form: what «Закройте прошедшие записи» links to when the
+   * client paid something other than the «Итого».
+   */
+  focusBookingId?: string | null;
   exceptions: readonly CalendarException[];
   /** The rota the day's tally measures its free time against. */
   shifts: readonly (ShiftRule & Readonly<{ locationId: string }>)[];
@@ -601,6 +608,23 @@ export function CalendarBoard({
       details?.removeEventListener("toggle", onToggle);
     };
   }, []);
+
+  /*
+   * Opened once, on arrival, rather than held open: after this it is the
+   * reader's card to close. The outer `<details>` opening is what loads the
+   * margin preview, exactly as a tap on it would.
+   */
+  useEffect(() => {
+    if (!focusBookingId) return;
+    const entry = document.getElementById(`booking-${focusBookingId}`);
+    const card = entry?.querySelector<HTMLDetailsElement>(":scope > details");
+    if (!entry || !card) return;
+    card.open = true;
+    const modify = card.querySelector<HTMLDetailsElement>("details.calendar-subform");
+    if (modify) modify.open = true;
+    entry.scrollIntoView({ block: "center" });
+    modify?.querySelector<HTMLInputElement>('input[name="paid"]')?.focus({ preventScroll: true });
+  }, [focusBookingId]);
 
   /**
    * Whose time this screen may block out. A master blocks only their own; for
@@ -1074,6 +1098,7 @@ export function CalendarBoard({
                 return (
                 <li
                   key={booking.id}
+                  id={`booking-${booking.id}`}
                   className={`calendar-entry status-${booking.status}`}
                 >
                   <details

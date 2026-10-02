@@ -109,6 +109,8 @@ export default async function CalendarPage({
     location?: string;
     specialist?: string;
     status?: string;
+    /** An appointment to open on arrival; see `focusBookingId`. */
+    booking?: string;
   }>;
 }) {
   const { membership, bookingAccess, locale, currency, businessType } = await requireWorkspace();
@@ -524,6 +526,7 @@ export default async function CalendarPage({
           };
         })}
         assignments={data.assignments}
+        focusBookingId={filters.booking ?? null}
         clients={data.roster}
         filters={{
           location: filters.location ?? "",

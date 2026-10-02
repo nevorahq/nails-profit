@@ -94,3 +94,94 @@ test.describe("closing the day", () => {
     await context.close();
   });
 });
+
+/*
+ * The same panel where it is used most — a phone between two clients — at the
+ * narrowest width the product supports. Nothing may scroll sideways, and each
+ * of the three answers has to be reachable.
+ */
+test.describe("closing the day at 375 px", () => {
+  let studio: Studio;
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test.beforeEach(async ({ baseURL }, testInfo) => {
+    studio = await seedStudio(baseURL!, testInfo, { confirmationMode: "instant" });
+  });
+
+  test.afterEach(async () => {
+    if (studio) await disposeStudio(studio);
+  });
+
+  test("«Неявка» takes the appointment off the list without a visit", async (
+    { browser, baseURL, browserErrors },
+    testInfo,
+  ) => {
+    void browserErrors;
+    const booking = await bookAppointment(studio.owner, studio, { startsAt: daysFromToday(1) });
+    await alreadyOver(studio, booking.id);
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    const page = await context.newPage();
+    await page.goto("/app");
+
+    const panel = page.locator("#close-day");
+    const item = panel.locator(".close-day-item");
+    await expect(item).toHaveCount(1);
+    for (const action of [
+      item.getByRole("button", { name: "Took place — MDL 600.00" }),
+      item.getByRole("button", { name: "No-show" }),
+      item.getByRole("link", { name: "Different amount" }),
+    ]) {
+      await expect(action).toBeVisible();
+    }
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath("close-day-375.png"), fullPage: true });
+
+    await item.getByRole("button", { name: "No-show" }).click();
+    await expect(panel).toHaveCount(0);
+    const after = await studio.owner.get<{ status: string }>(`/api/v1/bookings/${booking.id}`);
+    expect(after.status).toBe("no_show");
+
+    await page.goto("/app/visits");
+    await expect(page.locator(".visit-card-total")).toHaveCount(0);
+    await context.close();
+  });
+
+  test("«Другая сумма» opens the appointment ready for the amount", async (
+    { browser, baseURL, browserErrors },
+    testInfo,
+  ) => {
+    void browserErrors;
+    const booking = await bookAppointment(studio.owner, studio, { startsAt: daysFromToday(1) });
+    await alreadyOver(studio, booking.id);
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    const page = await context.newPage();
+    await page.goto("/app");
+    await page.locator("#close-day").getByRole("link", { name: "Different amount" }).click();
+    await page.waitForURL(`**/app/calendar?**booking=${booking.id}`);
+
+    // Straight to the field: the card and its form are open, the cursor in it.
+    const entry = page.locator(`#booking-${booking.id}`);
+    const paid = entry.getByLabel("Client paid, MDL");
+    await expect(paid).toBeVisible();
+    await expect(paid).toBeFocused();
+    await expect(paid).toHaveValue("600");
+    await page.screenshot({ path: testInfo.outputPath("close-day-other-amount-375.png"), fullPage: true });
+
+    await paid.fill("550");
+    await entry
+      .locator("details.calendar-subform form")
+      .getByRole("button", { name: "Close into a visit" })
+      .click();
+    await expect(entry).toContainText("Completed");
+
+    await page.goto("/app/visits");
+    await expect(page.locator(".visit-card-total")).toContainText("MDL 550.00");
+    await context.close();
+  });
+});
+
