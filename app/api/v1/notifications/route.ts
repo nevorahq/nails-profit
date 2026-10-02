@@ -8,6 +8,7 @@ import { resolveLocalizedText } from "@/i18n/localized-text";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { scopedSpecialistId } from "@/lib/booking-access";
 import { groupNotices, loadNoticeFeed, loadNoticeReads } from "@/lib/staff-notices";
+import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
   const actor = caller.membership;
   if (!can(actor.role, "bookings", "read")) {
-    return apiSuccess({ pending: [], feed: [], unread: 0 }, id);
+    return apiSuccess({ pending: [], feed: [], unread: 0, unclosed: 0 }, id);
   }
   // A no-op today — `bookingModuleRefusal` only refuses writes — but this list
   // is calendar-surface data same as `GET /api/v1/bookings`, so it stays
@@ -84,6 +85,11 @@ export async function GET(request: Request) {
       found,
       lines,
       notices: await loadNoticeFeed(tx, { organizationId: actor.organizationId, actor }),
+      // Past appointments nobody closed. Counted only for a role that could
+      // close them; listed on the dashboard, not here.
+      unclosed: can(actor.role, "bookings", "write")
+        ? (await loadUnclosedBookings(tx, actor, { now: new Date(), locale })).count
+        : 0,
       reads: await loadNoticeReads(tx, {
         organizationId: actor.organizationId,
         userId: actor.userId,
@@ -163,5 +169,8 @@ export async function GET(request: Request) {
     };
   });
 
-  return apiSuccess({ pending: items, feed, unread: feed.filter((row) => row.unread).length }, id);
+  return apiSuccess(
+    { pending: items, feed, unread: feed.filter((row) => row.unread).length, unclosed: rows.unclosed },
+    id,
+  );
 }

@@ -1,5 +1,3 @@
-import type { Browser } from "@playwright/test";
-
 import { expect, test } from "../fixtures";
 import {
   bookAppointment,
@@ -8,6 +6,7 @@ import {
   isoDate,
   moveIntoThePast,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -20,26 +19,6 @@ import {
  * forgetting to follow the price, or sending an amount nobody typed — would
  * show up.
  */
-/**
- * The owner's browser, with cookie consent already answered.
- *
- * The fixture declines consent for its own page only; a context made here
- * would otherwise open with the banner, which on a phone sits over the very
- * button these tests press.
- */
-async function ownerContext(browser: Browser, studio: Studio, baseURL: string) {
-  const context = await browser.newContext({ storageState: await studio.owner.storageState() });
-  await context.addCookies([
-    {
-      name: "npo_cookie_consent",
-      value: encodeURIComponent(JSON.stringify({ analytics: false, updatedAt: "2026-01-01T00:00:00.000Z" })),
-      url: baseURL,
-      sameSite: "Lax",
-    },
-  ]);
-  return context;
-}
-
 test.describe("what the client paid", () => {
   let studio: Studio;
 
@@ -56,7 +35,7 @@ test.describe("what the client paid", () => {
     const booking = await bookAppointment(studio.owner, studio, { startsAt: daysFromToday(1) });
     const startsAt = await moveIntoThePast(studio, booking.id);
 
-    const context = await ownerContext(browser, studio, baseURL!);
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     await page.goto(`/app/calendar?date=${isoDate(startsAt)}&specialist=${studio.specialistId}`);
 
@@ -91,7 +70,7 @@ test.describe("what the client paid", () => {
 
   test("closing a walk-in for more records a surcharge", async ({ browser, baseURL, browserErrors }, testInfo) => {
     void browserErrors;
-    const context = await ownerContext(browser, studio, baseURL!);
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/visits/new");
 

@@ -11,7 +11,8 @@ import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatHours, formatMoneyMinor } from "@/lib/format";
-import { isMonth, loadPeriodPL, monthOf } from "@/lib/period";
+import { isMonth, loadPeriodPL, monthBounds, monthOf } from "@/lib/period";
+import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { requireWorkspace } from "@/lib/workspace";
 
 /**
@@ -60,7 +61,7 @@ export default async function MonthReportPage({
    * `principalLabourMinor` is zero both for a studio that has no principal and
    * for one whose principal worked no visits this month.
    */
-  const { report, soloWithoutPrincipal } = await withTenant(
+  const { report, soloWithoutPrincipal, unclosed } = await withTenant(
     membership.organizationId,
     async (tx) => {
       const report = await loadPeriodPL(
@@ -74,8 +75,21 @@ export default async function MonthReportPage({
         .from(specialists)
         .where(isNull(specialists.archivedAt));
 
+      /*
+       * Appointments of this month that ended and were never closed. Their
+       * money is in no line above, and without saying so the month reads as
+       * a worse month rather than an unfinished one.
+       */
+      const bounds = monthBounds(month);
+      const unclosed = await loadUnclosedBookings(
+        tx,
+        { userId: membership.userId, role: membership.role },
+        { now: new Date(), locale, endedFrom: bounds.from, endedTo: bounds.to },
+      );
+
       return {
         report,
+        unclosed,
         soloWithoutPrincipal: soloNeedsPrincipal(
           businessType,
           people.map((person) => person.isPrincipal),
@@ -141,6 +155,18 @@ export default async function MonthReportPage({
 
       {report.excludedRows > 0 && (
         <p className="pl-note">{t("pl.otherCurrency", { count: report.excludedRows })}</p>
+      )}
+
+      {/* Outside the report itself: a month whose only work is unclosed
+          appointments is otherwise «nothing happened», which is the one thing
+          that is not true of it. */}
+      {unclosed.count > 0 && (
+        <div className="warning-banner">
+          {t("pl.unclosed", { count: unclosed.count, amount: money(unclosed.totalMinor) })}{" "}
+          <Link className="text-link" href="/app#close-day">
+            {t("pl.unclosedAction")}
+          </Link>
+        </div>
       )}
 
       {nothingHappened ? (

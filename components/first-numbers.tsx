@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import Link from "next/link";
 
 import { BookingLink } from "@/components/booking-link";
@@ -32,6 +34,7 @@ export function FirstNumbers({
   businessType,
   currency,
   bookingSlug,
+  closeDay,
 }: {
   rows: readonly FirstNumberRow[];
   locale: AppLocale;
@@ -40,6 +43,11 @@ export function FirstNumbers({
   currency: Currency;
   /** The studio's public address, when its page is actually live. */
   bookingSlug: string | null;
+  /**
+   * Appointments that happened and were never closed. Shown first: a studio
+   * still on this screen has no visit yet, and these are the first ones.
+   */
+  closeDay?: ReactNode;
 }) {
   const t = getTranslator(locale);
   const localeCode = localeTag(locale);
@@ -47,6 +55,7 @@ export function FirstNumbers({
 
   return (
     <main className="app-shell">
+      {closeDay}
       <section className="panel">
         <h2>{t("firstNumbers.title")}</h2>
         <p className="muted">{t("firstNumbers.lead")}</p>

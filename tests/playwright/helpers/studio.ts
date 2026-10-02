@@ -1,4 +1,10 @@
-import { request as newRequest, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+import {
+  request as newRequest,
+  type APIRequestContext,
+  type Browser,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 /** What `browser.newContext({ storageState })` accepts, as Playwright types it. */
 type StorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>;
@@ -247,6 +253,26 @@ export async function seedStudio(
     colleagueName,
     slug,
   };
+}
+
+/**
+ * A browser signed in as `account`, with cookie consent already answered.
+ *
+ * The `browserErrors` fixture declines consent for its own page only; a context
+ * made by hand would otherwise open with the banner, which on a phone sits over
+ * the bottom of the screen — exactly where a form's button lands.
+ */
+export async function signedInContext(browser: Browser, account: Account, baseURL: string) {
+  const context = await browser.newContext({ storageState: await account.storageState() });
+  await context.addCookies([
+    {
+      name: "npo_cookie_consent",
+      value: encodeURIComponent(JSON.stringify({ analytics: false, updatedAt: "2026-01-01T00:00:00.000Z" })),
+      url: baseURL,
+      sameSite: "Lax",
+    },
+  ]);
+  return context;
 }
 
 export async function disposeStudio(studio: Studio) {
