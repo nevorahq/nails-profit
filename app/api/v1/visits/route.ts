@@ -7,6 +7,7 @@ import { can, scopeFor } from "@/domain/rbac";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { fingerprintOf } from "@/lib/idempotency";
 import { getActiveMembership } from "@/lib/membership";
+import { refineServiceSelection, serviceItemsOf, serviceSelection } from "@/lib/service-items";
 import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
 
 /**
@@ -15,27 +16,30 @@ import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
  * Creating one snapshots the catalogue: prices, names and the commission rule
  * are copied in, and the visit never reads the catalogue again.
  */
-const createVisitSchema = z.object({
-  service_id: z.uuid(),
-  specialist_id: z.uuid(),
-  client_id: z.uuid().nullable().optional(),
-  add_on_ids: z.array(z.uuid()).max(50).default([]),
-  completed_at: z.iso.datetime().optional(),
-  actual_duration_minutes: z.int().positive().nullable().optional(),
-  /**
-   * Omitted takes the studio's default method; an explicit null means cash.
-   * The distinction matters: a studio that usually takes cards should not have
-   * to think about the field, and the one client who paid in notes has to be
-   * recordable without a fee the bank never charged.
-   */
-  payment_method_id: z.uuid().nullable().optional(),
-  /**
-   * What the client actually paid, in minor units. Omitted means the price
-   * list; less becomes discount, more becomes a surcharge line. Capped well
-   * above any manicure so a slipped finger cannot book a fortune.
-   */
-  paid_minor: z.int().min(0).max(100_000_000).optional(),
-});
+const createVisitSchema = z
+  .object({
+    /** One service, or several: see `lib/service-items.ts`. */
+    ...serviceSelection,
+    specialist_id: z.uuid(),
+    client_id: z.uuid().nullable().optional(),
+    add_on_ids: z.array(z.uuid()).max(50).default([]),
+    completed_at: z.iso.datetime().optional(),
+    actual_duration_minutes: z.int().positive().nullable().optional(),
+    /**
+     * Omitted takes the studio's default method; an explicit null means cash.
+     * The distinction matters: a studio that usually takes cards should not have
+     * to think about the field, and the one client who paid in notes has to be
+     * recordable without a fee the bank never charged.
+     */
+    payment_method_id: z.uuid().nullable().optional(),
+    /**
+     * What the client actually paid, in minor units. Omitted means the price
+     * list; less becomes discount, more becomes a surcharge line. Capped well
+     * above any manicure so a slipped finger cannot book a fortune.
+     */
+    paid_minor: z.int().min(0).max(100_000_000).optional(),
+  })
+  .superRefine(refineServiceSelection);
 
 export async function GET(request: Request) {
   const id = requestId(request);
@@ -107,7 +111,12 @@ export async function GET(request: Request) {
       specialist_id: visit.specialistId,
       client_id: visit.clientId,
       status: visit.status,
-      lines: lines.map((line) => ({ kind: line.kind, name: line.nameSnapshot, price_minor: line.priceMinor })),
+      lines: lines.map((line) => ({
+        kind: line.kind,
+        service_id: line.serviceId,
+        name: line.nameSnapshot,
+        price_minor: line.priceMinor,
+      })),
       snapshot: snapshot
         ? {
             version: snapshot.snapshotVersion,
@@ -173,10 +182,9 @@ export async function POST(request: Request) {
     return recordCompletedVisit(tx, {
       organizationId: actor.organizationId,
       actor: { userId: actor.userId, role: actor.role },
-      serviceId: parsed.data.service_id,
+      items: serviceItemsOf(parsed.data),
       specialistId: parsed.data.specialist_id,
       clientId: parsed.data.client_id ?? null,
-      addOnIds: parsed.data.add_on_ids,
       completedAt,
       actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,
       // Passed straight through, undefined included: the service tells the two

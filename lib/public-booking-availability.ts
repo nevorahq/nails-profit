@@ -3,7 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { addLocalDays, localToUtc, type LocalDate } from "@/domain/timezone";
 import {
   alternativeSlots,
-  loadBookingDraft,
+  loadBookingDraftFor,
   loadSlotContext,
   slotsFor,
 } from "@/lib/availability-service";
@@ -23,8 +23,19 @@ export type PublicAvailabilityInput = Readonly<{
   date: LocalDate;
   /** Set when a client is moving this booking, so its own hour stays offerable. */
   excludeBookingId?: string | null;
+  /**
+   * Every service of the booking being moved, when the studio booked several
+   * in one sitting. The public page books one; an appointment made at the
+   * desk can hold more, and moving it must find room for all of it rather
+   * than for its first service. Absent means `serviceId` with `addOnIds`.
+   */
+  items?: readonly Readonly<{ serviceId: string; addOnIds: readonly string[] }>[];
   now: Date;
 }>;
+
+function itemsOf(input: PublicAvailabilityInput) {
+  return input.items ?? [{ serviceId: input.serviceId, addOnIds: input.addOnIds }];
+}
 
 export type PublicSlot = Readonly<{
   starts_at: string;
@@ -47,11 +58,7 @@ async function candidateFor(
   person: PublicSpecialist,
   timezone: string,
 ): Promise<Candidate | null> {
-  const draft = await loadBookingDraft(tx, {
-    serviceId: input.serviceId,
-    addOnIds: input.addOnIds,
-    specialistId: person.id,
-  });
+  const draft = await loadBookingDraftFor(tx, { items: itemsOf(input), specialistId: person.id });
   if (!draft) return null;
 
   const context = await loadSlotContext(tx, input.locationId);
@@ -116,13 +123,23 @@ export async function loadPublicAvailability(
   const catalogue = await loadPublicCatalog(input.slug, input.locationId);
   if (!catalogue) return null;
 
-  const service = catalogue.dto.services.find((entry) => entry.id === input.serviceId);
-  if (!service) return null;
-  const allowedAddOns = new Set(service.add_ons.map((addOn) => addOn.id));
-  if (input.addOnIds.some((id) => !allowedAddOns.has(id))) return null;
+  const items = itemsOf(input);
+  for (const item of items) {
+    const service = catalogue.dto.services.find((entry) => entry.id === item.serviceId);
+    if (!service) return null;
+    const allowedAddOns = new Set(service.add_ons.map((addOn) => addOn.id));
+    if (item.addOnIds.some((id) => !allowedAddOns.has(id))) return null;
+  }
 
   return withTenant(catalogue.organization.id, async (tx) => {
-    let people = await publicSpecialistsFor(tx, input.locationId, input.serviceId);
+    // Whoever does every service of the sitting, not only the first.
+    let people = await publicSpecialistsFor(tx, input.locationId, items[0].serviceId);
+    for (const item of items.slice(1)) {
+      const able = new Set(
+        (await publicSpecialistsFor(tx, input.locationId, item.serviceId)).map((person) => person.id),
+      );
+      people = people.filter((person) => able.has(person.id));
+    }
     if (input.specialistId) {
       people = people.filter((person) => person.id === input.specialistId);
     }
@@ -173,9 +190,8 @@ export async function loadPublicAvailability(
             (
               await Promise.all(
                 people.map(async (person) => {
-                  const draft = await loadBookingDraft(tx, {
-                    serviceId: input.serviceId,
-                    addOnIds: input.addOnIds,
+                  const draft = await loadBookingDraftFor(tx, {
+                    items: itemsOf(input),
                     specialistId: person.id,
                   });
                   if (!draft) return [];

@@ -84,6 +84,59 @@ describe("visit snapshots", () => {
     );
   });
 
+  it("takes a line's own commission rule only whole and well-formed", async () => {
+    const visit = await createVisit(organizationId, { specialistId });
+    const line = {
+      organizationId,
+      visitId: visit.id,
+      kind: "service",
+      nameSnapshot: { ru: "Услуга" },
+      priceMinor: 10_000,
+    };
+    const ruleId = "00000000-0000-4000-8000-000000000057";
+
+    // A rate without the rule it came from cannot be grouped, so it is refused.
+    await expectDatabaseError(
+      adminDb.insert(visitLines).values({ ...line, commissionType: "percentage", commissionBasisPoints: 4_000 }),
+      { code: PG_ERROR.check, constraint: "visit_line_commission_shape" },
+    );
+    // A fixed rule carrying a rate contradicts its type, as on the rule itself.
+    await expectDatabaseError(
+      adminDb.insert(visitLines).values({
+        ...line,
+        commissionRuleId: ruleId,
+        commissionType: "fixed",
+        commissionBasisPoints: 4_000,
+        commissionFixedAmountMinor: 5_000,
+        commissionBase: "after_discount",
+      }),
+      { code: PG_ERROR.check, constraint: "visit_line_commission_shape" },
+    );
+    await expectDatabaseError(
+      adminDb.insert(visitLines).values({
+        ...line,
+        commissionRuleId: ruleId,
+        commissionType: "fixed",
+        commissionFixedAmountMinor: -1,
+        commissionBase: "after_discount",
+      }),
+      { code: PG_ERROR.check, constraint: "visit_line_commission_non_negative" },
+    );
+
+    // None at all is every line written before, and each whole shape is fine.
+    await adminDb.insert(visitLines).values([
+      line,
+      {
+        ...line,
+        commissionRuleId: ruleId,
+        commissionType: "hybrid",
+        commissionBasisPoints: 1_000,
+        commissionFixedAmountMinor: 5_000,
+        commissionBase: "full_price",
+      },
+    ]);
+  });
+
   it("refuses to update a financial snapshot, and lets a deleted visit take it", async () => {
     /*
      * Append-only is enforced by a trigger, not by convention: an UPDATE here

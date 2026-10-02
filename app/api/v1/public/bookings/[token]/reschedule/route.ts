@@ -4,7 +4,7 @@ import { z } from "zod";
 import { bookingIdempotencyKeys } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { toZonedParts } from "@/domain/timezone";
-import { loadBookingDraft } from "@/lib/availability-service";
+import { loadBookingDraftFor } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
 import {
   cancelPendingNotifications,
@@ -87,6 +87,14 @@ async function handlePost(
     );
   }
 
+  // All of the sitting, so that moving an appointment of two services finds
+  // room for both rather than shortening it to the first.
+  const itemsOfAccess = (access.dto.services ?? []).map((item) => ({
+    serviceId: item.service_id,
+    addOnIds: item.add_on_ids,
+  }));
+  if (itemsOfAccess.length === 0) return publicNotFound(id);
+
   const startsAt = new Date(parsed.data.starts_at);
   const local = toZonedParts(startsAt, access.dto.location.timezone);
   const availability = await loadPublicAvailability({
@@ -94,6 +102,7 @@ async function handlePost(
     locationId: access.dto.location.id,
     serviceId: access.dto.service_id,
     addOnIds: access.dto.add_on_ids,
+    items: itemsOfAccess,
     specialistId: parsed.data.specialist_id,
     date: { year: local.year, month: local.month, day: local.day },
     // Moving by fifteen minutes is a move, and the booking's own hour is only
@@ -134,9 +143,8 @@ async function handlePost(
           : { ok: false as const, failure: "not_bookable" as const };
       }
 
-      const draft = await loadBookingDraft(tx, {
-        serviceId: access.dto.service_id!,
-        addOnIds: access.dto.add_on_ids,
+      const draft = await loadBookingDraftFor(tx, {
+        items: itemsOfAccess,
         specialistId: parsed.data.specialist_id,
       });
       if (!draft) return { ok: false as const, failure: "not_bookable" as const };

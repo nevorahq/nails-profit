@@ -3,7 +3,7 @@ import { mayActOnSpecialist } from "@/lib/booking-access";
 import { requireCalendarCaller } from "@/lib/booking-http";
 import { bookingLinesOf, loadBooking } from "@/lib/booking-service";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
-import { buildVisitDraft, calculateVisitDraftProfit, quotedPricesOf } from "@/lib/visit-service";
+import { bookingServicesOf, buildVisitDraft, calculateVisitDraftProfit } from "@/lib/visit-service";
 
 /**
  * What an appointment would earn if it were closed now.
@@ -30,8 +30,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!booking) return null;
     if (!(await mayActOnSpecialist(tx, actor, booking.specialistId))) return null;
 
-    const lines = await bookingLinesOf(tx, booking.id);
-    const service = lines.find((line) => line.kind === "service");
+    const booked = bookingServicesOf(await bookingLinesOf(tx, booking.id));
 
     // The service is gone from the catalogue, so there is no commission rule to
     // resolve and no duration to divide by. Named rather than guessed at.
@@ -39,15 +38,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       durationMinutes: 0,
       preview: { status: "incomplete" as const, reasons: ["missing_commission_rule"] },
     };
-    if (!service?.serviceId) return unknown;
+    if (!booked) return unknown;
 
     const draft = await buildVisitDraft(tx, {
-      serviceId: service.serviceId,
-      addOnIds: lines.filter((line) => line.addOnId).map((line) => line.addOnId!),
+      items: booked.items,
       specialistId: booking.specialistId,
       at: new Date(),
       // Costed at the prices the booking quoted, as closing it will be.
-      quoted: quotedPricesOf(lines),
+      quoted: booked.quoted,
     });
     if (!draft) return unknown;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { applyPaidAmount, spreadDiscount } from "@/domain/visit-payment";
+import { applyPaidAmount, spreadDiscount, surchargeByService } from "@/domain/visit-payment";
 
 const charged = (lines: readonly { priceMinor: number; discountMinor: number }[]) =>
   lines.reduce((sum, line) => sum + line.priceMinor - line.discountMinor, 0);
@@ -113,5 +113,49 @@ describe("applyPaidAmount", () => {
   it("refuses a negative or fractional amount", () => {
     expect(() => applyPaidAmount(lines, -1)).toThrow(RangeError);
     expect(() => applyPaidAmount(lines, 1.5)).toThrow(RangeError);
+  });
+});
+
+describe("surchargeByService", () => {
+  const manicure = { serviceId: "manicure", priceMinor: 30_000, discountMinor: 0 };
+  const design = { serviceId: "manicure", priceMinor: 10_000, discountMinor: 0 };
+  const pedicure = { serviceId: "pedicure", priceMinor: 60_000, discountMinor: 0 };
+
+  it("puts the whole surcharge on the only service", () => {
+    expect(surchargeByService([manicure, design], 5_000)).toEqual([
+      { serviceId: "manicure", amountMinor: 5_000 },
+    ]);
+  });
+
+  it("splits it by what each service charges with its add-ons, summing exactly", () => {
+    // 400 and 600 of a 1 000 visit: 10.01 splits 4.00 / 6.01.
+    const parts = surchargeByService([manicure, design, pedicure], 1_001);
+    expect(parts).toEqual([
+      { serviceId: "manicure", amountMinor: 400 },
+      { serviceId: "pedicure", amountMinor: 601 },
+    ]);
+  });
+
+  it("weighs what a line still charges, after the discount already on it", () => {
+    const parts = surchargeByService(
+      [{ ...manicure, discountMinor: 20_000 }, { ...pedicure, discountMinor: 30_000 }],
+      400,
+    );
+    // 100 and 300 still charged.
+    expect(parts).toEqual([
+      { serviceId: "manicure", amountMinor: 100 },
+      { serviceId: "pedicure", amountMinor: 300 },
+    ]);
+  });
+
+  it("leaves out a part that comes to zero", () => {
+    expect(surchargeByService([{ ...manicure, priceMinor: 1 }, pedicure], 1)).toEqual([
+      { serviceId: "pedicure", amountMinor: 1 },
+    ]);
+  });
+
+  it("returns nothing for nothing, and refuses a surcharge with no service to book it to", () => {
+    expect(surchargeByService([{ ...design, serviceId: null }], 0)).toEqual([]);
+    expect(() => surchargeByService([{ ...design, serviceId: null }], 100)).toThrow(RangeError);
   });
 });

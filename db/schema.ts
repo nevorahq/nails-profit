@@ -1130,11 +1130,46 @@ export const visitLines = pgTable(
      * place the numbers are.
      */
     commissionable: boolean("commissionable").notNull().default(true),
+    /**
+     * The rule this line is paid under, copied when the visit closed.
+     *
+     * A visit used to hold one service and so one rule, kept on `visit`. With
+     * several, each service's rule is chosen on its own and copied onto its
+     * lines here. All null on every line written before, which then falls under
+     * the visit's rule — the figure it was always costed at.
+     *
+     * `commission_rule_id` is a grouping key and nothing else: lines that share
+     * it share one fixed amount (`domain/visit-commission.ts`). No foreign key,
+     * because the costing must never depend on a row that lives elsewhere, and
+     * a rule removed later must not change how many fixed amounts a closed
+     * visit paid.
+     */
+    commissionRuleId: uuid("commission_rule_id"),
+    commissionType: commissionType("commission_type"),
+    commissionBasisPoints: integer("commission_basis_points"),
+    commissionFixedAmountMinor: bigint("commission_fixed_amount_minor", { mode: "number" }),
+    commissionBase: commissionBase("commission_base"),
     durationMinutes: integer("duration_minutes").notNull().default(0),
     ...auditColumns,
   },
   (table) => [
     index("visit_line_visit_idx").on(table.visitId),
+    // The same shapes as `visit_commission_shape`, or nothing at all. Text
+    // comparisons for the reason given at `commission_rule_shape`.
+    check(
+      "visit_line_commission_shape",
+      sql`(${table.commissionRuleId} is null and ${table.commissionType} is null and ${table.commissionBasisPoints} is null
+          and ${table.commissionFixedAmountMinor} is null and ${table.commissionBase} is null)
+        or (${table.commissionRuleId} is not null and ${table.commissionBase} is not null and (
+          (${table.commissionType}::text = 'fixed' and ${table.commissionFixedAmountMinor} is not null and ${table.commissionBasisPoints} is null)
+          or (${table.commissionType}::text = 'percentage' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)
+          or (${table.commissionType}::text = 'hybrid' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is not null)))`,
+    ),
+    check(
+      "visit_line_commission_non_negative",
+      sql`(${table.commissionBasisPoints} is null or ${table.commissionBasisPoints} >= 0)
+        and (${table.commissionFixedAmountMinor} is null or ${table.commissionFixedAmountMinor} >= 0)`,
+    ),
     check("visit_line_price_non_negative", sql`${table.priceMinor} >= 0`),
     check(
       "visit_line_discount_within_price",

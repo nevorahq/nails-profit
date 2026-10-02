@@ -6,11 +6,11 @@ import { z } from "zod";
 import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
-import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
+import { serviceNamesOf } from "@/lib/service-names";
 
 export default async function ClientCardPage({
   params,
@@ -191,18 +191,16 @@ export default async function ClientCardPage({
             <tbody>
               {visitRows.map((visit) => {
                 const lines = linesByVisit.get(visit.id) ?? [];
-                const serviceLine = lines.find((l) => l.kind === "service");
+                const serviceCount = lines.filter((l) => l.kind === "service").length;
                 const snapshot = latestSnapshot.get(visit.id);
                 const duration = visit.actualDurationMinutes ?? visit.plannedDurationMinutes;
                 return (
                   <tr key={visit.id}>
                     <td>{visit.completedAt.toLocaleDateString(tag)}</td>
                     <td>
-                      {serviceLine
-                        ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
-                        : "—"}
-                      {lines.length > 1 && (
-                        <span className="unit-hint">+{lines.length - 1}</span>
+                      {serviceNamesOf(lines, locale) ?? "—"}
+                      {lines.length > Math.max(1, serviceCount) && (
+                        <span className="unit-hint">+{lines.length - Math.max(1, serviceCount)}</span>
                       )}
                     </td>
                     {specialistMap.size > 1 && (

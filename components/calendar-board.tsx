@@ -13,6 +13,7 @@ import {
   type ShiftRule,
   type Span,
 } from "@/components/calendar-free-time";
+import { ServiceLinesField, toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
 import { PaidField, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
@@ -154,6 +155,7 @@ export function CalendarBoard({
   buffers,
   canWrite,
   canFilterBySpecialist,
+  focusBookingId = null,
   businessType,
   currency,
   localeTag,
@@ -168,11 +170,18 @@ export function CalendarBoard({
   locations: readonly Readonly<{ id: string; name: string; timezone: string }>[];
   specialists: readonly Person[];
   services: readonly Readonly<{ id: string; name: string; durationMinutes: number | null }>[];
-  addOns: readonly Option[];
+  /** `serviceIds` null: offered with any service, as the calendar always has. */
+  addOns: readonly Readonly<{ id: string; name: string; serviceIds: readonly string[] | null }>[];
   assignments: readonly Readonly<{ specialistId: string; locationId: string }>[];
   clients: readonly Option[];
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
+  /**
+   * An appointment to open on arrival, with its «Другая сумма или
+   * длительность» form: what «Закройте прошедшие записи» links to when the
+   * client paid something other than the «Итого».
+   */
+  focusBookingId?: string | null;
   exceptions: readonly CalendarException[];
   /** The rota the day's tally measures its free time against. */
   shifts: readonly (ShiftRule & Readonly<{ locationId: string }>)[];
@@ -326,8 +335,7 @@ export function CalendarBoard({
     const payload = {
       location_id: locationId,
       specialist_id: String(data.get("specialist_id")),
-      service_id: String(data.get("service_id")),
-      add_on_ids: data.getAll("add_on_ids").map(String),
+      services: toServicesPayload(composeLines),
       ...(clientId ? { client_id: clientId } : {}),
       starts_at: when.toISOString(),
     };
@@ -336,7 +344,10 @@ export function CalendarBoard({
       key: keyFor(JSON.stringify(payload)),
       zone: timezoneOf(locationId),
     });
-    if (created) form.reset();
+    if (created) {
+      form.reset();
+      setComposeLines(firstLines());
+    }
   }
 
   async function blockTime(event: FormEvent<HTMLFormElement>) {
@@ -526,6 +537,9 @@ export function CalendarBoard({
    * everyone is offered rather than nobody.
    */
   const [composeLocation, setComposeLocation] = useState(locations[0]?.id ?? "");
+  // What the new appointment is made of: one service, or several in one sitting.
+  const firstLines = (): ServiceLine[] => (services[0] ? [{ serviceId: services[0].id, addOnIds: [] }] : []);
+  const [composeLines, setComposeLines] = useState<ServiceLine[]>(firstLines);
 
   /*
    * The compose form's `<details>` opens on its own summary click — that part
@@ -594,6 +608,23 @@ export function CalendarBoard({
       details?.removeEventListener("toggle", onToggle);
     };
   }, []);
+
+  /*
+   * Opened once, on arrival, rather than held open: after this it is the
+   * reader's card to close. The outer `<details>` opening is what loads the
+   * margin preview, exactly as a tap on it would.
+   */
+  useEffect(() => {
+    if (!focusBookingId) return;
+    const entry = document.getElementById(`booking-${focusBookingId}`);
+    const card = entry?.querySelector<HTMLDetailsElement>(":scope > details");
+    if (!entry || !card) return;
+    card.open = true;
+    const modify = card.querySelector<HTMLDetailsElement>("details.calendar-subform");
+    if (modify) modify.open = true;
+    entry.scrollIntoView({ block: "center" });
+    modify?.querySelector<HTMLInputElement>('input[name="paid"]')?.focus({ preventScroll: true });
+  }, [focusBookingId]);
 
   /**
    * Whose time this screen may block out. A master blocks only their own; for
@@ -1067,6 +1098,7 @@ export function CalendarBoard({
                 return (
                 <li
                   key={booking.id}
+                  id={`booking-${booking.id}`}
                   className={`calendar-entry status-${booking.status}`}
                 >
                   <details
@@ -1442,16 +1474,15 @@ export function CalendarBoard({
             ) : (
               <input type="hidden" name="specialist_id" value={bookable[0]?.id ?? ""} />
             )}
-            <label>
-              {t("calendar.service")}
-              <select name="service_id" required>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ServiceLinesField
+              idPrefix="compose"
+              lines={composeLines}
+              services={services}
+              addOns={addOns}
+              addOnsLegend={t("calendar.addOns")}
+              locale={locale}
+              onChange={setComposeLines}
+            />
             <label>
               {t("calendar.date")}
               <input type="date" name="date" defaultValue={selected} required />
@@ -1479,17 +1510,6 @@ export function CalendarBoard({
               {t("calendar.clientPhone")}
               <input name="client_phone" inputMode="tel" maxLength={32} />
             </label>
-            {addOns.length > 0 && (
-              <fieldset className="checkbox-set">
-                <legend>{t("calendar.addOns")}</legend>
-                {addOns.map((addOn) => (
-                  <label key={addOn.id} className="consent-field">
-                    <input type="checkbox" name="add_on_ids" value={addOn.id} />
-                    <span>{addOn.name}</span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
             <button className="primary-button" type="submit" disabled={pending}>
               {pending ? t("common.saving") : t("calendar.book")}
             </button>

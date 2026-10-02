@@ -106,7 +106,9 @@ export async function loadBookingDraft(
     },
     ...chosen.map((addOn) => ({
       kind: "add_on" as const,
-      serviceId: null,
+      // The service the add-on was chosen for. A booking of one service could
+      // leave this to be inferred; one of several cannot.
+      serviceId: service.id,
       addOnId: addOn.id,
       nameSnapshot: (addOn.name ?? {}) as LocalizedText,
       priceMinor: Math.max(0, addOn.priceDeltaMinor),
@@ -118,6 +120,37 @@ export async function loadBookingDraft(
     durationMinutes,
     priceMinor,
     lines,
+  };
+}
+
+/**
+ * The draft of an appointment of several services, in the order chosen.
+ *
+ * Each service is drafted as it would be alone — the specialist's own duration,
+ * its add-ons' deltas — and the appointment is their sum: one sitting, booked
+ * as one interval. Null when any of them could not be booked alone, for the
+ * same reasons.
+ */
+export async function loadBookingDraftFor(
+  tx: TenantTransaction,
+  input: { items: readonly Readonly<{ serviceId: string; addOnIds: readonly string[] }>[]; specialistId: string },
+): Promise<BookingDraft | null> {
+  const drafts: BookingDraft[] = [];
+  for (const item of input.items) {
+    const draft = await loadBookingDraft(tx, {
+      serviceId: item.serviceId,
+      addOnIds: item.addOnIds,
+      specialistId: input.specialistId,
+    });
+    if (!draft) return null;
+    drafts.push(draft);
+  }
+  if (drafts.length === 0) return null;
+
+  return {
+    durationMinutes: drafts.reduce((total, draft) => total + draft.durationMinutes, 0),
+    priceMinor: drafts.reduce((total, draft) => total + draft.priceMinor, 0),
+    lines: drafts.flatMap((draft) => draft.lines),
   };
 }
 

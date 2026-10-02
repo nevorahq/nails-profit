@@ -75,8 +75,11 @@ async function handlePost(request: Request, context: { params: Promise<{ id: str
           return { ok: false as const, failure: "forbidden_specialist" as const };
         }
 
-        const serviceLine = (await bookingLinesOf(tx, existing.id)).find((line) => line.kind === "service");
-        if (serviceLine?.serviceId) {
+        // Each service of the appointment: a colleague who does the manicure
+        // but not the pedicure beside it cannot take the sitting.
+        const serviceLines = (await bookingLinesOf(tx, existing.id)).filter((line) => line.kind === "service");
+        for (const serviceLine of serviceLines) {
+          if (!serviceLine.serviceId) continue;
           const assignable = await assertAssignable(tx, {
             specialistId,
             locationId: existing.locationId,

@@ -110,7 +110,7 @@ export function CloseDayPanel({
               </button>
               <Link
                 className="text-link"
-                href={`/app/calendar?date=${booking.localDate}&specialist=${booking.specialistId}`}
+                href={`/app/calendar?date=${booking.localDate}&specialist=${booking.specialistId}&booking=${booking.id}`}
               >
                 {t("closeDay.other")}
               </Link>

@@ -928,6 +928,10 @@ const ru = {
   "closeVisit.specialist": "мастер",
   "closeVisit.noClient": "без клиента",
   "closeVisit.addOns": "Опции",
+  "serviceLines.serviceN": "Услуга {n}",
+  "serviceLines.add": "+ Ещё услуга",
+  "serviceLines.remove": "Убрать",
+  "serviceLines.removeN": "Убрать услугу {n}",
   "closeVisit.needsSetup": "Чтобы закрыть визит, нужны хотя бы одна {service} и один {specialist} с правилом комиссии.",
   "closeVisit.saveFailed": "Не удалось сохранить визит",
 
@@ -2295,6 +2299,10 @@ const ro: Record<MessageKey, Message> = {
   "closeVisit.specialist": "maestru",
   "closeVisit.noClient": "fără client",
   "closeVisit.addOns": "Opțiuni",
+  "serviceLines.serviceN": "Serviciul {n}",
+  "serviceLines.add": "+ Încă un serviciu",
+  "serviceLines.remove": "Elimină",
+  "serviceLines.removeN": "Elimină serviciul {n}",
   "closeVisit.needsSetup": "Ca să finalizați o vizită, aveți nevoie de cel puțin un {service} și un {specialist} cu regulă de comision.",
   "closeVisit.saveFailed": "Vizita nu a putut fi salvată",
 
@@ -3648,6 +3656,10 @@ const en: Record<MessageKey, Message> = {
   "closeVisit.specialist": "specialist",
   "closeVisit.noClient": "no client",
   "closeVisit.addOns": "Add-ons",
+  "serviceLines.serviceN": "Service {n}",
+  "serviceLines.add": "+ Another service",
+  "serviceLines.remove": "Remove",
+  "serviceLines.removeN": "Remove service {n}",
   "closeVisit.needsSetup": "To close a visit you need at least one {service} and one {specialist} with a commission rule.",
   "closeVisit.saveFailed": "Could not save the visit",
 

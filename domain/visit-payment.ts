@@ -13,6 +13,8 @@
  * ignores, and a refund later is checked against what the line charged.
  */
 
+import { allocateProportionally } from "@/domain/money";
+
 export type PricedLine = Readonly<{ priceMinor: number; discountMinor: number }>;
 
 /** What a line still charges: its price less what was already taken off it. */
@@ -102,4 +104,38 @@ export function applyPaidAmount<Line extends PricedLine>(
     return { lines: spreadDiscount(lines, charged - paidMinor), surchargeMinor: 0 };
   }
   return { lines: [...lines], surchargeMinor: paidMinor - charged };
+}
+
+/**
+ * Splits a surcharge between the services of a visit, in proportion to what
+ * each charges with its add-ons.
+ *
+ * A visit of one service puts all of it on that service, as before. With two,
+ * the master is paid on each part under the rule of the service it is booked
+ * to — paying a manicure rule on money the pedicure fetched would be guessing.
+ * Largest remainder, so the parts add up to the surcharge exactly; a part that
+ * comes to zero is left out rather than written as an empty line.
+ */
+export function surchargeByService<Line extends PricedLine & Readonly<{ serviceId: string | null }>>(
+  lines: readonly Line[],
+  amountMinor: number,
+): { serviceId: string; amountMinor: number }[] {
+  const charges = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.serviceId) continue;
+    charges.set(line.serviceId, (charges.get(line.serviceId) ?? 0) + chargeOf(line));
+  }
+  const serviceIds = [...charges.keys()];
+  if (serviceIds.length === 0) {
+    if (amountMinor === 0) return [];
+    throw new RangeError("A surcharge needs a service to be booked to");
+  }
+
+  const parts = allocateProportionally(
+    amountMinor,
+    serviceIds.map((serviceId) => charges.get(serviceId)!),
+  );
+  return serviceIds
+    .map((serviceId, index) => ({ serviceId, amountMinor: parts[index] }))
+    .filter((part) => part.amountMinor > 0);
 }

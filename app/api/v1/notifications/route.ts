@@ -4,7 +4,6 @@ import { bookingLines, bookings, clients, locations, specialists } from "@/db/sc
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { formatLocalDate, formatLocalTime, toZonedParts } from "@/domain/timezone";
-import { resolveLocalizedText } from "@/i18n/localized-text";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { scopedSpecialistId } from "@/lib/booking-access";
 import { groupNotices, loadNoticeFeed, loadNoticeReads } from "@/lib/staff-notices";
@@ -12,6 +11,7 @@ import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { serviceNamesOf } from "@/lib/service-names";
 
 /**
  * The topbar's notification list: appointments still waiting on the studio,
@@ -98,9 +98,7 @@ export async function GET(request: Request) {
   });
 
   const items = rows.found.map((row) => {
-    const serviceLine = rows.lines.find(
-      (line) => line.bookingId === row.booking.id && line.kind === "service",
-    );
+    const ownLines = rows.lines.filter((line) => line.bookingId === row.booking.id);
     const parts = toZonedParts(row.booking.startsAt, row.timezone);
 
     return {
@@ -118,7 +116,7 @@ export async function GET(request: Request) {
        */
       client_name: row.booking.clientNameSnapshot ?? row.clientName,
       client_card_name: row.booking.clientNameSnapshot ? row.clientName : null,
-      service_name: serviceLine ? resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) : null,
+      service_name: serviceNamesOf(ownLines, locale),
       local_date: formatLocalDate({ year: parts.year, month: parts.month, day: parts.day }),
       local_time: formatLocalTime(parts.minutes),
     };

@@ -66,3 +66,59 @@ export function roundRatio(numerator: number, denominator: number) {
   // Guard against -0, which Intl renders as "-0,00 MDL".
   return numerator < 0 && magnitude !== 0 ? -magnitude : magnitude;
 }
+
+/**
+ * Splits `amountMinor` into parts proportional to `weights`, summing exactly to
+ * the amount.
+ *
+ * Largest remainder: every part is floored and the leftover minor units go one
+ * each to the largest fractional parts, ties to the larger weight and then to
+ * the earlier index, so the answer depends on nothing but the inputs. Rounding
+ * each part on its own would let the parts drift a unit away from the whole,
+ * and a report whose rows do not add up to its total is a report nobody trusts.
+ *
+ * All-zero weights split evenly: there is no proportion to follow, and dropping
+ * the money would be worse than an arbitrary but stable split.
+ *
+ * BigInt inside, because an amount times a weight can pass 2^53 long before
+ * either does.
+ */
+export function allocateProportionally(amountMinor: number, weights: readonly number[]): number[] {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new RangeError("The amount to allocate must be a non-negative safe integer");
+  }
+  if (weights.some((weight) => !Number.isSafeInteger(weight) || weight < 0)) {
+    throw new RangeError("Weights must be non-negative safe integers");
+  }
+  if (weights.length === 0) {
+    if (amountMinor === 0) return [];
+    throw new RangeError("Cannot allocate an amount over no parts");
+  }
+
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const effective = total === 0 ? weights.map(() => 1) : weights;
+  const denominator = BigInt(total === 0 ? weights.length : total);
+  const amount = BigInt(amountMinor);
+
+  const shares = effective.map((weight, index) => {
+    const exact = amount * BigInt(weight);
+    return { index, weight, floored: exact / denominator, remainder: exact % denominator };
+  });
+
+  let left = amount - shares.reduce((sum, share) => sum + share.floored, BigInt(0));
+  const order = [...shares].sort((a, b) =>
+    a.remainder === b.remainder
+      ? b.weight - a.weight || a.index - b.index
+      : a.remainder > b.remainder
+        ? -1
+        : 1,
+  );
+  const parts = shares.map((share) => share.floored);
+  for (const share of order) {
+    if (left === BigInt(0)) break;
+    parts[share.index] += BigInt(1);
+    left -= BigInt(1);
+  }
+
+  return parts.map(Number);
+}

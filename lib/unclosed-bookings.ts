@@ -3,9 +3,9 @@ import { and, asc, countDistinct, eq, gte, inArray, lte, sql } from "drizzle-orm
 import { bookingLines, bookings, clients, locations, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { formatLocalDate, formatLocalTime, toZonedParts } from "@/domain/timezone";
-import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 import { scopedSpecialistId, type CalendarActor } from "@/lib/booking-access";
+import { serviceNamesOf } from "@/lib/service-names";
 
 /**
  * Appointments that happened and were never closed into a visit.
@@ -115,7 +115,6 @@ export async function loadUnclosedBookings(
 
   const items = found.map((row) => {
     const itsLines = lines.filter((line) => line.bookingId === row.booking.id);
-    const service = itsLines.find((line) => line.kind === "service");
     const parts = toZonedParts(row.booking.startsAt, row.timezone);
     return {
       id: row.booking.id,
@@ -124,9 +123,7 @@ export async function loadUnclosedBookings(
       specialistName: row.specialistName,
       // The name the appointment was made under, as the bell shows it.
       clientName: row.booking.clientNameSnapshot ?? row.clientName,
-      serviceName: service
-        ? resolveLocalizedText(service.nameSnapshot, options.locale, options.locale)
-        : null,
+      serviceName: serviceNamesOf(itsLines, options.locale),
       localDate: formatLocalDate({ year: parts.year, month: parts.month, day: parts.day }),
       localTime: formatLocalTime(parts.minutes),
       priceMinor: itsLines.reduce((total, line) => total + line.priceMinor, 0),

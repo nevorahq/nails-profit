@@ -22,6 +22,7 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
+import { serviceNamesOf } from "@/lib/service-names";
 
 export default async function VisitsPage({
   searchParams,
@@ -215,7 +216,7 @@ export default async function VisitsPage({
             )}
             <ul className="visit-cards">
               {group.rows.map(({ visit, snapshot, lines, clientName }) => {
-                const serviceLine = lines.find((line) => line.kind === "service");
+                const serviceCount = lines.filter((line) => line.kind === "service").length;
                 const incomplete = !snapshot || snapshot.contributionMarginMinor === null;
                 const adjustLines: AdjustLine[] = lines.map((line) => ({
                   id: line.id,
@@ -243,10 +244,10 @@ export default async function VisitsPage({
                       )}
                     </summary>
                     <p className="visit-card-service">
-                      {serviceLine
-                        ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? "—")
-                        : "—"}
-                      {lines.length > 1 && <span className="unit-hint">+{lines.length - 1}</span>}
+                      {serviceNamesOf(lines, locale) ?? "—"}
+                      {lines.length > Math.max(1, serviceCount) && (
+                        <span className="unit-hint">+{lines.length - Math.max(1, serviceCount)}</span>
+                      )}
                     </p>
                     <p className="visit-card-client">{clientName ?? <span className="muted">—</span>}</p>
 

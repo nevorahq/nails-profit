@@ -9,7 +9,7 @@ import {
   alternativeSlots,
   assertAssignable,
   describeAlternatives,
-  loadBookingDraft,
+  loadBookingDraftFor,
   loadSlotContext,
 } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
@@ -26,6 +26,7 @@ import { apiError, apiSuccess, requestId, toFieldErrors, timedRoute } from "@/li
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
 import { logEvent } from "@/lib/logger";
 import { getActiveMembership } from "@/lib/membership";
+import { refineServiceSelection, serviceItemsOf, serviceSelection } from "@/lib/service-items";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 
 /**
@@ -40,15 +41,18 @@ import { recordPilotProductEvent } from "@/lib/pilot-events";
  * is not doing something wrong, and the rule that actually matters — nobody is
  * booked twice — is enforced regardless.
  */
-const createBookingSchema = z.object({
-  location_id: z.uuid(),
-  specialist_id: z.uuid(),
-  service_id: z.uuid(),
-  add_on_ids: z.array(z.uuid()).max(20).default([]),
-  client_id: z.uuid().nullable().optional(),
-  workplace_id: z.uuid().nullable().optional(),
-  starts_at: z.iso.datetime(),
-});
+const createBookingSchema = z
+  .object({
+    location_id: z.uuid(),
+    specialist_id: z.uuid(),
+    /** One service, or several in one sitting: see `lib/service-items.ts`. */
+    ...serviceSelection,
+    add_on_ids: z.array(z.uuid()).max(20).default([]),
+    client_id: z.uuid().nullable().optional(),
+    workplace_id: z.uuid().nullable().optional(),
+    starts_at: z.iso.datetime(),
+  })
+  .superRefine(refineServiceSelection);
 
 const IDEMPOTENCY_SCOPE = "booking.staff_create";
 
@@ -186,16 +190,20 @@ async function handlePost(request: Request) {
       const context = await loadSlotContext(tx, parsed.data.location_id);
       if (!context) return { failure: "LOCATION_NOT_FOUND" as const };
 
-      const assignable = await assertAssignable(tx, {
-        specialistId: parsed.data.specialist_id,
-        locationId: parsed.data.location_id,
-        serviceId: parsed.data.service_id,
-      });
-      if (assignable !== "ok") return { failure: assignable };
+      // Every service of the sitting, or none: a master booked for a pedicure
+      // they do not do has been booked for the manicure beside it too.
+      const items = serviceItemsOf(parsed.data);
+      for (const item of items) {
+        const assignable = await assertAssignable(tx, {
+          specialistId: parsed.data.specialist_id,
+          locationId: parsed.data.location_id,
+          serviceId: item.serviceId,
+        });
+        if (assignable !== "ok") return { failure: assignable };
+      }
 
-      const draft = await loadBookingDraft(tx, {
-        serviceId: parsed.data.service_id,
-        addOnIds: parsed.data.add_on_ids,
+      const draft = await loadBookingDraftFor(tx, {
+        items,
         specialistId: parsed.data.specialist_id,
       });
       if (!draft) return { failure: "SERVICE_NOT_BOOKABLE" as const };

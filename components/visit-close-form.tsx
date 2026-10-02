@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 
 import { PaidField, toMajorUnits, toMinorUnits } from "@/components/paid-field";
+import {
+  ServiceLinesField,
+  selectionTotals,
+  toServicesPayload,
+  type ServiceLine,
+} from "@/components/service-lines-field";
 
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
@@ -73,14 +79,19 @@ export function VisitCloseForm({
 }) {
   const router = useRouter();
   const t = getTranslator(locale);
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  /*
+   * The services of the visit, each with its own add-ons. One to begin with,
+   * which is every visit most studios close; «+ ещё услуга» adds the pedicure.
+   */
+  const [lines, setLines] = useState<ServiceLine[]>(
+    services[0] ? [{ serviceId: services[0].id, addOnIds: [] }] : [],
+  );
   /*
    * Controlled, unlike the client and the payment method, because the pair
    * (service, specialist) is what decides whether this visit can be closed at
    * all — and the answer has to be on screen while it is being chosen.
    */
   const [specialistId, setSpecialistId] = useState(specialists[0]?.id ?? "");
-  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   /*
    * What the client paid, as typed. Null until somebody types: the field then
    * shows the price list and follows every change of service and add-on, so the
@@ -93,28 +104,31 @@ export function VisitCloseForm({
 
   const money = (amountMinor: number) => formatMoneyMinor(amountMinor, currency, localeTag(locale));
 
-  const service = services.find((item) => item.id === serviceId) ?? null;
-  const availableAddOns = addOns.filter((addOn) => addOn.serviceIds.includes(serviceId));
-  const chosen = availableAddOns.filter((addOn) => selectedAddOns.includes(addOn.id));
-
-  // Never below zero: an add-on that lowers the price can only take it to free.
-  const price = Math.max(
-    0,
-    (service?.price_minor ?? 0) + chosen.reduce((total, a) => total + a.price_delta_minor, 0),
-  );
+  const pickerServices = services.map((item) => ({
+    id: item.id,
+    name: item.displayName,
+    priceMinor: item.price_minor,
+    durationMinutes: item.duration_minutes,
+  }));
+  const pickerAddOns = addOns.map((addOn) => ({
+    id: addOn.id,
+    name: addOn.displayName,
+    priceDeltaMinor: addOn.price_delta_minor,
+    durationDeltaMinutes: addOn.duration_delta_minutes,
+    serviceIds: addOn.serviceIds,
+  }));
+  const { priceMinor: price, durationMinutes: duration } = selectionTotals(lines, pickerServices, pickerAddOns);
   const paidMinor = paidInput === null ? null : toMinorUnits(paidInput);
-  const duration =
-    (service?.duration_minutes ?? 0) + chosen.reduce((total, a) => total + a.duration_delta_minutes, 0);
 
-  /** Whether a rule in force pays this person for this service. */
-  function covers(person: CloseFormSpecialist, chosenServiceId: string) {
-    return (
-      person.covered_service_ids === null || person.covered_service_ids.includes(chosenServiceId)
+  /** Whether a rule in force pays this person for every service of the visit. */
+  function covers(person: CloseFormSpecialist) {
+    return lines.every(
+      (line) => person.covered_service_ids === null || person.covered_service_ids.includes(line.serviceId),
     );
   }
 
   const specialist = specialists.find((person) => person.id === specialistId) ?? null;
-  const payable = specialist !== null && covers(specialist, serviceId);
+  const payable = specialist !== null && lines.length > 0 && covers(specialist);
   /** Nobody has a rule at all: this is setup, not a wrong pick. */
   const anyonePayable = specialists.some(
     (person) => person.covered_service_ids === null || person.covered_service_ids.length > 0,
@@ -142,10 +156,9 @@ export function VisitCloseForm({
         "idempotency-key": completionKey.current,
       },
       body: JSON.stringify({
-        service_id: serviceId,
+        services: toServicesPayload(lines),
         specialist_id: specialistId,
         client_id: clientId === "" ? null : clientId,
-        add_on_ids: selectedAddOns,
         ...(actualDuration ? { actual_duration_minutes: Number(actualDuration) } : {}),
         // Sent only once it was touched: an untouched field is the price list,
         // which is what leaving it out has always meant to the server.
@@ -200,25 +213,20 @@ export function VisitCloseForm({
   return (
     <form onSubmit={submit}>
       <section className="panel">
+        <ServiceLinesField
+          idPrefix="visit"
+          lines={lines}
+          services={pickerServices}
+          addOns={pickerAddOns}
+          addOnsLegend={t("closeVisit.addOns")}
+          locale={locale}
+          onChange={(next) => {
+            setLines(next);
+            // A different visit: the amount follows the price list again.
+            setPaidInput(null);
+          }}
+        />
         <div className="inline-form">
-          <label>
-            {t("services.service")}
-            <select
-              name="service_id"
-              value={serviceId}
-              onChange={(event) => {
-                setServiceId(event.target.value);
-                setSelectedAddOns([]);
-                setPaidInput(null);
-              }}
-            >
-              {services.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
           {/*
             Not asked when there is nobody to choose between. A studio of one —
             which after `POST /api/v1/organizations` is every solo workspace —
@@ -249,7 +257,7 @@ export function VisitCloseForm({
                 {specialists.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
-                    {covers(item, serviceId) ? "" : ` — ${t("closeVisit.noRuleOption")}`}
+                    {covers(item) ? "" : ` — ${t("closeVisit.noRuleOption")}`}
                   </option>
                 ))}
               </select>
@@ -293,29 +301,6 @@ export function VisitCloseForm({
             </label>
           )}
         </div>
-
-        {availableAddOns.length > 0 && (
-          <fieldset className="checkbox-set">
-            <legend>{t("closeVisit.addOns")}</legend>
-            {availableAddOns.map((addOn) => (
-              <label key={addOn.id} className="radio-row">
-                <input
-                  type="checkbox"
-                  checked={selectedAddOns.includes(addOn.id)}
-                  onChange={(event) => {
-                    setSelectedAddOns(
-                      event.target.checked
-                        ? [...selectedAddOns, addOn.id]
-                        : selectedAddOns.filter((value) => value !== addOn.id),
-                    );
-                    setPaidInput(null);
-                  }}
-                />{" "}
-                {addOn.displayName}
-              </label>
-            ))}
-          </fieldset>
-        )}
 
         <p className="muted">
           {t("closeVisit.dueLine", { amount: money(price), duration })}
