@@ -2216,6 +2216,42 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .close-day-what small { color: var(--muted); font-size: 12rem; }
 .close-day-item .button-row { align-items: center; }
 
+/*
+ * The services of one sitting, each with its own add-ons. A row of its own in
+ * the forms it sits in — inside a wrapping `.inline-form` it would otherwise
+ * share a line with the date and squeeze the second service under the first
+ * service's add-ons.
+ */
+.service-lines { display: grid; gap: 12rem; flex: 1 1 100%; margin-bottom: 16rem; }
+.service-line { display: grid; gap: 8rem; min-width: 0; }
+.service-line-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8rem 12rem; }
+/* The caption-above-field of `.inline-form`, which these sit outside of on the
+   close-visit form. */
+.service-line-head label {
+  display: flex;
+  flex-direction: column;
+  gap: 6rem;
+  min-width: 0;
+  flex: 0 1 320rem;
+  font-size: 13rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.service-line-head select {
+  width: 100%;
+  padding: 11rem 12rem;
+  border-radius: 4rem;
+  border: 1rem solid var(--line);
+  background: var(--surface);
+  font: inherit;
+  font-size: 16rem;
+}
+.service-line-head .inline-action { margin-left: 0; padding-bottom: 11rem; }
+@media (max-width: 680px) {
+  .service-line-head label { flex-basis: 100%; }
+}
+.service-lines-add { justify-self: start; }
+
 .notifications-panel { min-width: 280rem; }
 .notifications-empty { padding: 10rem 12rem; color: var(--muted); font-size: 13rem; }
 .notifications-list { display: grid; gap: 2rem; max-height: 360rem; overflow-y: auto; }

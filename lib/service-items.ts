@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { MAX_SERVICES } from "@/domain/service-limit";
 import type { VisitServiceItem } from "@/lib/visit-service";
 
 /**
@@ -11,9 +12,6 @@ import type { VisitServiceItem } from "@/lib/visit-service";
  * `service_ids` would leave the pairing to a guess. The single `service_id`
  * with its `add_on_ids` every client already sends is taken as a list of one.
  */
-
-/** A visit is one sitting; ten services in it is a typo, not a client. */
-export const MAX_SERVICES = 10;
 
 const serviceItem = z.object({
   service_id: z.uuid(),

@@ -17,6 +17,7 @@ import {
   clients,
   locations,
   scheduleRules,
+  serviceAddOns,
   services,
   specialistAvatars,
   specialistLocations,
@@ -39,6 +40,7 @@ import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { scopedSpecialistId } from "@/lib/booking-access";
 import { requireWorkspace } from "@/lib/workspace";
+import { serviceNamesOf } from "@/lib/service-names";
 
 /**
  * The staff calendar, roadmap section 7.2.
@@ -248,6 +250,12 @@ export default async function CalendarPage({
       .from(addOns)
       .where(isNull(addOns.archivedAt))
       .orderBy(asc(addOns.createdAt));
+    // Which services each add-on goes with, so an appointment of two services
+    // pairs each add-on with its own. One linked to none stays on offer with
+    // any service, which is how this screen always offered it.
+    const addOnLinks = await tx
+      .select({ addOnId: serviceAddOns.addOnId, serviceId: serviceAddOns.serviceId })
+      .from(serviceAddOns);
 
     const assignments = await tx
       .select({
@@ -339,6 +347,7 @@ export default async function CalendarPage({
       people,
       catalogue,
       extras,
+      addOnLinks,
       assignments,
       roster,
       exceptionsRaw,
@@ -399,7 +408,7 @@ export default async function CalendarPage({
     const parts = toZonedParts(row.booking.startsAt, row.timezone);
     const endParts = toZonedParts(row.booking.endsAt, row.timezone);
     const ownLines = data.lines.filter((line) => line.bookingId === row.booking.id);
-    const serviceLine = ownLines.find((line) => line.kind === "service");
+    const serviceCount = ownLines.filter((line) => line.kind === "service").length;
 
     return {
       id: row.booking.id,
@@ -425,10 +434,9 @@ export default async function CalendarPage({
       clientPhone: hideContacts ? null : row.clientPhone,
       /* Read with the number and hidden with it: an Analyst has neither. */
       clientChannels: hideContacts ? {} : parseContactChannels(row.clientChannels),
-      serviceName: serviceLine
-        ? (resolveLocalizedText(serviceLine.nameSnapshot, locale, locale) ?? t("calendar.service"))
-        : t("calendar.service"),
-      extraLines: Math.max(0, ownLines.length - 1),
+      serviceName: serviceNamesOf(ownLines, locale) ?? t("calendar.service"),
+      // Add-ons and the like: every service is already in the name.
+      extraLines: Math.max(0, ownLines.length - Math.max(1, serviceCount)),
       priceMinor: ownLines.reduce((total, line) => total + line.priceMinor, 0),
       confirmationDueAt: row.booking.confirmationDueAt?.toISOString() ?? null,
     };
@@ -507,10 +515,14 @@ export default async function CalendarPage({
           name: resolveLocalizedText(service.name, locale, locale) ?? t("calendar.service"),
           durationMinutes: service.durationMinutes,
         }))}
-        addOns={data.extras.map((addOn) => ({
-          id: addOn.id,
-          name: resolveLocalizedText(addOn.name, locale, locale) ?? "",
-        }))}
+        addOns={data.extras.map((addOn) => {
+          const linked = data.addOnLinks.filter((link) => link.addOnId === addOn.id).map((link) => link.serviceId);
+          return {
+            id: addOn.id,
+            name: resolveLocalizedText(addOn.name, locale, locale) ?? "",
+            serviceIds: linked.length > 0 ? linked : null,
+          };
+        })}
         assignments={data.assignments}
         clients={data.roster}
         filters={{
