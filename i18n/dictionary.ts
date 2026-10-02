@@ -927,6 +927,7 @@ const ru = {
   "auth.signInNoMatch": "Адрес или пароль не подошли. Если аккаунта ещё нет — создайте его ниже.",
   "auth.tooManyAttempts": "Слишком много попыток. Подождите несколько минут и попробуйте снова.",
   "auth.activeSession": "Вы вошли как {email}",
+  "auth.continueAsActive": "Продолжить →",
   "auth.invitedEmailHint": "Приглашение в «{org}» выдано на этот адрес — аккаунт должен быть на нём.",
   "auth.checkMail": "Проверьте почту",
   "auth.checkMailBody":
@@ -2267,6 +2268,7 @@ const ro: Record<MessageKey, Message> = {
   "auth.signInNoMatch": "Adresa sau parola nu se potrivesc. Dacă încă nu aveți cont, creați-l mai jos.",
   "auth.tooManyAttempts": "Prea multe încercări. Așteptați câteva minute și încercați din nou.",
   "auth.activeSession": "Sunteți autentificat ca {email}",
+  "auth.continueAsActive": "Continuați →",
   "auth.invitedEmailHint": "Invitația în „{org}” a fost emisă pentru această adresă — contul trebuie să fie pe ea.",
   "auth.checkMail": "Verificați e-mailul",
   "auth.checkMailBody":
@@ -3596,6 +3598,7 @@ const en: Record<MessageKey, Message> = {
   "auth.signInNoMatch": "That address and password do not match. If you have no account yet, create one below.",
   "auth.tooManyAttempts": "Too many attempts. Wait a few minutes and try again.",
   "auth.activeSession": "Signed in as {email}",
+  "auth.continueAsActive": "Continue →",
   "auth.invitedEmailHint": "The invitation to “{org}” was issued for this address — the account has to use it.",
   "auth.checkMail": "Check your email",
   "auth.checkMailBody":

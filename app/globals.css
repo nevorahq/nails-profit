@@ -901,6 +901,11 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .warning-banner { background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); border-radius: 4rem; padding: 16rem 20rem; margin: 20rem 0; font-size: 14rem; line-height: 1.6; }
 .warning-banner ul { margin: 8rem 0 0; padding-left: 20rem; }
+/* The «signed in as» notice on /login, when it is also the way back in. */
+.warning-banner.session-link { display: flex; justify-content: space-between; align-items: center; gap: 12rem; flex-wrap: wrap; text-decoration: none; overflow-wrap: anywhere; }
+.warning-banner.session-link strong { white-space: nowrap; }
+.warning-banner.session-link:hover strong,
+.warning-banner.session-link:focus-visible strong { text-decoration: underline; }
 .badge-warning { display: inline-block; margin-left: 8rem; padding: 4rem 10rem; border-radius: 4rem; background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); font-size: 12rem; font-weight: 700; }
 /* The same pill, when it is somewhere to go rather than something to read:
    «не задана» на «Мастерах» opens the card the rule is set on. Underlined on
