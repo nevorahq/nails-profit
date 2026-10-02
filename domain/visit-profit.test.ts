@@ -242,3 +242,51 @@ describe("calculateVisitProfit", () => {
     expect(result.costing.commissionMinor).toBe(5_000);
   });
 });
+
+describe("calculateVisitProfit with a tip", () => {
+  const card = { basisPoints: 200, fixedFeeMinor: 300 };
+
+  it("keeps a tip out of the revenue, the margin and the master's base", () => {
+    const result = calculateVisitProfit(visit({ tipMinor: 5_000 }));
+
+    if (result.status !== "complete") throw new Error("expected complete");
+    expect(result.revenueMinor).toBe(60_000);
+    expect(result.costing.commissionMinor).toBe(24_000);
+    expect(result.costing.contributionMarginMinor).toBe(36_000);
+  });
+
+  it("costs a visit without a tip exactly as before", () => {
+    const without = calculateVisitProfit(visit({ payment: card }));
+    const zero = calculateVisitProfit(visit({ payment: card, tipMinor: 0 }));
+    expect(zero).toEqual(without);
+  });
+
+  it("charges the card's percentage on the tip too, and the fixed fee once", () => {
+    const result = calculateVisitProfit(visit({ payment: card, tipMinor: 5_000 }));
+
+    if (result.status !== "complete") throw new Error("expected complete");
+    // 2% of 650 + 3: the tip went through the terminal with the visit.
+    expect(result.costing.paymentCommissionMinor).toBe(1_300 + 300);
+    expect(result.costing.contributionMarginMinor).toBe(36_000 - 1_600);
+  });
+
+  it("costs nothing on a tip left in cash", () => {
+    const result = calculateVisitProfit(visit({ tipMinor: 5_000 }));
+
+    if (result.status !== "complete") throw new Error("expected complete");
+    expect(result.costing.paymentCommissionMinor).toBe(0);
+  });
+
+  it("still reports a free visit as having no revenue, tip or not", () => {
+    const result = calculateVisitProfit(
+      visit({ lines: [{ kind: "service", priceMinor: 0, discountMinor: 0 }], tipMinor: 5_000, payment: card }),
+    );
+
+    expect(result).toEqual({ status: "incomplete", revenueMinor: 0, reasons: ["no_revenue"] });
+  });
+
+  it("refuses a negative or fractional tip", () => {
+    expect(() => calculateVisitProfit(visit({ tipMinor: -1 }))).toThrow(RangeError);
+    expect(() => calculateVisitProfit(visit({ tipMinor: 0.5 }))).toThrow(RangeError);
+  });
+});
