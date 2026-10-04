@@ -91,5 +91,28 @@ for (const width of [null, 375] as const) {
       expect(booked[0].price_minor).toBe(100_000);
       expect((new Date(booked[0].ends_at).getTime() - new Date(booked[0].starts_at).getTime()) / 60_000).toBe(150);
     });
+
+    test("services nobody does together are not offered as one sitting", async ({ page, browserErrors }) => {
+      void browserErrors;
+      const catalogue = await studio.owner.get<{ id: string; name: Record<string, string> }[]>("/api/v1/services");
+      const pedicure = catalogue.find((entry) => entry.name.en === "Pedicure")!;
+      // One does hands, the other feet.
+      await studio.owner.put(`/api/v1/specialists/${studio.specialistId}/services`, {
+        services: [{ service_id: studio.serviceId }],
+      });
+      await studio.owner.put(`/api/v1/specialists/${studio.colleagueId}/services`, {
+        services: [{ service_id: pedicure.id }],
+      });
+
+      await page.goto(`/book/${studio.slug}`);
+      await page.getByRole("button", { name: "+ Another service" }).click();
+      await page.getByRole("combobox", { name: /^Service 2/ }).selectOption({ label: "Pedicure" });
+      await expect(page.locator(".public-booking-card").getByRole("alert")).toContainText("No single specialist does all of these");
+      await expect(page.getByRole("button", { name: "Show available times" })).toBeDisabled();
+
+      // Back to one service, and the page books as before.
+      await page.getByRole("button", { name: "Remove service 2" }).click();
+      await expect(page.getByRole("button", { name: "Show available times" })).toBeEnabled();
+    });
   });
 }
