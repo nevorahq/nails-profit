@@ -150,4 +150,66 @@ test.describe("the bell's list of what happened", () => {
 
     await context.close();
   });
+  /**
+   * And an answer that was already on its way when the line was opened.
+   *
+   * Opening the bell asks for the list again; opening a line reads it at once
+   * and writes behind. A list asked for before that write is a list in which
+   * the line is still unread, and it used to be taken as it came — the dot
+   * back on for the thirty seconds until the next poll. Staged here rather
+   * than hoped for: the answer is fetched from the server before the click and
+   * handed to the page only after the write has landed.
+   */
+  test("an answer sent before the line was opened does not light it again", async ({
+    baseURL,
+    browser,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    // One unread line, so the dot is that line's alone.
+    const { feed } = await studio.owner.get<{ feed: { booking_id: string }[] }>(
+      "/api/v1/notifications?locale=en",
+    );
+    await studio.owner.post("/api/v1/notifications/read", { booking_id: feed[1].booking_id });
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    const page = await context.newPage();
+
+    let holding = false;
+    let fetched!: () => void;
+    let release!: () => void;
+    const answerFetched = new Promise<void>((resolve) => (fetched = resolve));
+    const answerReleased = new Promise<void>((resolve) => (release = resolve));
+    await page.route(
+      (url) => url.pathname === "/api/v1/notifications",
+      async (route) => {
+        if (!holding) return route.continue();
+        holding = false;
+        const response = await route.fetch();
+        fetched();
+        await answerReleased;
+        await route.fulfill({ response });
+      },
+    );
+
+    await page.goto("/app/calendar");
+    const badge = page.locator(".topbar-notifications-badge");
+    await expect(badge).toHaveCount(1);
+
+    holding = true;
+    await page.locator(".topbar-notifications").click();
+    await answerFetched;
+    await readLine(page, page.locator(".notifications-panel .notifications-item.unread").first());
+    await expect(badge).toHaveCount(0);
+
+    const stale = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/notifications");
+    release();
+    await stale;
+    // The page parses and applies the answer after the response event; a
+    // moment for that, since what is asserted is that nothing comes back.
+    await page.waitForTimeout(500);
+    await expect(badge).toHaveCount(0);
+
+    await context.close();
+  });
 });

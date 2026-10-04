@@ -6,7 +6,7 @@ import type { Currency } from "@/domain/money";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
-import { formatMoneyMinor } from "@/lib/format";
+import { formatLongDate, formatMoneyMinor } from "@/lib/format";
 import {
   bookingNextStepKey,
   publicBookingErrorKey,
@@ -347,7 +347,7 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
           })}
         </p>
         <dl className="booking-manage-facts">
-          <div><dt>{t("publicBooking.when")}</dt><dd>{new Intl.DateTimeFormat(tag, { timeZone: booking.location.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date(booking.starts_at))}</dd></div>
+          <div><dt>{t("publicBooking.when")}</dt><dd>{formatLongDate(new Date(booking.starts_at), tag, { timeZone: booking.location.timezone, year: true, time: true })}</dd></div>
           <div><dt>{t("publicBooking.service")}</dt><dd>{booking.lines.map((line) => line.name).join(" · ")}</dd></div>
           <div><dt>{t("publicBooking.specialist")}</dt><dd>{booking.specialist.name}</dd></div>
           <div><dt>{t("publicBooking.where")}</dt><dd>{booking.location.name}{booking.location.address ? ` · ${booking.location.address}` : ""}</dd></div>

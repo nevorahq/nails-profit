@@ -93,6 +93,16 @@ test.describe("the public booking page", () => {
       /The studio will answer by \d{1,2}:\d{2}/,
     );
     await expect(page.locator(".booking-watching")).toContainText("keep it open");
+
+    // The day as the server wrote it is the day the page keeps. Spelled out by
+    // the runtime it was not: Node and Chromium join an English date with
+    // different punctuation, the page failed hydration and was redrawn, and a
+    // client watched the date change under them.
+    const when = page.locator(".booking-manage-facts dd").first();
+    await expect(when).toHaveText(/ at \d{2}:\d{2}$/);
+    const served = await (await page.request.get(page.url())).text();
+    const servedWhen = served.match(/<dt>Date and time<\/dt><dd>([^<]*)<\/dd>/)?.[1];
+    expect(await when.innerText()).toBe(servedWhen);
     await page.goBack();
 
     // The other end of it: a request waiting in the studio, for the master it

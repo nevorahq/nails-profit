@@ -17,6 +17,7 @@ import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
 import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
 import { PublicAddressEditor } from "@/components/public-address-editor";
 import { localeTag } from "@/i18n/translate";
+import { formatLongDate } from "@/lib/format";
 import type { MemberRole } from "@/domain/rbac";
 
 export type LocationRow = {
@@ -767,11 +768,7 @@ export function BookingSetup({
               <p className="muted">{t("bookingSetup.checklistDone")}</p>
               <p className="muted">
                 {t("bookingSetup.nearestSlot", {
-                  date: new Date(`${nearestSlotDate}T00:00:00`).toLocaleDateString(localeTag(locale), {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  }),
+                  date: formatLongDate(new Date(`${nearestSlotDate}T00:00:00`), localeTag(locale)),
                 })}
               </p>
             </>

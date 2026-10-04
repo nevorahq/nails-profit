@@ -7,6 +7,7 @@ import { ChromeIcon } from "@/components/icons";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
+import { settledReads, withLocalReads } from "@/lib/notice-reads";
 import { playNotificationChime, unlockNotificationChime } from "@/lib/notification-chime";
 /*
  * The feed's kinds taken from the writer rather than copied beside it.
@@ -108,13 +109,18 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
   // "new" — only something that lands after the list was already known to.
   const known = useRef<Set<string> | null>(null);
 
+  // Lines read on this screen and not yet confirmed by an answer: see
+  // `withLocalReads` for the answer that would otherwise undo them.
+  const readHere = useRef(new Map<string, string>());
+
   const apply = useCallback((next: Notifications) => {
     const keys = keysOf(next);
     if (known.current && [...keys].some((key) => !known.current!.has(key))) {
       playNotificationChime();
     }
     known.current = keys;
-    setData(next);
+    for (const bookingId of settledReads(next, readHere.current)) readHere.current.delete(bookingId);
+    setData(withLocalReads(next, readHere.current));
     setFailed(false);
   }, []);
 
@@ -165,21 +171,18 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
    * finished would be the interface asking to be clicked again. A failed write
    * leaves the line where it was, which the next poll shows honestly.
    */
-  async function markSeen(bookingId: string) {
-    setData((current) => {
-      if (!current) return current;
-      const feed = current.feed.map((row) =>
-        row.booking_id === bookingId ? { ...row, unread: false } : row,
-      );
-      return { ...current, feed, unread: feed.filter((row) => row.unread).length };
-    });
+  async function markSeen(notice: NoticeItem) {
+    readHere.current.set(notice.booking_id, notice.happened_at);
+    setData((current) => (current ? withLocalReads(current, readHere.current) : current));
     try {
-      await fetch("/api/v1/notifications/read", {
+      const response = await fetch("/api/v1/notifications/read", {
         method: "POST",
-        body: JSON.stringify({ booking_id: bookingId }),
+        body: JSON.stringify({ booking_id: notice.booking_id }),
       });
+      if (!response.ok) throw new Error(String(response.status));
     } catch {
       /* The line comes back on the next poll, which is the honest answer. */
+      readHere.current.delete(notice.booking_id);
     }
   }
 
@@ -308,7 +311,7 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
                         setOpen(false);
                         // Opening the day is seeing what the line was about.
                         // The two that are not this one keep their place.
-                        void markSeen(notice.booking_id);
+                        void markSeen(notice);
                       }}
                     >
                       <strong>
