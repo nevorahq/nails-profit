@@ -309,12 +309,19 @@ export function BookingSetup({
    * than sitting under it, because both cannot be true at once.
    */
   const active = locations.filter((place) => place.status === "active");
+  // One address, one switch: the owner of a studio with a single address is
+  // offered «Онлайн-запись вкл/выкл» instead of two controls with one meaning.
+  const singleAddress = canPublish && active.length === 1;
   const published = active.filter((place) => place.public_status === "published");
   const assignedLocationIds = new Set(assignments.map((row) => row.location_id));
   const rotaKeys = new Set(rota.map((rule) => `${rule.specialist_id}:${rule.location_id}`));
   const blockers: MessageKey[] = [
     active.length === 0 ? "bookingSetup.blockerLocation" : null,
-    active.length > 0 && published.length === 0 ? "bookingSetup.blockerPublish" : null,
+    active.length > 0 && published.length === 0
+      ? singleAddress
+        ? "bookingSetup.blockerSwitchOn"
+        : "bookingSetup.blockerPublish"
+      : null,
     specialists.length === 0 ? "bookingSetup.blockerSpecialist" : null,
     specialists.length > 0 && published.some((place) => !assignedLocationIds.has(place.id))
       ? "bookingSetup.blockerAssign"
@@ -523,6 +530,25 @@ export function BookingSetup({
    */
   async function setPublicStatus(id: string, status: "published" | "paused") {
     await send(`/api/v1/locations/${id}/booking-settings`, "PUT", { public_status: status });
+  }
+
+  /**
+   * The one switch a studio with one address gets: the page open or shut.
+   *
+   * Two rows say whether `/book/<slug>` answers — the address's `public_status`
+   * and the organization's `booking_access` — and for one address they are one
+   * question. Publishing the address raises the organization already (see the
+   * booking-settings endpoint). Closing lowers the organization first, to the
+   * calendar it had before: should the second request fail, the page is shut
+   * either way, which is the safe half to be left in.
+   */
+  async function setOnlineBooking(id: string, on: boolean) {
+    if (on) {
+      await send(`/api/v1/locations/${id}/booking-settings`, "PUT", { public_status: "published" });
+      return;
+    }
+    const lowered = await send("/api/v1/organizations/settings", "PATCH", { booking_access: "calendar" });
+    if (lowered) await send(`/api/v1/locations/${id}/booking-settings`, "PUT", { public_status: "paused" });
   }
 
   async function deleteLocation(id: string) {
@@ -749,6 +775,18 @@ export function BookingSetup({
       {!isMaster && !guided && !(blockers.length === 0 && bookingAccess === "public") && (
         <section className="panel booking-panel">
           <h2>{t("bookingSetup.checklistTitle")}</h2>
+          {/*
+            The page as a client meets it, beside the list of what is still
+            missing on it. Only once it is open: a closed page is a 404, and
+            there is no owner's preview of the public page to show instead.
+          */}
+          {publicPageHref && bookingAccess === "public" && published.length > 0 && (
+            <p>
+              <a className="inline-action" href={publicPageHref} target="_blank" rel="noopener noreferrer">
+                {t("bookingSetup.viewAsClient")}
+              </a>
+            </p>
+          )}
           {blockers.length > 0 && (
             <div className="warning-banner">
               <ul>
@@ -774,7 +812,7 @@ export function BookingSetup({
             </>
           )}
 
-          {bookingAccess !== "public" && canPublish && published.length > 0 && (
+          {bookingAccess !== "public" && canPublish && !singleAddress && published.length > 0 && (
             <div style={{ marginTop: blockers.length > 0 ? "12rem" : 0 }}>
               <p className="muted">{t("bookingSetup.openPublicHint")}</p>
               <button
@@ -830,6 +868,31 @@ export function BookingSetup({
         {(publicPageHref || canPublish) && (
           <PublicAddressEditor slug={organizationSlug} locale={locale} canEdit={canPublish} />
         )}
+        {singleAddress && (() => {
+          const place = active[0];
+          const online = place.public_status === "published" && bookingAccess === "public";
+          return (
+            <div className="booking-switch-row">
+              <button
+                className={`booking-switch${online ? " is-on" : ""}`}
+                type="button"
+                role="switch"
+                aria-checked={online}
+                aria-label={t("bookingSetup.onlineSwitch")}
+                disabled={pending}
+                onClick={() => setOnlineBooking(place.id, !online)}
+              >
+                <span className="booking-switch-track" aria-hidden="true" />
+                {t(online ? "bookingSetup.onlineOn" : "bookingSetup.onlineOff")}
+              </button>
+              {online && publicPageHref && (
+                <a className="inline-action" href={publicPageHref} target="_blank" rel="noopener noreferrer">
+                  {t("bookingSetup.viewAsClient")}
+                </a>
+              )}
+            </div>
+          );
+        })()}
         {locations.length === 0 && <p className="muted">{t("bookingSetup.noLocations")}</p>}
 
         {locations.map((place) => {
@@ -913,7 +976,7 @@ export function BookingSetup({
                   </>
                 ) : (
                   <>
-                    {place.public_status === "published" ? (
+                    {singleAddress ? null : place.public_status === "published" ? (
                       <button
                         className="inline-action"
                         type="button"

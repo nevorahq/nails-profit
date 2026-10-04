@@ -156,18 +156,15 @@ describe("a workspace created from the setup form", () => {
     expect(progress.complete).toBe(true);
   });
 
-  test("puts the studio's booking page live, with every request waiting for an answer", async () => {
+  test("remembers the wish to book online, and opens nothing until the prices are confirmed", async () => {
     /*
-     * The last screen a new studio had to find on its own. `booking_access`
-     * starts at `calendar` and the address's settings at `draft`, so
-     * `/book/<slug>` answered 404 until two switches were flipped in
-     * «Онлайн-запись» — a screen nobody opens in their first week.
-     *
-     * Published from registration instead, and deliberately not on the terms
-     * everybody else gets: what is on that page in its first minute is a
-     * suggested price and hours nobody chose, so a request waits for the owner
-     * rather than confirming itself.
+     * Registration used to publish here, on a suggested price and hours nobody
+     * chose. It keeps the tick as an intention now — the opening-setup screen
+     * leads with «открыть запись» because of it — and the page opens only from
+     * that screen, on prices a person has confirmed (`opening-setup.test.ts`
+     * holds the rest). Requests still wait for the owner when it does open.
      */
+    process.env.PUBLIC_BOOKING_ENABLED = "true";
     const owner = await signUp("setup-published@studio.example");
     const organization = dataOf<{ id: string; slug: string }>(
       await owner.post("/api/v1/organizations", {
@@ -178,43 +175,25 @@ describe("a workspace created from the setup form", () => {
     );
 
     const [row] = await adminDb
-      .select({ bookingAccess: organizations.bookingAccess })
+      .select({
+        bookingAccess: organizations.bookingAccess,
+        wantsOnlineBooking: organizations.wantsOnlineBooking,
+        setupConfirmedAt: organizations.setupConfirmedAt,
+      })
       .from(organizations)
       .where(eq(organizations.id, organization.id));
-    expect(row.bookingAccess).toBe("public");
+    expect(row).toEqual({ bookingAccess: "calendar", wantsOnlineBooking: true, setupConfirmedAt: null });
 
     const [settings] = await adminDb
       .select()
       .from(bookingSettings)
       .where(eq(bookingSettings.organizationId, organization.id));
-    expect(settings.publicStatus).toBe("published");
+    expect(settings.publicStatus).toBe("draft");
     expect(settings.confirmationMode).toBe("manual");
 
-    // And the page a client would open actually answers — with the service the
-    // studio was registered with, and somebody to do it.
-    process.env.PUBLIC_BOOKING_ENABLED = "true";
+    // And a client who has the link meets a closed door, not the suggestions.
     const page = await anonymous.get(`/api/v1/public/booking/${organization.slug}`);
-    expect(page.status).toBe(200);
-
-    /*
-     * The catalogue, which is where a workspace that looks complete quietly
-     * falls apart: a service reaches a client only if somebody is attached to
-     * the address it is offered at. That row — `specialist_location` — used to
-     * be written by one screen only, and a studio published from here would
-     * have shown an empty page.
-     */
-    const [place] = dataOf<{ id: string }[]>(await owner.get("/api/v1/locations"));
-    const catalogue = dataOf<{ services: { name: string; specialists: unknown[] }[] }>(
-      await anonymous.get(
-        `/api/v1/public/booking/${organization.slug}/catalog?location_id=${place.id}`,
-      ),
-    );
-    // Both services the studio registered with, each with somebody to do it.
-    expect(catalogue.services.map((service) => service.name).sort()).toEqual([
-      "Маникюр",
-      "Педикюр",
-    ]);
-    expect(catalogue.services.every((service) => service.specialists.length > 0)).toBe(true);
+    expect(page.status).toBe(404);
   });
 
   test("leaves the booking page alone unless the form asked for it", async () => {
@@ -238,6 +217,11 @@ describe("a workspace created from the setup form", () => {
       .where(eq(bookingSettings.organizationId, organization.id));
     expect(settings.publicStatus).toBe("draft");
     expect(settings.confirmationMode).toBe("instant");
+    const [intent] = await adminDb
+      .select({ wantsOnlineBooking: organizations.wantsOnlineBooking })
+      .from(organizations)
+      .where(eq(organizations.id, organization.id));
+    expect(intent.wantsOnlineBooking).toBe(false);
   });
 
   test("gives a studio's named masters a card, the same rate and the same week", async () => {

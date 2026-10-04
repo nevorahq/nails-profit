@@ -9,9 +9,12 @@ test.describe("landing experience", () => {
     const sliders = calculator.getByRole("slider");
     await expect(sliders).toHaveCount(3);
     // The page is server-rendered, so the sliders are on screen a beat before
-    // React listens to them: a value set in that beat is lost, and hydration
-    // puts the slider back where it was. Retried until the reading follows.
+    // React listens to them: a value set in that beat is lost. Retried until
+    // the reading follows — and through another value each time, because the
+    // lost one can stay in the slider, and setting a slider to the value it
+    // already shows is no change React would hear about.
     await expect(async () => {
+      await sliders.nth(0).fill("890");
       await sliders.nth(0).fill("900");
       await expect(calculator.getByRole("status").first()).toContainText("900", { timeout: 1_000 });
     }).toPass({ timeout: 15_000 });

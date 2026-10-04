@@ -34,6 +34,7 @@ export function FirstNumbers({
   businessType,
   currency,
   bookingSlug,
+  bookingClosed = false,
   closeDay,
 }: {
   rows: readonly FirstNumberRow[];
@@ -43,6 +44,12 @@ export function FirstNumbers({
   currency: Currency;
   /** The studio's public address, when its page is actually live. */
   bookingSlug: string | null;
+  /**
+   * Whether the page could be opened but is not: the deployment offers public
+   * booking and the studio has not opened it. Then the screen offers the way
+   * there instead of the link — a link to a 404 is worse than none.
+   */
+  bookingClosed?: boolean;
   /**
    * Appointments that happened and were never closed. Shown first: a studio
    * still on this screen has no visit yet, and these are the first ones.
@@ -104,6 +111,18 @@ export function FirstNumbers({
             <h3>{t("firstNumbers.bookingTitle")}</h3>
             <p className="muted">{t("firstNumbers.bookingBody")}</p>
             <BookingLink slug={bookingSlug} locale={locale} />
+          </>
+        )}
+
+        {!bookingSlug && bookingClosed && (
+          <>
+            <h3>{t("firstNumbers.closedTitle")}</h3>
+            <p className="muted">{t("firstNumbers.closedBody")}</p>
+            <div className="button-row">
+              <Link className="primary-button" href="/app/setup">
+                {t("firstNumbers.openBooking")}
+              </Link>
+            </div>
           </>
         )}
 

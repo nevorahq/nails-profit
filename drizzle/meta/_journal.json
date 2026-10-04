@@ -414,6 +414,13 @@
       "when": 1790956266226,
       "tag": "0058_a_visit_keeps_what_the_client_left_on_top",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791133001118,
+      "tag": "0059_a_studio_confirms_what_it_opens_with",
+      "breakpoints": true
     }
   ]
 }

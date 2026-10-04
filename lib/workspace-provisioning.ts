@@ -73,11 +73,8 @@ export type WorkspacePlan = Readonly<{
   /** What the owner's card is called, when the studio's own name is not it. */
   ownerName?: string;
   /**
-   * Whether the studio's public page goes live with the workspace.
-   *
-   * The other half of this answer is `organization.booking_access`, set in
-   * `POST /api/v1/organizations` where the row is written — both are needed
-   * before `/book/<slug>` answers anything but 404.
+   * Whether the owner means to take bookings online. It publishes nothing: the
+   * page opens from the opening-setup screen, once the prices are confirmed.
    */
   publishBooking?: boolean;
   /** Other people who work here, named on the form. */
@@ -149,22 +146,18 @@ export async function provisionWorkspace(
   await tx.insert(bookingSettings).values({
     organizationId: organization.id,
     locationId: location.id,
-    ...(plan.publishBooking
-      ? {
-          publicStatus: "published" as const,
-          /*
-           * Manual, and only for a page published by registration itself.
-           *
-           * What is on that page in its first minute is a price the product
-           * suggested and hours nobody chose — so `instant`, the default
-           * everywhere else, would hand a client a *confirmed* appointment on
-           * terms the studio has not agreed to. As a request it is safe: the
-           * owner is notified, and says yes or no. The switch back to instant
-           * lives in «Онлайн-запись», to be flipped when the prices are real.
-           */
-          confirmationMode: "manual" as const,
-        }
-      : {}),
+    /*
+     * A draft, whatever the registration tick said. What would be on the page
+     * in its first minute is a price the product suggested and hours nobody
+     * chose; it opens from the opening-setup screen, after a person has
+     * confirmed both (`lib/opening-setup.ts`).
+     *
+     * Manual confirmation for a studio that means to take bookings online, as
+     * when registration published the page itself: the first requests arrive
+     * before the owner has seen one come in, and as a request each is still
+     * theirs to accept. The switch to instant lives in «Онлайн-запись».
+     */
+    ...(plan.publishBooking ? { confirmationMode: "manual" as const } : {}),
     ...audit,
   });
 

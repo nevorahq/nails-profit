@@ -266,6 +266,15 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/organizations/settings", body: { locale: "ro" } }),
   },
   {
+    route: "/api/v1/organizations/setup",
+    method: "POST",
+    allowed: ["owner"],
+    // An empty price list is refused by validation, which comes after the
+    // role: an owner meets a 422, everybody else the 403 this row is about.
+    note: "organization_settings: the prices and week a studio opens on are the owner's",
+    request: async () => ({ path: "/api/v1/organizations/setup", body: { services: [] } }),
+  },
+  {
     route: "/api/v1/organizations/logo",
     method: "GET",
     allowed: ALL_ROLES,

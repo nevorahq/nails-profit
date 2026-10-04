@@ -49,6 +49,7 @@ export const errorMessages = {
     SERVICE_NOT_BOOKABLE: "У услуги не задана длительность",
     IDEMPOTENCY_KEY_REUSED: "Повторная отправка с другими данными",
     MISSING_COMMISSION_RULE: "У мастера нет правила комиссии",
+    PUBLIC_BOOKING_UNAVAILABLE: "Онлайн-запись здесь пока недоступна — сохраните прайс без неё",
   },
   ro: {
     UNAUTHENTICATED: "Este necesară autentificarea",
@@ -92,6 +93,7 @@ export const errorMessages = {
     SERVICE_NOT_BOOKABLE: "Serviciul nu are durată stabilită",
     IDEMPOTENCY_KEY_REUSED: "Retrimitere cu alte date",
     MISSING_COMMISSION_RULE: "Maestrul nu are regulă de comision",
+    PUBLIC_BOOKING_UNAVAILABLE: "Programarea online nu este încă disponibilă aici — salvați prețurile fără ea",
   },
   en: {
     UNAUTHENTICATED: "Authentication is required",
@@ -135,6 +137,7 @@ export const errorMessages = {
     SERVICE_NOT_BOOKABLE: "The service has no duration set",
     IDEMPOTENCY_KEY_REUSED: "Resent with different details",
     MISSING_COMMISSION_RULE: "The specialist has no commission rule",
+    PUBLIC_BOOKING_UNAVAILABLE: "Online booking is not available here yet — save the prices without it",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>;
 

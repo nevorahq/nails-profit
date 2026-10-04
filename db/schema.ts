@@ -176,6 +176,24 @@ export const organizations = pgTable(
      */
     bookingAccess: bookingAccessLevel("booking_access").notNull().default("calendar"),
     /**
+     * When the owner confirmed the prices and hours the studio opens with.
+     *
+     * Registration fills the catalogue and the rota with suggestions — a
+     * manicure at 200, Monday to Friday 08–16 — and until somebody has looked
+     * at them they are a draft: no client may book on terms nobody chose. Null
+     * means «not yet», and the app opens on the screen that asks; nothing
+     * publishes the booking page before it is set. Every organization created
+     * before this column existed is backfilled as confirmed, so a working
+     * studio is never sent back to its first day.
+     */
+    setupConfirmedAt: timestamp("setup_confirmed_at", { withTimezone: true }),
+    /**
+     * The tick «Принимать записи онлайн» from registration, kept as an
+     * intention rather than acted on: it decides which button the confirmation
+     * screen leads with, and publishes nothing by itself.
+     */
+    wantsOnlineBooking: boolean("wants_online_booking").notNull().default(false),
+    /**
      * Who besides the working master hears about a booking — see
      * `staffNoticeAudience`. `owner` by default: it is what every studio has
      * today, and starting to mail the managers of studios that never asked
