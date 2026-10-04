@@ -202,6 +202,17 @@ export default async function AppPage({
    * for a master this would be a door they cannot open, and they get the
    * dashboard as before.
    */
+  /*
+   * A studio that has not yet confirmed the prices and week it opens with is
+   * asked that before anything else — before the numbers, because the numbers
+   * are computed from those prices. The owner's question alone: the endpoint
+   * that answers it is theirs, and a master opening the app meanwhile gets the
+   * dashboard as always.
+   */
+  if (membership.organization.setupConfirmedAt === null && can(membership.role, "organization_settings", "write")) {
+    redirect("/app/setup");
+  }
+
   if (canManageCatalogue(membership.role, "services")) {
     const start = await withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale));
     if (start?.kind === "goal" && start.progress.next) {

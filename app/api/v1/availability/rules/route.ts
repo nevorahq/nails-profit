@@ -1,14 +1,14 @@
-import { and, asc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { locations, scheduleRules, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { parseLocalDate, parseLocalTime, weekdays } from "@/domain/timezone";
-import { recordAuditEvent } from "@/lib/audit";
 import { bookingModuleRefusal } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { replaceWeeklySchedule } from "@/lib/schedule-rules";
 
 /**
  * Weekly working patterns, roadmap section 7.6.
@@ -199,79 +199,15 @@ export async function PUT(request: Request) {
       .limit(1);
     if (!location) return { failure: "LOCATION_NOT_FOUND" as const };
 
-    // A rule that has not started yet is replaced outright: closing it on its
-    // own start date would leave a row valid for no day at all, which is what
-    // the effective-range constraint refuses. Correcting a rota before it takes
-    // effect is a correction, not a handover, and leaves nothing to preserve.
-    const superseded = await tx
-      .delete(scheduleRules)
-      .where(
-        and(
-          eq(scheduleRules.specialistId, specialist.id),
-          eq(scheduleRules.locationId, location.id),
-          gte(scheduleRules.effectiveFrom, parsed.data.effective_from),
-        ),
-      )
-      .returning({ id: scheduleRules.id });
-
-    // What did apply is closed rather than deleted, from the day the new
-    // pattern starts: a booking taken last Tuesday was offered against the
-    // schedule of last Tuesday, and that has to remain answerable.
-    const closed = await tx
-      .update(scheduleRules)
-      .set({
-        effectiveTo: parsed.data.effective_from,
-        updatedBy: actor.userId,
-        updatedAt: new Date(),
-        version: sql`${scheduleRules.version} + 1`,
-      })
-      .where(
-        and(
-          eq(scheduleRules.specialistId, specialist.id),
-          eq(scheduleRules.locationId, location.id),
-          lt(scheduleRules.effectiveFrom, parsed.data.effective_from),
-          or(isNull(scheduleRules.effectiveTo), sql`${scheduleRules.effectiveTo} > ${parsed.data.effective_from}`),
-        ),
-      )
-      .returning({ id: scheduleRules.id });
-
-    const created =
-      intervals.length === 0
-        ? []
-        : await tx
-            .insert(scheduleRules)
-            .values(
-              intervals.map((interval) => ({
-                organizationId: actor.organizationId,
-                specialistId: specialist.id,
-                locationId: location.id,
-                weekday: interval.weekday,
-                startMinute: interval.startMinute,
-                endMinute: interval.endMinute,
-                effectiveFrom: parsed.data.effective_from,
-                createdBy: actor.userId,
-                updatedBy: actor.userId,
-              })),
-            )
-            .returning({ id: scheduleRules.id });
-
-    await recordAuditEvent(tx, {
+    return replaceWeeklySchedule(tx, {
       organizationId: actor.organizationId,
       actorUserId: actor.userId,
-      eventType: "schedule.replaced",
-      entityType: "specialist",
-      entityId: specialist.id,
-      after: {
-        location_id: location.id,
-        effective_from: parsed.data.effective_from,
-        closed: closed.length,
-        superseded: superseded.length,
-        created: created.length,
-      },
+      specialistId: specialist.id,
+      locationId: location.id,
+      effectiveFrom: parsed.data.effective_from,
+      intervals,
       requestId: id,
     });
-
-    return { closed: closed.length, superseded: superseded.length, created: created.length };
   });
 
   if ("failure" in outcome) {

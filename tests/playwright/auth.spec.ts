@@ -150,6 +150,31 @@ test.describe("authentication UI", () => {
     expect(Math.round((ruleBox?.height ?? 0) / ruleLine)).toBe(1);
   });
 
+  /**
+   * «Ваш прайс и часы», which registration now ends on: the suggested manicure
+   * ticked and priced, Monday to Friday chosen, nothing published yet. Saved
+   * with the button the registration tick asked for.
+   */
+  async function confirmOpening(page: Page, options: Readonly<{ price?: string }> = {}) {
+    await expect(page).toHaveURL(/\/app\/setup$/);
+    await expect(page.getByRole("heading", { name: "Your prices and hours" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Manicure" })).toBeChecked();
+    const price = page.getByLabel(/^Price/).first();
+    await expect(price).toHaveValue("200");
+    for (const day of ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]) {
+      await expect(page.getByRole("button", { name: day })).toHaveAttribute("aria-pressed", "true");
+    }
+    await expect(page.getByRole("button", { name: "Saturday" })).toHaveAttribute("aria-pressed", "false");
+    if (options.price) await price.fill(options.price);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    await page.getByRole("button", { name: "Save and open booking" }).click();
+    await expect(page).toHaveURL(/\/app$/);
+  }
+
   /** Registration, up to the one question the setup screen still asks. */
   async function signUpAndAddress(page: Page, suffix: string, studioName = "Browser Studio") {
     await page.goto("/login?mode=signup");
@@ -191,31 +216,35 @@ test.describe("authentication UI", () => {
     await expect(page.getByRole("checkbox", { name: "Accept online bookings" })).toBeChecked();
 
     await page.getByRole("button", { name: "Continue" }).click();
+    await confirmOpening(page, { price: "350" });
 
     /*
      * No checklist, no «add a specialist», no first visit to invent: the owner
      * is catalogued with the workspace, and what the product owes them — what
      * an hour of work is worth — is on the screen that follows, computed from
-     * the defaults registration wrote.
+     * the price just confirmed.
      */
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByRole("heading", { level: 2, name: "Your figures" })).toBeVisible();
     const manicure = page.getByRole("row", { name: /Manicure/ });
-    // 200.00 at 40%: 80.00 to the person doing the work, 120.00 kept — and the
+    // 350.00 at 40%: 140.00 to the person doing the work, 210.00 kept — and the
     // hour is the hour, so the hourly is the same figure.
-    await expect(manicure).toContainText("200");
-    await expect(manicure).toContainText("80");
-    await expect(manicure).toContainText("120");
+    await expect(manicure).toContainText("350");
+    await expect(manicure).toContainText("140");
+    await expect(manicure).toContainText("210");
 
     /*
-     * And the page clients book on is already live, with its address on the
-     * same screen. It used to be two switches deep in «Онлайн-запись» — a
-     * screen a studio has no reason to open in its first week — and until they
-     * were flipped, `/book/<slug>` answered 404.
+     * And the page clients book on is live now, with its address on the same
+     * screen — opened by the button on the prices screen, not by registration.
      */
     await expect(page.getByRole("heading", { name: "Your booking page" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^\/book\// })).toBeVisible();
+    const link = page.getByRole("link", { name: /^\/book\// });
+    await expect(link).toBeVisible();
     await expect(page.getByRole("button", { name: "Copy the link" })).toBeVisible();
+
+    // With the price on it that was typed, not the one the product suggested.
+    await page.goto((await link.textContent())!.trim());
+    await expect(page.locator(".public-booking-quote")).toContainText("350");
   });
 
   test("a studio whose owner works is costed like anybody else", async ({
@@ -236,6 +265,11 @@ test.describe("authentication UI", () => {
     await expect(page.getByRole("checkbox", { name: /I take clients/ })).toBeChecked();
     await page.getByLabel("Your name").fill("Irina");
     await page.getByRole("button", { name: "Continue" }).click();
+
+    // Her own week is on the screen, and said to be hers: the others' are set
+    // where they always were.
+    await expect(page.getByText("Your own hours.")).toBeVisible();
+    await confirmOpening(page);
 
     await expect(page.getByRole("heading", { level: 2, name: "Your figures" })).toBeVisible();
   });
@@ -263,6 +297,12 @@ test.describe("authentication UI", () => {
     // And the question of what to call her card goes with it.
     await expect(page.getByLabel("Your name")).toHaveCount(0);
     await page.getByRole("button", { name: "Continue" }).click();
+
+    // Prices only: nobody here works under this account, so there is no week
+    // on the screen for the owner to set.
+    await expect(page.getByRole("heading", { name: "Your prices and hours" })).toBeVisible();
+    await expect(page.getByText("Days and hours")).toHaveCount(0);
+    await page.getByRole("button", { name: "Save and open booking" }).click();
 
     /*
      * So the single step left is the one thing the product must not guess:
@@ -348,6 +388,29 @@ test.describe("authentication UI", () => {
       }
     } finally {
       await owner.dispose();
+    }
+  });
+
+  test.describe("on a 375 px phone", () => {
+    test.use({ viewport: { width: 375, height: 812 } });
+
+    for (const format of ["solo", "studio"] as const) {
+      test(`the prices screen fits, ${format}`, async ({ page, browserErrors }, testInfo) => {
+        void browserErrors;
+        const suffix = `${testInfo.project.name}-narrow-${format}-${Date.now()}-${testInfo.workerIndex}`
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, "-");
+        await signUpAndAddress(page, suffix);
+        if (format === "studio") {
+          await page.getByRole("radio", { name: "Studio" }).check();
+          await page.getByLabel("Your name").fill("Irina");
+        }
+        await page.getByRole("button", { name: "Continue" }).click();
+        await expect(page.getByRole("heading", { name: "Your prices and hours" })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath(`opening-${format}-375.png`), fullPage: true });
+        await confirmOpening(page);
+        await expect(page.getByRole("heading", { level: 2, name: "Your figures" })).toBeVisible();
+      });
     }
   });
 });

@@ -197,6 +197,19 @@ export async function seedStudio(
     duration_minutes: CANONICAL.serviceDurationMinutes,
   });
 
+  // Confirmed the way a new studio is asked to confirm it: these are the
+  // studio's own prices, so the app opens on its screens rather than on
+  // «Ваш прайс и часы». The page is published above, address by address.
+  await owner.post("/api/v1/organizations/setup", {
+    services: [
+      {
+        id: service.id,
+        price_minor: CANONICAL.servicePriceMinor,
+        duration_minutes: CANONICAL.serviceDurationMinutes,
+      },
+    ],
+  });
+
   // The Master is invited the way the product invites: an invitation issued by
   // the owner and accepted by an account with that address. Their specialist
   // card is then created carrying `user_id`, which is the link every "own
