@@ -7,7 +7,8 @@ import { normalizePhone } from "@/domain/phone";
 import { parseBookingToken } from "@/domain/booking-token";
 import { supportedLocales } from "@/i18n/messages";
 import { getPublicNotificationChannel } from "@/env";
-import { loadBookingDraft, loadSlotContext } from "@/lib/availability-service";
+import { MAX_PUBLIC_SERVICES } from "@/domain/service-limit";
+import { loadBookingDraftFor, loadSlotContext } from "@/lib/availability-service";
 import { recordAuditEvent } from "@/lib/audit";
 import { issueManageLink, managePath } from "@/lib/booking-manage-link";
 import {
@@ -28,23 +29,27 @@ import { recordSuspiciousActivity } from "@/lib/bot-challenge";
 import { findPublicOrganization } from "@/lib/public-booking";
 import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_CREATE_RULE } from "@/lib/rate-limit";
+import { refineServiceSelection, serviceItemsOf, serviceSelectionUpTo } from "@/lib/service-items";
 
-const bodySchema = z.object({
-  hold_token: z.string().min(40).max(300),
-  service_id: z.uuid(),
-  add_on_ids: z.array(z.uuid()).max(20).default([]),
-  name: z.string().trim().min(2).max(120),
-  phone: z.string().trim().min(6).max(40),
-  /**
-   * Where the client would like to be written to, if they said. Optional and
-   * unvalidated beyond the four names: a field in a booking form costs
-   * completed bookings, and this one must never be the reason one fails.
-   */
-  contact_channels: z.array(z.enum(contactChannels)).max(4).default([]),
-  email: z.string().trim().toLowerCase().pipe(z.email().max(254)).nullable().optional(),
-  locale: z.enum(supportedLocales),
-  legal_accepted: z.literal(true),
-});
+const bodySchema = z
+  .object({
+    hold_token: z.string().min(40).max(300),
+    /** What was held: one service, or up to three with one master. */
+    ...serviceSelectionUpTo(MAX_PUBLIC_SERVICES),
+    add_on_ids: z.array(z.uuid()).max(20).default([]),
+    name: z.string().trim().min(2).max(120),
+    phone: z.string().trim().min(6).max(40),
+    /**
+     * Where the client would like to be written to, if they said. Optional and
+     * unvalidated beyond the four names: a field in a booking form costs
+     * completed bookings, and this one must never be the reason one fails.
+     */
+    contact_channels: z.array(z.enum(contactChannels)).max(4).default([]),
+    email: z.string().trim().toLowerCase().pipe(z.email().max(254)).nullable().optional(),
+    locale: z.enum(supportedLocales),
+    legal_accepted: z.literal(true),
+  })
+  .superRefine(refineServiceSelection);
 
 async function findOrCreateClient(
   tx: TenantTransaction,
@@ -246,9 +251,10 @@ async function handlePost(
         return { failure: "BOOKING_PAUSED" as const };
       }
 
-      const draft = await loadBookingDraft(tx, {
-        serviceId: parsed.data.service_id,
-        addOnIds: parsed.data.add_on_ids,
+      // The services as sent, measured against what was held: a sitting that
+      // does not fill the held interval exactly was not the one offered.
+      const draft = await loadBookingDraftFor(tx, {
+        items: serviceItemsOf(parsed.data),
         specialistId: hold.specialistId,
       });
       if (!draft) return { failure: "SERVICE_NOT_BOOKABLE" as const };

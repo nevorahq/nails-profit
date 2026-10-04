@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { withTenant } from "@/db/tenant";
 import { toZonedParts } from "@/domain/timezone";
-import { loadBookingDraft, loadSlotContext } from "@/lib/availability-service";
+import { MAX_PUBLIC_SERVICES } from "@/domain/service-limit";
+import { loadBookingDraftFor, loadSlotContext } from "@/lib/availability-service";
 import { holdSlot, HOLD_TTL_MINUTES } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, toFieldErrors } from "@/lib/http";
@@ -12,14 +13,18 @@ import { loadPublicCatalog } from "@/lib/public-booking";
 import { loadPublicAvailability } from "@/lib/public-booking-availability";
 import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_HOLD_RULE } from "@/lib/rate-limit";
+import { refineServiceSelection, serviceItemsOf, serviceSelectionUpTo } from "@/lib/service-items";
 
-const bodySchema = z.object({
-  location_id: z.uuid(),
-  service_id: z.uuid(),
-  add_on_ids: z.array(z.uuid()).max(20).default([]),
-  specialist_id: z.uuid(),
-  starts_at: z.iso.datetime(),
-});
+const bodySchema = z
+  .object({
+    location_id: z.uuid(),
+    /** One service, or up to three in one sitting with one master. */
+    ...serviceSelectionUpTo(MAX_PUBLIC_SERVICES),
+    add_on_ids: z.array(z.uuid()).max(20).default([]),
+    specialist_id: z.uuid(),
+    starts_at: z.iso.datetime(),
+  })
+  .superRefine(refineServiceSelection);
 
 export async function POST(
   request: Request,
@@ -42,13 +47,17 @@ export async function POST(
   const catalogue = await loadPublicCatalog(slug, parsed.data.location_id);
   if (!catalogue) return publicNotFound(id);
 
+  // The slot has to have been offered for all of it: the same search the page
+  // made, so a hold for a sitting of three is a hold for its whole length.
+  const items = serviceItemsOf(parsed.data);
   const startsAt = new Date(parsed.data.starts_at);
   const local = toZonedParts(startsAt, catalogue.location.timezone);
   const availability = await loadPublicAvailability({
     slug,
     locationId: parsed.data.location_id,
-    serviceId: parsed.data.service_id,
-    addOnIds: parsed.data.add_on_ids,
+    serviceId: items[0].serviceId,
+    addOnIds: items[0].addOnIds,
+    items,
     specialistId: parsed.data.specialist_id,
     date: { year: local.year, month: local.month, day: local.day },
     now: new Date(),
@@ -72,11 +81,7 @@ export async function POST(
       const context = await loadSlotContext(tx, parsed.data.location_id);
       if (!context || context.publicStatus !== "published") return null;
 
-      const draft = await loadBookingDraft(tx, {
-        serviceId: parsed.data.service_id,
-        addOnIds: parsed.data.add_on_ids,
-        specialistId: parsed.data.specialist_id,
-      });
+      const draft = await loadBookingDraftFor(tx, { items, specialistId: parsed.data.specialist_id });
       if (!draft) return null;
 
       const held = await holdSlot(tx, {

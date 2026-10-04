@@ -18,10 +18,15 @@ const serviceItem = z.object({
   add_on_ids: z.array(z.uuid()).max(20).default([]),
 });
 
-export const serviceSelection = {
-  service_id: z.uuid().optional(),
-  services: z.array(serviceItem).min(1).max(MAX_SERVICES).optional(),
-};
+/** The two forms of the selection, with the list held to `max` services. */
+export function serviceSelectionUpTo(max: number) {
+  return {
+    service_id: z.uuid().optional(),
+    services: z.array(serviceItem).min(1).max(max).optional(),
+  };
+}
+
+export const serviceSelection = serviceSelectionUpTo(MAX_SERVICES);
 
 type Selection = Readonly<{
   service_id?: string;
