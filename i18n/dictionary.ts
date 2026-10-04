@@ -1333,6 +1333,7 @@ const ru = {
   "bookingSetup.blockerLocation": "Добавьте адрес — без него записывать некуда.",
   "bookingSetup.blockerPublish":
     "Опубликуйте адрес: пока он не опубликован, страница его не показывает.",
+  "bookingSetup.blockerSwitchOn": "Включите онлайн-запись: пока она выключена, клиенты не видят страницу.",
   "bookingSetup.blockerSpecialist": "Заведите мастера в разделе «Мастера».",
   "bookingSetup.blockerAssign": "Отметьте, кто из мастеров работает на опубликованном адресе.",
   "bookingSetup.blockerRota": "Задайте график работы — без часов свободных слотов не будет.",
@@ -1366,6 +1367,10 @@ const ru = {
   "bookingSetup.editLocation": "Изменить адрес",
   "bookingSetup.publish": "Опубликовать",
   "bookingSetup.unpublish": "Снять с публикации",
+  "bookingSetup.onlineSwitch": "Онлайн-запись",
+  "bookingSetup.onlineOn": "Онлайн-запись: вкл",
+  "bookingSetup.onlineOff": "Онлайн-запись: выкл",
+  "bookingSetup.viewAsClient": "Посмотреть как клиент",
   "bookingSetup.deleteLocation": "Удалить адрес",
   "bookingSetup.deleteConfirm": "Подтвердить удаление",
   "bookingSetup.deleteHint":
@@ -2745,6 +2750,7 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.blockerLocation": "Adăugați o adresă — fără ea nu există unde să fie programat cineva.",
   "bookingSetup.blockerPublish":
     "Publicați adresa: cât timp nu este publicată, pagina nu o arată.",
+  "bookingSetup.blockerSwitchOn": "Porniți programarea online: cât timp este oprită, clienții nu văd pagina.",
   "bookingSetup.blockerSpecialist": "Adăugați un maestru în secțiunea „Maeștri”.",
   "bookingSetup.blockerAssign": "Marcați care maeștri lucrează la adresa publicată.",
   "bookingSetup.blockerRota": "Setați programul de lucru — fără ore nu vor exista intervale libere.",
@@ -2778,6 +2784,10 @@ const ro: Record<MessageKey, Message> = {
   "bookingSetup.editLocation": "Modifică adresa",
   "bookingSetup.publish": "Publică",
   "bookingSetup.unpublish": "Retrage publicarea",
+  "bookingSetup.onlineSwitch": "Programare online",
+  "bookingSetup.onlineOn": "Programare online: pornită",
+  "bookingSetup.onlineOff": "Programare online: oprită",
+  "bookingSetup.viewAsClient": "Vedeți ca un client",
   "bookingSetup.deleteLocation": "Șterge adresa",
   "bookingSetup.deleteConfirm": "Confirmă ștergerea",
   "bookingSetup.deleteHint":
@@ -4139,6 +4149,7 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.blockerLocation": "Add an address — there is nowhere to book without one.",
   "bookingSetup.blockerPublish":
     "Publish the address: while it is unpublished the page does not show it.",
+  "bookingSetup.blockerSwitchOn": "Turn online booking on: while it is off, clients cannot see the page.",
   "bookingSetup.blockerSpecialist": "Add a specialist under “Specialists”.",
   "bookingSetup.blockerAssign": "Mark which specialists work at the published address.",
   "bookingSetup.blockerRota": "Set the working hours — without them there are no free slots.",
@@ -4172,6 +4183,10 @@ const en: Record<MessageKey, Message> = {
   "bookingSetup.editLocation": "Edit the address",
   "bookingSetup.publish": "Publish",
   "bookingSetup.unpublish": "Unpublish",
+  "bookingSetup.onlineSwitch": "Online booking",
+  "bookingSetup.onlineOn": "Online booking: on",
+  "bookingSetup.onlineOff": "Online booking: off",
+  "bookingSetup.viewAsClient": "View as a client",
   "bookingSetup.deleteLocation": "Delete the address",
   "bookingSetup.deleteConfirm": "Confirm deletion",
   "bookingSetup.deleteHint":

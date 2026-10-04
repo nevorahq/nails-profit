@@ -236,3 +236,31 @@ describe("the opening-setup screen", () => {
     expect((await stateOf(organization.id)).setupConfirmedAt).toBeNull();
   });
 });
+describe("the one online-booking switch of a studio with one address", () => {
+  /*
+   * The switch in «Онлайн-запись» is the two requests below, in this order;
+   * what this holds to is that they move both flags together, both ways.
+   */
+  test("opens and shuts the page with both of its flags", async () => {
+    const { owner, organization, manicureId } = await register("opening-switch@studio.example");
+    await confirm(owner, { services: [{ id: manicureId, price_minor: 20_000, duration_minutes: 60 }] });
+    const [place] = dataOf<{ id: string }[]>(await owner.get("/api/v1/locations"));
+    const page = () => anonymous.get(`/api/v1/public/booking/${organization.slug}`);
+
+    // On: publishing the address raises the organization with it.
+    expect((await owner.put(`/api/v1/locations/${place.id}/booking-settings`, { public_status: "published" })).status).toBe(200);
+    expect(await stateOf(organization.id)).toMatchObject({ bookingAccess: "public", publicStatus: "published" });
+    expect((await page()).status).toBe(200);
+
+    // Off: the organization first, then the address.
+    expect((await owner.patch("/api/v1/organizations/settings", { booking_access: "calendar" })).status).toBe(200);
+    expect((await page()).status).toBe(404);
+    expect((await owner.put(`/api/v1/locations/${place.id}/booking-settings`, { public_status: "paused" })).status).toBe(200);
+    expect(await stateOf(organization.id)).toMatchObject({ bookingAccess: "calendar", publicStatus: "paused" });
+
+    // And on again from paused.
+    await owner.put(`/api/v1/locations/${place.id}/booking-settings`, { public_status: "published" });
+    expect(await stateOf(organization.id)).toMatchObject({ bookingAccess: "public", publicStatus: "published" });
+    expect((await page()).status).toBe(200);
+  });
+});

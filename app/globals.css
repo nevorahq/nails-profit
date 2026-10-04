@@ -450,6 +450,16 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .setup-language { display: flex; align-items: center; justify-content: flex-end; gap: 10rem; margin-bottom: 10rem; }
 .setup-language select { width: auto; margin-top: 0; }
 
+/*
+ * «Онлайн-запись: вкл/выкл» for a studio with one address — the one control
+ * that opens or shuts its page, so drawn as a switch rather than as a link.
+ */
+.booking-switch-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10rem 18rem; margin: 14rem 0 6rem; }
+.booking-switch { display: inline-flex; align-items: center; gap: 10rem; min-height: 44rem; padding: 0 14rem 0 8rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font-weight: 750; cursor: pointer; }
+.booking-switch-track { position: relative; width: 38rem; height: 22rem; border-radius: 11rem; background: var(--line); transition: background var(--duration-fast) var(--ease-standard); }
+.booking-switch-track::after { content: ""; position: absolute; top: 3rem; left: 3rem; width: 16rem; height: 16rem; border-radius: 50%; background: var(--surface-strong); transition: transform var(--duration-fast) var(--ease-standard); }
+.booking-switch.is-on .booking-switch-track { background: var(--accent); }
+.booking-switch.is-on .booking-switch-track::after { transform: translateX(16rem); }
 /* The booking address and the button that puts it on the clipboard, in one row. */
 .booking-link { display: flex; align-items: center; gap: 12rem; flex-wrap: wrap; margin: 8rem 0 0; }
 
