@@ -100,6 +100,8 @@ export default async function MonthReportPage({
   const pl = report.pl;
   const capacity = report.capacity;
   const cash = report.cashFlow;
+  // A column of zeros for a studio nobody tips is noise; it appears with the first tip.
+  const tipped = report.masterBreakdown.some((master) => master.tipsMinor > 0);
 
   const commissionRule = (rule: (typeof report.masterBreakdown)[number]["rules"][number]) => {
     const rate = rule.basisPoints === null ? null : formatBasisPoints(rule.basisPoints, localeCode);
@@ -360,6 +362,20 @@ export default async function MonthReportPage({
                     <td>{money(cash.settledMinor)}</td>
                   </tr>
                 )}
+                {/* Money in that the profit never sees: left on top, and mostly
+                    handed straight on. Shown only where there was any. */}
+                {cash.tipsMinor > 0 && (
+                  <tr>
+                    <td className="pl-label">{t("cash.tips")}</td>
+                    <td>{money(cash.tipsMinor)}</td>
+                  </tr>
+                )}
+                {cash.tipsPaidOutMinor > 0 && (
+                  <tr>
+                    <td className="pl-label">{t("cash.tipsPaidOut")}</td>
+                    <td>{cost(cash.tipsPaidOutMinor)}</td>
+                  </tr>
+                )}
                 <tr>
                   <td className="pl-label">{t("cash.visitLabour")}</td>
                   <td>{cost(cash.visitLabourMinor)}</td>
@@ -403,6 +419,13 @@ export default async function MonthReportPage({
               </tbody>
             </table>
             <p className="pl-note">{t("cash.hint")}</p>
+            {/* Part of why the account outgrew the profit, named rather than
+                left to read as a cost that has not gone out yet. */}
+            {cash.tipsMinor > cash.tipsPaidOutMinor && (
+              <p className="pl-note">
+                {t("cash.principalTips", { amount: money(cash.tipsMinor - cash.tipsPaidOutMinor) })}
+              </p>
+            )}
             {cash.ledgerPayrollMinor > 0 && (
               <p className="pl-note">
                 {t("cash.payrollExcluded", { amount: money(cash.ledgerPayrollMinor) })}
@@ -544,6 +567,7 @@ export default async function MonthReportPage({
                     <th>{t("pl.revenue")}</th>
                     <th>{t("pl.commissionRule")}</th>
                     <th>{t("pl.compensation")}</th>
+                    {tipped && <th>{t("pl.tips")}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -554,6 +578,7 @@ export default async function MonthReportPage({
                       <td>{money(master.revenueMinor)}</td>
                       <td>{master.rules.map(commissionRule).join(" · ")}</td>
                       <td>{money(master.compensationMinor)}</td>
+                      {tipped && <td>{money(master.tipsMinor)}</td>}
                     </tr>
                   ))}
                 </tbody>

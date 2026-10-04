@@ -1060,6 +1060,20 @@ export const visits = pgTable(
      * before this column was costed on.
      */
     commissionBase: commissionBase("commission_base"),
+    /**
+     * What the client left on top, in minor units — the master's, whole.
+     *
+     * On the visit rather than on a line: a line is something sold, and the
+     * revenue of a visit is the sum of its lines, which is exactly what a tip
+     * must stay out of. It is not revenue, not margin and not the base of the
+     * master's percentage; it is money the studio takes in and hands on. The
+     * one way it touches the costing is the terminal's fee, which is charged
+     * on everything that went through the card — see `domain/visit-profit.ts`.
+     *
+     * Not null with a default, so every visit before it reads as «no tip»
+     * and the previous version's inserts keep working.
+     */
+    tipMinor: bigint("tip_minor", { mode: "number" }).notNull().default(0),
     ...auditColumns,
   },
   (table) => [
@@ -1082,6 +1096,7 @@ export const visits = pgTable(
         or (${table.commissionType}::text = 'percentage' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is null)
         or (${table.commissionType}::text = 'hybrid' and ${table.commissionBasisPoints} is not null and ${table.commissionFixedAmountMinor} is not null)`,
     ),
+    check("visit_tip_non_negative", sql`${table.tipMinor} >= 0`),
     check(
       "visit_actual_duration_positive",
       sql`${table.actualDurationMinutes} is null or ${table.actualDurationMinutes} > 0`,

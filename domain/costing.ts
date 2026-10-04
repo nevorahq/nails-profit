@@ -35,8 +35,13 @@ export type Commission =
  * `domain/visit-commission.ts`. It is a generalisation, not a re-cut: a visit
  * whose lines share one rule, which is every visit closed before it, costs
  * exactly what `costing-v3` made of it.
+ *
+ * `costing-v5` charges the acquirer's percentage on a tip paid by card along
+ * with the visit. A tip is not revenue, but it went through the terminal and
+ * the studio pays the fee on it. A visit without a tip — every visit before
+ * tips existed — costs exactly what `costing-v4` made of it.
  */
-export const CURRENT_FORMULA_VERSION = "costing-v4";
+export const CURRENT_FORMULA_VERSION = "costing-v5";
 export type FormulaVersion = typeof CURRENT_FORMULA_VERSION;
 
 /**

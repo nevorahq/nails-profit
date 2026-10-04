@@ -494,6 +494,8 @@ export type RecordVisitInput = VisitServices &
     quoted?: QuotedPrices;
     /** What the client actually paid; omitted means the price list or the quote. */
     paidMinor?: number;
+    /** What the client left on top, the master's whole. Omitted means none. */
+    tipMinor?: number;
     requestId: string;
     /** Optional for server-to-server callers; the browser always sends one. */
     completionKey?: string;
@@ -591,6 +593,7 @@ export async function recordCompletedVisit(
       paymentCommissionBasisPointsSnapshot: draft.payment?.basisPoints ?? null,
       paymentFixedFeeMinorSnapshot: draft.payment?.fixedFeeMinor ?? null,
       taxSnapshot: draft.taxes,
+      tipMinor: input.tipMinor ?? 0,
       createdBy: input.actor.userId,
       updatedBy: input.actor.userId,
     });
@@ -658,6 +661,7 @@ export async function recordCompletedVisit(
       revenue_minor: snapshot.revenueMinor,
       snapshot_version: snapshot.snapshotVersion,
       booking_id: input.bookingId ?? null,
+      tip_minor: visit.tipMinor,
     },
     requestId: input.requestId,
   });
@@ -782,6 +786,9 @@ export async function recalculateVisitProfit(
     }),
     plannedDurationMinutes: visit.plannedDurationMinutes,
     actualDurationMinutes: visit.actualDurationMinutes,
+    // Read off the visit like everything else here: a tip corrected later is a
+    // new snapshot whose acquirer's fee follows it.
+    tipMinor: visit.tipMinor,
   });
 
   return { visit, profit };

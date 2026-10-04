@@ -38,6 +38,12 @@ const createVisitSchema = z
      * above any manicure so a slipped finger cannot book a fortune.
      */
     paid_minor: z.int().min(0).max(100_000_000).optional(),
+    /**
+     * What the client left on top, the master's whole. Not revenue: it reaches
+     * the cash flow and the master's earnings, and the costing only through the
+     * terminal's fee on it.
+     */
+    tip_minor: z.int().min(0).max(10_000_000).optional(),
   })
   .superRefine(refineServiceSelection);
 
@@ -111,6 +117,7 @@ export async function GET(request: Request) {
       specialist_id: visit.specialistId,
       client_id: visit.clientId,
       status: visit.status,
+      tip_minor: visit.tipMinor,
       lines: lines.map((line) => ({
         kind: line.kind,
         service_id: line.serviceId,
@@ -191,6 +198,7 @@ export async function POST(request: Request) {
       // apart, and collapsing them here would lose the difference.
       paymentMethodId: parsed.data.payment_method_id,
       paidMinor: parsed.data.paid_minor,
+      tipMinor: parsed.data.tip_minor,
       requestId: id,
       completionKey,
       completionFingerprint: completionKey ? fingerprintOf(parsed.data) : undefined,

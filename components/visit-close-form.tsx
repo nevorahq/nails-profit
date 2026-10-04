@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useRef, useState } from "react";
 
-import { PaidField, toMajorUnits, toMinorUnits } from "@/components/paid-field";
+import { PaidField, TipField, tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import {
   ServiceLinesField,
   selectionTotals,
@@ -98,6 +98,8 @@ export function VisitCloseForm({
    * usual visit — paid exactly the price — is still a single tap.
    */
   const [paidInput, setPaidInput] = useState<string | null>(null);
+  // Empty is no tip, which is most visits.
+  const [tipInput, setTipInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const completionKey = useRef<string | null>(null);
@@ -119,6 +121,7 @@ export function VisitCloseForm({
   }));
   const { priceMinor: price, durationMinutes: duration } = selectionTotals(lines, pickerServices, pickerAddOns);
   const paidMinor = paidInput === null ? null : toMinorUnits(paidInput);
+  const tipMinor = tipMinorOf(tipInput);
 
   /** Whether a rule in force pays this person for every service of the visit. */
   function covers(person: CloseFormSpecialist) {
@@ -163,6 +166,7 @@ export function VisitCloseForm({
         // Sent only once it was touched: an untouched field is the price list,
         // which is what leaving it out has always meant to the server.
         ...(paidMinor !== null ? { paid_minor: paidMinor } : {}),
+        ...(tipMinor ? { tip_minor: tipMinor } : {}),
         ...(paymentMethods.length > 0
           ? { payment_method_id: paymentMethodId === "" ? null : paymentMethodId }
           : {}),
@@ -306,15 +310,19 @@ export function VisitCloseForm({
           {t("closeVisit.dueLine", { amount: money(price), duration })}
         </p>
 
-        <PaidField
-          id="visit-paid"
-          value={paidInput ?? toMajorUnits(price)}
-          priceMinor={price}
-          paidMinor={paidMinor}
-          currency={currency}
-          locale={locale}
-          onChange={setPaidInput}
-        />
+        {/* The two amounts as fields like the others, side by side where there is room. */}
+        <div className="inline-form">
+          <PaidField
+            id="visit-paid"
+            value={paidInput ?? toMajorUnits(price)}
+            priceMinor={price}
+            paidMinor={paidMinor}
+            currency={currency}
+            locale={locale}
+            onChange={setPaidInput}
+          />
+          <TipField id="visit-tip" value={tipInput} currency={currency} locale={locale} onChange={setTipInput} />
+        </div>
 
         {unusableServices > 0 && (
           <p className="muted">
@@ -346,7 +354,7 @@ export function VisitCloseForm({
       <button
         className="primary-button"
         type="submit"
-        disabled={pending || !payable || (paidInput !== null && paidMinor === null)}
+        disabled={pending || !payable || (paidInput !== null && paidMinor === null) || tipMinor === null}
       >
         {pending ? t("common.saving") : t("closeVisit.title")}
       </button>

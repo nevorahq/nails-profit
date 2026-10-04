@@ -407,6 +407,13 @@
       "when": 1790950221342,
       "tag": "0057_a_visit_line_carries_its_own_rule",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790956266226,
+      "tag": "0058_a_visit_keeps_what_the_client_left_on_top",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { financialSnapshots, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { CURRENT_FORMULA_VERSION } from "@/domain/costing";
 import { loadDashboard } from "@/lib/dashboard";
 import { loadPeriodPL, monthOf } from "@/lib/period";
 
@@ -92,7 +93,7 @@ describe("a visit of several services", () => {
     // 40% of the manicure and a flat 150 for the pedicure — not 40% of 1 000.
     expect(snapshot.commissionMinor).toBe(CANONICAL.commissionMinor + FLAT);
     expect(snapshot.contributionMarginMinor).toBe(100_000 - 24_000 - FLAT);
-    expect(snapshot.formulaVersion).toBe("costing-v4");
+    expect(snapshot.formulaVersion).toBe(CURRENT_FORMULA_VERSION);
 
     const [visit] = await withTenant(studio.organizationId, (tx) =>
       tx.select().from(visits).where(eq(visits.id, visitId)),

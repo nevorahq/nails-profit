@@ -38,6 +38,8 @@ const completeSchema = z.object({
    * the prices the client was quoted, not today's price list.
    */
   paid_minor: z.int().min(0).max(100_000_000).optional(),
+  /** What the client left on top, the master's whole. Omitted means none. */
+  tip_minor: z.int().min(0).max(10_000_000).optional(),
 });
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -182,6 +184,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         clientId: existing.clientId,
         quoted: booked.quoted,
         paidMinor: parsed.data.paid_minor,
+        tipMinor: parsed.data.tip_minor,
         bookingId: existing.id,
         completedAt,
         actualDurationMinutes: parsed.data.actual_duration_minutes ?? null,

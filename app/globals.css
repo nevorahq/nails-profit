@@ -518,6 +518,18 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   color: var(--muted);
 }
 .visit-card-revenue strong { color: var(--ink); font-size: 15rem; }
+/* Beside the client, not in the revenue row: the master's money, not the studio's. */
+.visit-card-tip { margin: -6rem 0 10rem; color: var(--muted); font-size: 13rem; }
+.visit-card-tip strong { color: var(--ink); }
+/* A visit's card held to its column on a phone. As a grid item it took the
+   width of its widest content once the correction was opened — a line's name,
+   what it charged and a refund field side by side — and pushed the page past a
+   375-wide screen. The refunds table then has to fit what is left. */
+.visit-cards > .visit-card { min-width: 0; }
+.visit-card-details .data-table { width: 100%; table-layout: fixed; }
+.visit-card-details .data-table th,
+.visit-card-details .data-table td { overflow-wrap: anywhere; }
+.visit-card-details .data-table input { width: 100%; min-width: 0; }
 
 .visit-card-warning { display: grid; gap: 10rem; }
 .visit-card-warning .badge-warning { margin-left: 0; }

@@ -41,6 +41,20 @@ export type CashFlowInput = Readonly<{
   /** Money the owner took for themselves this month. */
   ownerDrawsMinor: number;
   /**
+   * What clients left on top this month. Absent means none.
+   *
+   * Never revenue, so the profit never sees it — which is exactly why it has
+   * to be here: it is money that came into the account, and most of it went
+   * straight back out to the master it was left for.
+   */
+  tipsMinor?: number;
+  /**
+   * The part of `tipsMinor` handed on to hired masters. A principal's tips stay
+   * on the account: the money was theirs already, and taking it out is an
+   * owner's draw like any other.
+   */
+  tipsPaidOutMinor?: number;
+  /**
    * Operating profit for the same month, carried in so the statement can end
    * on the difference rather than leaving the reader to subtract two screens.
    */
@@ -54,6 +68,10 @@ export type CashFlow = Readonly<{
   paymentCommissionMinor: number;
   /** What actually landed: takings less the acquirer's cut. */
   settledMinor: number;
+  /** Left on top by clients; the acquirer's cut on it is already above. */
+  tipsMinor: number;
+  /** Handed on to hired masters. */
+  tipsPaidOutMinor: number;
 
   visitLabourMinor: number;
   salariedLabourMinor: number;
@@ -97,8 +115,12 @@ export function buildCashFlow(input: CashFlowInput): CashFlow {
     .reduce((total, row) => total + row.amountMinor, 0);
 
   const settledMinor = input.revenueMinor - input.paymentCommissionMinor;
+  const tipsMinor = input.tipsMinor ?? 0;
+  const tipsPaidOutMinor = input.tipsPaidOutMinor ?? 0;
   const netCashMinor =
-    settledMinor -
+    settledMinor +
+    tipsMinor -
+    tipsPaidOutMinor -
     input.visitLabourMinor -
     input.salariedLabourMinor -
     spentFromLedgerMinor -
@@ -110,6 +132,8 @@ export function buildCashFlow(input: CashFlowInput): CashFlow {
     revenueMinor: input.revenueMinor,
     paymentCommissionMinor: input.paymentCommissionMinor,
     settledMinor,
+    tipsMinor,
+    tipsPaidOutMinor,
 
     visitLabourMinor: input.visitLabourMinor,
     salariedLabourMinor: input.salariedLabourMinor,

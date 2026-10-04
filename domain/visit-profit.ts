@@ -64,6 +64,15 @@ export type VisitProfitInput = Readonly<{
   /** The tax rules in force when the visit closed. Absent means none applied. */
   taxes?: TaxRates;
   /**
+   * What the client left on top, which is the master's whole.
+   *
+   * Not revenue, so it reaches neither the margin nor the master's base nor any
+   * tax. It does go through the terminal with the rest when the visit is paid
+   * by card, and the acquirer takes its percentage of all of it: that fee is
+   * the studio's cost, so it is charged here. Absent means none.
+   */
+  tipMinor?: number;
+  /**
    * What the master's percentage applies to, as snapshotted into the visit.
    * Absent reads as `after_discount` — what every visit closed before this was
    * costed on.
@@ -99,8 +108,13 @@ export type VisitProfit = Readonly<
 >;
 
 export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
-  // What the terminal processed: before refunds, because a refund does not
-  // return the acquirer's fee. See `PaymentCost.chargedMinor`.
+  const tipMinor = input.tipMinor ?? 0;
+  if (!Number.isSafeInteger(tipMinor) || tipMinor < 0) {
+    throw new RangeError("tipMinor must be a non-negative integer");
+  }
+
+  // What the visit charged: before refunds, because a refund does not return
+  // the acquirer's fee. See `PaymentCost.chargedMinor`.
   const chargedMinor = input.lines.reduce(
     (total, line) => total + line.priceMinor - line.discountMinor,
     0,
@@ -147,7 +161,9 @@ export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
     durationMinutes,
     currency: input.currency,
     commission: { type: "fixed", amountMinor: commission.totalMinor },
-    ...(input.payment ? { payment: { ...input.payment, chargedMinor } } : {}),
+    // The terminal processed the tip with the visit, in the one transaction —
+    // so its percentage, and no second fixed fee.
+    ...(input.payment ? { payment: { ...input.payment, chargedMinor: chargedMinor + tipMinor } } : {}),
     ...(input.taxes ? { taxes: input.taxes } : {}),
   });
 
