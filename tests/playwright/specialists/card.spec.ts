@@ -80,4 +80,47 @@ test.describe("a master's card", () => {
       await context.close();
     }
   });
+
+  test("is renamed where it is read", async ({ baseURL, browser, browserErrors }) => {
+    void browserErrors;
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    try {
+      const page = await context.newPage();
+      await page.goto(`/app/specialists/${studio.colleagueId}`);
+      await expect(page.getByRole("heading", { name: studio.colleagueName, exact: true })).toBeVisible();
+
+      await page.getByRole("button", { name: "Rename" }).click();
+      const field = page.getByRole("textbox", { name: "Name" });
+      await expect(field).toHaveValue(studio.colleagueName);
+      await expect(page.getByText(/Clients see this name/)).toBeVisible();
+
+      await field.fill("Cora Clarke");
+      // The commission form further down has a «Save» of its own.
+      await page.locator("form").filter({ has: field }).getByRole("button", { name: "Save" }).click();
+
+      await expect(page.getByRole("heading", { name: "Cora Clarke", exact: true })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Name" })).toHaveCount(0);
+
+      // Stored, not only redrawn: the list says it too.
+      await page.goto("/app/specialists");
+      await expect(page.getByRole("link", { name: /Cora Clarke/ })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("is not renamed by the master it belongs to", async ({ baseURL, browser, browserErrors }) => {
+    void browserErrors;
+
+    const context = await signedInContext(browser, studio.master, baseURL!);
+    try {
+      const page = await context.newPage();
+      await page.goto(`/app/specialists/${studio.specialistId}`);
+      await expect(page.getByRole("heading", { name: studio.specialistName, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Rename" })).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
 });

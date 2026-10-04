@@ -137,6 +137,7 @@ export default async function SpecialistsPage() {
         showsPay={showsPay}
         canManage={canManage}
         hasOwnCard={people.some((person) => person.user_id === membership.userId)}
+        viewerId={membership.userId}
         setupGuide={setupGuide}
       />
     </main>

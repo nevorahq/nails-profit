@@ -134,3 +134,37 @@ describe("a master with an account but no card", () => {
     expect(own.map((row) => row.id)).toEqual([created.id]);
   });
 });
+
+describe("a card's name", () => {
+  test("is changed by the studio and read by the master it belongs to", async () => {
+    /*
+     * «Добавить как мастера» names a card after the account, which for an
+     * account registered without a name is the part of the address before
+     * the «@» — and a client books, and is reminded of, whatever the card says.
+     */
+    const master = await inviteMember(studio.owner, "renamed@studio.example", "master");
+    const created = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/specialists", {
+        name: "renamed",
+        user_id: master.userId,
+        default_rule: { type: "percentage", basis_points: 4_000 },
+      }),
+    );
+
+    expect(
+      (await studio.owner.patch(`/api/v1/specialists/${created.id}`, { name: "  Ирина К.  " })).status,
+    ).toBe(200);
+
+    const own = dataOf<{ id: string; name: string }[]>(await master.get("/api/v1/specialists"));
+    expect(own).toEqual([expect.objectContaining({ id: created.id, name: "Ирина К." })]);
+
+    // Their own card, and still not theirs to rename: the name is the studio's
+    // catalogue, which a master's scope reads and does not write.
+    const refused = await master.patch(`/api/v1/specialists/${created.id}`, { name: "Сама" });
+    expect(refused.status).toBe(403);
+
+    // An empty name is not a name.
+    const blank = await studio.owner.patch(`/api/v1/specialists/${created.id}`, { name: "   " });
+    expect(blank.status).toBe(422);
+  });
+});
