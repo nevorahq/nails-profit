@@ -99,12 +99,16 @@ test.describe("a master's photo", () => {
     await expect(photo).toHaveAttribute("src", /\/avatar\?v=\d+$/);
 
     // Squared and shrunk by the page, not merely displayed that way by CSS.
-    const drawn = await photo.evaluate((image) => ({
-      width: (image as HTMLImageElement).naturalWidth,
-      height: (image as HTMLImageElement).naturalHeight,
-    }));
-    expect(drawn.width).toBe(256);
-    expect(drawn.height).toBe(256);
+    // Read once it has arrived: the circle gives the element its size before
+    // the file is in, and until then the picture measures 0 × 0.
+    await expect
+      .poll(() =>
+        photo.evaluate((image) => {
+          const element = image as HTMLImageElement;
+          return element.complete ? `${element.naturalWidth}×${element.naturalHeight}` : "loading";
+        }),
+      )
+      .toBe("256×256");
 
     /*
      * The picture is the only control in this panel, so the ring around it on
