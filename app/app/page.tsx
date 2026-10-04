@@ -247,6 +247,11 @@ export default async function AppPage({
               ? membership.organization.slug
               : null
           }
+          bookingClosed={
+            isPublicBookingEnabled() &&
+            membership.organization.bookingAccess !== "off" &&
+            !(membership.organization.bookingAccess === "public" && start.bookingPublished)
+          }
         />
       );
     }
