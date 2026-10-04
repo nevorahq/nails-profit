@@ -6,6 +6,7 @@ import {
   moveIntoThePast,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -75,7 +76,7 @@ test.describe("from a client's request to the month's profit", () => {
     // a visit cannot be closed before its appointment has started.
     await moveIntoThePast(studio, booking.id);
 
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/calendar");
@@ -130,7 +131,7 @@ test.describe("from a client's request to the month's profit", () => {
     void browserErrors;
     await requestAppointmentAsClient(baseURL!, studio, { date: daysFromToday(1) });
 
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "Notifications" }).click();
