@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { Currency } from "@/domain/money";
+import { MAX_PUBLIC_SERVICES } from "@/domain/service-limit";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { AppLocale } from "@/i18n/messages";
@@ -175,9 +176,23 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const emailRequired =
     location?.verification_mode === "code" && profile.notification_channel === "email";
   const [services, setServices] = useState<Service[]>([]);
-  const [serviceId, setServiceId] = useState("");
-  const service = services.find((entry) => entry.id === serviceId) ?? null;
-  const [addOnIds, setAddOnIds] = useState<string[]>([]);
+  /*
+   * What the client is booking: one service, or up to three in one sitting,
+   * each with its own add-ons. One master does all of it, so only the people
+   * who do every service chosen are offered.
+   */
+  const [lines, setLines] = useState<{ serviceId: string; addOnIds: string[] }[]>([]);
+  const chosen = lines.flatMap((line) => {
+    const entry = services.find((candidate) => candidate.id === line.serviceId);
+    return entry ? [{ service: entry, addOnIds: line.addOnIds }] : [];
+  });
+  /** The first service, for everything that names the sitting by one id. */
+  const service = chosen[0]?.service ?? null;
+  const sittingName = chosen.map((entry) => entry.service.name).join(" + ");
+  const masters = (service?.specialists ?? []).filter((person) =>
+    chosen.every((entry) => entry.service.specialists.some((other) => other.id === person.id)),
+  );
+  const sittingPayload = chosen.map((entry) => ({ service_id: entry.service.id, add_on_ids: entry.addOnIds }));
   const [specialistId, setSpecialistId] = useState("any");
   const [date, setDate] = useState(() => dateInZone(location.timezone));
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -254,7 +269,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * what they already knew from the studio's own name at the top. Where there
    * is more than one pair of hands the choice is real and all three stay.
    */
-  const namesSpecialist = (service?.specialists.length ?? 0) > 1;
+  const namesSpecialist = masters.length > 1;
 
   useEffect(() => {
     let active = true;
@@ -275,8 +290,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
         const next = body.data.services as Service[];
         setServices(next);
-        setServiceId(next[0]?.id ?? "");
-        setAddOnIds([]);
+        setLines(next[0] ? [{ serviceId: next[0].id, addOnIds: [] }] : []);
         setSpecialistId("any");
         setSlots([]);
         setNearestDates([]);
@@ -410,16 +424,31 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (Object.keys(fieldErrors).length > 0 || codeError) errorSummaryRef.current?.focus();
   }, [fieldErrors, codeError]);
 
-  const quote = useMemo(() => {
-    if (!service) return { price: 0, duration: 0 };
-    const selected = service.add_ons.filter((addOn) => addOnIds.includes(addOn.id));
-    return {
-      price: service.price_minor + selected.reduce((sum, addOn) => sum + addOn.price_delta_minor, 0),
-      duration:
-        service.duration_minutes +
-        selected.reduce((sum, addOn) => sum + addOn.duration_delta_minutes, 0),
-    };
-  }, [service, addOnIds]);
+  const quote = chosen.reduce(
+    (total, entry) => {
+      const selected = entry.service.add_ons.filter((addOn) => entry.addOnIds.includes(addOn.id));
+      return {
+        price:
+          total.price +
+          entry.service.price_minor +
+          selected.reduce((sum, addOn) => sum + addOn.price_delta_minor, 0),
+        duration:
+          total.duration +
+          entry.service.duration_minutes +
+          selected.reduce((sum, addOn) => sum + addOn.duration_delta_minutes, 0),
+      };
+    },
+    { price: 0, duration: 0 },
+  );
+
+  /** A change to what is being booked: the times found were for something else. */
+  function changeLines(next: { serviceId: string; addOnIds: string[] }[]) {
+    setLines(next);
+    setSpecialistId("any");
+    setSlots([]);
+    setNearestDates([]);
+    setSearched(false);
+  }
 
   /**
    * A public mutation, with the challenge solved and retried once if the
@@ -460,7 +489,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     const query = new URLSearchParams({
       location_id: locationId,
       service_id: service.id,
-      add_on_ids: addOnIds.join(","),
+      add_on_ids: chosen[0].addOnIds.join(","),
+      // Every service of the sitting, so the times offered fit all of it.
+      services: chosen.map((entry) => [entry.service.id, ...entry.addOnIds].join(":")).join("|"),
       specialist_id: specialistId,
       date: nextDate,
     });
@@ -501,8 +532,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     try {
       const response = await postPublic(`/api/v1/public/booking/${profile.slug}/holds`, {
         location_id: locationId,
-        service_id: service.id,
-        add_on_ids: addOnIds,
+        services: sittingPayload,
         specialist_id: slot.specialist_id,
         starts_at: slot.starts_at,
       });
@@ -563,8 +593,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   function bookingIdempotencyKey(holdToken: string, serviceId: string, entered: Contact) {
     const request = bookingRequestSignature({
       holdToken,
+      // The whole sitting as one key: a different service or add-on anywhere
+      // in it is a different request.
       serviceId,
-      addOnIds,
+      addOnIds: [],
       name: entered.name,
       phone: entered.phone,
       email: entered.email,
@@ -703,8 +735,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         `/api/v1/public/booking/${profile.slug}/bookings`,
         {
           hold_token: held.token,
-          service_id: service.id,
-          add_on_ids: addOnIds,
+          services: sittingPayload,
           name: entered.name,
           phone: entered.phone,
           email: entered.email,
@@ -712,7 +743,13 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           contact_channels: entered.channels,
           legal_accepted: entered.legalAccepted,
         },
-        { "idempotency-key": bookingIdempotencyKey(held.token, service.id, entered) },
+        {
+          "idempotency-key": bookingIdempotencyKey(
+            held.token,
+            sittingPayload.map((entry) => [entry.service_id, ...[...entry.add_on_ids].sort()].join(":")).join("|"),
+            entered,
+          ),
+        },
       );
       const body = await response.json().catch(() => null);
       if (!response.ok) {
@@ -820,8 +857,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       <section className="public-booking-card" aria-busy={pending}>
         {!held ? (
           <form onSubmit={findTimes} noValidate>
-            <div className="public-booking-grid">
-              {profile.locations.length > 1 && (
+            {profile.locations.length > 1 && (
+              <div className="public-booking-grid">
                 <label>
                   {t("publicBooking.location")}
                   <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); clearError(); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
@@ -830,32 +867,115 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                     ))}
                   </select>
                 </label>
-              )}
-              <label>
-                {t("publicBooking.service")}
-                <select
-                  value={serviceId}
-                  disabled={pending}
-                  onChange={(event) => {
-                    setServiceId(event.target.value);
-                    setAddOnIds([]);
-                    setSpecialistId("any");
-                    setSlots([]);
-                    setNearestDates([]);
-                    setSearched(false);
-                  }}
-                >
-                  {services.map((entry) => (
-                    <option key={entry.id} value={entry.id}>{entry.name}</option>
-                  ))}
-                </select>
-              </label>
+              </div>
+            )}
+
+            {chosen.map((entry, index) => {
+              const number = index + 1;
+              const label = chosen.length > 1 ? t("serviceLines.serviceN", { n: number }) : t("publicBooking.service");
+              return (
+                <div className="public-booking-service" key={`${index}:${entry.service.id}`}>
+                  <div className="public-booking-service-head">
+                    <label>
+                      {label}
+                      <select
+                        value={entry.service.id}
+                        disabled={pending}
+                        onChange={(event) =>
+                          changeLines(
+                            lines.map((line, position) =>
+                              position === index ? { serviceId: event.target.value, addOnIds: [] } : line,
+                            ),
+                          )
+                        }
+                      >
+                        {/* A service already in the sitting is not offered twice. */}
+                        {services
+                          .filter(
+                            (candidate) =>
+                              candidate.id === entry.service.id ||
+                              !lines.some((line) => line.serviceId === candidate.id),
+                          )
+                          .map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                          ))}
+                      </select>
+                    </label>
+                    {chosen.length > 1 && (
+                      <button
+                        type="button"
+                        className="inline-action"
+                        disabled={pending}
+                        aria-label={t("serviceLines.removeN", { n: number })}
+                        onClick={() => changeLines(lines.filter((_, position) => position !== index))}
+                      >
+                        {t("serviceLines.remove")}
+                      </button>
+                    )}
+                  </div>
+                  {entry.service.add_ons.length > 0 && (
+                    <fieldset className="public-booking-options">
+                      <legend>{chosen.length > 1 ? `${t("publicBooking.addOns")} · ${label}` : t("publicBooking.addOns")}</legend>
+                      {entry.service.add_ons.map((addOn) => (
+                        <label key={addOn.id}>
+                          <input
+                            type="checkbox"
+                            checked={entry.addOnIds.includes(addOn.id)}
+                            disabled={pending}
+                            onChange={(event) =>
+                              changeLines(
+                                lines.map((line, position) =>
+                                  position === index
+                                    ? {
+                                        serviceId: line.serviceId,
+                                        addOnIds: event.target.checked
+                                          ? [...line.addOnIds, addOn.id]
+                                          : line.addOnIds.filter((id) => id !== addOn.id),
+                                      }
+                                    : line,
+                                ),
+                              )
+                            }
+                          />
+                          <span>{addOn.name}</span>
+                          <small>{money(addOn.price_delta_minor)}</small>
+                        </label>
+                      ))}
+                    </fieldset>
+                  )}
+                </div>
+              );
+            })}
+
+            {lines.length < MAX_PUBLIC_SERVICES && services.some((candidate) => !lines.some((line) => line.serviceId === candidate.id)) && (
+              <button
+                type="button"
+                className="secondary-button public-booking-add-service"
+                disabled={pending}
+                onClick={() => {
+                  const next = services.find((candidate) => !lines.some((line) => line.serviceId === candidate.id));
+                  if (next) changeLines([...lines, { serviceId: next.id, addOnIds: [] }]);
+                }}
+              >
+                {t("serviceLines.add")}
+              </button>
+            )}
+
+            {/* One master does the whole sitting; when nobody does all of it,
+                say so here rather than after a search that cannot find a time. */}
+            {service && masters.length === 0 && (
+              <p className="form-error" role="alert">{t("publicBooking.noCommonSpecialist")}</p>
+            )}
+
+            {/* Who and when, after what: the people offered are the ones who do
+                every service chosen above. */}
+            <div className="public-booking-grid">
               {namesSpecialist && (
                 <label>
                   {t("publicBooking.specialist")}
                   <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }}>
                     <option value="any">{t("publicBooking.anySpecialist")}</option>
-                    {service?.specialists.map((person) => (
+                    {masters.map((person) => (
                       <option key={person.id} value={person.id}>{person.name}</option>
                     ))}
                   </select>
@@ -867,33 +987,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </label>
             </div>
 
-            {service && service.add_ons.length > 0 && (
-              <fieldset className="public-booking-options">
-                <legend>{t("publicBooking.addOns")}</legend>
-                {service.add_ons.map((addOn) => (
-                  <label key={addOn.id}>
-                    <input
-                      type="checkbox"
-                      checked={addOnIds.includes(addOn.id)}
-                      disabled={pending}
-                      onChange={(event) =>
-                        setAddOnIds((current) => {
-                          setSearched(false);
-                          setSlots([]);
-                          setNearestDates([]);
-                          return event.target.checked
-                            ? [...current, addOn.id]
-                            : current.filter((id) => id !== addOn.id);
-                        })
-                      }
-                    />
-                    <span>{addOn.name}</span>
-                    <small>{money(addOn.price_delta_minor)}</small>
-                  </label>
-                ))}
-              </fieldset>
-            )}
-
             <div className="public-booking-quote">
               <strong>{money(quote.price)}</strong>
               <div>
@@ -901,7 +994,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
               </div>
             </div>
-            <button className="primary-button" type="submit" disabled={pending || !service}>
+            <button className="primary-button" type="submit" disabled={pending || !service || masters.length === 0}>
               {pendingAction === "availability" || pendingAction === "catalog"
                 ? t("publicBooking.loadingAvailability")
                 : t("publicBooking.findTime")}
@@ -912,7 +1005,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             <div className="public-booking-summary">
               <div>
                 <span>{t("publicBooking.yourChoice")}</span>
-                <strong>{service?.name}</strong>
+                <strong>{sittingName}</strong>
               </div>
               <div>
                 <span>{namesSpecialist ? held.slot.specialist_name : t("publicBooking.when")}</span>
@@ -972,7 +1065,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             <div className="public-booking-summary">
               <div>
                 <span>{t("publicBooking.yourChoice")}</span>
-                <strong>{service?.name}</strong>
+                <strong>{sittingName}</strong>
               </div>
               <div>
                 <span>{namesSpecialist ? held.slot.specialist_name : t("publicBooking.when")}</span>
