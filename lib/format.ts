@@ -22,6 +22,47 @@ export function formatDay(day: string, locale = "ru-MD") {
   );
 }
 
+/**
+ * «понедельник, 5 октября 2026 г. в 08:00» — a day spelled out, the same on the
+ * server and in every browser.
+ *
+ * `dateStyle: "full"` asks the runtime's own CLDR for the punctuation, and the
+ * runtimes disagree: Node 22 writes «Monday, 5 October 2026», Chromium 141
+ * «Monday 5 October 2026». A client component rendered on one and hydrated on
+ * the other then fails hydration and is redrawn, which a client sees as the
+ * date changing under them. The names — weekday, month in its case — agree
+ * everywhere, so only those come from `Intl`; the joins are written here, for
+ * the three languages the product speaks.
+ */
+export function formatLongDate(
+  date: Date,
+  locale: string,
+  options: Readonly<{ timeZone?: string; year?: boolean; time?: boolean }> = {},
+) {
+  const { timeZone, year = false, time = false } = options;
+  const parts = new Intl.DateTimeFormat(locale, {
+    timeZone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(year ? { year: "numeric" } : {}),
+    ...(time ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : {}),
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  const language = locale.slice(0, 2);
+
+  const day =
+    language === "ru" || language === "ro"
+      ? `${value("weekday")}, ${value("day")} ${value("month")}`
+      : `${value("weekday")} ${value("day")} ${value("month")}`;
+  const withYear = !year ? day : language === "ru" ? `${day} ${value("year")} г.` : `${day} ${value("year")}`;
+  if (!time) return withYear;
+  const clock = `${value("hour")}:${value("minute")}`;
+  const at = language === "ru" ? "в" : language === "ro" ? "la" : "at";
+  return `${withYear} ${at} ${clock}`;
+}
+
 export function formatBasisPoints(basisPoints: number | null, locale = "ru-MD") {
   if (basisPoints === null) return "—";
   return new Intl.NumberFormat(locale, {

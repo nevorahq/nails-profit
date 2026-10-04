@@ -30,7 +30,7 @@ import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { specialistOptions } from "@/lib/specialist-options";
 import { getTranslator, type MessageKey } from "@/i18n/t";
-import { formatMoneyMinor } from "@/lib/format";
+import { formatLongDate, formatMoneyMinor } from "@/lib/format";
 
 /**
  * One date in the month grid.
@@ -791,11 +791,7 @@ export function CalendarBoard({
    * than a heading printed inside it. The grid says which date is chosen by
    * filling it in, and a heading repeating that was the same fact twice.
    */
-  const dayLabel = new Date(`${selected}T12:00:00`).toLocaleDateString(localeTag, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const dayLabel = formatLongDate(new Date(`${selected}T12:00:00`), localeTag);
 
   /**
    * «Пн Вт Ср…», taken from the grid's own first week rather than written out.
