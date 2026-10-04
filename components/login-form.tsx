@@ -41,6 +41,14 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   /*
+   * Typing a password of ten characters on a phone, blind, is where sign-up
+   * was lost: one mistyped letter and the account is made with a password its
+   * owner does not know. So it can be shown, and while registering the count
+   * says how far there is to go before the rule below is met.
+   */
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordLength, setPasswordLength] = useState(0);
+  /*
    * The address a failed sign-in was tried with, kept so switching to
    * registration — «Нет аккаунта? Создать», at the bottom — arrives with the
    * address already filled in rather than empty.
@@ -226,7 +234,28 @@ export function LoginForm({
         )}
         <label>
           {t("auth.password")}
-          <input name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={10} />
+          <span className="password-field">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              required
+              minLength={10}
+              onChange={(event) => setPasswordLength(event.target.value.length)}
+            />
+            {/* Its own words rather than an aria-label naming the password, so
+                the field stays the one thing on this card labelled «Пароль». */}
+            <button
+              type="button"
+              className="password-toggle"
+              aria-controls="password"
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((shown) => !shown)}
+            >
+              {t(showPassword ? "auth.hidePassword" : "auth.showPassword")}
+            </button>
+          </span>
           {/*
             The rule the field enforces, on the screen that enforces it. Ten
             characters is not a guessable number, and the only way anybody
@@ -236,7 +265,14 @@ export function LoginForm({
             in already has a password and does not need to be told what it must
             look like.
           */}
-          {mode === "signup" && <span className="field-hint">{t("auth.passwordHint")}</span>}
+          {mode === "signup" && (
+            <span className="field-hint">
+              {t("auth.passwordHint")}{" "}
+              <span className={passwordLength >= 10 ? "password-count is-enough" : "password-count"} aria-live="polite">
+                {t("auth.passwordCount", { count: passwordLength })}
+              </span>
+            </span>
+          )}
         </label>
         {mode === "signup" && (
           <div className="consent-field">

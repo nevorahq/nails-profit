@@ -150,6 +150,33 @@ test.describe("authentication UI", () => {
     expect(Math.round((ruleBox?.height ?? 0) / ruleLine)).toBe(1);
   });
 
+  test("lets a password be seen while it is typed, and counts it while registering", async ({
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    await page.goto("/login?mode=signup");
+    const password = page.getByLabel("Password");
+    await expect(password).toHaveAttribute("type", "password");
+    await password.fill("orchid");
+    await expect(page.getByText("6 of 10")).toBeVisible();
+
+    const toggle = page.getByRole("button", { name: "Show" });
+    await toggle.click();
+    await expect(password).toHaveAttribute("type", "text");
+    await expect(page.getByRole("button", { name: "Hide" })).toHaveAttribute("aria-pressed", "true");
+    // Typing on carries on in the field, which is still the same one.
+    await password.fill("orchid-lacquer");
+    await expect(page.locator(".password-count.is-enough")).toHaveText("14 of 10");
+    await page.getByRole("button", { name: "Hide" }).click();
+    await expect(password).toHaveAttribute("type", "password");
+
+    // Signing in has the switch and no count: the password already exists.
+    await page.goto("/login");
+    await expect(page.getByRole("button", { name: "Show" })).toBeVisible();
+    await expect(page.locator(".password-count")).toHaveCount(0);
+  });
+
   /**
    * «Ваш прайс и часы», which registration now ends on: the suggested manicure
    * ticked and priced, Monday to Friday chosen, nothing published yet. Saved

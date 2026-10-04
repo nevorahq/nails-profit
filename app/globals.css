@@ -1259,6 +1259,13 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .public-booking-consent input:checked::after { transform: rotate(45deg) scale(1); }
 .public-booking-consent a { display: inline-flex; min-height: 44rem; align-items: center; margin-block: -12rem; }
 .field-error { color: var(--danger); font-size: 13rem; font-weight: 650; line-height: 1.4; }
+/* The password and the word that shows it, on one line; the button keeps the
+   field's own height so a thumb finds it without aiming. */
+.password-field { display: flex; align-items: stretch; gap: 8rem; }
+.password-field input { flex: 1 1 auto; min-width: 0; }
+.password-toggle { flex: 0 0 auto; min-height: 44rem; margin-top: 8rem; padding: 0 14rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font-weight: 700; cursor: pointer; }
+.password-count { white-space: nowrap; }
+.password-count.is-enough { color: var(--accent); font-weight: 750; }
 .public-booking-grid [aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
 .public-booking-consent-error { grid-column: 2; }
 .form-error-summary { display: grid; gap: 8rem; padding: 16rem 18rem; border: 1rem solid var(--danger); border-radius: 4rem; background: var(--danger-soft); color: var(--danger); }
