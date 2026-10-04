@@ -23,6 +23,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:down": "node scripts/migrate-down.mjs",
+    "db:status": "node scripts/db-status.mjs",
+    "db:status:test": "node scripts/db-status.mjs --test",
     "db:migrate:test": "drizzle-kit migrate --config drizzle.test.config.ts",
     "db:migrate:down:test": "node scripts/migrate-down.mjs --test",
     "icon": "node scripts/make-icon.mjs",
