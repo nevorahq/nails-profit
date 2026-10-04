@@ -28,7 +28,7 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 
 const FOLDER = join(process.cwd(), "drizzle");
 
-function readCheckout() {
+export function readCheckout() {
   const journal = JSON.parse(readFileSync(join(FOLDER, "meta", "_journal.json"), "utf8"));
   const files = journal.entries.map((entry) => {
     const source = readFileSync(join(FOLDER, `${entry.tag}.sql`)).toString();
@@ -73,14 +73,13 @@ async function readDatabase(tx) {
   return { applied, present: new Set(rows.map((row) => row.key)) };
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const variables = urlVariablesFor(args);
-  const variable = variables.find((name) => process.env[name]?.trim());
-  if (!variable) throw new Error(`Set ${variables.join(" or ")}.`);
-
+/**
+ * The verdict for one database against this checkout. Shared with
+ * `db-migrate.mjs`, which will not start a run this calls broken.
+ */
+export async function databaseStatus(url, variable) {
   const entries = readCheckout();
-  const sql = postgres(process.env[variable], { max: 1, prepare: false, onnotice: () => {} });
+  const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
   let database;
   try {
     database = await sql.begin("read only", readDatabase);
@@ -93,8 +92,16 @@ async function main() {
   } finally {
     await sql.end();
   }
+  return assess(entries, database.applied, database.present);
+}
 
-  const result = assess(entries, database.applied, database.present);
+async function main() {
+  const args = process.argv.slice(2);
+  const variables = urlVariablesFor(args);
+  const variable = variables.find((name) => process.env[name]?.trim());
+  if (!variable) throw new Error(`Set ${variables.join(" or ")}.`);
+
+  const result = await databaseStatus(process.env[variable], variable);
   const { host, pathname } = new URL(process.env[variable]);
 
   if (args.includes("--json")) {
@@ -106,7 +113,10 @@ async function main() {
   process.exitCode = EXIT_CODES[result.verdict];
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+// Importable by `db-migrate.mjs` without running the report.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}

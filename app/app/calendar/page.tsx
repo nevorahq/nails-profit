@@ -1,13 +1,15 @@
-import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 
 import {
   CalendarBoard,
   type CalendarBooking,
   type CalendarException,
   type CalendarMonthDay,
+  type CalendarVisit,
 } from "@/components/calendar-board";
 import { ToolIcon } from "@/components/icons";
 import { avatarUrl } from "@/domain/avatar-image";
+import { keepsManualVisit, manualVisitSpan } from "@/domain/calendar-visits";
 import {
   addOns,
   availabilityExceptions,
@@ -15,6 +17,7 @@ import {
   bookingSettings,
   bookings,
   clients,
+  financialSnapshots,
   locations,
   scheduleRules,
   serviceAddOns,
@@ -22,6 +25,8 @@ import {
   specialistAvatars,
   specialistLocations,
   specialists,
+  visitLines,
+  visits,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, hasConstraint, scopeFor } from "@/domain/rbac";
@@ -266,6 +271,86 @@ export default async function CalendarPage({
       })
       .from(specialistLocations);
 
+    /*
+     * Visits closed by hand, with no appointment behind them — see
+     * `domain/calendar-visits`. Scoped exactly as the appointments are. Found
+     * by when they were closed and placed by when they began, so the window
+     * runs a day longer at its far end: a visit closed just after midnight
+     * still belongs to the evening before.
+     */
+    const placeIdsOf = (specialistId: string) =>
+      assignments
+        .filter(
+          (link) =>
+            link.specialistId === specialistId && active.some((place) => place.id === link.locationId),
+        )
+        .map((link) => link.locationId);
+    const visitRows = await tx
+      .select({
+        id: visits.id,
+        specialistId: visits.specialistId,
+        specialistName: specialists.name,
+        clientName: clients.name,
+        completedAt: visits.completedAt,
+        plannedDurationMinutes: visits.plannedDurationMinutes,
+        actualDurationMinutes: visits.actualDurationMinutes,
+      })
+      .from(visits)
+      .innerJoin(specialists, eq(visits.specialistId, specialists.id))
+      .leftJoin(clients, eq(visits.clientId, clients.id))
+      .where(
+        and(
+          isNull(visits.bookingId),
+          gte(visits.completedAt, windowStart),
+          lt(visits.completedAt, new Date(windowEnd.getTime() + 24 * 60 * 60_000)),
+          ownSpecialistId
+            ? eq(visits.specialistId, ownSpecialistId)
+            : filters.specialist
+              ? eq(visits.specialistId, filters.specialist)
+              : undefined,
+        ),
+      )
+      .orderBy(asc(visits.completedAt));
+
+    const handVisits = visitRows
+      .filter((row) =>
+        keepsManualVisit(
+          { specialistLocationIds: placeIdsOf(row.specialistId) },
+          { location: filters.location ?? "", statuses: requestedStatuses },
+        ),
+      )
+      .map((row) => {
+        const span = manualVisitSpan(row);
+        // The visit names no address, so its hours are read in the one being
+        // looked at, else its master's, else the calendar's own.
+        const place = filters.location || placeIdsOf(row.specialistId)[0];
+        const timezone = active.find((candidate) => candidate.id === place)?.timezone ?? anchorZone;
+        return { ...row, ...span, timezone, localDate: localDateAt(span.startsAt, timezone) };
+      });
+    const visitsOnDay = handVisits.filter((row) => row.localDate === selected);
+    const visitIds = visitsOnDay.map((row) => row.id);
+
+    // Names and money for the listed day alone, as with the appointments.
+    const handLines =
+      visitIds.length === 0
+        ? []
+        : await tx
+            .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
+            .from(visitLines)
+            .where(inArray(visitLines.visitId, visitIds));
+    // The newest version of each visit's figures, as `/app/visits` reads it.
+    const handRevenue =
+      visitIds.length === 0
+        ? []
+        : await tx
+            .selectDistinctOn([financialSnapshots.visitId], {
+              visitId: financialSnapshots.visitId,
+              revenueMinor: financialSnapshots.revenueMinor,
+            })
+            .from(financialSnapshots)
+            .where(inArray(financialSnapshots.visitId, visitIds))
+            .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
+
     const roster = await tx
       .select({ id: clients.id, name: clients.name })
       .from(clients)
@@ -342,6 +427,10 @@ export default async function CalendarPage({
     return {
       shifts,
       buffers,
+      handVisits,
+      visitsOnDay,
+      handLines,
+      handRevenue,
       dated,
       onDay,
       lines,
@@ -444,6 +533,23 @@ export default async function CalendarPage({
     };
   });
 
+  const dayVisits: CalendarVisit[] = data.visitsOnDay.map((visit) => {
+    const ownLines = data.handLines.filter((line) => line.visitId === visit.id);
+    const serviceCount = ownLines.filter((line) => line.kind === "service").length;
+    return {
+      id: visit.id,
+      localDate: visit.localDate,
+      localStart: formatLocalTime(toZonedParts(visit.startsAt, visit.timezone).minutes),
+      localEnd: formatLocalTime(toZonedParts(visit.endsAt, visit.timezone).minutes),
+      specialistId: visit.specialistId,
+      specialistName: visit.specialistName,
+      clientName: visit.clientName,
+      serviceName: serviceNamesOf(ownLines, locale) ?? t("calendar.service"),
+      extraLines: Math.max(0, ownLines.length - Math.max(1, serviceCount)),
+      revenueMinor: data.handRevenue.find((row) => row.visitId === visit.id)?.revenueMinor ?? null,
+    };
+  });
+
   /*
    * What each date in the grid carries, as the marks a cell draws.
    *
@@ -463,6 +569,7 @@ export default async function CalendarPage({
   for (const row of data.dated) {
     mark(row.localDate, row.booking.startsAt.toISOString(), row.booking.status);
   }
+  for (const visit of data.handVisits) mark(visit.localDate, visit.startsAt.toISOString(), "visit");
   for (const exc of datedExceptions) mark(exc.localDate, exc.startsAt, "blocked");
 
   const monthDays: CalendarMonthDay[] = data.grid.map((day) => {
@@ -510,6 +617,7 @@ export default async function CalendarPage({
         selected={data.selected}
         today={data.today}
         bookings={calendar}
+        visits={dayVisits}
         locations={data.places}
         specialists={data.people}
         services={data.catalogue.map((service) => ({
