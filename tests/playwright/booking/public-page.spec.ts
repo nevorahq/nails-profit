@@ -4,6 +4,7 @@ import {
   disposeStudio,
   isoDate,
   seedStudio,
+  signedInContext,
   useClientAddress,
   type Studio,
 } from "../helpers/studio";
@@ -33,6 +34,7 @@ test.describe("the public booking page", () => {
   });
 
   test("a stranger books a time and the studio gets a request", async ({
+    baseURL,
     browser,
     page,
     browserErrors,
@@ -95,7 +97,7 @@ test.describe("the public booking page", () => {
 
     // The other end of it: a request waiting in the studio, for the master it
     // was booked with, at the time the client chose.
-    const staff = await browser.newContext({ storageState: await studio.master.storageState() });
+    const staff = await signedInContext(browser, studio.master, baseURL!);
     const staffPage = await staff.newPage();
     await staffPage.goto("/app/calendar");
     await staffPage.getByRole("button", { name: "Notifications" }).click();
@@ -202,6 +204,7 @@ test.describe("the public booking page", () => {
    * nobody filled in for a reason.
    */
   test("a client says where to write, and the master's screen shows it", async ({
+    baseURL,
     browser,
     page,
     browserErrors,
@@ -231,7 +234,9 @@ test.describe("the public booking page", () => {
     await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
 
     // And on the day, where somebody has to decide how to reach them.
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    // Consent answered: on a phone the banner lands over this very entry, and
+    // a click that reaches it instead of the summary leaves the card shut.
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const staff = await context.newPage();
     await staff.goto(`/app/calendar?date=${isoDate(daysFromToday(3))}`);
     await staff.locator(".calendar-entry summary").first().click();
