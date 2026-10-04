@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
  * The question that stands between a studio and a removed client.
@@ -49,11 +49,12 @@ test.describe("removing a client from the list", () => {
   });
 
   test("asks in the application's own window, and the left button keeps the client", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     // A browser dialog is dismissed by Playwright without anybody seeing it, so
@@ -83,11 +84,12 @@ test.describe("removing a client from the list", () => {
   });
 
   test("the right button removes it, and the list can still show it", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/clients");

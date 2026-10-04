@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
  * Which of two deletions comes first, said before the ritual rather than by the
@@ -28,11 +28,12 @@ test.describe("leaving, from the settings screen", () => {
   });
 
   test("an owner is told the order instead of offered the refusal", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/settings");
@@ -51,9 +52,9 @@ test.describe("leaving, from the settings screen", () => {
     await context.close();
   });
 
-  test("a master, who owns nothing, still gets the action", async ({ browser, browserErrors }) => {
+  test("a master, who owns nothing, still gets the action", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/settings");

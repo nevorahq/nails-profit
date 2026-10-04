@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
  * A master's own card, and the two things it used to state without helping.
@@ -25,7 +25,7 @@ test.describe("a master's card", () => {
     if (studio) await disposeStudio(studio);
   });
 
-  test("names what is missing and is where it gets fixed", async ({ browser, browserErrors }) => {
+  test("names what is missing and is where it gets fixed", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
 
     /*
@@ -44,7 +44,7 @@ test.describe("a master's card", () => {
       intervals: [],
     });
 
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     try {
       const page = await context.newPage();
       await page.goto(`/app/specialists/${stranded.id}`);

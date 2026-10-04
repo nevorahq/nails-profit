@@ -5,6 +5,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -38,11 +39,12 @@ test.describe("the month grid", () => {
   });
 
   test("marks the days that have something and lists the one that is chosen", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/calendar");
@@ -83,11 +85,12 @@ test.describe("the month grid", () => {
    * the 1st wants next — but they must not be mistaken for this month's.
    */
   test("draws whole weeks and marks which dates belong to the month", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     // A month that both begins and ends mid-week, so the grid has to borrow at
@@ -119,11 +122,12 @@ test.describe("the month grid", () => {
    * clamp to the end of the month being entered.
    */
   test("jumps whole months and years, clamping a date the target does not have", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     // The month and the year are two controls, so they are read as values

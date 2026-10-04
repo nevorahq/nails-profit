@@ -1,3 +1,5 @@
+import type { Locator, Page } from "@playwright/test";
+
 import { expect, test } from "../fixtures";
 import {
   cancelAsClient,
@@ -5,8 +7,31 @@ import {
   disposeStudio,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
+
+/*
+ * The bell and its lines, each waited for until the server has answered.
+ *
+ * Opening the bell reloads the list, and a line is read locally at once and
+ * written behind it. Either answer can arrive after the click that follows: a
+ * reload sent before a write brings the line back unread, and one that lands
+ * after the next click undoes it. A person is slower than both; a test is not.
+ */
+async function openBell(page: Page) {
+  await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/notifications"),
+    page.locator(".topbar-notifications").click(),
+  ]);
+}
+
+async function readLine(page: Page, line: Locator) {
+  await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/notifications/read"),
+    line.click(),
+  ]);
+}
 
 /**
  * The bell as a queue rather than as a record.
@@ -53,18 +78,18 @@ test.describe("the bell's list of what happened", () => {
   });
 
   test("sinks the line whose appointment was opened, and leaves the rest", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
 
-    const bell = page.locator(".topbar-notifications");
     const items = page.locator(".notifications-panel .notifications-item");
 
-    await bell.click();
+    await openBell(page);
     // Both visits are off, so neither is waiting on an answer: everything in
     // the panel is the feed.
     await expect(items).toHaveCount(2);
@@ -74,10 +99,10 @@ test.describe("the bell's list of what happened", () => {
     // first and a queue still does — until it has been dealt with.
     const opened = await items.first().getAttribute("href");
     expect(opened).toBeTruthy();
-    await items.first().click();
+    await readLine(page, items.first());
     await expect(page).toHaveURL(new RegExp("/app/calendar\\?date="));
 
-    await bell.click();
+    await openBell(page);
     await expect(items).toHaveCount(2);
     // Nothing was hidden — it moved. The one still waiting is now on top, and
     // the one that was opened is underneath it and no longer marked.
@@ -98,11 +123,12 @@ test.describe("the bell's list of what happened", () => {
    * «is there anything left».
    */
   test("keeps the badge lit until every line has been dealt with", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
 
@@ -111,15 +137,15 @@ test.describe("the bell's list of what happened", () => {
     await expect(badge).toHaveCount(1);
 
     // One of the two, opened: still something left, so the dot stays.
-    await page.locator(".topbar-notifications").click();
-    await items.first().click();
+    await openBell(page);
+    await readLine(page, items.first());
     await expect(badge).toHaveCount(1);
 
     // And the other. Reopened rather than assumed, because the panel closes on
     // a click and the count is the server's answer, not the browser's guess.
-    await page.locator(".topbar-notifications").click();
+    await openBell(page);
     await expect(items).toHaveCount(2);
-    await page.locator(".notifications-panel .notifications-item.unread").first().click();
+    await readLine(page, page.locator(".notifications-panel .notifications-item.unread").first());
     await expect(badge).toHaveCount(0);
 
     await context.close();

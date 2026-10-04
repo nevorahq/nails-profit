@@ -4,6 +4,7 @@ import {
   disposeStudio,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -50,11 +51,12 @@ test.describe("authenticated smoke", () => {
   });
 
   test("every owner screen renders, names itself and logs nothing", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     const failures: string[] = [];
 
@@ -79,11 +81,12 @@ test.describe("authenticated smoke", () => {
   });
 
   test("a master reaches their own screens and is refused the studio's", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
 
     for (const [path, title] of [
@@ -130,8 +133,8 @@ test.describe("authenticated smoke", () => {
    * the title list from `navItems` rather than from the filtered navigation
    * would close it; the links stay hidden either way.
    */
-  test.fixme("a master's own visits and clients name themselves", async ({ browser }) => {
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+  test.fixme("a master's own visits and clients name themselves", async ({ baseURL, browser }) => {
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
 
     for (const [path, title] of [

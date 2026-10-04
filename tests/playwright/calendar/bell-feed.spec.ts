@@ -6,6 +6,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -48,7 +49,7 @@ test.describe("the bell after a client changes their mind", () => {
     const cancelled = await cancelAsClient(baseURL!, booking.manage_token);
     expect(cancelled.status).toBe("cancelled");
 
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
 

@@ -5,6 +5,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -50,7 +51,7 @@ test.describe("confirming keeps the appointment visible", () => {
     const booking = await requestAppointmentAsClient(baseURL!, studio, { date: daysFromToday(1) });
     expect(booking.status).toBe("pending_confirmation");
 
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
 
@@ -86,7 +87,7 @@ test.describe("confirming keeps the appointment visible", () => {
     void browserErrors;
     const booking = await requestAppointmentAsClient(baseURL!, studio, { date: daysFromToday(1) });
 
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "Notifications" }).click();
@@ -121,7 +122,7 @@ test.describe("confirming keeps the appointment visible", () => {
       name: "Colleague Client",
     });
 
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     // Arriving the way the bell sends an owner: one master's day.
