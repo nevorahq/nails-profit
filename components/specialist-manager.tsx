@@ -28,6 +28,11 @@ export type OrganizationMember = {
 type ServiceOption = { id: string; name: string; duration_minutes: number | null };
 
 
+/** What a card made for this account is called until somebody renames it. */
+function memberLabel(member: OrganizationMember): string {
+  return member.name?.trim() || member.email.split("@")[0];
+}
+
 export function SpecialistManager({
   specialists,
   services,
@@ -38,6 +43,7 @@ export function SpecialistManager({
   showsPay,
   canManage,
   hasOwnCard = false,
+  viewerId = null,
   setupGuide = null,
 }: {
   specialists: SpecialistRow[];
@@ -67,6 +73,12 @@ export function SpecialistManager({
    */
   hasOwnCard?: boolean;
   /**
+   * The account signed in now. Picking it from the members list is «Это я»,
+   * not a link to somebody else, so it leaves that tick to say so — the tick
+   * also marks the card as the owner's own, which a bare link does not.
+   */
+  viewerId?: string | null;
+  /**
    * Where «Первый расчёт» stood when this page was drawn, or null once the
    * studio has closed a visit and the guided run is over.
    */
@@ -83,6 +95,13 @@ export function SpecialistManager({
    * services a rule pays on. An empty list means every service.
    */
   const [addName, setAddName] = useState("");
+  /*
+   * Whose account the card being added belongs to, once somebody is picked
+   * from «Участники без карточки». Picking used to copy the name and nothing
+   * else: the card arrived unlinked, and the person it was made for stayed in
+   * «Ждут карточки» above it.
+   */
+  const [addMemberId, setAddMemberId] = useState<string | null>(null);
   const [addRuleType, setAddRuleType] = useState("percentage");
   /*
    * Read only to explain the field below it. A master on a salary or renting a
@@ -111,6 +130,7 @@ export function SpecialistManager({
   // server's render of this "use client" component.
   const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-specialist");
   const addRef = useRef<HTMLDivElement>(null);
+  const rateRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
@@ -186,6 +206,7 @@ export function SpecialistManager({
         // Two facts in one tick: this card is the account signed in now, and
         // the commission booked to it is the owner's own — see the endpoint.
         ...(data.get("is_me") ? { is_me: true } : {}),
+        ...(addMemberId ? { user_id: addMemberId } : {}),
         ...(rule
           ? {
               default_rule:
@@ -200,6 +221,7 @@ export function SpecialistManager({
     if (ok) {
       setAddOpen(false);
       setAddName("");
+      setAddMemberId(null);
       setAddCooperation("commission");
     }
   }
@@ -210,16 +232,21 @@ export function SpecialistManager({
    * The sequence it repairs: invite a master, they accept, and they appear in
    * «Команда» and nowhere else — no row in «Мастера» to book them into, and
    * «Связать мастера с аккаунтом» offering an empty list, because the thing it
-   * links to did not exist yet. One press writes the card and the link
-   * together; the commission rule stays the owner's decision, and the banner
-   * above already names everyone missing one.
+   * links to did not exist yet.
+   *
+   * It opens «Добавить мастера» with them already chosen rather than writing
+   * the card itself. One press used to create it with no rate at all, and a
+   * card without a rate is a master whose every visit refuses to close with
+   * MISSING_COMMISSION_RULE — found at the end of the first appointment, not
+   * here. The form is the one place that will not create a card without one,
+   * so the press now ends there, on the field that is left to fill.
    */
-  async function cardForMember(member: OrganizationMember) {
-    await send("/api/v1/specialists", {
-      name: member.name?.trim() || member.email.split("@")[0],
-      cooperation_type: "commission",
-      user_id: member.user_id,
-    });
+  function cardForMember(member: OrganizationMember) {
+    setError(null);
+    setAddName(memberLabel(member));
+    setAddMemberId(member.user_id);
+    setAddOpen(true);
+    requestAnimationFrame(() => rateRef.current?.focus({ preventScroll: true }));
   }
 
   /*
@@ -292,6 +319,9 @@ export function SpecialistManager({
    * only masters are named, and only while nothing is linked to their account.
    */
   const waitingForCard = unlinkedMembers.filter((member) => member.role === "master");
+  const addMember = addMemberId
+    ? unlinkedMembers.find((member) => member.user_id === addMemberId)
+    : undefined;
 
   return (
     <>
@@ -305,7 +335,7 @@ export function SpecialistManager({
             {waitingForCard.map((member) => (
               <li key={member.user_id} className="waiting-member">
                 <span>
-                  {member.name?.trim() || member.email.split("@")[0]}
+                  {memberLabel(member)}
                   <span className="unit-hint">{member.email}</span>
                 </span>
                 <button
@@ -372,13 +402,36 @@ export function SpecialistManager({
                     value={addName}
                     options={unlinkedMembers.map((member) => ({
                       key: member.user_id,
-                      label: member.name?.trim() || member.email.split("@")[0],
+                      label: memberLabel(member),
                       hint: `${member.email} · ${t(`roles.${member.role}` as MessageKey)}`,
                     }))}
-                    onChange={setAddName}
-                    onSelect={(option) => setAddName(option.label)}
+                    onChange={(value) => {
+                      setAddName(value);
+                      // An emptied field is somebody else being typed.
+                      if (!value.trim()) setAddMemberId(null);
+                    }}
+                    onSelect={(option) => {
+                      setAddName(option.label);
+                      setAddMemberId(option.key === viewerId ? null : option.key);
+                    }}
                   />
-                  {!hasOwnCard && (
+                  {addMember && (
+                    <span className="field-hint">
+                      {t("specialists.linkedTo", { email: addMember.email })}{" "}
+                      <button
+                        className="inline-action"
+                        type="button"
+                        onClick={() => setAddMemberId(null)}
+                      >
+                        {t("specialists.dontLink")}
+                      </button>
+                    </span>
+                  )}
+                  {/*
+                    Not while an account is chosen: the card is theirs, and «Это
+                    я» would claim it for whoever is signed in instead.
+                  */}
+                  {!hasOwnCard && !addMember && (
                     <>
                       <label>
                         <input type="checkbox" name="is_me" defaultChecked />
@@ -432,7 +485,15 @@ export function SpecialistManager({
                 )}
                 <label>
                   {t("specialists.value")}
-                  <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
+                  <input
+                    ref={rateRef}
+                    name="rule_value"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="40"
+                    required
+                  />
                   {addCooperation !== "commission" && (
                     <span className="muted">{t("specialists.zeroRuleHint")}</span>
                   )}

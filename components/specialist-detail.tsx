@@ -86,6 +86,7 @@ export function SpecialistDetail({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [ruleType, setRuleType] = useState("percentage");
   const [ruleService, setRuleService] = useState("");
   const [selected, setSelected] = useState<string[]>(
@@ -191,6 +192,26 @@ export function SpecialistDetail({
     );
   }
 
+  /**
+   * The name a client books, and the one their reminders carry.
+   *
+   * The endpoint has taken a name since it was written, and no screen ever sent
+   * one: a card typed with a mistake, or created by «Добавить как мастера» from
+   * the part of an address before the «@», kept it until somebody deleted the
+   * card — which a master with visits cannot be — or wrote to support.
+   */
+  async function rename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = String(new FormData(event.currentTarget).get("name") ?? "").trim();
+    if (!name || name === person.name) {
+      setRenaming(false);
+      return;
+    }
+    if (await send(`/api/v1/specialists/${person.id}`, { name }, undefined, "PATCH")) {
+      setRenaming(false);
+    }
+  }
+
   async function linkAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -228,8 +249,50 @@ export function SpecialistDetail({
             ← {t("specialists.title")}
           </Link>
           <h1>{person.name}</h1>
+          {canManage && !renaming && (
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => {
+                setError(null);
+                setRenaming(true);
+              }}
+            >
+              {t("specialists.rename")}
+            </button>
+          )}
         </div>
       </header>
+
+      {canManage && renaming && (
+        <section className="panel">
+          <form className="inline-form" onSubmit={rename}>
+            <label>
+              {t("specialists.name")}
+              <input
+                name="name"
+                defaultValue={person.name}
+                required
+                maxLength={200}
+                autoComplete="off"
+                autoFocus
+              />
+              <span className="muted">{t("specialists.renameHint")}</span>
+            </label>
+            <button className="primary-button" type="submit" disabled={pending}>
+              {pending ? t("common.saving") : t("common.save")}
+            </button>
+            <button
+              className="inline-action"
+              type="button"
+              disabled={pending}
+              onClick={() => setRenaming(false)}
+            >
+              {t("common.cancel")}
+            </button>
+          </form>
+        </section>
+      )}
 
       {error && <div className="form-error" role="alert">{error}</div>}
       {!canManage && <div className="warning-banner">{t("specialists.readOnlyNote")}</div>}
