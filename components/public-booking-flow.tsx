@@ -155,6 +155,11 @@ function challengeOf(body: unknown): Challenge | null {
   return error?.code === "CHALLENGE_REQUIRED" && error.details?.nonce ? error.details : null;
 }
 
+/** «Ирина» and « ирина » are one name; a solo studio is often called after its master. */
+function sameName(a: string, b: string) {
+  return a.trim().localeCompare(b.trim(), undefined, { sensitivity: "base" }) === 0;
+}
+
 export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const t = useMemo(() => getTranslator(profile.locale), [profile.locale]);
   const [locationId, setLocationId] = useState(profile.locations[0]?.id ?? "");
@@ -268,8 +273,16 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * and headed the confirmed time with it — three ways of telling somebody
    * what they already knew from the studio's own name at the top. Where there
    * is more than one pair of hands the choice is real and all three stay.
+   *
+   * One master who is not the studio's name — an owner who works under their
+   * own, beside a studio called something else — is still news to the client:
+   * there is nothing to choose, but who will be doing the nails is said once
+   * above the date and again beside the time held.
    */
   const namesSpecialist = masters.length > 1;
+  const soleMaster =
+    masters.length === 1 && !sameName(masters[0].name, profile.name) ? masters[0] : null;
+  const showsMaster = namesSpecialist || soleMaster !== null;
 
   useEffect(() => {
     let active = true;
@@ -970,6 +983,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             {/* Who and when, after what: the people offered are the ones who do
                 every service chosen above. */}
             <div className="public-booking-grid">
+              {soleMaster && (
+                <div className="public-booking-master">
+                  <span>{t("publicBooking.specialist")}</span>
+                  <strong>{soleMaster.name}</strong>
+                </div>
+              )}
               {namesSpecialist && (
                 <label>
                   {t("publicBooking.specialist")}
@@ -1008,7 +1027,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <strong>{sittingName}</strong>
               </div>
               <div>
-                <span>{namesSpecialist ? held.slot.specialist_name : t("publicBooking.when")}</span>
+                <span>{showsMaster ? held.slot.specialist_name : t("publicBooking.when")}</span>
                 <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(held.slot.starts_at))}</strong>
               </div>
             </div>
@@ -1068,7 +1087,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <strong>{sittingName}</strong>
               </div>
               <div>
-                <span>{namesSpecialist ? held.slot.specialist_name : t("publicBooking.when")}</span>
+                <span>{showsMaster ? held.slot.specialist_name : t("publicBooking.when")}</span>
                 <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(held.slot.starts_at))}</strong>
               </div>
               <p>{t("publicBooking.heldUntil", { time: new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, timeStyle: "short" }).format(new Date(held.expiresAt)) })}</p>
