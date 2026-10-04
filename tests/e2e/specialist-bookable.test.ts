@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { locations, scheduleRules, specialistLocations } from "@/db/schema";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
-import { anonymous, dataOf, signUp } from "../helpers/api";
+import { anonymous, dataOf, signUp, type Actor } from "../helpers/api";
 import { isoDay, weekdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 
@@ -34,6 +34,21 @@ const SETUP = {
   publish_booking: true,
 };
 
+/**
+ * Registered the way a studio is, then opened the way it is now: registration
+ * publishes nothing, and the page opens from «Ваш прайс и часы» on the price
+ * confirmed there — the registration's own here.
+ */
+async function registerAndOpen(owner: Actor, body: Record<string, unknown>) {
+  const organization = dataOf<{ id: string; slug: string }>(await owner.post("/api/v1/organizations", body));
+  const [service] = dataOf<{ id: string }[]>(await owner.get("/api/v1/services"));
+  await owner.post("/api/v1/organizations/setup", {
+    services: [{ id: service.id, price_minor: 30_000, duration_minutes: 60 }],
+    open_booking: true,
+  });
+  return organization;
+}
+
 beforeAll(async () => {
   await resetDatabase();
   process.env.PUBLIC_BOOKING_ENABLED = "true";
@@ -46,9 +61,7 @@ afterAll(async () => {
 describe("a master added after the studio was registered", () => {
   test("is bookable by a client the moment the card exists", async () => {
     const owner = await signUp("bookable-owner@studio.example", "Belle Nails");
-    const organization = dataOf<{ id: string; slug: string }>(
-      await owner.post("/api/v1/organizations", { ...SETUP, owner_works: true, owner_name: "Irina" }),
-    );
+    const organization = await registerAndOpen(owner, { ...SETUP, owner_works: true, owner_name: "Irina" });
 
     const hired = dataOf<{ id: string }>(
       await owner.post("/api/v1/specialists", {
@@ -84,9 +97,7 @@ describe("a master added after the studio was registered", () => {
 
   test("works the studio's own week from the day the card is made", async () => {
     const owner = await signUp("bookable-rota@studio.example", "Rota Nails");
-    const organization = dataOf<{ id: string; slug: string }>(
-      await owner.post("/api/v1/organizations", { ...SETUP, owner_works: false }),
-    );
+    const organization = await registerAndOpen(owner, { ...SETUP, owner_works: false });
 
     const hired = dataOf<{ id: string }>(
       await owner.post("/api/v1/specialists", {
