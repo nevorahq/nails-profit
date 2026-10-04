@@ -292,7 +292,8 @@ export function WorkspaceSetup({
               </label>
               {/*
                 One line, and it is the one that makes the default safe to
-                accept without thinking: the page goes up, but nothing on it
+                accept without thinking: the page opens only from the next
+                screen, on prices the owner has checked, and nothing on it
                 becomes an appointment until the owner says so.
               */}
               <span className="field-hint">{t("workspace.publishBookingHint")}</span>

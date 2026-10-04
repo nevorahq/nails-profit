@@ -94,11 +94,11 @@ const createOrganizationSchema = z.object({
    */
   owner_name: z.string().trim().min(2).max(200).optional(),
   /**
-   * Whether the studio's public booking page goes live with the workspace.
+   * Whether the owner means to take bookings online.
    *
-   * Two rows say so — `booking_access` here and `public_status` on the
-   * address's settings — and until both do, `/book/<slug>` is a 404 the owner
-   * has to go and fix in a screen they have no reason to open.
+   * An intention only. It used to publish the page with the workspace, on a
+   * price and a week the product had suggested; now it decides which button
+   * the opening-setup screen leads with, and that screen is what publishes.
    */
   publish_booking: z.boolean().optional(),
   /** Other people who work here, named on the form. */
@@ -323,9 +323,10 @@ export async function POST(request: Request) {
            * caller of this endpoint sends.
            */
           timezone: parsed.data.timezone ?? "Europe/Chisinau",
-          // The public half of «принимать записи онлайн»; the address's own
-          // settings are written beside it in `provisionWorkspace`.
-          ...(planned.plan.publishBooking ? { bookingAccess: "public" as const } : {}),
+          // «Принимать записи онлайн» is remembered, not acted on: the page
+          // opens from the opening-setup screen, once a person has confirmed
+          // the prices it would open on (`lib/opening-setup.ts`).
+          wantsOnlineBooking: planned.plan.publishBooking ?? false,
           createdBy: session.user.id,
           updatedBy: session.user.id,
         })
