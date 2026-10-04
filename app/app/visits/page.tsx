@@ -24,10 +24,12 @@ import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
 import { serviceNamesOf } from "@/lib/service-names";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function VisitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; specialist?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; specialist?: string; visit?: string }>;
 }) {
   const { membership, locale, currency, businessType } = await requireWorkspace();
   const t = getTranslator(locale);
@@ -42,6 +44,14 @@ export default async function VisitsPage({
   }
 
   const filters = await searchParams;
+  /*
+   * One visit, opened: where the calendar sends a visit closed without an
+   * appointment, which has no card of its own there. Checked before the query,
+   * since a malformed id would otherwise reach Postgres as an error rather
+   * than as nothing found. Scope still applies — a Master asking for a
+   * colleague's visit gets an empty list.
+   */
+  const onlyVisit = filters.visit && UUID.test(filters.visit) ? filters.visit : null;
 
   const data = await withTenant(membership.organizationId, async (tx) => {
     // Section 6.1: a Master sees only their own visits, resolved from the
@@ -57,6 +67,7 @@ export default async function VisitsPage({
     }
 
     const conditions = [
+      onlyVisit ? eq(visits.id, onlyVisit) : undefined,
       filters.from ? gte(visits.completedAt, new Date(filters.from)) : undefined,
       filters.to ? lte(visits.completedAt, new Date(`${filters.to}T23:59:59.999Z`)) : undefined,
       ownSpecialistId
@@ -227,7 +238,11 @@ export default async function VisitsPage({
                   refundMinor: line.refundMinor,
                 }));
                 return (
-                  <li key={visit.id} className={`visit-card${incomplete ? " is-incomplete" : ""}`}>
+                  <li
+                    key={visit.id}
+                    id={`visit-${visit.id}`}
+                    className={`visit-card${incomplete ? " is-incomplete" : ""}`}
+                  >
                     {/*
                       Closed until asked for. A month of visits is a list to scan
                       by date first — the figures under each one are what the
@@ -236,7 +251,7 @@ export default async function VisitsPage({
                       rendered on the server, and the browser has known how to
                       open and close this element without help for years.
                     */}
-                    <details className="visit-card-details">
+                    <details className="visit-card-details" open={visit.id === onlyVisit}>
                     <summary className="visit-card-head">
                       <span className="visit-card-date">
                         {visit.completedAt.toLocaleDateString(localeTag(locale))}
