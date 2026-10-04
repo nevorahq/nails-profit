@@ -8,7 +8,13 @@ test.describe("landing experience", () => {
     const calculator = page.locator(".calculator-card");
     const sliders = calculator.getByRole("slider");
     await expect(sliders).toHaveCount(3);
-    await sliders.nth(0).fill("900");
+    // The page is server-rendered, so the sliders are on screen a beat before
+    // React listens to them: a value set in that beat is lost, and hydration
+    // puts the slider back where it was. Retried until the reading follows.
+    await expect(async () => {
+      await sliders.nth(0).fill("900");
+      await expect(calculator.getByRole("status").first()).toContainText("900", { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await sliders.nth(1).fill("50");
     await sliders.nth(2).fill("250");
     await expect(calculator.getByText("600 MDL", { exact: true })).toBeVisible();
