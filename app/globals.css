@@ -39,6 +39,14 @@
    * this view exists for.
    */
   --free-hour-edge: #dcc07a;
+  /*
+   * A visit already done, in the calendar: a neutral grey, away from the greens
+   * a live appointment is drawn in. The ink keeps 5:1 on the surface.
+   */
+  --visit-done-surface: #eceeea;
+  --visit-done-line: #d6d9d3;
+  --visit-done-edge: #a9aea6;
+  --visit-done-ink: #5a605a;
   --shadow: 0 2rem 8rem rgba(15, 42, 29, 0.4);
 
   /*
@@ -1145,6 +1153,17 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-entry.status-pending_confirmation { border-left-color: var(--warning-border); }
 .calendar-entry.status-cancelled, .calendar-entry.status-no_show { border-left-color: var(--danger); }
 .calendar-entry.status-blocked { border-left-color: var(--muted); }
+/*
+ * A visit closed by hand, with no appointment behind it: done, so quieter than
+ * anything still to come. Grey rather than faded — opacity would take the text
+ * below 4.5:1 — and still a card that opens. The words for it are in the
+ * summary for a reader who cannot see grey.
+ */
+.calendar-entry.is-visit { background: var(--visit-done-surface); border-color: var(--visit-done-line); border-left-color: var(--visit-done-edge); color: var(--visit-done-ink); }
+.calendar-entry.is-visit .calendar-who,
+.calendar-entry.is-visit .unit-hint,
+.calendar-entry.is-visit .muted { color: var(--visit-done-ink); }
+.calendar-entry.is-visit .calendar-detail { border-top-color: var(--visit-done-line); }
 
 .calendar-entry summary { display: flex; flex-wrap: wrap; gap: 6rem 14rem; align-items: baseline; padding: 14rem 16rem; cursor: pointer; min-height: 44rem; }
 .calendar-entry summary::marker { color: var(--muted); }
@@ -2770,6 +2789,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-mark.status-cancelled,
 .calendar-mark.status-no_show { background: var(--danger); }
 .calendar-mark.status-blocked { background: var(--free-hour-edge); }
+.calendar-mark.status-visit { background: var(--visit-done-edge); }
 
 /* The marks a cell could not draw. Four is what fits at 288; the difference
    between five appointments and fifteen is otherwise the same picture, and
@@ -2784,6 +2804,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-cell.is-selected .calendar-mark.status-pending_confirmation { background: var(--warning); }
 .calendar-cell.is-selected .calendar-mark.status-cancelled,
 .calendar-cell.is-selected .calendar-mark.status-no_show { background: var(--danger); }
+.calendar-cell.is-selected .calendar-mark.status-visit { background: var(--visit-done-line); }
 
 /* --- The chosen day --- */
 

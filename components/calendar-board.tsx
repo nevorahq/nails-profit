@@ -97,6 +97,27 @@ export type CalendarBooking = Readonly<{
   confirmationDueAt: string | null;
 }>;
 
+/**
+ * A visit closed by hand, with no appointment behind it (`domain/calendar-visits`).
+ *
+ * Drawn among the appointments on the hours it took, so the day it happened no
+ * longer reads «Записей нет». It is done: there is nothing to confirm, move or
+ * cancel, so its card carries the facts and the way to the visit itself.
+ */
+export type CalendarVisit = Readonly<{
+  id: string;
+  localDate: string;
+  localStart: string;
+  localEnd: string;
+  specialistId: string;
+  specialistName: string;
+  clientName: string | null;
+  serviceName: string;
+  extraLines: number;
+  /** The newest snapshot's revenue; null when the visit has none. */
+  revenueMinor: number | null;
+}>;
+
 type Option = Readonly<{ id: string; name: string }>;
 
 /**
@@ -142,6 +163,7 @@ export function CalendarBoard({
   selected,
   today,
   bookings,
+  visits = [],
   locations,
   specialists,
   services,
@@ -167,6 +189,8 @@ export function CalendarBoard({
   selected: string;
   today: string;
   bookings: CalendarBooking[];
+  /** Visits of the listed day closed without an appointment. */
+  visits?: readonly CalendarVisit[];
   locations: readonly Readonly<{ id: string; name: string; timezone: string }>[];
   specialists: readonly Person[];
   services: readonly Readonly<{ id: string; name: string; durationMinutes: number | null }>[];
@@ -474,10 +498,12 @@ export function CalendarBoard({
    */
   type DayItem =
     | { kind: "booking"; at: string; data: CalendarBooking }
+    | { kind: "visit"; at: string; data: CalendarVisit }
     | { kind: "exception"; at: string; data: CalendarException };
 
   const dayItems: DayItem[] = [
     ...bookings.map((data) => ({ kind: "booking" as const, at: data.localStart, data })),
+    ...visits.map((data) => ({ kind: "visit" as const, at: data.localStart, data })),
     ...exceptions.map((data) => ({ kind: "exception" as const, at: data.localStart, data })),
   ].sort((left, right) => left.at.localeCompare(right.at));
 
@@ -503,7 +529,9 @@ export function CalendarBoard({
     ownSpecialistId === null &&
     !filters.specialist &&
     (specialists.length > 1 ||
-      bookings.some((booking) => !specialists.some((person) => person.id === booking.specialistId)));
+      [...bookings, ...visits].some(
+        (entry) => !specialists.some((person) => person.id === entry.specialistId),
+      ));
 
   /**
    * The master's face, drawn the way `/app/visits` draws one.
@@ -718,6 +746,16 @@ export function CalendarBoard({
               booking.locationId,
             ),
           ),
+        // A visit closed by hand took its hours as surely as a completed
+        // appointment did. It names no address, so it carries no buffer; one
+        // running past midnight takes the rest of this day.
+        ...visits
+          .filter((visit) => visit.specialistId === specialistId)
+          .map((visit) => {
+            const start = minutesOf(visit.localStart);
+            const end = minutesOf(visit.localEnd);
+            return { start, end: end < start ? 24 * 60 : end };
+          }),
         ...exceptions
           .filter((exception) => exception.specialistId === specialistId)
           .map((exception) => ({
@@ -1089,6 +1127,46 @@ export function CalendarBoard({
                               {pending ? t("common.saving") : t("calendar.unblock")}
                             </button>
                           )}
+                        </div>
+                      </details>
+                    </li>
+                  );
+                }
+                if (item.kind === "visit") {
+                  const visit = item.data;
+                  return (
+                    <li key={visit.id} id={`visit-${visit.id}`} className="calendar-entry is-visit">
+                      <details>
+                        <summary>
+                          <span className="calendar-time">
+                            {visit.localStart}–{visit.localEnd}
+                          </span>
+                          <span className="calendar-what">
+                            {visit.serviceName}
+                            {visit.extraLines > 0 && <span className="unit-hint">+{visit.extraLines}</span>}
+                          </span>
+                          <span className="calendar-who">
+                            {visit.clientName ?? t("calendar.noClient")}
+                            {namesMasters && (
+                              <span className="unit-hint calendar-master">
+                                {faceOf(visit.specialistId)}
+                                {visit.specialistName}
+                              </span>
+                            )}
+                          </span>
+                          {/* Grey says it is done; the words say it to a reader who cannot see grey. */}
+                          <span className="sr-only">{t("calendar.visitClosed")}</span>
+                        </summary>
+                        <div className="calendar-detail">
+                          <p className="muted">
+                            {visit.specialistName}
+                            {visit.revenueMinor !== null && <> · {money(visit.revenueMinor)}</>}
+                          </p>
+                          <p>
+                            <Link className="text-link" href={`/app/visits?visit=${visit.id}`}>
+                              {t("calendar.openVisit")}
+                            </Link>
+                          </p>
                         </div>
                       </details>
                     </li>
