@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
  * What «Мастера» says about a row, and what it has stopped saying.
@@ -27,6 +27,7 @@ test.describe("the notices on the list of masters", () => {
   });
 
   test("an unset rate is the way to set it, and nothing else shouts", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
@@ -48,7 +49,7 @@ test.describe("the notices on the list of masters", () => {
       default_rule: { type: "percentage", basis_points: 5_000 },
     });
 
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     try {
       const page = await context.newPage();
       await page.goto("/app/specialists");

@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { PASSWORD, signUp, uniqueSuffix } from "./helpers/studio";
+import { PASSWORD, signedInContext, signUp, uniqueSuffix } from "./helpers/studio";
 
 test.describe("authentication UI", () => {
   test("sign-in and sign-up modes expose the right fields", async ({ page, browserErrors }) => {
@@ -338,7 +338,7 @@ test.describe("authentication UI", () => {
        * которым нужна карточка», and the button beside it creates that card
        * with the very name asked for above (`components/specialist-manager.tsx`).
        */
-      const ownerContext = await browser.newContext({ storageState: await owner.storageState() });
+      const ownerContext = await signedInContext(browser, owner, baseURL!);
       try {
         const ownerPage = await ownerContext.newPage();
         await ownerPage.goto("/app/specialists");

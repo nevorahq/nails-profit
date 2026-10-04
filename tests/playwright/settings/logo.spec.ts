@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
  * Putting the studio's own mark where the product's flower stands.
@@ -27,11 +27,12 @@ test.describe("the studio's logo", () => {
   });
 
   test("replaces the flower in the topbar, and gives it back when removed", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/settings");

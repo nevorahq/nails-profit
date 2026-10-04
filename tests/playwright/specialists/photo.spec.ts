@@ -5,6 +5,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -38,11 +39,12 @@ test.describe("a master's photo", () => {
   });
 
   test("uploads, replaces the initial, and can be taken off again", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/specialists");

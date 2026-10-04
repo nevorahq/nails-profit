@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
  * The studio's name and its booking link, changed from the screens an owner
@@ -23,11 +23,12 @@ test.describe("the studio's name and booking link", () => {
   });
 
   test("the link is moved from «Online booking», and the old one stops answering", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     const moved = `${studio.slug.slice(0, 34)}-moved`;
 
@@ -48,11 +49,12 @@ test.describe("the studio's name and booking link", () => {
   });
 
   test("a reserved word is refused in words before anything is sent", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/booking");
@@ -68,11 +70,12 @@ test.describe("the studio's name and booking link", () => {
   });
 
   test("renaming the studio is reached from the address card and offers the link to follow", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
     const word = `belle${Math.floor(Math.random() * 1e6)}`;
 
@@ -108,9 +111,9 @@ test.describe("the studio's name and booking link", () => {
     await context.close();
   });
 
-  test("a new address is added by its name alone", async ({ browser, browserErrors }) => {
+  test("a new address is added by its name alone", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto("/app/booking");

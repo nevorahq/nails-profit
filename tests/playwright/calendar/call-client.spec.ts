@@ -5,6 +5,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -46,9 +47,9 @@ test.describe("the client's number on an appointment", () => {
     if (studio) await disposeStudio(studio);
   });
 
-  test("dials exactly the number it prints", async ({ browser, browserErrors }) => {
+  test("dials exactly the number it prints", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);
@@ -91,11 +92,12 @@ test.describe("the client's number on an appointment", () => {
    * null — so there is nothing to build it from and nothing to press.
    */
   test("offers a master the call and prints no number they may not see", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
 
     await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);
@@ -120,11 +122,12 @@ test.describe("the client's number on an appointment", () => {
    * all wrong at once, which is precisely what this asserts against.
    */
   test("offers the messengers the same number, each in its own form", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     // The client who ticked all three: the only one with four ways to compare.
@@ -172,11 +175,12 @@ test.describe("the client's number on an appointment", () => {
    * required to book at all — and it is the one that needs no application.
    */
   test("offers the call alone when nobody said where to write", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto(`/app/calendar?date=${isoDate(daysFromToday(1))}`);

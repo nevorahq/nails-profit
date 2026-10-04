@@ -4,6 +4,7 @@ import {
   disposeStudio,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -56,7 +57,7 @@ test.describe("a request made under a name the card does not carry", () => {
     expect(mothers.status).toBe("pending_confirmation");
     expect(daughters.status).toBe("pending_confirmation");
 
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "Notifications" }).click();

@@ -5,6 +5,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -48,9 +49,9 @@ test.describe("the hours left in the listed day", () => {
    * this is the assertion that catches it being done the cheap way instead. A
    * merged rota would report the owner 12 and 10, the same as the master below.
    */
-  test("adds up what every master has left", async ({ browser, browserErrors }) => {
+  test("adds up what every master has left", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     await page.goto(`/app/calendar?date=${isoDate(day)}`);
@@ -65,11 +66,12 @@ test.describe("the hours left in the listed day", () => {
   });
 
   test("is one master's own day when the calendar is one master's", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
 
     await page.goto(`/app/calendar?date=${isoDate(day)}`);
@@ -93,9 +95,9 @@ test.describe("the hours left in the listed day", () => {
    * A day nobody works has no tally at all, rather than a tally of zero. «0 / 0»
    * is what a fully booked day looks like too, and the two are opposite facts.
    */
-  test("says nothing about a day outside every rota", async ({ browser, browserErrors }) => {
+  test("says nothing about a day outside every rota", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.owner.storageState() });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
     // The rota starts yesterday, so any date before that is a day the studio

@@ -5,6 +5,7 @@ import {
   isoDate,
   requestAppointmentAsClient,
   seedStudio,
+  signedInContext,
   type Studio,
 } from "../helpers/studio";
 
@@ -42,15 +43,14 @@ test.describe("a master sees their own calendar and no further", () => {
   });
 
   test("the day shows one appointment to the master and two to the owner", async ({
+    baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
     const url = `/app/calendar?date=${isoDate(day)}`;
 
-    const masterContext = await browser.newContext({
-      storageState: await studio.master.storageState(),
-    });
+    const masterContext = await signedInContext(browser, studio.master, baseURL!);
     const masterPage = await masterContext.newPage();
     await masterPage.goto(url);
 
@@ -64,9 +64,7 @@ test.describe("a master sees their own calendar and no further", () => {
     // names one — a booking has to be made for somebody — but only ever them.)
     await expect(masterPage.locator(".calendar-specialist")).toHaveCount(0);
 
-    const ownerContext = await browser.newContext({
-      storageState: await studio.owner.storageState(),
-    });
+    const ownerContext = await signedInContext(browser, studio.owner, baseURL!);
     const ownerPage = await ownerContext.newPage();
     await ownerPage.goto(url);
 
@@ -100,9 +98,10 @@ test.describe("a master sees their own calendar and no further", () => {
    * decision; that the two screens disagree is not.
    */
   test.fixme("the client picker offers a master only the clients they have worked with", async ({
+    baseURL,
     browser,
   }) => {
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
     await page.goto(`/app/calendar?date=${isoDate(day)}`);
 
@@ -112,9 +111,9 @@ test.describe("a master sees their own calendar and no further", () => {
     await context.close();
   });
 
-  test("the bell carries only the master's own requests", async ({ browser, browserErrors }) => {
+  test("the bell carries only the master's own requests", async ({ baseURL, browser, browserErrors }) => {
     void browserErrors;
-    const context = await browser.newContext({ storageState: await studio.master.storageState() });
+    const context = await signedInContext(browser, studio.master, baseURL!);
     const page = await context.newPage();
     await page.goto("/app/calendar");
     await page.getByRole("button", { name: "Notifications" }).click();
