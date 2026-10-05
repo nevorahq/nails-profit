@@ -382,6 +382,12 @@ const ru = {
   "notify.staffRequestExpired.bodySolo":
     "Заявка на {when} не была подтверждена вовремя и отменилась. Окно снова свободно.",
   "notify.staffRequestExpired.cta": "Открыть календарь",
+  "notify.staffRequestReminder.subject": "Заявка всё ещё ждёт ответа — {studio}",
+  "notify.staffRequestReminder.body":
+    "Заявка к мастеру {specialist} на {when} всё ещё ждёт ответа, половина срока уже прошла. Без ответа она отменится сама.",
+  "notify.staffRequestReminder.bodySolo":
+    "Заявка на {when} всё ещё ждёт ответа, половина срока уже прошла. Без ответа она отменится сама.",
+  "notify.staffRequestReminder.cta": "Открыть запрос",
   "notify.visitCompleted.subject": "{studio}: спасибо за визит",
   "notify.visitCompleted.body": "Спасибо, что были у нас {when}.",
   "notify.visitCompleted.cta": "Записаться снова",
@@ -1925,6 +1931,12 @@ const ro: Record<MessageKey, Message> = {
   "notify.staffRequestExpired.bodySolo":
     "Cererea pentru {when} nu a fost confirmată la timp și s-a anulat. Ora este din nou liberă.",
   "notify.staffRequestExpired.cta": "Deschideți calendarul",
+  "notify.staffRequestReminder.subject": "Cererea încă așteaptă răspuns — {studio}",
+  "notify.staffRequestReminder.body":
+    "Cererea la {specialist} pentru {when} încă așteaptă răspuns, iar jumătate din timp a trecut. Fără răspuns, se anulează singură.",
+  "notify.staffRequestReminder.bodySolo":
+    "Cererea pentru {when} încă așteaptă răspuns, iar jumătate din timp a trecut. Fără răspuns, se anulează singură.",
+  "notify.staffRequestReminder.cta": "Deschideți cererea",
   "notify.visitCompleted.subject": "{studio}: vă mulțumim pentru vizită",
   "notify.visitCompleted.body": "Vă mulțumim că ați fost la noi {when}.",
   "notify.visitCompleted.cta": "Programați-vă din nou",
@@ -3462,6 +3474,12 @@ const en: Record<MessageKey, Message> = {
   "notify.staffRequestExpired.bodySolo":
     "The request for {when} was not confirmed in time and has been cancelled. The slot is free again.",
   "notify.staffRequestExpired.cta": "Open the calendar",
+  "notify.staffRequestReminder.subject": "A request is still waiting for an answer — {studio}",
+  "notify.staffRequestReminder.body":
+    "The request with {specialist} for {when} is still waiting, and half the time to answer has passed. Without an answer it cancels itself.",
+  "notify.staffRequestReminder.bodySolo":
+    "The request for {when} is still waiting, and half the time to answer has passed. Without an answer it cancels itself.",
+  "notify.staffRequestReminder.cta": "Open the request",
   "notify.visitCompleted.subject": "{studio}: thank you for your visit",
   "notify.visitCompleted.body": "Thank you for visiting us on {when}.",
   "notify.visitCompleted.cta": "Book again",

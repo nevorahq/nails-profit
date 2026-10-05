@@ -658,6 +658,35 @@ export async function bookingLinesOf(tx: TenantTransaction, bookingId: string) {
 }
 
 /**
+ * Requests halfway through their window and still unanswered, claimed for the
+ * one reminder each version of them gets.
+ *
+ * Claimed rather than selected: the marker is written by the same statement
+ * that finds the row, so a second cron run — or two overlapping ones — finds
+ * nothing left to remind anybody about. `version` is left where it is on
+ * purpose; the master answering the request this minute is answering the
+ * version she sees, and nothing about the request has changed.
+ *
+ * The midpoint is measured from when the request was made, in SQL, so it is
+ * the database's clock against the database's timestamps.
+ */
+export async function claimRequestsDueForReminder(tx: TenantTransaction, now: Date) {
+  return tx
+    .update(bookings)
+    .set({ staffRemindedVersion: sql`${bookings.version}` })
+    .where(
+      and(
+        eq(bookings.status, "pending_confirmation"),
+        isNotNull(bookings.confirmationDueAt),
+        gt(bookings.confirmationDueAt, now),
+        sql`${bookings.createdAt} + (${bookings.confirmationDueAt} - ${bookings.createdAt}) / 2 <= ${now}`,
+        sql`${bookings.staffRemindedVersion} is distinct from ${bookings.version}`,
+      ),
+    )
+    .returning({ id: bookings.id, version: bookings.version });
+}
+
+/**
  * Bookings whose confirmation window has passed, section 7.4: a manual request
  * the studio never answered stops holding the slot.
  *

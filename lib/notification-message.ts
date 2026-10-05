@@ -110,6 +110,15 @@ export const bookingNotificationTemplates = [
    * and lost.
    */
   "booking.staff_request_expired",
+  /**
+   * The same request, halfway through its window and still unanswered.
+   *
+   * Once per version of the request (`lib/booking-maintenance.ts`). A window
+   * of twelve hours is long enough to forget a request in, which is the price
+   * of making it long enough to answer from the chair; this is the price paid.
+   * Names the master, for the owner's copy, and so has a solo variant.
+   */
+  "booking.staff_request_reminder",
 ] as const;
 
 export type BookingNotificationTemplate = (typeof bookingNotificationTemplates)[number];
@@ -149,6 +158,7 @@ const KEY_PREFIX: Record<BookingNotificationTemplate, string> = {
   "booking.staff_assigned": "notify.staffAssigned",
   "booking.staff_freed": "notify.staffFreed",
   "booking.staff_request_expired": "notify.staffRequestExpired",
+  "booking.staff_request_reminder": "notify.staffRequestReminder",
 };
 
 /**
@@ -195,6 +205,7 @@ const SOLO_BODY = {
    * master the request was for, and for a studio of one that is the reader.
    */
   "booking.staff_request_expired": "notify.staffRequestExpired.bodySolo",
+  "booking.staff_request_reminder": "notify.staffRequestReminder.bodySolo",
 } as const satisfies Partial<Record<BookingNotificationTemplate, MessageKey>>;
 
 /** Templates whose reader is the studio, not the client. */
@@ -207,6 +218,7 @@ export const staffNotificationTemplates = [
   "booking.staff_assigned",
   "booking.staff_freed",
   "booking.staff_request_expired",
+  "booking.staff_request_reminder",
 ] as const satisfies readonly BookingNotificationTemplate[];
 
 export type StaffNotificationTemplate = (typeof staffNotificationTemplates)[number];

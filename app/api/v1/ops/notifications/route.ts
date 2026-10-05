@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       dead_lettered: summary.deadLettered,
       expired_holds: maintenance.expiredHolds,
       lapsed_requests: maintenance.lapsedRequests,
+      reminded_requests: maintenance.remindedRequests,
     },
     id,
   );

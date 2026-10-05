@@ -462,7 +462,9 @@ async function verificationFacts(
  * so a message about one is as true when it is sent as when it was written.
  */
 function staffMessageStillHolds(template: StaffNotificationTemplate, status: string): boolean {
-  if (template === "booking.staff_requested") return status === "pending_confirmation";
+  if (template === "booking.staff_requested" || template === "booking.staff_request_reminder") {
+    return status === "pending_confirmation";
+  }
   /*
    * Both say an appointment is off, and nothing follows `cancelled`. The second
    * is narrower than it looks: the repair job is the only writer of it, and a
