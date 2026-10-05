@@ -1026,6 +1026,33 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .report-tab:hover { color: var(--ink); }
 .report-tab[aria-current="page"] { border-bottom-color: var(--accent); color: var(--ink); }
 
+/*
+ * The ranking as «Итог» draws it. One grid for the heading and the rows, so
+ * the four columns line up whatever a service is called; the name takes what
+ * the three figures leave and wraps rather than pushing them off a phone.
+ */
+.ranking-compact { display: flex; flex-direction: column; gap: 10rem; }
+.ranking-row { display: grid; grid-template-columns: minmax(0, 1fr) 52rem 104rem 92rem; gap: 10rem; align-items: baseline; padding: 10rem 0; }
+.ranking-head { padding: 0; color: var(--muted); font-size: 12rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.ranking-list { list-style: none; margin: 0; padding: 0; }
+.ranking-list > li + li { border-top: 1rem solid var(--line); }
+.ranking-name { overflow-wrap: anywhere; font-weight: 650; }
+.ranking-cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ranking-cell.metric-negative { color: var(--danger); }
+.ranking-details > summary { cursor: pointer; list-style: none; }
+.ranking-details > summary::-webkit-details-marker { display: none; }
+.ranking-details > summary .ranking-name::after { content: " ▸"; color: var(--muted); }
+.ranking-details[open] > summary .ranking-name::after { content: " ▾"; }
+.ranking-more { display: flex; flex-wrap: wrap; gap: 6rem 22rem; margin: 0 0 12rem; color: var(--muted); font-size: 14rem; }
+.ranking-more div { display: flex; gap: 6rem; }
+.ranking-more dt { margin: 0; }
+.ranking-more dd { margin: 0; color: var(--ink); font-weight: 650; }
+
+@media (max-width: 680px) {
+  .ranking-row { grid-template-columns: minmax(0, 1fr) 30rem 92rem 80rem; gap: 8rem; font-size: 14rem; }
+  .ranking-head { font-size: 10rem; }
+}
+
 /* «Прибыль по услугам»: the same ranking `metrics.ranking` already computes,
    read as bars instead of a table row — the full table stays put further
    down the page for whoever wants every column. */
@@ -1043,11 +1070,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .profit-trend-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .profit-trend-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
 .profit-trend-axis { fill: var(--muted); font-size: 10px; }
-
-.report-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rem; }
-@media (max-width: 900px) {
-  .report-charts-grid { grid-template-columns: 1fr; }
-}
 
 .breakdown { margin-top: 20rem; }
 .breakdown summary { cursor: pointer; color: var(--accent); font-size: 14rem; font-weight: 700; }

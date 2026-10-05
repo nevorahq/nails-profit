@@ -10,10 +10,9 @@ import { HeadlineCard } from "@/components/headline-card";
 import { MetricIcon } from "@/components/icons";
 import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
-import { ProfitBars } from "@/components/profit-bars";
 import { ProfitTrendChart } from "@/components/profit-trend-chart";
 import { ReportTabs } from "@/components/report-tabs";
-import { ServiceRankingTable } from "@/components/service-ranking";
+import { ServiceRankingCompact } from "@/components/service-ranking-compact";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
@@ -25,6 +24,7 @@ import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
+import { queryFor } from "@/lib/filter-bar";
 import { auth } from "@/lib/auth";
 import { formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
@@ -473,29 +473,6 @@ export default async function AppPage({
       ? formatPercentDelta(expensesMinor, previousExpensesMinor, localeCode)
       : null;
 
-  // «Прибыль по услугам»: the top of the same ranking the full table below
-  // shows, with everything past it folded into one «Прочее» bar so five bars
-  // stay readable regardless of how many services the catalogue has.
-  const TOP_SERVICES_SHOWN = 4;
-  const topServices = metrics.ranking.slice(0, TOP_SERVICES_SHOWN);
-  const otherServices = metrics.ranking.slice(TOP_SERVICES_SHOWN);
-  const profitByServiceEntries = [
-    ...topServices.map((entry) => ({
-      key: entry.serviceId ?? entry.serviceName,
-      label: entry.serviceName,
-      valueMinor: entry.contributionMarginMinor,
-    })),
-    ...(otherServices.length > 0
-      ? [
-          {
-            key: "__other__",
-            label: t("dashboard.otherServices"),
-            valueMinor: otherServices.reduce((total, entry) => total + entry.contributionMarginMinor, 0),
-          },
-        ]
-      : []),
-  ];
-
   // «Диаграмма прибыли»: bucketed by `buildProfitTrend` (day or month, decided
   // from the actual spread of the data), labelled here since that is where
   // the viewer's locale lives.
@@ -635,31 +612,34 @@ export default async function AppPage({
         </section>
       )}
 
-      {!isMaster && profitByServiceEntries.length > 0 && (
-        <div className="report-charts-grid">
-          <section className="panel">
-            <h2>{t("dashboard.profitByService")}</h2>
-            <ProfitBars entries={profitByServiceEntries} formatMoney={money} />
-          </section>
-          <section className="panel">
-            <h2>{t("dashboard.profitTrend")}</h2>
-            <ProfitTrendChart
-              points={profitTrendPoints}
-              formatMoney={money}
-              emptyLabel={t("dashboard.profitTrendEmpty")}
-              title={t("dashboard.profitTrend")}
-            />
-          </section>
-        </div>
+      {metrics.ranking.length > 0 && (
+        <ServiceRankingCompact
+          ranking={metrics.ranking}
+          locale={locale}
+          currency={currency}
+          businessType={businessType}
+          isMaster={isMaster}
+          allHref={queryFor("/app/reports/services", {
+            from: filters.from,
+            to: filters.to,
+            specialist: filters.specialist,
+          })}
+        />
       )}
 
-      <ServiceRankingTable
-        metrics={metrics}
-        locale={locale}
-        currency={currency}
-        businessType={businessType}
-        isMaster={isMaster}
-      />
+      {/* «Прибыль по услугам» as bars lives on «Услуги» now, beside the table it
+          draws; the trend over time is the one chart that answers «Итог». */}
+      {!isMaster && metrics.ranking.length > 0 && (
+        <section className="panel">
+          <h2>{t("dashboard.profitTrend")}</h2>
+          <ProfitTrendChart
+            points={profitTrendPoints}
+            formatMoney={money}
+            emptyLabel={t("dashboard.profitTrendEmpty")}
+            title={t("dashboard.profitTrend")}
+          />
+        </section>
+      )}
     </main>
   );
 }
