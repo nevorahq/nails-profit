@@ -318,6 +318,9 @@ async function prepare(
   row: ClaimedRow,
   now: Date,
 ): Promise<Prepared> {
+  // Written by a build that can send to a phone; this one cannot yet.
+  if (row.channel === "push") return { ok: false, code: "push_unavailable" };
+
   const template = asBookingNotificationTemplate(row.template);
   if (!template) {
     /*
@@ -624,6 +627,8 @@ async function bookingFacts(
   slug: string | null,
   now: Date,
 ): Promise<Facts> {
+  // A client is never written to on a phone of the studio's; see `prepare`.
+  if (row.channel === "push") return { ok: false, code: "push_unavailable" };
   if (!row.bookingId) return { ok: false, code: "booking_missing" };
 
   const [found] = await tx

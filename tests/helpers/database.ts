@@ -35,6 +35,8 @@ const TABLES_IN_DELETE_ORDER = [
   "organization_subscription",
   "notification_provider_event",
   "notification_outbox",
+  // The devices those messages wake. Points only at `organization` and `user`.
+  "push_subscription",
   // Before `booking` and `specialist`, both of which it points at.
   "staff_notice",
   // And what each reader has already dealt with, which points at `booking` too.
