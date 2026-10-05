@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { Hint } from "@/components/hint";
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
@@ -512,28 +513,38 @@ export function SpecialistDetail({
             )}
             <label>
               {t("specialists.value")}
-              <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
+              <input
+                name="rule_value"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder={businessType === "solo" ? "0" : "40"}
+                required
+              />
               {person.cooperation_type !== "commission" && (
                 <span className="muted">{t("specialists.zeroRuleHint")}</span>
               )}
-              {/*
-                The one field on this page a solo studio cannot answer from
-                what the product has told it.
-                
-                This is where somebody working alone is sent by «Первый
-                расчёт» — the card exists from the moment the workspace does,
-                and the rate is all that is missing — so an empty box with a
-                «40» in grey is the whole of the first task the product sets.
-                What it is asking for is not a payment to anybody: it is the
-                price of the hour, which is what makes two services
-                comparable, and which the month's report then hands straight
-                back (`domain/period-pl.ts`). Said here rather than only in
-                that report, which is a fortnight away.
-              */}
-              {businessType === "solo" && person.is_principal && (
-                <span className="muted">{t("specialists.imputedHint")}</span>
-              )}
             </label>
+            {/*
+              The one field on this page a solo studio cannot answer from
+              what the product has told it.
+              
+              Registration writes her a rule at zero now, so this is where she
+              comes only to change it. What it asks for is not a payment to
+              anybody: it is the price of the hour, which is what makes two
+              services comparable, and which the month's report then hands
+              straight back (`domain/period-pl.ts`). Said here rather than only
+              in that report, which is a fortnight away — and outside the
+              label, where a «Подробнее» would toggle the field.
+            */}
+            {businessType === "solo" && person.is_principal && (
+              <Hint
+                short={t("specialists.imputedHintShort")}
+                more={t("specialists.imputedHint")}
+                moreLabel={t("common.more")}
+                howLabel={t("common.howCounted")}
+              />
+            )}
             {ruleType !== "fixed" && (
               <label>
                 {t("specialists.commissionBase")}

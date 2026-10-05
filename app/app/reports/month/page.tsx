@@ -1,6 +1,7 @@
 import { isNull } from "drizzle-orm";
 import Link from "next/link";
 
+import { Hint } from "@/components/hint";
 import { MonthPicker } from "@/components/month-picker";
 import { specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -352,7 +353,13 @@ export default async function MonthReportPage({
             )}
 
             {detailedAnalytics && pl.principalLabourMinor > 0 && (
-              <p className="pl-note">{t(businessLabel.principalHint[businessType])}</p>
+              <Hint
+                short={t("pl.principalHintShort")}
+                more={t(businessLabel.principalHint[businessType])}
+                moreLabel={t("common.more")}
+                howLabel={t("common.howCounted")}
+                className="pl-note"
+              />
             )}
 
             {pl.incompleteVisits > 0 && (
@@ -458,7 +465,13 @@ export default async function MonthReportPage({
                 </tr>
               </tbody>
             </table>
-            <p className="pl-note">{t("cash.hint")}</p>
+            <Hint
+              short={t("cash.hintShort")}
+              more={t("cash.hint")}
+              moreLabel={t("common.more")}
+              howLabel={t("common.howCounted")}
+              className="pl-note"
+            />
             {/* Part of why the account outgrew the profit, named rather than
                 left to read as a cost that has not gone out yet. */}
             {cash.tipsMinor > cash.tipsPaidOutMinor && (
@@ -532,7 +545,13 @@ export default async function MonthReportPage({
                     </tbody>
                   )}
                 </table>
-                <p className="pl-note">{t("capacity.utilizationHint")}</p>
+                <Hint
+                  short={t("capacity.utilizationHintShort")}
+                  more={t("capacity.utilizationHint")}
+                  moreLabel={t("common.more")}
+                  howLabel={t("common.howCounted")}
+                  className="pl-note"
+                />
               </>
             ) : (
               /*

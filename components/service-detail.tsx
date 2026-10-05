@@ -7,6 +7,7 @@ import { FormEvent, useRef, useState } from "react";
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { type MessageKey } from "@/i18n/t";
+import { Hint } from "@/components/hint";
 import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { roundRatio } from "@/domain/money";
@@ -586,23 +587,26 @@ export function ServiceDetail({
                 negative={keptPerHourMinor < 0}
               />
             </div>
-            {fullyLoaded && fixedShareMinor !== null && (
-              <p className="muted">
-                {t("services.fullyLoadedHint", {
-                  rate: formatMoneyMinor(
-                    fullyLoaded.fixed_cost_rate_minor_per_hour,
-                    service.costing.currency,
-                  ),
-                  // Named as a month, not as `2026-03`: the rate came from a
-                  // month of the owner's life, and a key from the query layer
-                  // is not how they refer to it.
-                  month: new Intl.DateTimeFormat(localeTag(locale), {
-                    month: "long",
-                    year: "numeric",
-                  }).format(new Date(`${fullyLoaded.month}-01T00:00:00.000Z`)),
-                })}
-              </p>
-            )}
+            {fullyLoaded && fixedShareMinor !== null && (() => {
+              const params = {
+                rate: formatMoneyMinor(fullyLoaded.fixed_cost_rate_minor_per_hour, service.costing.currency),
+                // Named as a month, not as `2026-03`: the rate came from a
+                // month of the owner's life, and a key from the query layer
+                // is not how they refer to it.
+                month: new Intl.DateTimeFormat(localeTag(locale), {
+                  month: "long",
+                  year: "numeric",
+                }).format(new Date(`${fullyLoaded.month}-01T00:00:00.000Z`)),
+              };
+              return (
+                <Hint
+                  short={t("services.fullyLoadedHintShort", params)}
+                  more={t("services.fullyLoadedHint", params)}
+                  moreLabel={t("common.more")}
+                  howLabel={t("common.howCounted")}
+                />
+              );
+            })()}
             {/*
               Why a cost that never leaves the business is subtracted here.
               Without the line, the two screens contradict each other: this one

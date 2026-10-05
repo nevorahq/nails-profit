@@ -7,6 +7,7 @@ import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { soloNeedsPrincipal } from "@/domain/principal";
 import { type MessageKey } from "@/i18n/t";
+import { Hint } from "@/components/hint";
 import { useTranslator } from "@/components/lexicon-provider";
 import { NameCombobox } from "@/components/name-combobox";
 import { SpecialistPhoto } from "@/components/specialist-photo";
@@ -498,16 +499,22 @@ export function SpecialistManager({
                   {addCooperation !== "commission" && (
                     <span className="muted">{t("specialists.zeroRuleHint")}</span>
                   )}
-                  {/*
-                    The same sentence the card carries, for the studios that
-                    predate `POST /organizations` writing the owner's card
-                    itself: they still meet this field here, on the form, with
-                    «Это я» ticked above it.
-                  */}
-                  {businessType === "solo" && !hasOwnCard && (
-                    <span className="muted">{t("specialists.imputedHint")}</span>
-                  )}
                 </label>
+                {/*
+                  The same sentence the card carries, for the studios that
+                  predate `POST /organizations` writing the owner's card
+                  itself: they still meet this field here, on the form, with
+                  «Это я» ticked above it. Outside the label, where a
+                  «Подробнее» would toggle the field.
+                */}
+                {businessType === "solo" && !hasOwnCard && (
+                  <Hint
+                    short={t("specialists.imputedHintShort")}
+                    more={t("specialists.imputedHint")}
+                    moreLabel={t("common.more")}
+                    howLabel={t("common.howCounted")}
+                  />
+                )}
                 {addRuleType !== "fixed" && (
                   <label>
                     {t("specialists.commissionBase")}

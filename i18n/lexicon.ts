@@ -96,6 +96,13 @@ export const plainWords: Layer = {
     en: "The revenue at which the month leaves nothing — at today's prices and costs.",
   },
 
+  // The plain view has no practical capacity, so its «Подробнее» does not open on one.
+  "capacity.utilizationHint": {
+    ru: "Считается от расписания, а не от календаря: если мастер выходит три дня в неделю, остальные четыре — не простой, а просто не рабочее время.",
+    ro: "Se calculează din program, nu din calendar: dacă maestrul lucrează trei zile pe săptămână, celelalte patru nu sunt timp nefolosit, ci pur și simplu nu sunt timp de lucru.",
+    en: "It is measured against the rota, not the calendar — a master who works three days a week is not idle the other four, those are simply not working hours.",
+  },
+
   // «Комиссия» is a studio's word for what a master is paid; the plain view says so.
   "services.commission.studio": { ru: "Оплата мастеру", ro: "Plata maestrului", en: "Paid to the master" },
   "services.commissionWord.studio": { ru: "оплата мастеру", ro: "plata maestrului", en: "the master's pay" },

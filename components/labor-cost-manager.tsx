@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
+import { Hint } from "@/components/hint";
 import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
@@ -179,7 +180,12 @@ export function LaborCostManager({
         <div className="add-form-inner">
           <section className="panel">
             <h2>{t("labor.title")}</h2>
-            <p className="muted">{t(businessLabel.laborHint[businessType])}</p>
+            <Hint
+              short={t("labor.hintShort")}
+              more={t(businessLabel.laborHint[businessType])}
+              moreLabel={t("common.more")}
+              howLabel={t("common.howCounted")}
+            />
 
             {error && (
               <div className="form-error" role="alert">

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
+import { Hint } from "@/components/hint";
 import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints } from "@/lib/format";
@@ -131,7 +132,12 @@ export function TaxRuleManager({
         <div className="add-form-inner">
           <section className="panel">
             <h2>{t("tax.title")}</h2>
-            <p className="muted">{t("tax.hint")}</p>
+            <Hint
+              short={t("tax.hintShort")}
+              more={t("tax.hint")}
+              moreLabel={t("common.more")}
+              howLabel={t("common.howCounted")}
+            />
 
             {error && (
               <div className="form-error" role="alert">
