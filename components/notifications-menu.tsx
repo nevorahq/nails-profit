@@ -60,7 +60,20 @@ type Notifications = Readonly<{
   unread: number;
   /** Past appointments never closed into a visit. Not news, so no chime. */
   unclosed: number;
+  /** A request has come in and this person has no device on push; see the route. */
+  push_hint: boolean;
 }>;
+
+/** Per browser, not per account: it is this device the hint is about. */
+const PUSH_HINT_DISMISSED = "nail-profit:push-hint-dismissed";
+
+function hintDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(PUSH_HINT_DISMISSED) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * What the chime is for: something arrived, not something changed.
@@ -106,6 +119,9 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
   const [data, setData] = useState<Notifications | null>(null);
   const [failed, setFailed] = useState(false);
   const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
+  // Read once the panel is first opened, never during render on the server.
+  const [hintHidden, setHintHidden] = useState(true);
+  const [deviceOn, setDeviceOn] = useState(false);
 
   // Null until the first successful load, so that load never counts as
   // "new" — only something that lands after the list was already known to.
@@ -188,6 +204,8 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
     }
   }
 
+  const showHint = data !== null && data.push_hint && !hintHidden && !deviceOn;
+
   return (
     <div className="notifications-menu" ref={root}>
       <button
@@ -200,7 +218,10 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
         onClick={() => {
           const next = !open;
           setOpen(next);
-          if (next) void reload();
+          if (next) {
+            setHintHidden(hintDismissed());
+            void reload();
+          }
         }}
       >
         <ChromeIcon name="bell" />
@@ -220,6 +241,33 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
           <div className="account-menu-head">
             <strong>{t("nav.notifications")}</strong>
           </div>
+
+          {/*
+            One nudge, once a request has come in that this person could have
+            missed: the switch itself, at the top, rather than advice about a
+            control somewhere further down. Hidden for good on this browser by
+            «Скрыть», and gone by itself once the device is on.
+          */}
+          {showHint && (
+            <div className="notifications-push-hint">
+              <p>{t("pushDevice.hint")}</p>
+              <PushDeviceSwitch locale={locale} compact onChange={setDeviceOn} />
+              <button
+                className="inline-action"
+                type="button"
+                onClick={() => {
+                  try {
+                    window.localStorage.setItem(PUSH_HINT_DISMISSED, "1");
+                  } catch {
+                    /* A private window forgets it; the hint comes back, which is harmless. */
+                  }
+                  setHintHidden(true);
+                }}
+              >
+                {t("pushDevice.hintDismiss")}
+              </button>
+            </div>
+          )}
 
           {failed && <p className="notifications-empty">{loadFailed}</p>}
           {!failed && data === null && <p className="notifications-empty">{t("notifications.loading")}</p>}
@@ -346,8 +394,9 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
           )}
 
           {/* This device's switch, where somebody who just missed a request
-              is looking — the same control as in «Настройки». */}
-          <PushDeviceSwitch locale={locale} compact />
+              is looking — the same control as in «Настройки». Once only: the
+              hint above carries it while the hint is shown. */}
+          {!showHint && <PushDeviceSwitch locale={locale} compact />}
         </div>
       )}
     </div>

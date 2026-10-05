@@ -2,6 +2,8 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { pushSubscriptions } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
+import { isPushConfigured } from "@/env";
+import { logEvent } from "@/lib/logger";
 
 /**
  * The devices of the studio's people, phase 7. Who may hold one and when it is
@@ -147,4 +149,19 @@ export async function deviceCountOf(tx: TenantTransaction, userId: string): Prom
 /** The last time a push reached this device, so a dead one can be told from a quiet one. */
 export async function touchDevice(tx: TenantTransaction, id: string, at: Date): Promise<void> {
   await tx.update(pushSubscriptions).set({ lastSuccessAt: at }).where(eq(pushSubscriptions.id, id));
+}
+
+/**
+ * Whether push is configured, without letting a broken configuration fail the
+ * request it is asked inside — a booking, the bell. Half a key pair is a
+ * deployment mistake to shout about in the log, not a reason a client's
+ * request is refused.
+ */
+export function isPushOn(): boolean {
+  try {
+    return isPushConfigured();
+  } catch (error) {
+    logEvent("error", "push.misconfigured", {}, { reason: error instanceof Error ? error.message : "unknown" });
+    return false;
+  }
 }

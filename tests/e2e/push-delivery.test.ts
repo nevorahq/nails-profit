@@ -173,6 +173,44 @@ afterAll(async () => {
   await closeTestConnections();
 });
 
+/**
+ * The bell's one nudge. First in the file on purpose: its «before the first
+ * request» half needs a chair nobody has booked yet.
+ */
+describe("the hint to turn push on", () => {
+  async function hintFor(actor: Actor) {
+    return dataOf<{ push_hint: boolean }>(await actor.get("/api/v1/notifications?locale=ru")).push_hint;
+  }
+
+  test("appears after the first online request on a chair the reader can see, until a device is on", async () => {
+    await adminDb.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, masterB.userId));
+
+    // Nothing to have missed yet.
+    expect(await hintFor(masterB)).toBe(false);
+
+    await requestFor(cardB);
+    expect(await hintFor(masterB)).toBe(true);
+
+    // The owner has a device on push already.
+    expect(await hintFor(studio.owner)).toBe(false);
+
+    await masterB.put("/api/v1/push/subscription", device("master-b"));
+    expect(await hintFor(masterB)).toBe(false);
+  });
+
+  test("is not offered where push is not configured", async () => {
+    await adminDb.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, masterB.userId));
+    delete process.env.VAPID_PUBLIC_KEY;
+    delete process.env.VAPID_PRIVATE_KEY;
+    try {
+      expect(await hintFor(masterB)).toBe(false);
+    } finally {
+      process.env.VAPID_PUBLIC_KEY = vapid.publicKey;
+      process.env.VAPID_PRIVATE_KEY = vapid.privateKey;
+    }
+  });
+});
+
 describe("a request on the studio's phones", () => {
   test("reaches the owner and the master whose chair it is, and not her colleague", async () => {
     const booking = await requestFor(cardA);

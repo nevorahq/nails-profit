@@ -3577,3 +3577,5 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   font-size: 13rem;
 }
 .notifications-push-hint p { margin: 0; color: var(--ink); font-weight: 650; }
+.notifications-push-hint .push-switch-compact { margin: 0; padding: 0; border-top: 0; }
+.notifications-push-hint .inline-action { justify-self: start; margin-left: 0; padding-left: 0; }

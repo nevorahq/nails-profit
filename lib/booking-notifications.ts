@@ -18,10 +18,8 @@ import {
   type StaffNotificationTemplate,
 } from "@/lib/notification-message";
 import { can, scopeFor } from "@/domain/rbac";
-import { isPushConfigured } from "@/env";
-import { logEvent } from "@/lib/logger";
 import { isPushTemplate } from "@/lib/push-message";
-import { devicesOf } from "@/lib/push-subscriptions";
+import { devicesOf, isPushOn } from "@/lib/push-subscriptions";
 import { recordStaffNotice, type StaffNoticeKind } from "@/lib/staff-notices";
 
 export type { BookingNotificationTemplate };
@@ -283,7 +281,7 @@ async function enqueuePush(
     releasedAt?: Date;
   },
 ) {
-  if (!isPushTemplate(input.template) || !pushIsOn()) return;
+  if (!isPushTemplate(input.template) || !isPushOn()) return;
 
   const [chair] = await tx
     .select({ userId: specialists.userId })
@@ -322,20 +320,6 @@ async function enqueuePush(
           : {}),
       },
     });
-  }
-}
-
-/**
- * Whether push is configured, without letting a broken configuration fail the
- * booking this is written inside. Half a key pair is a deployment mistake to
- * shout about in the log, not a reason a client's request is refused.
- */
-function pushIsOn(): boolean {
-  try {
-    return isPushConfigured();
-  } catch (error) {
-    logEvent("error", "push.misconfigured", {}, { reason: error instanceof Error ? error.message : "unknown" });
-    return false;
   }
 }
 
