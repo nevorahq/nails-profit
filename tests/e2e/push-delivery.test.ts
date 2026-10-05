@@ -40,7 +40,7 @@ const sent: OutgoingMessage[] = [];
 
 function device(name: string) {
   return {
-    endpoint: `https://push.example.test/send/${name}`,
+    endpoint: `https://fcm.googleapis.com/fcm/send/${name}`,
     keys: {
       p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
       auth: "tBHItJI5svbpez7KI4CCXg",

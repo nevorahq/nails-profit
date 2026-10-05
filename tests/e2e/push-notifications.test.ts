@@ -23,7 +23,7 @@ const previous = {
 
 function device(name = crypto.randomUUID()) {
   return {
-    endpoint: `https://push.example.test/send/${name}`,
+    endpoint: `https://fcm.googleapis.com/fcm/send/${name}`,
     keys: {
       p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
       auth: "tBHItJI5svbpez7KI4CCXg",
@@ -134,10 +134,13 @@ describe("the device switch", () => {
     expect(await devicesOfUser(master.userId)).toHaveLength(0);
   });
 
-  test("refuses anything that is not an https push endpoint with its keys", async () => {
+  test("refuses anything that is not an https endpoint at a push service, with its keys", async () => {
     for (const body of [
-      { ...device(), endpoint: "http://push.example.test/send/plain" },
+      { ...device(), endpoint: "http://fcm.googleapis.com/fcm/send/plain" },
       { ...device(), endpoint: "/api/v1/ops/notifications" },
+      // https, but not a push service: the server would POST wherever this points.
+      { ...device(), endpoint: "https://169.254.169.254/latest/meta-data" },
+      { ...device(), endpoint: "https://fcm.googleapis.com.attacker.example/send/x" },
       { endpoint: device().endpoint },
       { ...device(), keys: { p256dh: "not base64!", auth: "tBHItJI5svbpez7KI4CCXg" } },
     ]) {

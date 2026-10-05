@@ -59,11 +59,18 @@ self.addEventListener("notificationclick", (event) => {
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       // An open tab of the application is reused rather than joined by another.
+      // `navigate` only works on a tab this worker controls — one inside /app —
+      // so a tab elsewhere on the site, or a refusal, falls through to a new one.
       for (const client of windows) {
         if (new URL(client.url).origin !== self.location.origin) continue;
-        await client.focus();
-        if ("navigate" in client) await client.navigate(target);
-        return;
+        if (!new URL(client.url).pathname.startsWith("/app") || !("navigate" in client)) continue;
+        try {
+          const moved = await client.navigate(target);
+          await (moved ?? client).focus();
+          return;
+        } catch {
+          break;
+        }
       }
       await self.clients.openWindow(target);
     })(),
