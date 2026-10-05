@@ -107,6 +107,8 @@ export async function POST(request: Request) {
         email: null,
         // Where to write is a fact about a person, and it goes with them.
         contactChannels: null,
+        // And so is what the studio wrote down about them.
+        notes: null,
         locale: null,
         termsVersion: null,
         privacyVersion: null,

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { auditEvents, clients, locations, specialists, users, visits, workplaces } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, hasConstraint } from "@/domain/rbac";
+import { can, hasConstraint, seesClientNotes } from "@/domain/rbac";
 import { formatLocalTime, toZonedParts } from "@/domain/timezone";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { ClientContact } from "@/components/client-contact";
@@ -69,6 +69,7 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
             phone: clients.normalizedPhone,
             email: clients.email,
             channels: clients.contactChannels,
+            notes: clients.notes,
           })
           .from(clients)
           .where(eq(clients.id, booking.clientId))
@@ -189,6 +190,13 @@ export default async function BookingCardPage({ params }: { params: Promise<{ id
               <span className="unit-hint">{card.client.email}</span>
             )}
           </dd>
+
+          {card.client?.notes && seesClientNotes(membership.role) && (
+            <>
+              <dt>{t("calendar.clientNotes")}</dt>
+              <dd className="client-notes-text">{card.client.notes}</dd>
+            </>
+          )}
 
           <dt>{t("calendar.source")}</dt>
           <dd>{t(`bookingSource.${card.booking.source}` as MessageKey)}</dd>

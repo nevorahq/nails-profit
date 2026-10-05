@@ -207,6 +207,20 @@ export function seesIndividualPay(role: MemberRole): boolean {
   );
 }
 
+/**
+ * Whether this role may read what the studio wrote down about a client.
+ *
+ * A note is free text about a person — «аллергия на гель», «не любит
+ * разговоров» — and says more about them than their number does. So it follows
+ * the contacts: an Analyst reads client history «без телефонов и email», and a
+ * note is withheld under the same `exclude_pii` rather than under a constraint
+ * of its own that could drift from it. Everyone else who reads clients reads
+ * their notes, within their own scope — a Master, their own clients.
+ */
+export function seesClientNotes(role: MemberRole): boolean {
+  return can(role, "clients", "read") && !hasConstraint(role, "clients", "exclude_pii");
+}
+
 /** True when `actor` may administer a member holding `target`'s role. */
 export function canManageRole(actor: MemberRole, target: MemberRole): boolean {
   if (!can(actor, "user_management", "write")) return false;

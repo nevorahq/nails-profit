@@ -289,12 +289,18 @@ export async function loadSlotSearch(
   tx: TenantTransaction,
   query: SlotQuery,
   context: SlotContext,
+  /**
+   * How many days from `query.date` the search will be read for. One for a
+   * single day; a forward search has to load the busy time of every day it is
+   * going to offer, or each day after the first looks empty.
+   */
+  spanDays = 1,
 ): Promise<SlotSearch> {
-  // A day's window, widened by a day at each end: a shift can run past midnight
-  // and an exception can start the evening before.
+  // The days asked about, widened by a day at each end: a shift can run past
+  // midnight and an exception can start the evening before.
   const window: Interval = {
     start: new Date(Date.UTC(query.date.year, query.date.month - 1, query.date.day - 1)),
-    end: new Date(Date.UTC(query.date.year, query.date.month - 1, query.date.day + 2)),
+    end: new Date(Date.UTC(query.date.year, query.date.month - 1, query.date.day + spanDays + 1)),
   };
 
   const [rules, exceptions, bookedIntervals, heldIntervals] = await Promise.all([
@@ -338,15 +344,19 @@ export async function alternativeSlots(
   context: SlotContext,
   options: { limit?: number; horizonDays?: number } = {},
 ): Promise<{ date: string; slots: Slot[] }[]> {
-  const search = await loadSlotSearch(tx, query, context);
+  // The same default `findNextAvailableDates` falls back on. The busy time is
+  // loaded for all of it: this used to load the first day's alone, so every
+  // later day was offered as though nobody were booked on it.
+  const horizonDays = options.horizonDays ?? 30;
+  const search = await loadSlotSearch(tx, query, context, horizonDays + 1);
   const { date, ...rest } = search;
   void date;
 
   return findNextAvailableDates(rest, query.date, {
     limit: options.limit ?? 3,
-    // Undefined keeps `findNextAvailableDates`'s own default; a conflict asks
-    // for the next few days, the setup screen for the next fortnight.
-    horizonDays: options.horizonDays,
+    // A conflict asks for the next few days, the setup screen for the next
+    // fortnight.
+    horizonDays,
   });
 }
 

@@ -37,6 +37,9 @@ describe("single-client privacy erasure", () => {
       }),
     ).id;
 
+    // What the studio wrote about them is theirs too, and goes with the rest.
+    await studio.owner.patch(`/api/v1/clients/${clientId}`, { notes: "Аллергия на гель, не любит разговоров" });
+
     // A public booking normally writes this consent metadata. Setting it here
     // keeps this scenario focused on erasure while proving that the fields are
     // not left attached to the retained pseudonymous row.
@@ -155,6 +158,7 @@ describe("single-client privacy erasure", () => {
       normalizedPhone: null,
       email: null,
       contactChannels: null,
+      notes: null,
       locale: null,
       termsVersion: null,
       privacyVersion: null,

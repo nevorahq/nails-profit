@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { contactLink, contactWays } from "@/domain/contact-links";
+import { contactLink, contactWays, messageWays } from "@/domain/contact-links";
 
 const phone = "+37369384050";
 
@@ -49,5 +49,37 @@ describe("reaching a client from their number", () => {
   ])("refuses %s, which is not the stored shape", (input) => {
     expect(contactLink("call", input)).toBeNull();
     expect(contactWays(input)).toEqual([]);
+  });
+});
+
+describe("writing to a client from their number", () => {
+  const text = "Здравствуйте, Мария! Окно: https://x.test/book/s?a=1&b=2";
+
+  it("offers SMS alone when nobody said which messengers they use", () => {
+    const ways = messageWays("+37369384050", text, ["call"]);
+    expect(ways.map((way) => way.channel)).toEqual(["sms"]);
+    expect(ways[0].href).toBe(`sms:+37369384050?&body=${encodeURIComponent(text)}`);
+  });
+
+  it("puts the messengers a client uses first, and SMS last as the fallback", () => {
+    const ways = messageWays("+37369384050", text, ["call", "whatsapp", "telegram", "viber"]);
+    expect(ways.map((way) => way.channel)).toEqual(["whatsapp", "telegram", "viber", "sms"]);
+  });
+
+  it("carries the text where the link can, and only there", () => {
+    const ways = messageWays("+37369384050", text, ["call", "whatsapp", "telegram", "viber"]);
+    const whatsapp = ways.find((way) => way.channel === "whatsapp")!;
+    expect(whatsapp.href).toBe(`https://wa.me/37369384050?text=${encodeURIComponent(text)}`);
+    expect(whatsapp.carriesText).toBe(true);
+    expect(ways.find((way) => way.channel === "telegram")).toMatchObject({
+      href: "tg://resolve?phone=37369384050",
+      carriesText: false,
+    });
+    expect(ways.find((way) => way.channel === "viber")?.carriesText).toBe(false);
+  });
+
+  it("builds nothing from a number that is not E.164", () => {
+    expect(messageWays("069 384 050", text, ["call", "whatsapp"])).toEqual([]);
+    expect(messageWays(null, text, ["call"])).toEqual([]);
   });
 });

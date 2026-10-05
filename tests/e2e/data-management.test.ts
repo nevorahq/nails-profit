@@ -46,6 +46,8 @@ describe("Owner data export and erasure", () => {
         },
       })
       .where(eq(clients.id, clientId));
+    // Written the way the studio writes it, through the card.
+    await studio.owner.patch(`/api/v1/clients/${clientId}`, { notes: "Аллергия на гель" });
 
     await studio.owner.post("/api/v1/visits", {
       service_id: studio.serviceId,
@@ -116,7 +118,8 @@ describe("Owner data export and erasure", () => {
 
     const exported = dataOf<{
       members: { email: string }[];
-      clients: { id: string; email: string | null }[];
+      format_version: number;
+      clients: { id: string; email: string | null; notes: string | null }[];
       visits: { clientId: string | null }[];
       financial_snapshots: unknown[];
       import_jobs: { sourceText: string | null }[];
@@ -124,8 +127,10 @@ describe("Owner data export and erasure", () => {
 
     expect(exported.members).toContainEqual(expect.objectContaining({ email: studio.owner.email }));
     expect(exported.clients).toContainEqual(
-      expect.objectContaining({ id: clientId, email: "private-client@example.test" }),
+      // The note is the studio's own data about its client, so it leaves with it.
+      expect.objectContaining({ id: clientId, email: "private-client@example.test", notes: "Аллергия на гель" }),
     );
+    expect(exported.format_version).toBe(5);
     expect(exported.visits).toContainEqual(expect.objectContaining({ clientId }));
     expect(exported.financial_snapshots).toHaveLength(1);
     expect(exported.import_jobs[0].sourceText).toContain("Imported Person");
@@ -176,6 +181,7 @@ describe("Owner data export and erasure", () => {
       normalizedPhone: null,
       email: null,
       contactChannels: null,
+      notes: null,
       locale: null,
       termsVersion: null,
       privacyVersion: null,

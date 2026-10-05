@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { ClientNotes } from "@/components/client-notes";
 import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, scopeFor } from "@/domain/rbac";
+import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
@@ -122,6 +123,15 @@ export default async function ClientCardPage({
 
   const { client, visitRows, specialistMap, latestSnapshot, linesByVisit } = data;
 
+  /*
+   * An Analyst reads client history «без телефонов и email» (section 6.1). The
+   * list honoured that and this card did not: it printed the number and the
+   * address to anyone who could open it. The note goes with them — see
+   * `seesClientNotes`.
+   */
+  const hideContacts = hasConstraint(membership.role, "clients", "exclude_pii");
+  const showsNotes = seesClientNotes(membership.role);
+
   const totalRevenue = visitRows.reduce(
     (sum, v) => sum + (latestSnapshot.get(v.id)?.revenueMinor ?? 0),
     0,
@@ -145,13 +155,13 @@ export default async function ClientCardPage({
               <td className="muted" style={{ width: "120rem" }}>{t("clients.name")}</td>
               <td>{client.name}</td>
             </tr>
-            {client.normalizedPhone && (
+            {!hideContacts && client.normalizedPhone && (
               <tr>
                 <td className="muted">{t("clients.phone")}</td>
                 <td>{client.normalizedPhone}</td>
               </tr>
             )}
-            {client.email && (
+            {!hideContacts && client.email && (
               <tr>
                 <td className="muted">{t("clients.email")}</td>
                 <td>{client.email}</td>
@@ -160,6 +170,19 @@ export default async function ClientCardPage({
           </tbody>
         </table>
       </section>
+
+      {showsNotes && (
+        <section className="panel" style={{ marginBottom: "24rem" }}>
+          <h2>{t("clients.notes")}</h2>
+          <p className="muted">{t("clients.notesHint")}</p>
+          <ClientNotes
+            clientId={client.id}
+            initial={client.notes}
+            canWrite={can(membership.role, "clients", "write")}
+            locale={locale}
+          />
+        </section>
+      )}
 
       <section className="panel">
         <h2>

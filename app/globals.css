@@ -1249,6 +1249,37 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-facts dt { color: var(--muted); font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .calendar-facts dd { margin: 0; font-size: 15rem; }
 
+/* «Следующая запись» under a closed appointment: three intervals, then times. */
+.next-visit { display: grid; gap: 10rem; margin-top: 14rem; padding-top: 14rem; border-top: 1rem solid var(--line); }
+.next-visit h3 { margin: 0; font-size: 15rem; }
+.next-visit p { margin: 0; }
+.next-visit-intervals { display: flex; flex-wrap: wrap; gap: 8rem; }
+.next-visit-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(68rem, 1fr)); gap: 6rem; }
+.next-visit-intervals button, .next-visit-slots button { min-height: 44rem; padding-inline: 12rem; }
+.next-visit-slots button { padding-inline: 4rem; justify-content: center; text-align: center; }
+.next-visit-intervals button[aria-pressed="true"] { border-color: var(--accent); background: var(--sage-300); color: var(--forest-950); }
+.next-visit-day { display: grid; gap: 6rem; }
+.next-visit-day > p { font-weight: 700; font-size: 14rem; }
+
+/* The studio's note about a client: kept as typed, line breaks included. */
+.client-notes { display: grid; gap: 10rem; }
+.client-notes textarea { width: 100%; min-height: 110rem; resize: vertical; }
+.client-notes-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.calendar-client-notes { display: grid; gap: 4rem; margin: 8rem 0; padding: 10rem 12rem; border-left: 3rem solid var(--accent); background: var(--surface-strong); border-radius: 4rem; }
+.calendar-client-notes strong { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+/* «Пора позвать» on the clients page: who, how late, and a way to write. */
+.client-return { margin-bottom: 24rem; }
+.client-return h2 .muted { font-weight: 400; font-size: 15rem; }
+.client-return-list { list-style: none; margin: 12rem 0 0; padding: 0; display: grid; gap: 0; }
+.client-return-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8rem 16rem; padding: 12rem 0; border-top: 1rem solid var(--line); }
+.client-return-who { display: grid; gap: 2rem; min-width: 0; flex: 1 1 220rem; }
+.client-return-who .muted { font-size: 13rem; }
+.client-return-list button, .client-return-ways a { min-height: 44rem; }
+.client-return-ways { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8rem; }
+.client-return-ways a { display: inline-flex; align-items: center; gap: 6rem; }
+.client-return-ways p { flex-basis: 100%; margin: 0; }
+
 /* --- Phase 7.3: public booking --- */
 
 .public-booking-shell { min-height: 100vh; padding: 22rem clamp(18rem, 5vw, 72rem) 72rem; }

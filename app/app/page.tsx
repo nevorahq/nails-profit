@@ -18,6 +18,7 @@ import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
+import { rebookRateDeltaPoints } from "@/domain/rebook-rate";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { isPilotAccessEnforced, isPublicBookingEnabled } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
@@ -29,6 +30,7 @@ import { queryFor } from "@/lib/filter-bar";
 import { auth } from "@/lib/auth";
 import { formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
+import { loadRebookRate } from "@/lib/rebook-rate";
 import { loadHeadline } from "@/lib/headline";
 import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
@@ -56,7 +58,7 @@ function MetricCard({
   deltaCaption,
   negative,
 }: {
-  icon: "revenue" | "expenses" | "profit";
+  icon: "revenue" | "expenses" | "profit" | "rebook";
   label: string;
   value: string;
   formula: string;
@@ -360,6 +362,25 @@ export default async function AppPage({
       locale,
     );
 
+    /*
+     * «Записались на следующий раз», over the very visits the cards count:
+     * the same period, the same narrowing to one master. Every role reads it
+     * in its own scope — a master their own, an analyst the studio's whole,
+     * which is an aggregate and never one person's.
+     */
+    const rebook = await loadRebookRate(tx, {
+      from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
+      to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
+      specialistId: effectiveSpecialist,
+    });
+    const previousRebook = previousRange
+      ? await loadRebookRate(tx, {
+          from: previousRange.from,
+          to: previousRange.to,
+          specialistId: effectiveSpecialist,
+        })
+      : null;
+
     const previousMetrics = previousRange
       ? (
           await loadDashboard(
@@ -452,6 +473,8 @@ export default async function AppPage({
 
     return {
       ...dashboard,
+      rebook,
+      previousRebook,
       headline,
       beforeTaxesHref,
       previousMetrics,
@@ -643,6 +666,37 @@ export default async function AppPage({
               {t("dashboard.expensesOtherCurrency", { count: data.expenseTotal!.excludedRows })}
             </p>
           )}
+        </section>
+      )}
+
+      {/*
+        Shown once there is something to divide: a studio that closes every
+        visit by hand has no calendar visit to count, and «0%» there would read
+        as a verdict on a button it never had.
+      */}
+      {data.rebook.rateBasisPoints !== null && (
+        <section className="panel insight-panel">
+          <h2>{t("dashboard.rebookTitle")}</h2>
+          <div className="metric-cards">
+            <MetricCard
+              icon="rebook"
+              label={t("dashboard.rebookLabel")}
+              value={new Intl.NumberFormat(localeCode, { style: "percent", maximumFractionDigits: 0 }).format(
+                data.rebook.rateBasisPoints / 10_000,
+              )}
+              formula={t("dashboard.rebookFormula")}
+              delta={(() => {
+                const points = rebookRateDeltaPoints(data.rebook, data.previousRebook);
+                if (points === null || points === 0) return null;
+                const value = new Intl.NumberFormat(localeCode, { signDisplay: "exceptZero" }).format(points);
+                return { text: t("dashboard.pointsDelta", { value }), direction: points < 0 ? "down" : "up" };
+              })()}
+              deltaCaption={t("dashboard.vsPreviousPeriod")}
+            />
+          </div>
+          <p className="muted">
+            {t("dashboard.rebookCount", { rebooked: data.rebook.rebooked, eligible: data.rebook.eligible })}
+          </p>
         </section>
       )}
 

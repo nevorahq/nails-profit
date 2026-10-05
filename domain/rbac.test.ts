@@ -10,6 +10,7 @@ import {
   permissionFor,
   roleCapabilities,
   scopeFor,
+  seesClientNotes,
   seesIndividualPay,
   type Capability,
   type MemberRole,
@@ -189,5 +190,17 @@ describe("rbac helpers", () => {
         expect(canManageRole(actor, target)).toBe(false);
       }
     }
+  });
+});
+
+describe("seesClientNotes", () => {
+  it("shows notes to every role that reads clients with their contacts", () => {
+    expect(seesClientNotes("owner")).toBe(true);
+    expect(seesClientNotes("manager")).toBe(true);
+    expect(seesClientNotes("master")).toBe(true);
+  });
+
+  it("withholds them from the role that reads clients without contacts", () => {
+    expect(seesClientNotes("analyst")).toBe(false);
   });
 });

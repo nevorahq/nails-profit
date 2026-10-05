@@ -1,13 +1,18 @@
 import { asc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { ClientManager, type ClientRow } from "@/components/client-manager";
+import { ClientReturnPanel, type ReturnPanelRow } from "@/components/client-return-panel";
 import { ToolIcon } from "@/components/icons";
 import { clients, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { BOOKING_LINK_TOKEN } from "@/domain/client-return";
 import { can, scopeFor } from "@/domain/rbac";
+import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
+import { scopedClientSpecialistId } from "@/lib/client-access";
+import { loadReturnList, publishedBookingSlug } from "@/lib/client-return";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -124,6 +129,47 @@ export default async function ClientsPage() {
     });
   });
 
+  /*
+   * «Пора позвать». Only for the roles that can act on it: an Analyst has no
+   * numbers to write to, and a list they can only read is a list of names.
+   * The message is written in the client's own language when the card has
+   * one, the studio's otherwise.
+   */
+  const returning = canWrite
+    ? await withTenant(membership.organizationId, async (tx) => {
+        const [list, slug] = await Promise.all([
+          scopedClientSpecialistId(tx, membership).then((viewerSpecialistId) =>
+            loadReturnList(tx, { timezone: workspace.timezone, now: new Date(), viewerSpecialistId }),
+          ),
+          publishedBookingSlug(tx, {
+            slug: workspace.organizationSlug,
+            bookingAccess: workspace.bookingAccess,
+          }),
+        ]);
+        return { list, slug };
+      })
+    : null;
+
+  const returnRows: ReturnPanelRow[] = (returning?.list ?? []).map((row) => {
+    const clientLocale = (supportedLocales as readonly string[]).includes(row.locale ?? "")
+      ? (row.locale as AppLocale)
+      : locale;
+    const say = getTranslator(clientLocale);
+    const words = { name: row.name, studio: workspace.organizationName };
+    return {
+      clientId: row.clientId,
+      name: row.name,
+      phone: row.phone,
+      channels: row.channels,
+      lastVisitDay: row.due.lastVisitDay,
+      intervalDays: row.due.intervalDays,
+      daysSinceLastVisit: row.due.daysSinceLastVisit,
+      message: returning?.slug
+        ? say("clientReturn.message", { ...words, link: BOOKING_LINK_TOKEN })
+        : say("clientReturn.messageNoLink", words),
+    };
+  });
+
   // Sort by last visit descending. The aggregate query returns dates as strings.
   rows.sort((a, b) => {
     if (!a.lastVisitAt && !b.lastVisitAt) return a.name.localeCompare(b.name);
@@ -163,6 +209,12 @@ export default async function ClientsPage() {
           </a>
         )}
       </header>
+      <ClientReturnPanel
+        rows={returnRows}
+        bookingPath={returning?.slug ? `/book/${returning.slug}` : null}
+        locale={locale}
+        localeTag={localeTag(locale)}
+      />
       <ClientManager
         clients={rows}
         canWrite={canWrite}

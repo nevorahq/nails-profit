@@ -690,6 +690,13 @@ const cases: readonly Case[] = [
   },
   {
     route: "/api/v1/clients/[id]",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "clients read; a Master only their own, an Analyst without contacts or the studio's note",
+    request: async (fixture) => ({ path: `/api/v1/clients/${fixture.clientId}` }),
+  },
+  {
+    route: "/api/v1/clients/[id]",
     method: "PATCH",
     allowed: ["owner", "manager", "master"],
     note: "clients write; an Analyst reads only",
@@ -1036,6 +1043,13 @@ const cases: readonly Case[] = [
     allowed: ALL_ROLES,
     note: "bookings read: what the appointment would earn, costed but not written",
     request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/preview` }),
+  },
+  {
+    route: "/api/v1/bookings/[id]/next-slots",
+    method: "GET",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write: times to book the same sitting again, which an Analyst cannot take",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/next-slots?weeks=3` }),
   },
   {
     route: "/api/v1/bookings/[id]",

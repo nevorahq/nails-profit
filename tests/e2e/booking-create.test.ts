@@ -213,6 +213,30 @@ describe("staff bookings", () => {
     expect(visible.every((booking) => booking.specialist_id === studio.specialistId)).toBe(true);
   });
 
+  test("the next free times on a later day leave out what is booked on it", async () => {
+    // Regression: the alternatives searched forward from the day asked for but
+    // loaded the busy time of that one day, so the following Wednesday was
+    // offered whole, the appointment already standing in it included.
+    expect((await book(studio.owner, request(wednesdayAt(7, "10:00")), key("later-day"))).status).toBe(201);
+    expect((await book(studio.owner, request(wednesdayAt(6, "10:00")), key("asked-day"))).status).toBe(201);
+
+    const response = await book(studio.owner, request(wednesdayAt(6, "10:30")), key("later-overlap"));
+    expect(errorCodeOf(response)).toBe("SLOT_UNAVAILABLE");
+
+    const { alternatives } = (
+      response.body as { error: { details: { alternatives: { date: string; slots: string[] }[] } } }
+    ).error.details;
+    const laterDay = alternatives.find((entry) => entry.date === wednesdayAhead(7));
+    expect(laterDay).toBeDefined();
+
+    const taken = { start: Date.parse(wednesdayAt(7, "10:00")), end: Date.parse(wednesdayAt(7, "11:30")) };
+    const overlapping = laterDay!.slots.filter((slot) => {
+      const start = Date.parse(slot);
+      return start < taken.end && start + 90 * 60_000 > taken.start;
+    });
+    expect(overlapping).toEqual([]);
+  });
+
   test("another organization sees none of these bookings", async () => {
     const other = await createCanonicalStudio("bookings-other@studio.example", "Other Bookings");
     expect(dataOf<unknown[]>(await other.owner.get("/api/v1/bookings"))).toHaveLength(0);
