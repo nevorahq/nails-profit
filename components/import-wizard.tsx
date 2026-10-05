@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { AppLocale } from "@/i18n/messages";
 import { type MessageKey } from "@/i18n/t";
 import { useTranslator } from "@/components/lexicon-provider";
+import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
 /**
  * The five steps of INT-002 as one screen: upload, mapping, validation preview,
@@ -76,10 +77,8 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
    * five catalogue pages use, not a `<details>` whose own `<summary>` would
    * sit visible under the header's own button while closed.
    */
-  // Lazy so it reads the real hash on the client's own first render rather
-  // than in a follow-up effect — `location` does not exist during the
-  // server's render of this "use client" component.
-  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#import-upload");
+  // Open on a full page load too when the address names it — see `useAnchoredPanel`.
+  const [addOpen, setAddOpen] = useAnchoredPanel("import-upload");
   const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,7 +91,7 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
 
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, []);
+  }, [setAddOpen]);
 
   useEffect(() => {
     if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
