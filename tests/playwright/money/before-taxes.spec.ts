@@ -153,4 +153,30 @@ test.describe("«Зарплата» on the expense form", () => {
     expect(expenses).toEqual([]);
     await context.close();
   });
+
+  test("says how to move a row already written, rather than moving it", async ({ baseURL, browser, browserErrors }) => {
+    void browserErrors;
+    const today = new Date().toISOString().slice(0, 10);
+    await studio.owner.post("/api/v1/expenses", { name: "Rent", category: "rent", amount_minor: 30_000, spent_on: today });
+    await studio.owner.post("/api/v1/expenses", { name: "Visits paid", category: "payroll", amount_minor: 20_000, spent_on: today });
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    const page = await context.newPage();
+    await page.goto("/app/expenses");
+    const hint = page.getByRole("note").filter({ hasText: "delete the row and add it again" });
+
+    // A row turned into payroll is told where a salary or a draw goes instead.
+    await page.getByRole("button", { name: "Edit Rent" }).click();
+    const category = page.locator("table").getByLabel("Category");
+    await category.selectOption("payroll");
+    await expect(hint).toBeVisible();
+    await category.selectOption("tools");
+    await expect(hint).toHaveCount(0);
+    await page.locator("table").getByRole("button", { name: "Cancel" }).click();
+
+    // A row that already was payroll is pay for visits, and is left alone.
+    await page.getByRole("button", { name: "Edit Visits paid" }).click();
+    await expect(page.locator("table").getByLabel("Category")).toHaveValue("payroll");
+    await expect(hint).toHaveCount(0);
+    await context.close();
+  });
 });

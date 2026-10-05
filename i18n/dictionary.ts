@@ -856,6 +856,7 @@ const ru = {
   "expenses.payroll.salaryAction": "Задать оклад в «Оплате труда за месяц»",
   "expenses.payroll.salaryDetailedOff": "Оклад задаётся в «Оплате труда за месяц» — этот блок появляется здесь, когда в Настройках включена подробная финансовая аналитика.",
   "expenses.payroll.salaryDetailedOffAction": "Открыть Настройки",
+  "expenses.payroll.editHint": "Если это оплата за визиты — сохраните. Оклад или деньги себе так не записать: удалите строку и добавьте заново — форма спросит, куда.",
   "monthGuide.title": "Шаг выполнен",
   "monthGuide.doneTitle": "Расчёт месяца готов",
   "monthGuide.doneBody":
@@ -2396,6 +2397,7 @@ const ro: Record<MessageKey, Message> = {
   "expenses.payroll.salaryAction": "Stabilește salariul în «Plata muncii pe lună»",
   "expenses.payroll.salaryDetailedOff": "Salariul fix se stabilește în «Plata muncii pe lună» — acest bloc apare aici când în Setări este activată analiza financiară detaliată.",
   "expenses.payroll.salaryDetailedOffAction": "Deschide Setările",
+  "expenses.payroll.editHint": "Dacă este plata pentru vizite — salvați. Un salariu fix sau bani pentru dumneavoastră nu se înregistrează așa: ștergeți rândul și adăugați-l din nou — formularul vă va întreba unde.",
   "monthGuide.title": "Pas finalizat",
   "monthGuide.doneTitle": "Calculul lunii este gata",
   "monthGuide.doneBody":
@@ -3922,6 +3924,7 @@ const en: Record<MessageKey, Message> = {
   "expenses.payroll.salaryAction": "Set the salary in «Labour owed by the month»",
   "expenses.payroll.salaryDetailedOff": "A salary is set in «Labour owed by the month» — that block appears here once detailed financial analytics is on in Settings.",
   "expenses.payroll.salaryDetailedOffAction": "Open Settings",
+  "expenses.payroll.editHint": "If this is pay for visits, save it. A salary or money for yourself cannot be recorded this way: delete the row and add it again — the form will ask where it goes.",
   "monthGuide.title": "Step done",
   "monthGuide.doneTitle": "The month adds up",
   "monthGuide.doneBody":

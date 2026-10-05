@@ -571,6 +571,17 @@ function ExpenseTable({
                         </option>
                       ))}
                     </select>
+                    {/*
+                      The add form asks what a payroll payment is; a row already
+                      written cannot be turned into a salary rule or a draw from
+                      here without being written twice, so the way there is said
+                      instead — delete it, add it again, and answer the question.
+                    */}
+                    {edit.category === "payroll" && expense.category !== "payroll" && (
+                      <span className="muted payroll-edit-hint" role="note">
+                        {t("expenses.payroll.editHint")}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <input
