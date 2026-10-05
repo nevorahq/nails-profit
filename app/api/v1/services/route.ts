@@ -10,6 +10,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
+import { loadMaterialsModes, materialsModeAt } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 
 // partialRecord, not record: `z.record` with an enum key demands every locale,
@@ -25,6 +26,11 @@ const createServiceSchema = z.object({
   price_minor: z.int().min(0).nullable().optional(),
   duration_minutes: z.int().positive().nullable().optional(),
   currency: z.enum(currencies).default("MDL"),
+  /**
+   * What one sitting uses up in materials; null is «not given». Capped well
+   * above any service so a slipped finger cannot cost one at a fortune.
+   */
+  materials_minor: z.int().min(0).max(100_000_000).nullable().optional(),
 });
 
 /** The first specialist, used to resolve a commission when none was requested. */
@@ -53,6 +59,7 @@ export async function GET(request: Request) {
 
   const rows = await withTenant(caller.membership.organizationId, async (tx) => {
     const specialistId = requestedSpecialist ?? (await defaultSpecialistId(tx));
+    const materialsMode = materialsModeAt(await loadMaterialsModes(tx, caller.membership!.organizationId));
     const catalogue = await tx
       .select()
       .from(services)
@@ -61,7 +68,7 @@ export async function GET(request: Request) {
 
     return Promise.all(
       catalogue.map(async (service) => {
-        const costing = await loadServiceCosting(tx, service, { specialistId });
+        const costing = await loadServiceCosting(tx, service, { specialistId, materialsMode });
         return { service, costing };
       }),
     );
@@ -74,10 +81,12 @@ export async function GET(request: Request) {
       price_minor: service.priceMinor,
       duration_minutes: service.durationMinutes,
       currency: service.currency,
+      materials_minor: service.materialsMinor,
       costing:
         costing.status === "complete"
           ? {
               status: "complete",
+              materials_minor: costing.costing.materialsMinor,
               contribution_margin_minor: costing.costing.contributionMarginMinor,
               margin_basis_points: costing.costing.marginBasisPoints,
               profit_per_hour_minor: costing.costing.profitPerHourMinor,
@@ -119,6 +128,7 @@ export async function POST(request: Request) {
         priceMinor: parsed.data.price_minor ?? null,
         durationMinutes: parsed.data.duration_minutes ?? null,
         currency: parsed.data.currency,
+        materialsMinor: parsed.data.materials_minor ?? null,
         createdBy: actor.userId,
         updatedBy: actor.userId,
       })
@@ -130,7 +140,11 @@ export async function POST(request: Request) {
       eventType: "service.created",
       entityType: "service",
       entityId: created.id,
-      after: { price_minor: created.priceMinor, duration_minutes: created.durationMinutes },
+      after: {
+        price_minor: created.priceMinor,
+        duration_minutes: created.durationMinutes,
+        materials_minor: created.materialsMinor,
+      },
       requestId: id,
     });
 

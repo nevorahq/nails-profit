@@ -10,6 +10,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
+import { loadMaterialsModes, materialsModeAt } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 
 const patchServiceSchema = z.object({
@@ -18,6 +19,8 @@ const patchServiceSchema = z.object({
   price_minor: z.int().min(0).nullable().optional(),
   duration_minutes: z.int().positive().nullable().optional(),
   currency: z.enum(currencies).optional(),
+  /** See the collection route; null clears it back to «not given». */
+  materials_minor: z.int().min(0).max(100_000_000).nullable().optional(),
 });
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -58,7 +61,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       )[0]?.id ??
       null;
 
-    return { service, costing: await loadServiceCosting(tx, service, { specialistId, addOnIds }) };
+    const materialsMode = materialsModeAt(await loadMaterialsModes(tx, caller.membership!.organizationId));
+    return {
+      service,
+      costing: await loadServiceCosting(tx, service, { specialistId, addOnIds, materialsMode }),
+    };
   });
 
   if (!result) {
@@ -109,6 +116,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           ? { durationMinutes: parsed.data.duration_minutes }
           : {}),
         ...(parsed.data.currency ? { currency: parsed.data.currency } : {}),
+        ...(parsed.data.materials_minor !== undefined ? { materialsMinor: parsed.data.materials_minor } : {}),
         updatedBy: actor.userId,
         updatedAt: new Date(),
         version: sql`${services.version} + 1`,
@@ -124,8 +132,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       eventType: "service.updated",
       entityType: "service",
       entityId: service.id,
-      before: { price_minor: existing.priceMinor, duration_minutes: existing.durationMinutes },
-      after: { price_minor: service.priceMinor, duration_minutes: service.durationMinutes },
+      before: {
+        price_minor: existing.priceMinor,
+        duration_minutes: existing.durationMinutes,
+        materials_minor: existing.materialsMinor,
+      },
+      after: {
+        price_minor: service.priceMinor,
+        duration_minutes: service.durationMinutes,
+        materials_minor: service.materialsMinor,
+      },
       requestId: requestIdentifier,
     });
 
@@ -141,7 +157,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           .limit(1)
       )[0]?.id ?? null;
 
-    return { service, costing: await loadServiceCosting(tx, service, { specialistId }) };
+    const materialsMode = materialsModeAt(await loadMaterialsModes(tx, actor.organizationId));
+    return { service, costing: await loadServiceCosting(tx, service, { specialistId, materialsMode }) };
   });
 
   if (!updated) {
@@ -214,6 +231,7 @@ function serialize(
     price_minor: service.priceMinor,
     duration_minutes: service.durationMinutes,
     currency: service.currency,
+    materials_minor: service.materialsMinor,
     version: service.version,
     costing:
       costing.status === "complete"
@@ -223,6 +241,7 @@ function serialize(
             currency: costing.currency,
             price_minor: costing.costing.priceMinor,
             commission_minor: costing.costing.commissionMinor,
+            materials_minor: costing.costing.materialsMinor,
             contribution_margin_minor: costing.costing.contributionMarginMinor,
             margin_basis_points: costing.costing.marginBasisPoints,
             profit_per_hour_minor: costing.costing.profitPerHourMinor,

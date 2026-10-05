@@ -275,6 +275,17 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/organizations/setup", body: { services: [] } }),
   },
   {
+    route: "/api/v1/organizations/materials-mode",
+    method: "POST",
+    allowed: ["owner"],
+    note: "organization_settings write; it decides what the month's profit subtracts",
+    // Far ahead, so a pass leaves every costing in this suite as it was.
+    request: async () => ({
+      path: "/api/v1/organizations/materials-mode",
+      body: { mode: "purchases", effective_month: "2099-01" },
+    }),
+  },
+  {
     route: "/api/v1/organizations/logo",
     method: "GET",
     allowed: ALL_ROLES,
@@ -531,6 +542,16 @@ const cases: readonly Case[] = [
     allowed: CATALOGUE_MANAGERS,
     note: "services write",
     request: async () => ({ path: "/api/v1/add-ons", body: { name: { ru: "Опция" } } }),
+  },
+  {
+    route: "/api/v1/add-ons/[id]",
+    method: "PATCH",
+    allowed: CATALOGUE_MANAGERS,
+    note: "services write; an add-on's materials cost every master's visit with it",
+    request: async (fixture) => ({
+      path: `/api/v1/add-ons/${fixture.addOnId}`,
+      body: { materials_minor: 1_000 },
+    }),
   },
   {
     route: "/api/v1/specialists",

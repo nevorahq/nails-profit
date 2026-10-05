@@ -3,6 +3,7 @@ import { mayActOnSpecialist } from "@/lib/booking-access";
 import { requireCalendarCaller } from "@/lib/booking-http";
 import { bookingLinesOf, loadBooking } from "@/lib/booking-service";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
+import { loadMaterialsModes, materialsModeAt } from "@/lib/materials-mode";
 import { bookingServicesOf, buildVisitDraft, calculateVisitDraftProfit } from "@/lib/visit-service";
 
 /**
@@ -46,6 +47,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       at: new Date(),
       // Costed at the prices the booking quoted, as closing it will be.
       quoted: booked.quoted,
+      // And with the materials closing it now would snapshot.
+      materialsMode: materialsModeAt(await loadMaterialsModes(tx, actor.organizationId)),
     });
     if (!draft) return unknown;
 

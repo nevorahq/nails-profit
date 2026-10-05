@@ -13,7 +13,8 @@ import { commissionOfLines, type CommissionTerms } from "@/domain/visit-commissi
  * lines charged, and its commission is what its own rule paid on them. What a
  * line does not say is shared out: VAT, turnover tax and the acquirer's fee in
  * proportion to revenue, payroll tax in proportion to commission, the minutes
- * in proportion to each service's planned time. Every share is a
+ * in proportion to each service's planned time. Materials are a line's own
+ * too, and go to the service whose lines used them up. Every share is a
  * largest-remainder split of the snapshot's own figure, so the parts add up to
  * the visit to the unit and the ranking's total is the dashboard's.
  */
@@ -27,6 +28,8 @@ export type SplitLine = Readonly<{
   commissionable: boolean;
   commissionTerms: CommissionTerms | null;
   durationMinutes: number;
+  /** As snapshotted on the line; null or absent is none. */
+  materialsMinor?: number | null;
 }>;
 
 /** The snapshot's figures, as the dashboard reads them; null terms count as zero. */
@@ -38,6 +41,8 @@ export type SplitFigures = Readonly<{
   payrollTaxMinor: number;
   paymentCommissionMinor: number;
   durationMinutes: number;
+  /** Absent on a snapshot written before materials came back: none. */
+  materialsMinor?: number;
 }>;
 
 export type ServicePart = Readonly<{
@@ -107,6 +112,13 @@ export function splitVisitByService(
     ),
   );
 
+  const materialsWeights = serviceIds.map((serviceId) =>
+    sumBy(
+      lines.filter((line) => ownerOf(line) === serviceId),
+      (line) => line.materialsMinor ?? 0,
+    ),
+  );
+
   const revenue = allocateProportionally(figures.revenueMinor, revenueWeights);
   const commissionParts = allocateProportionally(figures.commissionMinor, commissionWeights);
   const vat = allocateProportionally(figures.vatMinor, revenue);
@@ -114,13 +126,20 @@ export function splitVisitByService(
   const payment = allocateProportionally(figures.paymentCommissionMinor, revenue);
   const payroll = allocateProportionally(figures.payrollTaxMinor, commissionParts);
   const minutes = allocateProportionally(figures.durationMinutes, durationWeights);
+  const materials = allocateProportionally(figures.materialsMinor ?? 0, materialsWeights);
 
   return serviceIds.map((serviceId, index) => ({
     serviceId,
     revenueMinor: revenue[index],
     commissionMinor: commissionParts[index],
     contributionMarginMinor:
-      revenue[index] - vat[index] - commissionParts[index] - payroll[index] - payment[index] - turnover[index],
+      revenue[index] -
+      vat[index] -
+      commissionParts[index] -
+      payroll[index] -
+      payment[index] -
+      turnover[index] -
+      materials[index],
     durationMinutes: minutes[index],
   }));
 }

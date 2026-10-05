@@ -4,12 +4,15 @@ import { expenses, laborCostRules, organizations, ownerDraws } from "@/db/schema
 import type { TenantTransaction } from "@/db/tenant";
 import { buildCapacityView, type CapacityView } from "@/domain/capacity";
 import { buildCashFlow, type CashFlow } from "@/domain/cash-flow";
+import { isMaterialCategory } from "@/domain/expense-classes";
 import { expensesForMonth, type PeriodExpenseRow } from "@/domain/expense-periods";
 import { selectLaborRules } from "@/domain/labor-cost";
+import { materialsModeFor, type MaterialsCostingMode } from "@/domain/materials-mode";
 import { buildPeriodPL, type PeriodPL } from "@/domain/period-pl";
 import type { AppLocale } from "@/i18n/messages";
 import { loadMonthRota } from "@/lib/capacity";
 import { loadDashboard } from "@/lib/dashboard";
+import { loadMaterialsModes } from "@/lib/materials-mode";
 
 /**
  * The month's profit and loss, read from the two places it lives: the financial
@@ -44,6 +47,18 @@ export type PeriodReport = Readonly<{
   /** Echoed back so the report can name the reserve it just subtracted. */
   withdrawalReserveMinor: number;
   masterBreakdown: readonly MasterPeriodBreakdown[];
+  /**
+   * How the month counted its materials, and — counted per service — the two
+   * figures that should roughly agree: what the visits took off their margins
+   * by the amounts on services, and what was bought. Only the first is in the
+   * profit; the second is cash only that month, so a gel pot is subtracted
+   * once.
+   */
+  materials: Readonly<{
+    mode: MaterialsCostingMode;
+    perServiceMinor: number;
+    purchasedMinor: number;
+  }>;
 }>;
 
 export type MasterPeriodBreakdown = Readonly<{
@@ -209,10 +224,17 @@ export async function loadPeriodPL(
       recurringTo: row.recurringTo,
     }));
 
+  // The month's own mode, never today's: a month already reported keeps it.
+  const materialsMode = materialsModeFor(
+    (await loadMaterialsModes(tx, options.organizationId)).periods,
+    options.month,
+  );
+  const monthExpenses = expensesForMonth(inCurrency, options.month, materialsMode);
+
   const pl = buildPeriodPL({
     month: options.month,
     metrics: dashboard.metrics,
-    expenses: expensesForMonth(inCurrency, options.month),
+    expenses: monthExpenses,
     laborRules: selectLaborRules(laborRows, options.month),
     withdrawalReserveMinor: organization?.withdrawalReserveMinor ?? 0,
   });
@@ -256,7 +278,7 @@ export async function loadPeriodPL(
       paymentCommissionMinor: pl.paymentCommissionMinor,
       visitLabourMinor: pl.labourCostMinor,
       salariedLabourMinor: pl.salariedLabourMinor,
-      expenses: expensesForMonth(inCurrency, options.month),
+      expenses: monthExpenses,
       ownerDrawsMinor,
       tipsMinor: dashboard.metrics.tipsMinor,
       // A principal's tips stay on the account; a hired master's are handed on.
@@ -267,5 +289,12 @@ export async function loadPeriodPL(
     excludedRows: rows.length - inCurrency.length,
     withdrawalReserveMinor: organization?.withdrawalReserveMinor ?? 0,
     masterBreakdown: buildMasterBreakdown(dashboard.rows),
+    materials: {
+      mode: materialsMode,
+      perServiceMinor: dashboard.metrics.materialsMinor,
+      purchasedMinor: monthExpenses
+        .filter((row) => isMaterialCategory(row.category))
+        .reduce((total, row) => total + row.amountMinor, 0),
+    },
   };
 }

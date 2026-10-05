@@ -21,6 +21,7 @@ import {
   type TaxRates,
 } from "@/domain/costing";
 import { hasAnyTax, selectTaxRates } from "@/domain/tax-rules";
+import type { MaterialsCostingMode } from "@/domain/materials-mode";
 import type { Currency } from "@/domain/money";
 import type { MemberRole } from "@/domain/rbac";
 import { calculateVisitProfit, type VisitProfit } from "@/domain/visit-profit";
@@ -29,6 +30,7 @@ import { applyPaidAmount, spreadDiscount, surchargeByService } from "@/domain/vi
 import { supportedLocales } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { recordAuditEvent } from "@/lib/audit";
+import { loadMaterialsModes, materialsModeAt } from "@/lib/materials-mode";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 
 /**
@@ -69,6 +71,12 @@ export type VisitDraftLine = Readonly<{
   rule: LineRule | null;
   /** Whether the rule's percentage applies to this line; see `recordCompletedVisit`. */
   commissionable: boolean;
+  /**
+   * What the line uses up, copied from the catalogue in a month counted per
+   * service; null otherwise, and always on a surcharge — what the client paid
+   * on top bought no gel.
+   */
+  materialsMinor: number | null;
 }>;
 
 export type VisitDraft = Readonly<{
@@ -138,6 +146,7 @@ export function calculateVisitDraftProfit(draft: VisitDraft): VisitProfit | null
       discountMinor: line.discountMinor,
       commissionable: line.commissionable,
       commissionTerms: line.rule ? termsOf(line.rule) : null,
+      materialsMinor: line.materialsMinor,
     })),
     commission: toCommission({
       id: "draft",
@@ -253,6 +262,11 @@ export async function buildVisitDraft(
     quoted?: QuotedPrices;
     /** What the client actually paid. Undefined means the price list (or the quote). */
     paidMinor?: number;
+    /**
+     * How the month of `at` counts materials (`lib/materials-mode.ts`).
+     * Undefined is `purchases`: no line carries any, as before.
+     */
+    materialsMode?: MaterialsCostingMode;
   },
 ): Promise<VisitDraft | null> {
   const items = itemsOf(input);
@@ -331,15 +345,18 @@ export async function buildVisitDraft(
       : null;
   };
 
+  const perService = input.materialsMode === "per_service";
   const lineOf = (
     serviceId: string,
     line: Pick<VisitDraftLine, "kind" | "addOnId" | "nameSnapshot" | "priceMinor" | "durationMinutes">,
+    materialsMinor: number | null = null,
   ): VisitDraftLine => ({
     ...line,
     serviceId,
     discountMinor: 0,
     rule: ruleOf(serviceId),
     commissionable: covers(serviceId),
+    materialsMinor: perService ? materialsMinor : null,
   });
 
   const discounted: VisitDraftLine[] = [];
@@ -355,7 +372,7 @@ export async function buildVisitDraft(
         nameSnapshot: (service.name ?? {}) as Record<string, string>,
         priceMinor: quote?.priceMinor ?? service.priceMinor ?? 0,
         durationMinutes: service.durationMinutes ?? 0,
-      }),
+      }, service.materialsMinor),
       ...chosen.map((addOn) =>
         lineOf(service.id, {
           kind: "add_on",
@@ -363,7 +380,7 @@ export async function buildVisitDraft(
           nameSnapshot: (addOn.name ?? {}) as Record<string, string>,
           priceMinor: quote?.addOnMinor[addOn.id] ?? Math.max(0, addOn.priceDeltaMinor),
           durationMinutes: addOn.durationDeltaMinutes,
-        }),
+        }, addOn.materialsMinor),
       ),
     ];
 
@@ -561,6 +578,10 @@ export async function recordCompletedVisit(
     paymentMethodId: input.paymentMethodId,
     quoted: input.quoted,
     paidMinor: input.paidMinor,
+    // The month the visit closed in, in the studio's zone: the one its owner
+    // reads it in on the report, and the one whose purchases it must not be
+    // charged on top of.
+    materialsMode: materialsModeAt(await loadMaterialsModes(tx, input.organizationId), input.completedAt),
   });
 
   if (!draft) return { ok: false, failure: "service_not_found" };
@@ -638,6 +659,7 @@ export async function recordCompletedVisit(
       commissionFixedAmountMinor: line.rule!.fixedAmountMinor,
       commissionBase: line.rule!.base,
       durationMinutes: line.durationMinutes,
+      materialsMinor: line.materialsMinor,
       createdBy: input.actor.userId,
       updatedBy: input.actor.userId,
     })),
@@ -756,6 +778,9 @@ export async function recalculateVisitProfit(
               base: line.commissionBase,
             })
           : null,
+      // The snapshot, never the catalogue: an amount edited on the service
+      // later must not re-cost a visit already reported.
+      materialsMinor: line.materialsMinor,
     })),
     /*
      * Read off the visit, never resolved afresh. A studio that signs a cheaper
@@ -845,6 +870,7 @@ export async function writeFinancialSnapshot(
             turnoverTaxMinor: profit.costing.turnoverTaxMinor,
             paymentCommissionMinor: profit.costing.paymentCommissionMinor,
             payrollTaxMinor: profit.costing.payrollTaxMinor,
+            materialsMinor: profit.costing.materialsMinor,
             contributionMarginMinor: profit.costing.contributionMarginMinor,
             marginBasisPoints: profit.costing.marginBasisPoints,
             profitPerHourMinor: profit.costing.profitPerHourMinor,

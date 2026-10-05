@@ -1,5 +1,6 @@
 import type { ExpenseCategory } from "@/domain/expense-categories";
 import { expenseClassOf, type ExpenseClass } from "@/domain/expense-classes";
+import { DEFAULT_MATERIALS_MODE, type MaterialsCostingMode } from "@/domain/materials-mode";
 
 /**
  * Turning the ledger into "what this month cost".
@@ -56,6 +57,8 @@ function monthOf(day: string): string {
 export function expensesForMonth(
   rows: readonly PeriodExpenseRow[],
   month: string,
+  /** How `month` counted its materials; see `expenseClassOf`. */
+  materialsMode: MaterialsCostingMode = DEFAULT_MATERIALS_MODE,
 ): readonly ResolvedExpense[] {
   return rows
     .filter((row) => {
@@ -67,7 +70,7 @@ export function expensesForMonth(
       if (month < monthOf(row.recurringFrom)) return false;
       return row.recurringTo === null || month <= monthOf(row.recurringTo);
     })
-    .map((row) => ({ ...row, month, class: expenseClassOf[row.category] }));
+    .map((row) => ({ ...row, month, class: expenseClassOf(row.category, materialsMode) }));
 }
 
 export function totalByClass(

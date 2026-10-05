@@ -57,6 +57,7 @@ export async function loadDashboard(
       turnoverTaxMinor: financialSnapshots.turnoverTaxMinor,
       payrollTaxMinor: financialSnapshots.payrollTaxMinor,
       paymentCommissionMinor: financialSnapshots.paymentCommissionMinor,
+      materialsMinor: financialSnapshots.materialsMinor,
       durationMinutes: financialSnapshots.durationMinutes,
       // From the visit, not the snapshot: an incomplete costing carries no
       // duration, and capacity is about the chair rather than the margin.
@@ -101,6 +102,7 @@ export async function loadDashboard(
       commissionFixedAmountMinor: visitLines.commissionFixedAmountMinor,
       commissionBase: visitLines.commissionBase,
       durationMinutes: visitLines.durationMinutes,
+      materialsMinor: visitLines.materialsMinor,
     })
     .from(visitLines)
     .innerJoin(visits, eq(visits.id, visitLines.visitId))
@@ -168,6 +170,7 @@ export async function loadDashboard(
                 payrollTaxMinor: snapshot.payrollTaxMinor ?? 0,
                 paymentCommissionMinor: snapshot.paymentCommissionMinor ?? 0,
                 durationMinutes: snapshot.durationMinutes ?? 0,
+                materialsMinor: snapshot.materialsMinor ?? 0,
               },
               own.map(
                 (line): SplitLine => ({
@@ -178,6 +181,7 @@ export async function loadDashboard(
                   commissionable: line.commissionable,
                   commissionTerms: termsOf(line),
                   durationMinutes: line.durationMinutes,
+                  materialsMinor: line.materialsMinor,
                 }),
               ),
               {
@@ -215,6 +219,7 @@ export async function loadDashboard(
         turnoverTaxMinor: snapshot.turnoverTaxMinor,
         payrollTaxMinor: snapshot.payrollTaxMinor,
         paymentCommissionMinor: snapshot.paymentCommissionMinor,
+        materialsMinor: snapshot.materialsMinor,
         durationMinutes: snapshot.durationMinutes,
         workedMinutes: snapshot.actualDurationMinutes ?? snapshot.plannedDurationMinutes,
         incompleteReasons: snapshot.incompleteReasons ?? [],

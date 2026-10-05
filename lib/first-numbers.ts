@@ -5,6 +5,7 @@ import type { TenantTransaction } from "@/db/tenant";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 import { loadOnboarding, type OnboardingProgress } from "@/lib/onboarding";
+import { loadMaterialsModes, materialsModeAt } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 
 /**
@@ -54,6 +55,8 @@ export type StartScreen =
 export async function loadStartScreen(
   tx: TenantTransaction,
   locale: AppLocale,
+  /** For the materials mode; absent costs as a studio counting by purchases. */
+  organizationId?: string,
 ): Promise<StartScreen> {
   /*
    * One count, paid by every studio that opens the dashboard, and the only
@@ -86,9 +89,16 @@ export async function loadStartScreen(
     .where(isNull(services.archivedAt))
     .orderBy(asc(services.createdAt));
 
+  const materialsMode = organizationId
+    ? materialsModeAt(await loadMaterialsModes(tx, organizationId))
+    : undefined;
+
   const rows: FirstNumberRow[] = [];
   for (const service of catalogue) {
-    const costed = await loadServiceCosting(tx, service, { specialistId: specialist?.id ?? null });
+    const costed = await loadServiceCosting(tx, service, {
+      specialistId: specialist?.id ?? null,
+      materialsMode,
+    });
     /*
      * An incomplete service is left out rather than shown with dashes. The
      * checklist above is what reports a gap in the catalogue, in the one place

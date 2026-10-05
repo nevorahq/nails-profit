@@ -130,3 +130,38 @@ describe("splitVisitByService", () => {
     expect(splitVisitByService(figures, [line({ serviceId: null })], percent)).toBeNull();
   });
 });
+
+describe("splitVisitByService with materials", () => {
+  const lines = [
+    line({ materialsMinor: 3_500 }),
+    line({ serviceId: "pedicure", priceMinor: 40_000, commissionTerms: flat, durationMinutes: 60, materialsMinor: 1_200 }),
+  ];
+  const figures: SplitFigures = {
+    revenueMinor: 100_000,
+    commissionMinor: 39_000,
+    vatMinor: 0,
+    turnoverTaxMinor: 0,
+    payrollTaxMinor: 0,
+    paymentCommissionMinor: 0,
+    durationMinutes: 150,
+    materialsMinor: 4_700,
+  };
+
+  it("gives each service the materials of its own lines", () => {
+    const parts = splitVisitByService(figures, lines, percent)!;
+    // 60 000 − 24 000 − 3 500 and 40 000 − 15 000 − 1 200.
+    expect(parts.map((part) => part.contributionMarginMinor)).toEqual([32_500, 23_800]);
+  });
+
+  it("still adds up to the visit's margin", () => {
+    const parts = splitVisitByService(figures, lines, percent)!;
+    expect(sum(parts.map((part) => part.contributionMarginMinor))).toBe(100_000 - 39_000 - 4_700);
+  });
+
+  it("splits nothing for materials on a snapshot written before them", () => {
+    const { materialsMinor: _materials, ...legacy } = figures;
+    void _materials;
+    const parts = splitVisitByService(legacy, lines.map((entry) => ({ ...entry, materialsMinor: null })), percent)!;
+    expect(sum(parts.map((part) => part.contributionMarginMinor))).toBe(100_000 - 39_000);
+  });
+});

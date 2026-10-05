@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
@@ -17,6 +17,8 @@ export type ServiceDetailData = {
   price_minor: number | null;
   duration_minutes: number | null;
   currency: string | null;
+  /** Null is «not given»; see `materialsShown`. */
+  materials_minor?: number | null;
   costing:
     | {
         status: "complete";
@@ -26,6 +28,8 @@ export type ServiceDetailData = {
         /** With the previewed add-ons, so the formula shown matches the figures. */
         duration_minutes: number;
         commission_minor: number;
+        /** Zero in a month counted by purchases, whatever the field holds. */
+        materials_minor?: number;
         contribution_margin_minor: number;
         margin_basis_points: number | null;
         profit_per_hour_minor: number;
@@ -52,7 +56,17 @@ export type ServiceAddOn = {
   displayName: string;
   price_delta_minor: number;
   duration_delta_minutes: number;
+  materials_minor?: number | null;
 };
+
+/** «12,50» or «12.50» as minor units; empty is null — not given, not zero. */
+function materialsMinorOf(typed: FormDataEntryValue | null): number | null {
+  const value = String(typed ?? "").trim().replace(",", ".");
+  return value === "" ? null : Math.round(Number(value) * 100);
+}
+
+const materialsValue = (minor: number | null | undefined) =>
+  minor === null || minor === undefined ? "" : minor / 100;
 
 /** Signed deltas read better with an explicit sign than as a bare number. */
 function signed(value: string, isNegative: boolean) {
@@ -66,6 +80,8 @@ export function ServiceDetail({
   linkedAddOnIds,
   selectedAddOnIds,
   fullyLoaded,
+  materialsShown = false,
+  materialsHintMinor = null,
   currency,
   canManage,
   locale,
@@ -77,6 +93,17 @@ export function ServiceDetail({
   linkedAddOnIds: string[];
   selectedAddOnIds: string[];
   fullyLoaded: FullyLoadedView | null;
+  /**
+   * Whether the studio counts materials per service now or from a month it
+   * has already chosen (`lib/materials-mode.ts`). Counting by purchases, the
+   * fields would hold a figure nothing reads.
+   */
+  materialsShown?: boolean;
+  /**
+   * «По вашим закупкам ≈ X на визит» — `lib/materials-hint.ts` — or null when
+   * there is not enough to say, or the reader may not see purchases.
+   */
+  materialsHintMinor?: number | null;
   /** The organization's own, which the price delta is entered in. */
   currency: string;
   /** Writing to the shared catalogue, which a master may not do. */
@@ -112,6 +139,8 @@ export function ServiceDetail({
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Uncontrolled like the rest of the form; the hint only fills it in.
+  const materialsInput = useRef<HTMLInputElement>(null);
   /*
    * Contribution margin is the default and stays the default. It is the figure
    * a price decision is made on — the one that answers "is this service worth
@@ -162,9 +191,42 @@ export function ServiceDetail({
       body: JSON.stringify({
         price_minor: price === "" ? null : Math.round(Number(price) * 100),
         duration_minutes: duration === "" ? null : Number(duration),
+        // Only while the field is on screen: a studio counting by purchases
+        // must not clear amounts it may switch back to.
+        ...(materialsShown ? { materials_minor: materialsMinorOf(data.get("materials")) } : {}),
       }),
     });
     await finish(response);
+  }
+
+  /**
+   * The materials of the add-ons offered here, one request per amount that
+   * changed. An add-on's amount is the studio's, not this service's: the same
+   * «снятие» costs the same gel with every service it goes with.
+   */
+  async function saveAddOnMaterials(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const data = new FormData(event.currentTarget);
+    const changed = addOns.filter(
+      (addOn) =>
+        linkedAddOnIds.includes(addOn.id) &&
+        materialsMinorOf(data.get(`materials-${addOn.id}`)) !== (addOn.materials_minor ?? null),
+    );
+    for (const addOn of changed) {
+      const response = await fetch(`/api/v1/add-ons/${addOn.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ materials_minor: materialsMinorOf(data.get(`materials-${addOn.id}`)) }),
+      });
+      if (!response.ok) {
+        await finish(response);
+        return;
+      }
+    }
+    setPending(false);
+    router.refresh();
   }
 
   /**
@@ -198,6 +260,7 @@ export function ServiceDetail({
         name: { [locale]: data.get("name") },
         price_delta_minor: price === "" ? 0 : Math.round(Number(price) * 100),
         duration_delta_minutes: duration === "" ? 0 : Number(duration),
+        ...(materialsShown ? { materials_minor: materialsMinorOf(data.get("materials")) } : {}),
       }),
     });
 
@@ -296,10 +359,40 @@ export function ServiceDetail({
               defaultValue={service.duration_minutes ?? ""}
             />
           </label>
+          {materialsShown && (
+            <label>
+              {t("services.materials", { currency })}
+              <input
+                ref={materialsInput}
+                name="materials"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="35"
+                defaultValue={materialsValue(service.materials_minor)}
+              />
+            </label>
+          )}
           <button className="primary-button" type="submit" disabled={pending}>
             {t("common.save")}
           </button>
         </form>
+        {materialsShown && <p className="muted">{t("services.materialsHint")}</p>}
+        {materialsShown && materialsHintMinor !== null && (
+          <p className="materials-suggestion">
+            {t("services.materialsFromPurchases", { amount: formatMoneyMinor(materialsHintMinor, currency) })}{" "}
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => {
+                if (materialsInput.current) materialsInput.current.value = String(materialsHintMinor / 100);
+                materialsInput.current?.focus();
+              }}
+            >
+              {t("services.materialsUseHint")}
+            </button>
+          </p>
+        )}
       </section>
 
       {(canManage || addOns.length > 0) && (
@@ -320,6 +413,12 @@ export function ServiceDetail({
                 {t("addOns.timeDelta")}
                 <input name="duration" type="number" step="1" placeholder="20" />
               </label>
+              {materialsShown && (
+                <label>
+                  {t("addOns.materials", { currency })}
+                  <input name="materials" type="number" step="0.01" min="0" placeholder="10" />
+                </label>
+              )}
               <button className="primary-button" type="submit" disabled={pending}>
                 {pending ? t("common.saving") : t("common.add")}
               </button>
@@ -351,6 +450,31 @@ export function ServiceDetail({
               </fieldset>
               <button className="primary-button" type="submit" disabled={pending}>
                 {t("services.saveList")}
+              </button>
+            </form>
+          )}
+
+          {canManage && materialsShown && linkedAddOnIds.length > 0 && (
+            <form className="inline-form" onSubmit={saveAddOnMaterials}>
+              <fieldset className="checkbox-set">
+                <legend>{t("addOns.materialsTitle")}</legend>
+                {addOns
+                  .filter((addOn) => linkedAddOnIds.includes(addOn.id))
+                  .map((addOn) => (
+                    <label key={addOn.id}>
+                      {addOn.displayName}, {currency}
+                      <input
+                        name={`materials-${addOn.id}`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={materialsValue(addOn.materials_minor)}
+                      />
+                    </label>
+                  ))}
+              </fieldset>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {t("common.save")}
               </button>
             </form>
           )}
@@ -419,6 +543,12 @@ export function ServiceDetail({
             <div className="metric-grid">
               <Metric label={t("services.servicePrice")} value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
               <Metric label={t(businessLabel.serviceCommission[businessType])} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
+              {(service.costing.materials_minor ?? 0) > 0 && (
+                <Metric
+                  label={t("services.materialsLine")}
+                  value={`− ${formatMoneyMinor(service.costing.materials_minor!, service.costing.currency)}`}
+                />
+              )}
               {fixedShareMinor !== null && (
                 <Metric
                   label={t("services.fixedShare")}
@@ -485,7 +615,14 @@ export function ServiceDetail({
               <summary>{t("services.howCounted")}</summary>
               <p>
                 {formatMoneyMinor(service.costing.price_minor, service.costing.currency)} −{" "}
-                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t(businessLabel.serviceCommissionWord[businessType])}) ={" "}
+                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t(businessLabel.serviceCommissionWord[businessType])}){" "}
+                {(service.costing.materials_minor ?? 0) > 0 && (
+                  <>
+                    − {formatMoneyMinor(service.costing.materials_minor!, service.costing.currency)} (
+                    {t("services.materialsLine").toLocaleLowerCase(localeTag(locale))}){" "}
+                  </>
+                )}
+                ={" "}
                 {formatMoneyMinor(service.costing.contribution_margin_minor, service.costing.currency)}
               </p>
               {fullyLoaded && fixedShareMinor !== null && (

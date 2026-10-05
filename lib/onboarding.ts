@@ -7,9 +7,11 @@ import {
   services,
   specialists,
   visits,
+  materialsCostingPeriods,
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { expensesForMonth } from "@/domain/expense-periods";
+import { materialsModeFor } from "@/domain/materials-mode";
 import { loadMonthRota } from "@/lib/capacity";
 
 /**
@@ -314,9 +316,15 @@ export async function loadMonthSetup(
     .from(expenses)
     .where(isNull(expenses.archivedAt));
 
+  // The month's materials mode, as the report reads it: counted per service,
+  // a purchase of gel is not the month's overhead.
+  const periods = await tx
+    .select({ mode: materialsCostingPeriods.mode, effectiveFrom: materialsCostingPeriods.effectiveFrom })
+    .from(materialsCostingPeriods);
   const thisMonth = expensesForMonth(
     ledger.filter((row) => row.currency === options.currency),
     options.month,
+    materialsModeFor(periods, options.month),
   );
   const hasOverhead = thisMonth.some((row) => row.class === "overhead");
 

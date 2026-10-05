@@ -290,3 +290,46 @@ describe("calculateVisitProfit with a tip", () => {
     expect(() => calculateVisitProfit(visit({ tipMinor: 0.5 }))).toThrow(RangeError);
   });
 });
+
+describe("calculateVisitProfit with materials", () => {
+  const twoLines: VisitProfitInput = {
+    currency: "MDL",
+    lines: [
+      { kind: "service", priceMinor: 60_000, discountMinor: 0, materialsMinor: 3_500 },
+      { kind: "add_on", priceMinor: 10_000, discountMinor: 0, materialsMinor: 1_000 },
+    ],
+    commission: { type: "percentage", basisPoints: 4_000 },
+    plannedDurationMinutes: 90,
+    actualDurationMinutes: null,
+  };
+
+  it("sums what every line used up, add-ons included", () => {
+    const profit = calculateVisitProfit(twoLines);
+    if (profit.status !== "complete") throw new Error("expected a complete costing");
+    expect(profit.costing.materialsMinor).toBe(4_500);
+    // 70 000 − 40% − 4 500.
+    expect(profit.costing.contributionMarginMinor).toBe(37_500);
+  });
+
+  it("takes nothing for a line without materials, and nothing for a surcharge", () => {
+    const profit = calculateVisitProfit({
+      ...twoLines,
+      lines: [
+        { kind: "service", priceMinor: 60_000, discountMinor: 0, materialsMinor: null },
+        { kind: "surcharge", priceMinor: 5_000, discountMinor: 0 },
+      ],
+    });
+    if (profit.status !== "complete") throw new Error("expected a complete costing");
+    expect(profit.costing.materialsMinor).toBe(0);
+  });
+
+  it("keeps the materials of a line discounted or refunded: they were used either way", () => {
+    const profit = calculateVisitProfit({
+      ...twoLines,
+      lines: [{ kind: "service", priceMinor: 60_000, discountMinor: 10_000, refundMinor: 5_000, materialsMinor: 3_500 }],
+    });
+    if (profit.status !== "complete") throw new Error("expected a complete costing");
+    expect(profit.revenueMinor).toBe(45_000);
+    expect(profit.costing.materialsMinor).toBe(3_500);
+  });
+});

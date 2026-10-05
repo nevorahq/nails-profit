@@ -611,6 +611,26 @@ export default async function MonthReportPage({
           )}
 
           {/*
+            Counted per service, the month has two figures for its materials
+            that ought to be close and are not the same thing: what the visits
+            took off their margins by the amounts on services, and what was
+            bought. Printed side by side so a drift between them — an amount
+            set too low, a crate bought ahead — is visible, and said once which
+            of the two is in the profit.
+          */}
+          {report.materials.mode === "per_service" && (
+            <section className="panel" id="materials-reconciliation">
+              <p>
+                {t("pl.materialsReconciliation", {
+                  used: money(report.materials.perServiceMinor),
+                  bought: money(report.materials.purchasedMinor),
+                })}
+              </p>
+              <p className="muted">{t("pl.materialsReconciliationHint")}</p>
+            </section>
+          )}
+
+          {/*
             The half of the ledger that is deliberately not in the profit above.
             Printed rather than dropped: money did leave the account, and a
             report that showed neither the sum nor the reason would look like it

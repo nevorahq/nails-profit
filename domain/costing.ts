@@ -40,8 +40,15 @@ export type Commission =
  * with the visit. A tip is not revenue, but it went through the terminal and
  * the studio pays the fee on it. A visit without a tip — every visit before
  * tips existed — costs exactly what `costing-v4` made of it.
+ *
+ * `costing-v6` takes the materials a visit used up off its margin: one sum per
+ * service and add-on, snapshotted when the visit closed in a month the studio
+ * counts per service (`domain/materials-mode.ts`). It is not the material
+ * engine `costing-v3` dropped — no recipe, no unit, no stock. A visit with no
+ * materials, which is every visit in a month counted by purchases, costs
+ * exactly what `costing-v5` made of it.
  */
-export const CURRENT_FORMULA_VERSION = "costing-v5";
+export const CURRENT_FORMULA_VERSION = "costing-v6";
 export type FormulaVersion = typeof CURRENT_FORMULA_VERSION;
 
 /**
@@ -120,6 +127,13 @@ export type CostingInput = Readonly<{
    */
   payment?: PaymentCost;
   taxes?: TaxRates;
+  /**
+   * What the visit or service used up in materials. Absent is none — which is
+   * how a studio counting its purchases as the month's costs is costed, and
+   * not a gap: nothing is reported incomplete for it. The master's commission
+   * is not taken after it; «after materials» went with the material engine.
+   */
+  materialsMinor?: number;
 }>;
 
 type CostingCommon = {
@@ -154,6 +168,7 @@ export type CostingResult = Readonly<
       turnoverTaxMinor: number;
       paymentCommissionMinor: number;
       payrollTaxMinor: number;
+      materialsMinor: number;
       contributionMarginMinor: number;
       /**
        * Margin over net revenue, not over the price.
@@ -263,12 +278,16 @@ export function calculateCosting(input: CostingInput): CostingResult {
       ? 0
       : roundRatio(payment.chargedMinor * payment.basisPoints, 10_000) + payment.fixedFeeMinor;
 
+  const materialsMinor = input.materialsMinor ?? 0;
+  assertNonNegativeInteger(materialsMinor, "materialsMinor");
+
   const contributionMarginMinor =
     netRevenueMinor -
     commissionMinor -
     payrollTaxMinor -
     paymentCommissionMinor -
-    turnoverTaxMinor;
+    turnoverTaxMinor -
+    materialsMinor;
   // A loss-making service must report its loss. Clamping these to zero would
   // contradict contributionMarginMinor and hide exactly what the product exists
   // to reveal. Margin percentage is undefined — not zero — for a free service.
@@ -287,6 +306,7 @@ export function calculateCosting(input: CostingInput): CostingResult {
     turnoverTaxMinor,
     paymentCommissionMinor,
     payrollTaxMinor,
+    materialsMinor,
     contributionMarginMinor,
     marginBasisPoints,
     profitPerHourMinor,
@@ -297,6 +317,7 @@ export function calculateCosting(input: CostingInput): CostingResult {
       ...(payrollTaxMinor > 0 ? [`payroll_tax:${payrollTaxMinor}`] : []),
       ...(paymentCommissionMinor > 0 ? [`payment_commission:${paymentCommissionMinor}`] : []),
       ...(turnoverTaxMinor > 0 ? [`turnover_tax:${turnoverTaxMinor}`] : []),
+      ...(materialsMinor > 0 ? [`materials:${materialsMinor}`] : []),
       `duration_minutes:${input.durationMinutes}`,
     ],
   };
