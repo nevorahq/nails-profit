@@ -29,7 +29,7 @@ import {
   visits,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, hasConstraint, scopeFor } from "@/domain/rbac";
+import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import {
   addLocalDays,
   formatLocalDate,
@@ -177,6 +177,7 @@ export default async function CalendarPage({
         clientName: clients.name,
         clientPhone: clients.normalizedPhone,
         clientChannels: clients.contactChannels,
+        clientNotes: clients.notes,
       })
       .from(bookings)
       .innerJoin(specialists, eq(bookings.specialistId, specialists.id))
@@ -457,6 +458,7 @@ export default async function CalendarPage({
   // Section 6.1: an Analyst reads client history «без телефонов и email». The
   // name stays — a calendar with nobody's name on it is not a calendar.
   const hideContacts = hasConstraint(membership.role, "clients", "exclude_pii");
+  const showsNotes = seesClientNotes(membership.role);
   // Section 7.11's rollback state, and section 7's rollback list is exact about
   // what survives it: the appointments already made stay visible to staff in
   // read-only mode. The module stops taking work; the day still has to be
@@ -528,6 +530,9 @@ export default async function CalendarPage({
       clientPhone: hideContacts ? null : row.clientPhone,
       /* Read with the number and hidden with it: an Analyst has neither. */
       clientChannels: hideContacts ? {} : parseContactChannels(row.clientChannels),
+      /* What the studio wrote about them, on the card the master opens before
+         the client sits down — withheld wherever the contacts are. */
+      clientNotes: showsNotes ? (row.clientNotes ?? null) : null,
       serviceName: serviceNamesOf(ownLines, locale) ?? t("calendar.service"),
       // Add-ons and the like: every service is already in the name.
       extraLines: Math.max(0, ownLines.length - Math.max(1, serviceCount)),

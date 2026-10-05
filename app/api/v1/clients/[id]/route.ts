@@ -8,8 +8,9 @@ import {
   notificationOutbox,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, scopeFor } from "@/domain/rbac";
+import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { mayActOnClient } from "@/lib/client-access";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { normalizePhone } from "@/domain/phone";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -20,7 +21,68 @@ const patchClientSchema = z.object({
   phone: z.string().trim().max(40).nullable().optional(),
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)).nullable().optional(),
   archived: z.boolean().optional(),
+  /**
+   * The studio's note about this client. Trimmed, and an empty one is no note:
+   * clearing the field is how a note is removed.
+   */
+  notes: z.string().trim().max(2000).nullable().optional(),
 });
+
+/**
+ * One client's card: contacts and the studio's note, within the caller's
+ * scope — a Master's own clients only, an Analyst without contacts or note.
+ */
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const id = requestId(request);
+  const caller = await getActiveMembership();
+  if (!caller.session) return apiError(401, "UNAUTHENTICATED", "Authentication is required", id);
+  if (!caller.membership) {
+    return apiError(404, "MEMBERSHIP_NOT_FOUND", "User does not belong to an organization", id);
+  }
+
+  const actor = caller.membership;
+  if (!can(actor.role, "clients", "read")) {
+    return apiError(403, "FORBIDDEN", "This role cannot read clients", id);
+  }
+
+  const { id: clientId } = await context.params;
+  if (!z.uuid().safeParse(clientId).success) {
+    return apiError(404, "CLIENT_NOT_FOUND", "No client with this ID", id);
+  }
+
+  const client = await withTenant(actor.organizationId, async (tx) => {
+    // Checked before the read, and answered the same as an unknown id: a
+    // colleague's client is not something a Master learns exists.
+    if (!(await mayActOnClient(tx, actor, clientId))) return null;
+    const [row] = await tx
+      .select({
+        id: clients.id,
+        name: clients.name,
+        phone: clients.normalizedPhone,
+        email: clients.email,
+        notes: clients.notes,
+        archivedAt: clients.archivedAt,
+      })
+      .from(clients)
+      .where(and(eq(clients.id, clientId), isNull(clients.anonymizedAt)))
+      .limit(1);
+    return row ?? null;
+  });
+
+  if (!client) return apiError(404, "CLIENT_NOT_FOUND", "No client with this ID", id);
+
+  const hidePii = hasConstraint(actor.role, "clients", "exclude_pii");
+  return apiSuccess(
+    {
+      id: client.id,
+      name: client.name,
+      ...(hidePii ? {} : { phone: client.phone, email: client.email }),
+      ...(seesClientNotes(actor.role) ? { notes: client.notes } : {}),
+      archived: client.archivedAt !== null,
+    },
+    id,
+  );
+}
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const id = requestId(request);
@@ -48,7 +110,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     });
   }
 
-  const { name, phone, email, archived } = parsed.data;
+  const { name, phone, email, archived, notes } = parsed.data;
 
   let normalizedPhone: string | null | undefined = undefined;
   if (phone !== undefined) {
@@ -66,6 +128,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   try {
     const updated = await withTenant(actor.organizationId, async (tx) => {
+      // A Master changes their own clients only; anybody else's is a 404, the
+      // same answer an id from another studio gets.
+      if (!(await mayActOnClient(tx, actor, clientId))) return null;
+
       const [existing] = await tx
         .select({ id: clients.id })
         .from(clients)
@@ -82,6 +148,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (name !== undefined) patch.name = name;
       if (normalizedPhone !== undefined) patch.normalizedPhone = normalizedPhone;
       if (email !== undefined) patch.email = email;
+      if (notes !== undefined) patch.notes = notes ? notes : null;
       /*
        * Hiding and bringing back, from the one field. Restoring can collide:
        * since 0046 an archived client no longer reserves its phone or address,
@@ -232,6 +299,8 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         email: null,
         // Where to write is a fact about a person, and it goes with them.
         contactChannels: null,
+        // And so is what the studio wrote down about them.
+        notes: null,
         locale: null,
         termsVersion: null,
         privacyVersion: null,

@@ -1261,6 +1261,13 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .next-visit-day { display: grid; gap: 6rem; }
 .next-visit-day > p { font-weight: 700; font-size: 14rem; }
 
+/* The studio's note about a client: kept as typed, line breaks included. */
+.client-notes { display: grid; gap: 10rem; }
+.client-notes textarea { width: 100%; min-height: 110rem; resize: vertical; }
+.client-notes-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.calendar-client-notes { display: grid; gap: 4rem; margin: 8rem 0; padding: 10rem 12rem; border-left: 3rem solid var(--accent); background: var(--surface-strong); border-radius: 4rem; }
+.calendar-client-notes strong { font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
 /* --- Phase 7.3: public booking --- */
 
 .public-booking-shell { min-height: 100vh; padding: 22rem clamp(18rem, 5vw, 72rem) 72rem; }

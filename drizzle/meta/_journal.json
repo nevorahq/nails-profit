@@ -449,6 +449,13 @@
       "when": 1791223244984,
       "tag": "0063_a_request_reaches_the_studio_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791235418815,
+      "tag": "0064_a_client_card_carries_notes",
+      "breakpoints": true
     }
   ]
 }

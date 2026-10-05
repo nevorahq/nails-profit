@@ -93,6 +93,8 @@ export type CalendarBooking = Readonly<{
   clientPhone: string | null;
   /** What anybody has said about reaching them; empty when nobody has. */
   clientChannels: ContactChannelMarks;
+  /** The studio's note about the client; null for none, and for an Analyst. */
+  clientNotes: string | null;
   serviceName: string;
   extraLines: number;
   priceMinor: number;
@@ -1232,6 +1234,12 @@ export function CalendarBoard({
                         <p className="muted">
                           {t("calendar.clientCard", { name: booking.clientCardName })}
                         </p>
+                      )}
+                      {booking.clientNotes && (
+                        <div className="calendar-client-notes">
+                          <strong>{t("calendar.clientNotes")}</strong>
+                          <p className="client-notes-text">{booking.clientNotes}</p>
+                        </div>
                       )}
                       <p className="muted">
                         {booking.locationName} · {booking.specialistName} · {money(booking.priceMinor)}

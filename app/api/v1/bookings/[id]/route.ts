@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { auditEvents, bookings, clients, workplaces } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { hasConstraint } from "@/domain/rbac";
+import { hasConstraint, seesClientNotes } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingPayload, mutationFailureResponse, requireCalendarCaller } from "@/lib/booking-http";
@@ -51,6 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
             name: clients.name,
             phone: clients.normalizedPhone,
             email: clients.email,
+            notes: clients.notes,
           })
           .from(clients)
           .where(eq(clients.id, booking.clientId))
@@ -98,6 +99,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
             name: found.client.name,
             phone: hideContacts ? null : found.client.phone,
             email: hideContacts ? null : found.client.email,
+            // Withheld with the contacts, for the same reader.
+            notes: seesClientNotes(actor.role) ? found.client.notes : null,
           }
         : null,
       workplace: found.workplace ? { id: found.workplace.id, name: found.workplace.name } : null,

@@ -39,6 +39,9 @@ import { apiError, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
 /**
+ * 5: a client carries the studio's note about them (`client.notes`). Added,
+ * not moved: a consumer written for 4 reads every field it knew.
+ *
  * 4: materials, their price versions, recipes, recipe items and consumptions
  * left the payload with the material engine itself. The first bump that takes
  * something away rather than adding it, so a consumer written for 3 will find
@@ -50,7 +53,7 @@ import { getActiveMembership } from "@/lib/membership";
  * still reads every field it knew, so the bump is a signal that more arrived,
  * not that anything moved.
  */
-export const EXPORT_FORMAT_VERSION = 4;
+export const EXPORT_FORMAT_VERSION = 5;
 
 /**
  * Owner-requested export of everything the organization owns, spec section 4.3.

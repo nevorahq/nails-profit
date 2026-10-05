@@ -1044,10 +1044,23 @@ export const clients = pgTable(
     consentedAt: timestamp("consented_at", { withTimezone: true }),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    /**
+     * What the studio wants in front of it before this client sits down: an
+     * allergy, a shape they always ask for, a colour they never want again.
+     *
+     * Free text about a person, so it is treated as their contacts are: an
+     * Analyst does not see it (`seesClientNotes`), erasure empties it, the
+     * export carries it, and nothing writes it into a log, an audit event or a
+     * message. A column rather than a table of its own because a card has one
+     * note, and the export reads `client` whole — which is exactly where it
+     * belongs.
+     */
+    notes: text("notes"),
     ...auditColumns,
   },
   (table) => [
     index("client_org_idx").on(table.organizationId),
+    check("client_notes_length", sql`char_length(${table.notes}) <= 2000`),
     /*
      * Section 11.3: partial unique on normalized contacts, so the same person
      * cannot be entered twice, while any number of clients may have no contact.

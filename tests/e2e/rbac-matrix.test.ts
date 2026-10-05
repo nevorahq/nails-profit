@@ -690,6 +690,13 @@ const cases: readonly Case[] = [
   },
   {
     route: "/api/v1/clients/[id]",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "clients read; a Master only their own, an Analyst without contacts or the studio's note",
+    request: async (fixture) => ({ path: `/api/v1/clients/${fixture.clientId}` }),
+  },
+  {
+    route: "/api/v1/clients/[id]",
     method: "PATCH",
     allowed: ["owner", "manager", "master"],
     note: "clients write; an Analyst reads only",
