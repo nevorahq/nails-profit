@@ -13,6 +13,8 @@ import {
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { defaultCommissionBasisPointsFor } from "@/domain/workspace-defaults";
+import { loadStartScreen } from "@/lib/first-numbers";
 import { loadOnboarding } from "@/lib/onboarding";
 import { anonymous, dataOf, errorCodeOf, signUp } from "../helpers/api";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -52,6 +54,55 @@ afterAll(async () => {
 });
 
 describe("a workspace created from the setup form", () => {
+  /*
+   * The rate the form sends, by format. Somebody working alone is written a
+   * rule at zero — still a rule, so the first visit closes — and her first
+   * screen shows the whole price as what she keeps instead of an imputed wage.
+   */
+  test("writes somebody working alone a rule at zero, and still costs her catalogue", async () => {
+    const owner = await signUp("setup-solo-zero@studio.example");
+    const organization = dataOf<{ id: string }>(
+      await owner.post("/api/v1/organizations", {
+        name: "Zero Solo",
+        ...FULL_SETUP,
+        commission_basis_points: defaultCommissionBasisPointsFor("solo"),
+      }),
+    );
+
+    const rules = await adminDb
+      .select()
+      .from(commissionRules)
+      .where(eq(commissionRules.organizationId, organization.id));
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({ type: "percentage", basisPoints: 0, serviceId: null });
+
+    const screen = await withTenant(organization.id, (tx) => loadStartScreen(tx, "ru", organization.id));
+    expect(screen?.kind).toBe("numbers");
+    if (screen?.kind !== "numbers") return;
+    const manicure = screen.rows.find((row) => row.priceMinor === 35_000);
+    expect(manicure).toMatchObject({ commissionMinor: 0, contributionMarginMinor: 35_000 });
+  });
+
+  test("writes a studio's cards at the studio rate", async () => {
+    const owner = await signUp("setup-studio-rate@studio.example");
+    const organization = dataOf<{ id: string }>(
+      await owner.post("/api/v1/organizations", {
+        name: "Rate Studio",
+        ...FULL_SETUP,
+        type: "studio",
+        owner_works: true,
+        owner_name: "Irina",
+        commission_basis_points: defaultCommissionBasisPointsFor("studio"),
+      }),
+    );
+
+    const rules = await adminDb
+      .select()
+      .from(commissionRules)
+      .where(eq(commissionRules.organizationId, organization.id));
+    expect(rules.map((rule) => rule.basisPoints)).toEqual([4_000]);
+  });
+
   test("arrives able to answer, without a single follow-up screen", async () => {
     const owner = await signUp("setup-full@studio.example");
     const organization = dataOf<{ id: string; timezone: string }>(

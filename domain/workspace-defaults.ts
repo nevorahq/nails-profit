@@ -41,17 +41,30 @@ export const DEFAULT_WORKWEEK = {
 };
 
 /**
- * The share of a service's price the person doing the work is paid.
+ * The share of a service's price the person doing the work is paid, for a
+ * studio.
  *
  * Forty per cent is the middle of what the pilot studios pay, and it is the one
- * figure here that is a genuine guess rather than a convention — which is why
- * the setup screen puts it in a field with its own label rather than applying
- * it silently. Without any rule at all a visit cannot be closed
- * (MISSING_COMMISSION_RULE) and no service has a margin, so a wrong-but-visible
- * rate is worth more than an empty one: it produces a number the owner can
- * disagree with.
+ * figure here that is a genuine guess rather than a convention. Without any
+ * rule at all a visit cannot be closed (MISSING_COMMISSION_RULE) and no service
+ * has a margin, so a wrong-but-visible rate is worth more than an empty one: it
+ * produces a number the owner can disagree with.
  */
 export const DEFAULT_COMMISSION_PERCENT = 40;
+
+/**
+ * The rate a new workspace's cards are written with, in basis points.
+ *
+ * Nothing for somebody working alone. Forty per cent of her own price booked as
+ * her own wage is an imputed cost — real to an economist and a riddle to her:
+ * a service at 200 read «остаётся бизнесу 120» while the whole 200 was hers,
+ * and the month then added the 80 back on a line of its own. Zero keeps the
+ * rule (a visit still needs one to close) and makes the card say what she
+ * actually keeps. Workspaces registered earlier keep the rule they were given.
+ */
+export function defaultCommissionBasisPointsFor(type: "solo" | "studio"): number {
+  return type === "solo" ? 0 : DEFAULT_COMMISSION_PERCENT * 100;
+}
 
 /** The zones whose money is the rouble. Membership, not a prefix: `Asia/` holds most of the world. */
 const ROUBLE_ZONES = new Set([
