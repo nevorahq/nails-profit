@@ -85,12 +85,13 @@ test.describe("the public booking page", () => {
      * A request is the state where that costs most: it lapses on a deadline the
      * client was never shown, and the studio's answer arrives by an email that
      * may be queued, filtered, or impossible to send. So the page now names the
-     * hour, and says it is watching for the answer itself.
+     * hour — and the day too when it is not today, which with a twelve-hour
+     * window it usually is not — and says it is watching for the answer itself.
      */
     await page.getByRole("link", { name: "Open appointment" }).click();
     await expect(page.locator(".booking-status-pending_confirmation")).toBeVisible();
     await expect(page.locator(".booking-next-step")).toContainText(
-      /The studio will answer by \d{1,2}:\d{2}/,
+      /The studio will answer by (\d{1,2} [A-Z][a-z]+ at )?\d{1,2}:\d{2}/,
     );
     await expect(page.locator(".booking-watching")).toContainText("keep it open");
 
