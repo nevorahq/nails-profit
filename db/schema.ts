@@ -219,6 +219,17 @@ export const organizations = pgTable(
      * feeds itself. Idle capacity is reported as its own figure instead.
      */
     practicalCapacityBasisPoints: integer("practical_capacity_basis_points").notNull().default(7500),
+    /**
+     * «Подробная финансовая аналитика»: whether the reports speak in the
+     * economist's terms — economic profit, the owner's imputed wage and its
+     * add-back, the reserve and what may be withdrawn, practical capacity.
+     *
+     * Off by default. A woman running her own table reads «выручка, расходы,
+     * осталось» and nothing she would need a dictionary for; the owner who
+     * wants the rest turns it on in Настройки. Wording and visibility only:
+     * every figure is computed the same way either side of it.
+     */
+    detailedAnalytics: boolean("detailed_analytics").notNull().default(false),
     currency: currency("currency").notNull().default("MDL"),
     locale: locale("locale").notNull().default("ru"),
     timezone: text("timezone").notNull().default("Europe/Chisinau"),

@@ -428,6 +428,13 @@
       "when": 1791176268382,
       "tag": "0060_a_service_carries_what_it_uses_up",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791200172830,
+      "tag": "0061_a_studio_chooses_how_much_finance_it_reads",
+      "breakpoints": true
     }
   ]
 }

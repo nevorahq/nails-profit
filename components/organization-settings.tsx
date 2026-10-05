@@ -48,6 +48,7 @@ export function OrganizationSettings({
   locale,
   currency,
   staffNotices,
+  detailedAnalytics,
   canEdit,
   startOpen = false,
 }: {
@@ -59,6 +60,8 @@ export function OrganizationSettings({
   currency: string;
   /** Who besides the working master hears about a booking. */
   staffNotices: StaffNotices;
+  /** «Подробная финансовая аналитика» — see the column in `db/schema.ts`. */
+  detailedAnalytics: boolean;
   canEdit: boolean;
   startOpen?: boolean;
 }) {
@@ -115,6 +118,7 @@ export function OrganizationSettings({
     locale?: AppLocale;
     currency?: string;
     staff_notices?: StaffNotices;
+    detailed_analytics?: boolean;
   }) {
     setPending(true);
     setError(null);
@@ -277,6 +281,25 @@ export function OrganizationSettings({
         */}
       </div>
 
+
+      {/*
+        The owner's to choose, like the rest of this panel: the endpoint asks
+        `can(…, "organization_settings", "write")` again, so a manager who
+        reached this control would be refused by the server, not by the
+        disabled attribute.
+      */}
+      <div className="inline-form">
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={detailedAnalytics}
+            disabled={!canEdit || pending}
+            onChange={(event) => change({ detailed_analytics: event.target.checked })}
+          />
+          {t("settings.detailedAnalytics")}
+        </label>
+      </div>
+      <p className="muted">{t("settings.detailedAnalyticsHint")}</p>
 
       {/*
         The practical capacity rate is still not offered: it stays at the

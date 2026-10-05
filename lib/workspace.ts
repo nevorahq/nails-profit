@@ -36,6 +36,12 @@ export type Workspace = Readonly<{
    */
   staffNotices: "owner" | "owner_and_managers";
   /**
+   * «Подробная финансовая аналитика»: whether reports draw the economist's
+   * lines and speak in their terms. Visibility and wording only — no figure
+   * is computed differently — see `i18n/lexicon.ts` for the words.
+   */
+  detailedAnalytics: boolean;
+  /**
    * The studio's own clock. Decides which month the reports open on — never a
    * month's bounds, which stay the UTC ones every figure is cut at.
    */
@@ -65,6 +71,7 @@ async function loadWorkspace(): Promise<Workspace> {
       type: organizations.type,
       practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
       staffNotices: organizations.staffNotices,
+      detailedAnalytics: organizations.detailedAnalytics,
       timezone: organizations.timezone,
     })
     .from(organizations)
@@ -81,6 +88,7 @@ async function loadWorkspace(): Promise<Workspace> {
     businessType: organization?.type ?? "solo",
     practicalCapacityBasisPoints: organization?.practicalCapacityBasisPoints ?? 7500,
     staffNotices: organization?.staffNotices ?? "owner",
+    detailedAnalytics: organization?.detailedAnalytics ?? false,
     timezone: organization?.timezone ?? "Europe/Chisinau",
   };
 }

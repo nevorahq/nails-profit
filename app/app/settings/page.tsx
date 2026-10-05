@@ -33,17 +33,16 @@ import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 
 /**
- * Temporarily keep the labour, acquiring and visit-tax controls off the
- * settings page without deleting their data, APIs or effect on snapshots. Flip
- * this single switch when the product is ready to expose them again.
+ * Temporarily keep the acquiring and visit-tax controls off the settings page
+ * without deleting their data, APIs or effect on snapshots. Flip this single
+ * switch when the product is ready to expose them again.
  *
- * «Оплата труда за месяц» was outside this switch for a while, because the
- * monthly report declines to compute economic profit without a wage for the
- * owner's own work and used to say so with a link to this page. The link went
- * with the block: the report now states the reason and offers no door, so
- * «Экономическая прибыль», «Резерв» and «Можно вывести» stay uncomputed until
- * this switch comes back on. `tests/owner-wage-reachable.test.ts` fails if one
- * of the two returns without the other.
+ * «Оплата труда за месяц» and the reserve are no longer behind it: they are
+ * what economic profit and «Можно вывести» are computed from, and those lines
+ * belong to the studio's own «Подробная финансовая аналитика» now. A studio
+ * that turns it on is offered the controls that feed them; one that leaves it
+ * off reads neither the lines nor the controls.
+ * `tests/owner-wage-reachable.test.ts` holds the report and this page together.
  */
 const SHOW_ADVANCED_FINANCIAL_SETTINGS = false;
 
@@ -63,13 +62,14 @@ export default async function SettingsPage({
     currency,
     businessType,
     staffNotices,
+    detailedAnalytics,
   } = await requireWorkspace();
 
   const canReadTeam = can(membership.role, "user_management", "read");
   const canReadOrg = can(membership.role, "organization_settings", "read");
   const canReadData = can(membership.role, "data_export", "read");
   const canReadFinancialSettings = can(membership.role, "expenses", "read");
-  const canReadLabour = SHOW_ADVANCED_FINANCIAL_SETTINGS && canReadFinancialSettings;
+  const canReadLabour = detailedAnalytics && canReadFinancialSettings;
 
   /*
    * The studio's own mark, which stands where `BrandMark`'s flower does until
@@ -303,6 +303,7 @@ export default async function SettingsPage({
           locale={locale}
           currency={currency}
           staffNotices={staffNotices}
+          detailedAnalytics={detailedAnalytics}
           canEdit={can(membership.role, "organization_settings", "write")}
         />
       )}
