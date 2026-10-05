@@ -17,7 +17,10 @@ import { disposeStudio, isoDate, seedStudio, signedInContext, type Studio } from
  * recorded.
  */
 
-type Placed = Readonly<{ id: string; day: string; hours: string }>;
+type Placed = Readonly<{ id: string; day: string; hours: string; withinShift: boolean }>;
+
+/** The fixture's rota, every day: `seedStudio` gives both masters 08:00–20:00. */
+const SHIFT = { start: 8 * 60, end: 20 * 60 };
 
 const clock = (instant: Date) => instant.toISOString().slice(11, 16);
 
@@ -25,7 +28,13 @@ const clock = (instant: Date) => instant.toISOString().slice(11, 16);
 function placed(id: string, completedAt: string, minutes: number): Placed {
   const end = new Date(completedAt);
   const start = new Date(end.getTime() - minutes * 60_000);
-  return { id, day: isoDate(start), hours: `${clock(start)}–${clock(end)}` };
+  const minuteOf = (instant: Date) => instant.getUTCHours() * 60 + instant.getUTCMinutes();
+  return {
+    id,
+    day: isoDate(start),
+    hours: `${clock(start)}–${clock(end)}`,
+    withinShift: isoDate(start) === isoDate(end) && minuteOf(start) >= SHIFT.start && minuteOf(end) <= SHIFT.end,
+  };
 }
 
 test.describe("a visit closed without an appointment", () => {
@@ -76,10 +85,15 @@ test.describe("a visit closed without an appointment", () => {
     await expect(entry.locator(".calendar-time")).toHaveText(own.hours);
     await expect(entry).toContainText(studio.specialistName);
 
-    // The hours it took are not offered as free ones.
-    const tally = (await page.locator(".calendar-tally").textContent()) ?? "";
-    const [shiftHours, freeHours] = (tally.match(/[\d.,]+/g) ?? []).map((n) => Number(n.replace(",", ".")));
-    expect(freeHours).toBeLessThan(shiftHours);
+    // The hours it took are not offered as free ones — which can only show
+    // when the visit fell inside the rota. Closed «now», it does only while
+    // the suite runs between 09:30 and 20:00 UTC; outside that the tally has
+    // nothing of it to subtract, and saying so would be the wrong claim.
+    if (own.withinShift) {
+      const tally = (await page.locator(".calendar-tally").textContent()) ?? "";
+      const [shiftHours, freeHours] = (tally.match(/[\d.,]+/g) ?? []).map((n) => Number(n.replace(",", ".")));
+      expect(freeHours).toBeLessThan(shiftHours);
+    }
 
     // Grey, and the month's cell carries a mark for each visit of the day.
     await expect(entry).toHaveCSS("background-color", "rgb(236, 238, 234)");
