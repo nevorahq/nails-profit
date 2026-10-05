@@ -13,6 +13,7 @@ import {
   importJobs,
   invitations,
   laborCostRules,
+  materialsCostingPeriods,
   memberships,
   organizations,
   ownerDraws,
@@ -142,6 +143,10 @@ export async function GET(request: Request) {
       .from(paymentMethods)
       .orderBy(asc(paymentMethods.createdAt));
     const taxRuleRows = await tx.select().from(taxRules).orderBy(asc(taxRules.activeFrom));
+    const materialsPeriodRows = await tx
+      .select()
+      .from(materialsCostingPeriods)
+      .orderBy(asc(materialsCostingPeriods.effectiveFrom));
     const expenseRows = await tx.select().from(expenses).orderBy(asc(expenses.spentOn), asc(expenses.createdAt));
     const ownerDrawRows = await tx
       .select()
@@ -202,6 +207,7 @@ export async function GET(request: Request) {
       owner_draws: ownerDrawRows,
       payment_methods: paymentMethodRows,
       tax_rules: taxRuleRows,
+      materials_costing_periods: materialsPeriodRows,
       external_references: externalReferenceRows,
       import_jobs: importJobRows,
       pilot_enrollment: pilotEnrollmentRows,

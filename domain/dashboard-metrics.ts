@@ -28,6 +28,8 @@ export type VisitMetricRow = Readonly<{
   turnoverTaxMinor: number | null;
   payrollTaxMinor: number | null;
   paymentCommissionMinor: number | null;
+  /** The `costing-v6` term; null on a snapshot written before it. */
+  materialsMinor?: number | null;
   durationMinutes: number | null;
   /**
    * How long the visit actually occupied the chair, from the visit itself
@@ -114,6 +116,12 @@ export type DashboardMetrics = Readonly<{
   turnoverTaxMinor: number;
   payrollTaxMinor: number;
   paymentCommissionMinor: number;
+  /**
+   * What the month's visits took off their margins for materials — the
+   * «списано по нормам» half of the monthly reconciliation. Already inside the
+   * contribution margin, like the four above.
+   */
+  materialsMinor: number;
   contributionMarginMinor: number;
   marginBasisPoints: number | null;
   profitPerHourMinor: number | null;
@@ -183,6 +191,7 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
     turnoverTaxMinor: sumOf((row) => row.turnoverTaxMinor),
     payrollTaxMinor: sumOf((row) => row.payrollTaxMinor),
     paymentCommissionMinor: sumOf((row) => row.paymentCommissionMinor),
+    materialsMinor: sumOf((row) => row.materialsMinor ?? null),
     contributionMarginMinor,
     // Section 8.9.1: total margin over total revenue, not the mean of per-visit
     // margins — a 20 MDL visit must not weigh as much as a 600 MDL one.

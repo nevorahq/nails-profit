@@ -275,6 +275,17 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/organizations/setup", body: { services: [] } }),
   },
   {
+    route: "/api/v1/organizations/materials-mode",
+    method: "POST",
+    allowed: ["owner"],
+    note: "organization_settings write; it decides what the month's profit subtracts",
+    // Far ahead, so a pass leaves every costing in this suite as it was.
+    request: async () => ({
+      path: "/api/v1/organizations/materials-mode",
+      body: { mode: "purchases", effective_month: "2099-01" },
+    }),
+  },
+  {
     route: "/api/v1/organizations/logo",
     method: "GET",
     allowed: ALL_ROLES,

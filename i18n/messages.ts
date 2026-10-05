@@ -50,6 +50,7 @@ export const errorMessages = {
     IDEMPOTENCY_KEY_REUSED: "Повторная отправка с другими данными",
     MISSING_COMMISSION_RULE: "У мастера нет правила комиссии",
     PUBLIC_BOOKING_UNAVAILABLE: "Онлайн-запись здесь пока недоступна — сохраните прайс без неё",
+    MATERIALS_MODE_PAST_MONTH: "Прошедший месяц уже посчитан — выберите текущий или следующий",
   },
   ro: {
     UNAUTHENTICATED: "Este necesară autentificarea",
@@ -94,6 +95,7 @@ export const errorMessages = {
     IDEMPOTENCY_KEY_REUSED: "Retrimitere cu alte date",
     MISSING_COMMISSION_RULE: "Maestrul nu are regulă de comision",
     PUBLIC_BOOKING_UNAVAILABLE: "Programarea online nu este încă disponibilă aici — salvați prețurile fără ea",
+    MATERIALS_MODE_PAST_MONTH: "Luna trecută este deja calculată — alegeți luna curentă sau următoarea",
   },
   en: {
     UNAUTHENTICATED: "Authentication is required",
@@ -138,6 +140,7 @@ export const errorMessages = {
     IDEMPOTENCY_KEY_REUSED: "Resent with different details",
     MISSING_COMMISSION_RULE: "The specialist has no commission rule",
     PUBLIC_BOOKING_UNAVAILABLE: "Online booking is not available here yet — save the prices without it",
+    MATERIALS_MODE_PAST_MONTH: "A past month is already counted — choose this month or a later one",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>;
 

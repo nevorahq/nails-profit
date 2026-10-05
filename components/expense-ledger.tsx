@@ -9,6 +9,7 @@ import {
   type ExpenseCategory,
 } from "@/domain/expense-categories";
 import { expenseClassOf } from "@/domain/expense-classes";
+import { materialsModeFor, type MaterialsModePeriod } from "@/domain/materials-mode";
 import type { ExpenseRow } from "@/lib/expenses";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
@@ -34,6 +35,8 @@ export function ExpenseLedger({
   locale,
   businessType,
   monthGuide = null,
+  materialsPeriods = [],
+  currentMonth = null,
 }: {
   expenses: ExpenseRow[];
   locale: AppLocale;
@@ -45,6 +48,13 @@ export function ExpenseLedger({
    * March's electricity is not owed a congratulation window for it.
    */
   monthGuide?: SetupGuideBaseline;
+  /**
+   * How the studio counted materials, month by month: in a month counted per
+   * service a purchase of gel is cash only, and the row says so.
+   */
+  materialsPeriods?: readonly MaterialsModePeriod[];
+  /** `YYYY-MM` a recurring row is judged in — it is paid every month. */
+  currentMonth?: string | null;
 }) {
   const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
   /*
@@ -106,7 +116,7 @@ export function ExpenseLedger({
           />
         </div>
       </div>
-      <ExpenseTable expenses={expenses} locale={locale} />
+      <ExpenseTable expenses={expenses} locale={locale} materialsPeriods={materialsPeriods} currentMonth={currentMonth} />
     </>
   );
 }
@@ -259,7 +269,17 @@ type EditState = {
   note: string;
 };
 
-function ExpenseTable({ expenses, locale }: { expenses: ExpenseRow[]; locale: AppLocale }) {
+function ExpenseTable({
+  expenses,
+  locale,
+  materialsPeriods,
+  currentMonth,
+}: {
+  expenses: ExpenseRow[];
+  locale: AppLocale;
+  materialsPeriods: readonly MaterialsModePeriod[];
+  currentMonth: string | null;
+}) {
   const router = useRouter();
   const t = getTranslator(locale);
 
@@ -519,7 +539,13 @@ function ExpenseTable({ expenses, locale }: { expenses: ExpenseRow[]; locale: Ap
                     category here, and here is where it is decided whether the
                     amount will reduce the month's profit or only its cash.
                   */}
-                  {expenseClassOf(expense.category) === "cash_only" && (
+                  {expenseClassOf(
+                    expense.category,
+                    materialsModeFor(
+                      materialsPeriods,
+                      expense.is_recurring && currentMonth ? currentMonth : expense.spent_on.slice(0, 7),
+                    ),
+                  ) === "cash_only" && (
                     <span className="unit-hint">{t("expenses.classCashOnly")}</span>
                   )}
                 </td>

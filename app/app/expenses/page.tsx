@@ -7,6 +7,7 @@ import { expenseCategories, isExpenseCategory } from "@/domain/expense-categorie
 import { can } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
 import { loadExpenses } from "@/lib/expenses";
+import { loadMaterialsModes, monthIn } from "@/lib/materials-mode";
 import { loadMonthGuide } from "@/lib/onboarding";
 import { monthOf } from "@/lib/period";
 import { ownerDraws } from "@/db/schema";
@@ -85,6 +86,10 @@ export default async function ExpensesPage({
    * to correct yet — and null again once both steps are done, which is most of
    * this page's life: the ledger is a weekly habit, not a setup screen.
    */
+  const materials = await withTenant(membership.organizationId, (tx) =>
+    loadMaterialsModes(tx, membership.organizationId),
+  );
+
   const monthGuide = await withTenant(membership.organizationId, (tx) =>
     loadMonthGuide(tx, { month: monthOf(new Date()), currency }),
   );
@@ -162,6 +167,8 @@ export default async function ExpensesPage({
         locale={locale}
         businessType={businessType}
         monthGuide={monthGuide}
+        materialsPeriods={materials.periods}
+        currentMonth={monthIn(new Date(), materials.timezone)}
       />
       <OwnerDrawLedger
         draws={draws}

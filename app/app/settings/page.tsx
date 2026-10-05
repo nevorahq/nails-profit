@@ -8,6 +8,7 @@ import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
 import { PaymentMethodManager, type PaymentMethodRow } from "@/components/payment-method-manager";
 import { TaxRuleManager, type TaxRuleRowView } from "@/components/tax-rule-manager";
+import { MaterialsModeSetting } from "@/components/materials-mode-setting";
 import {
   laborCostRules,
   memberships,
@@ -23,6 +24,7 @@ import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadDashboard } from "@/lib/dashboard";
+import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mode";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
@@ -160,6 +162,25 @@ export default async function SettingsPage({
           .orderBy(asc(paymentMethods.createdAt)),
       )
     : [];
+
+  /*
+   * How the studio counts materials, for whoever sees its costs. Not behind
+   * the advanced flag: it decides what the month's profit subtracts, which is
+   * not an advanced question.
+   */
+  const materials = canReadFinancialSettings
+    ? await withTenant(membership.organizationId, async (tx) => {
+        const modes = await loadMaterialsModes(tx, membership.organizationId);
+        const currentMonth = monthIn(new Date(), modes.timezone);
+        return {
+          current: materialsModeAt(modes),
+          currentMonth,
+          scheduled: modes.periods
+            .filter((period) => period.effectiveFrom.slice(0, 7) > currentMonth)
+            .map((period) => ({ mode: period.mode, month: period.effectiveFrom.slice(0, 7) })),
+        };
+      })
+    : null;
 
   const taxes: TaxRuleRowView[] | null =
     SHOW_ADVANCED_FINANCIAL_SETTINGS && canReadFinancialSettings
@@ -318,6 +339,15 @@ export default async function SettingsPage({
           currency={currency}
           locale={locale}
           canEdit={can(membership.role, "organization_settings", "write")}
+        />
+      )}
+      {materials && (
+        <MaterialsModeSetting
+          current={materials.current}
+          scheduled={materials.scheduled}
+          currentMonth={materials.currentMonth}
+          canEdit={can(membership.role, "organization_settings", "write")}
+          locale={locale}
         />
       )}
       {taxes && (
