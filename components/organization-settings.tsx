@@ -83,6 +83,12 @@ export function OrganizationSettings({
    * question is put once, after the rename, with the warning beside it.
    */
   const [suggestedSlug, setSuggestedSlug] = useState<string | null>(null);
+  /*
+   * The switch moves when it is pressed, not when the server has answered and
+   * the page re-rendered: a checkbox that ignores the click for a second reads
+   * as broken. A refusal puts it back.
+   */
+  const [detailed, setDetailed] = useState(detailedAnalytics);
 
   async function rename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -120,7 +126,7 @@ export function OrganizationSettings({
     currency?: string;
     staff_notices?: StaffNotices;
     detailed_analytics?: boolean;
-  }) {
+  }): Promise<boolean> {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -135,12 +141,13 @@ export function OrganizationSettings({
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       setError(body?.error?.message ?? "—");
-      return;
+      return false;
     }
     setSaved(true);
     // The whole interface re-renders in the new language, so the server has to
     // produce it: the dictionary is chosen on the server, not in the browser.
     router.refresh();
+    return true;
   }
 
   return (
@@ -293,9 +300,13 @@ export function OrganizationSettings({
         <label className="checkbox-field">
           <input
             type="checkbox"
-            checked={detailedAnalytics}
+            checked={detailed}
             disabled={!canEdit || pending}
-            onChange={(event) => change({ detailed_analytics: event.target.checked })}
+            onChange={async (event) => {
+              const next = event.target.checked;
+              setDetailed(next);
+              if (!(await change({ detailed_analytics: next }))) setDetailed(!next);
+            }}
           />
           {t("settings.detailedAnalytics")}
         </label>
