@@ -8,6 +8,7 @@ import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatLongDate, formatMoneyMinor } from "@/lib/format";
 import {
+  answerByLabel,
   bookingNextStepKey,
   publicBookingErrorKey,
   readApiError,
@@ -338,11 +339,12 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
         <p className="booking-next-step">
           {t(nextStep, {
             time: booking.confirmation_due_at
-              ? new Intl.DateTimeFormat(tag, {
-                  timeZone: booking.location.timezone,
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date(booking.confirmation_due_at))
+              ? answerByLabel(
+                  new Date(booking.confirmation_due_at),
+                  new Date(),
+                  booking.location.timezone,
+                  tag,
+                )
               : "",
           })}
         </p>

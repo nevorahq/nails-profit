@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { AppShell } from "@/components/app-shell";
 import { LexiconProvider } from "@/components/lexicon-provider";
+import { PushWorker } from "@/components/push-worker";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { organizationLogoUrl } from "@/domain/avatar-image";
@@ -92,6 +93,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         {children}
       </AppShell>
+      <PushWorker />
     </LexiconProvider>
   );
 }

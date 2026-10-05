@@ -265,6 +265,47 @@ export function getSupportEmail() {
   return value;
 }
 
+/**
+ * The application's identity at the browsers' push services (VAPID), or null —
+ * in which case push is off and everything else works exactly as before:
+ * nothing is queued for a phone, and the switch says the channel is not set up.
+ *
+ * Both keys together or neither; one without the other is a configuration
+ * mistake, not a choice, and is said so at startup rather than at the first
+ * request. The public key is not a secret — every browser that subscribes is
+ * handed it — but it is read here, at runtime, rather than baked into the
+ * bundle as `NEXT_PUBLIC_…`, so rotating the pair needs no rebuild.
+ *
+ * `VAPID_SUBJECT` is who the push service may write to about abuse:
+ * `mailto:` the support address when it is not set, then the site itself.
+ */
+export function getVapidConfig() {
+  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  if (!publicKey && !privateKey) return null;
+  if (!publicKey || !privateKey) {
+    throw new Error("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together");
+  }
+  if (!/^[A-Za-z0-9_-]{80,100}$/.test(publicKey) || !/^[A-Za-z0-9_-]{40,50}$/.test(privateKey)) {
+    throw new Error("VAPID keys must be the URL-safe base64 pair from `web-push generate-vapid-keys`");
+  }
+
+  const support = getSupportEmail();
+  const site = getPublicAppUrl();
+  const subject =
+    process.env.VAPID_SUBJECT?.trim() ||
+    (support ? `mailto:${support}` : site.startsWith("https://") ? site : "");
+  if (!/^(mailto:|https:\/\/)/.test(subject)) {
+    throw new Error("VAPID_SUBJECT must be a mailto: or https: URL (or set SUPPORT_EMAIL)");
+  }
+
+  return { publicKey, privateKey, subject };
+}
+
+export function isPushConfigured() {
+  return getVapidConfig() !== null;
+}
+
 /** The token the notification dispatch job authenticates with; unset disables the route. */
 export function getOpsApiToken() {
   const value = process.env.OPS_API_TOKEN?.trim();

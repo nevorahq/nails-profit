@@ -8,7 +8,11 @@ import {
   notifyBooking,
   notifyStaff,
 } from "@/lib/booking-notifications";
-import { expireUnconfirmedBookings, sweepExpiredHolds } from "@/lib/booking-service";
+import {
+  claimRequestsDueForReminder,
+  expireUnconfirmedBookings,
+  sweepExpiredHolds,
+} from "@/lib/booking-service";
 import { logEvent } from "@/lib/logger";
 
 /**
@@ -34,6 +38,7 @@ import { logEvent } from "@/lib/logger";
 export type MaintenanceSummary = Readonly<{
   expiredHolds: number;
   lapsedRequests: number;
+  remindedRequests: number;
 }>;
 
 export async function runBookingMaintenance(input: {
@@ -73,7 +78,26 @@ export async function runBookingMaintenance(input: {
       });
     }
 
-    return { expiredHolds, lapsedRequests: lapsed.length };
+    /*
+     * After the lapse, so a request whose whole window passed between two runs
+     * is cancelled rather than reminded about and cancelled in the same breath.
+     *
+     * Halfway, once per version of the request: twelve hours is long enough to
+     * answer from the chair and long enough to forget in, and the first
+     * message arrived while her hands were busy. A request the client moved is
+     * a new version and earns one more.
+     */
+    const reminded = await claimRequestsDueForReminder(tx, now);
+    for (const booking of reminded) {
+      await notifyStaff(tx, {
+        organizationId,
+        bookingId: booking.id,
+        template: "booking.staff_request_reminder",
+        occurrence: String(booking.version),
+      });
+    }
+
+    return { expiredHolds, lapsedRequests: lapsed.length, remindedRequests: reminded.length };
   });
 }
 
@@ -89,6 +113,7 @@ export async function sweepBookingMaintenance(input?: { now?: Date }): Promise<M
   const now = input?.now ?? new Date();
   let expiredHolds = 0;
   let lapsedRequests = 0;
+  let remindedRequests = 0;
 
   const tenants = await db
     .select({ id: organizations.id })
@@ -100,6 +125,7 @@ export async function sweepBookingMaintenance(input?: { now?: Date }): Promise<M
       const summary = await runBookingMaintenance({ organizationId: tenant.id, now });
       expiredHolds += summary.expiredHolds;
       lapsedRequests += summary.lapsedRequests;
+      remindedRequests += summary.remindedRequests;
     } catch (error) {
       logEvent(
         "error",
@@ -113,8 +139,9 @@ export async function sweepBookingMaintenance(input?: { now?: Date }): Promise<M
   logEvent("info", "booking.maintenance_completed", {}, {
     expired_holds: expiredHolds,
     lapsed_requests: lapsedRequests,
+    reminded_requests: remindedRequests,
     source: "cron",
   });
 
-  return { expiredHolds, lapsedRequests };
+  return { expiredHolds, lapsedRequests, remindedRequests };
 }

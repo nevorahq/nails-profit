@@ -1873,8 +1873,13 @@ export const bookingSettings = pgTable(
     bufferBeforeMinutes: integer("buffer_before_minutes").notNull().default(0),
     bufferAfterMinutes: integer("buffer_after_minutes").notNull().default(10),
     confirmationMode: bookingConfirmationMode("confirmation_mode").notNull().default("instant"),
-    /** How long a manually confirmed booking may hold a slot before it lapses. */
-    confirmationTtlMinutes: integer("confirmation_ttl_minutes").notNull().default(120),
+    /**
+     * How long a manually confirmed booking may hold a slot before it lapses.
+     * Twelve hours for a new address since 02.10.2026 — two was shorter than
+     * one client's appointment, see `domain/confirmation-deadline.ts`. Rows
+     * written before keep the window their studio had.
+     */
+    confirmationTtlMinutes: integer("confirmation_ttl_minutes").notNull().default(720),
     /**
      * Whether a public booking has to prove the contact belongs to whoever is
      * typing it, section 7.2 step 7. Off by default: a studio without a
@@ -2074,6 +2079,17 @@ export const bookings = pgTable(
     /** A short reason code, never free text: section 7.9 keeps PII out of this. */
     cancellationReason: text("cancellation_reason"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    /**
+     * The version of this request the studio was last reminded about, halfway
+     * through its window (`lib/booking-maintenance.ts`).
+     *
+     * A marker on the row rather than a search of the outbox, because a
+     * reminder that found nobody to write to must still count as sent: the
+     * outbox would have nothing in it, and every five minutes the job would ask
+     * again. Written without moving `version`, so a master answering the
+     * request at that moment is not refused for a change nobody made to it.
+     */
+    staffRemindedVersion: integer("staff_reminded_version"),
     ...auditColumns,
   },
   (table) => [
@@ -2237,7 +2253,12 @@ export const bookingAccessTokens = pgTable(
   ],
 );
 
-export const notificationChannel = pgEnum("notification_channel", ["email", "sms"]);
+/**
+ * `push` is the studio's own phone, through the browser's push service — never
+ * a client's. Shared with `booking_verification`, which only ever writes the
+ * first two: a verification code goes to whoever is booking, not to a device.
+ */
+export const notificationChannel = pgEnum("notification_channel", ["email", "sms", "push"]);
 export const notificationStatus = pgEnum("notification_status", [
   "pending",
   "processing",
@@ -2352,6 +2373,8 @@ export const notificationOutbox = pgTable(
       userId?: string;
       /** ISO 8601; a `jsonb` column holds no timestamps of its own. */
       startsAt?: string;
+      /** The device a `push` row is for; its owner is `userId`. */
+      subscriptionId?: string;
     }>(),
     status: notificationStatus("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
@@ -2522,6 +2545,53 @@ export const staffNoticeReads = pgTable(
       table.userId,
       table.bookingId,
     ),
+  ],
+);
+
+/**
+ * A browser that agreed to wake its owner when a request arrives, roadmap
+ * phase 7 (push first, decided 02.10.2026).
+ *
+ * A request used to reach the studio as a line in an open tab and an email,
+ * and lapsed by itself two hours later: a master with a client in the chair
+ * read neither in time. The phone in her pocket is the one screen she does
+ * look at, so each device she turns notifications on for is a row here.
+ *
+ * Per device and per account, never per studio: the endpoint is the browser's
+ * own address at its push service, and whoever signed in on it is who it
+ * wakes. Signing out forgets this device, leaving a team forgets every device
+ * of that person, and deleting the studio forgets them all.
+ *
+ * The endpoint is unique across studios, not within one. A browser carries one
+ * subscription per application key, and two studios writing to the same phone
+ * would put one studio's clients on the lock screen of somebody signed in to
+ * another. The second studio is refused, and the browser asked for a fresh
+ * endpoint instead — the old one dies at the push service and is cleared the
+ * first time it answers 410.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** A capability URL: whoever holds it can address this phone. Never logged whole. */
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    /** Only so a person can tell «iPhone» from «Chrome на ноутбуке» in a list. */
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("push_subscription_endpoint_idx").on(table.endpoint),
+    // Every send starts from the people who should hear, then their devices.
+    index("push_subscription_user_idx").on(table.organizationId, table.userId),
   ],
 );
 

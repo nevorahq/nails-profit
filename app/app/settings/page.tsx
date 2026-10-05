@@ -6,6 +6,7 @@ import { OrganizationLogo } from "@/components/organization-logo";
 import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
 import { MaterialsModeSetting } from "@/components/materials-mode-setting";
+import { PushDeviceSwitch } from "@/components/push-device-switch";
 import { memberships, organizationSubscriptions, specialists, users } from "@/db/schema";
 import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
@@ -232,6 +233,12 @@ export default async function SettingsPage({
           currentRole={membership.role}
         />
       )}
+      {/*
+        This device, for whoever is holding it — every role that has a bell has
+        something a push could tell them. Not the studio's setting: each person
+        turns it on for each phone of their own.
+      */}
+      {can(membership.role, "bookings", "read") && <PushDeviceSwitch locale={locale} />}
       {canReadData && (
         <DataManagement
           locale={locale}

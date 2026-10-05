@@ -11,6 +11,7 @@ import {
 } from "@/components/setup-guide";
 import { formatLocalTime, parseLocalTime, weekdays, type Weekday } from "@/domain/timezone";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
+import { DEFAULT_CONFIRMATION_TTL_MINUTES } from "@/domain/confirmation-deadline";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
@@ -1169,7 +1170,7 @@ export function BookingSetup({
                 type="number"
                 min={15}
                 max={1440}
-                defaultValue={settingsLocation.confirmation_ttl_minutes ?? 120}
+                defaultValue={settingsLocation.confirmation_ttl_minutes ?? DEFAULT_CONFIRMATION_TTL_MINUTES}
               />
             </label>
 

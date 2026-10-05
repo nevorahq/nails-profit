@@ -6,6 +6,7 @@ import { useState } from "react";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
+import { forgetThisDevice } from "@/lib/push-device";
 
 /**
  * The two controls on `/join` that do something, split out of the page so the
@@ -107,6 +108,8 @@ export function JoinSwitchAccount({ token, locale }: { token: string; locale: Ap
 
   async function switchAccount() {
     setPending(true);
+    // The account being left takes this device's notifications with it.
+    await forgetThisDevice().catch(() => {});
     await authClient.signOut();
     const next = encodeURIComponent(`/join?token=${encodeURIComponent(token)}`);
     router.push(`/login?next=${next}`);

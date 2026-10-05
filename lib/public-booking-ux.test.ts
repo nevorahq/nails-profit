@@ -6,6 +6,7 @@ import { dictionaries } from "@/i18n/dictionary";
 import { supportedLocales } from "@/i18n/messages";
 import type { MessageKey } from "@/i18n/t";
 import {
+  answerByLabel,
   bookingNextStepKey,
   bookingRequestSignature,
   bookingStripKey,
@@ -436,5 +437,32 @@ describe("bookingStripKey", () => {
         expect(dictionaries[locale][key as MessageKey], `${key} in ${locale}`).toBeTruthy();
       }
     }
+  });
+});
+
+describe("the hour a request will be answered by", () => {
+  const timeZone = "Europe/Chisinau";
+  // 20:00 in Chișinău on 5 October.
+  const evening = new Date("2026-10-05T17:00:00.000Z");
+
+  it("is only the hour when the answer is due today", () => {
+    expect(answerByLabel(new Date("2026-10-05T19:30:00.000Z"), evening, timeZone, "ru-RU")).toBe("22:30");
+  });
+
+  it("names the day when the answer is due tomorrow", () => {
+    const label = answerByLabel(new Date("2026-10-06T05:30:00.000Z"), evening, timeZone, "ru-RU");
+    expect(label).toContain("6 октября");
+    expect(label).toContain("08:30");
+  });
+
+  it("compares days on the location's calendar, not the server's", () => {
+    // 23:30 UTC on the 5th is already 02:30 on the 6th in Chișinău.
+    const label = answerByLabel(
+      new Date("2026-10-05T23:30:00.000Z"),
+      new Date("2026-10-05T20:00:00.000Z"),
+      timeZone,
+      "en-GB",
+    );
+    expect(label).toContain("6 October");
   });
 });

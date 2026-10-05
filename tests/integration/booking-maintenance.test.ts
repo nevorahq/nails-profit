@@ -4,7 +4,15 @@ import { promisify } from "node:util";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
-import { bookingHolds, bookings, notificationOutbox, organizations, staffNotices } from "@/db/schema";
+import {
+  bookingHolds,
+  bookings,
+  memberships,
+  notificationOutbox,
+  organizations,
+  specialists,
+  staffNotices,
+} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { runBookingMaintenance, sweepBookingMaintenance } from "@/lib/booking-maintenance";
 import { createBooking, holdSlot } from "@/lib/booking-service";
@@ -422,6 +430,85 @@ describe("booking maintenance on the deployed cron", () => {
     expect(
       await adminDb.select().from(staffNotices).where(eq(staffNotices.bookingId, bookingId)),
     ).toHaveLength(1);
+  });
+
+  /** Moves a request's creation back, so its midpoint is where the test needs it. */
+  async function madeMinutesAgo(bookingId: string, minutes: number) {
+    await adminDb
+      .update(bookings)
+      .set({ createdAt: new Date(Date.now() - minutes * 60_000) })
+      .where(eq(bookings.id, bookingId));
+  }
+
+  function remindersIn(rows: Awaited<ReturnType<typeof outboxOf>>) {
+    return rows.filter((row) => row.template === "booking.staff_request_reminder");
+  }
+
+  test("reminds the studio once, halfway through a request's window", async () => {
+    // Made 70 minutes ago, due in 60: the midpoint was five minutes ago.
+    const bookingId = await request(60);
+    await madeMinutesAgo(bookingId, 70);
+
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(1);
+    const reminded = remindersIn(await outboxOf(bookingId));
+    expect(reminded.map((row) => row.payload?.recipient).sort()).toEqual(["owner", "specialist"]);
+    expect(reminded.every((row) => row.channel === "email")).toBe(true);
+
+    // The second run, and the third, find it already reminded.
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(0);
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(0);
+    expect(remindersIn(await outboxOf(bookingId))).toHaveLength(2);
+
+    const [booking] = await adminDb.select().from(bookings).where(eq(bookings.id, bookingId));
+    // Marked without moving the version a master may be answering right now.
+    expect(booking.staffRemindedVersion).toBe(booking.version);
+    expect(booking.version).toBe(1);
+  });
+
+  test("does not remind before the midpoint", async () => {
+    const bookingId = await request(60);
+    await madeMinutesAgo(bookingId, 10);
+
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(0);
+    expect(remindersIn(await outboxOf(bookingId))).toHaveLength(0);
+  });
+
+  test("counts a reminder with nobody to write to as given", async () => {
+    // A card with no account and an owner who is gone: no rows to write, and
+    // still only one claim for this version.
+    const bookingId = await request(60);
+    await madeMinutesAgo(bookingId, 70);
+    await adminDb.update(specialists).set({ userId: null }).where(eq(specialists.id, specialistId));
+    await adminDb.delete(memberships).where(eq(memberships.organizationId, organizationId));
+
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(1);
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(0);
+    expect(remindersIn(await outboxOf(bookingId))).toHaveLength(0);
+  });
+
+  test("a request the client moved earns one more reminder", async () => {
+    const bookingId = await request(60);
+    await madeMinutesAgo(bookingId, 70);
+    await runBookingMaintenance({ organizationId });
+
+    const [before] = await adminDb.select().from(bookings).where(eq(bookings.id, bookingId));
+    await adminDb
+      .update(bookings)
+      .set({ version: before.version + 1 })
+      .where(eq(bookings.id, bookingId));
+
+    expect((await runBookingMaintenance({ organizationId })).remindedRequests).toBe(1);
+    expect(remindersIn(await outboxOf(bookingId))).toHaveLength(4);
+  });
+
+  test("lapses rather than reminds a request whose whole window has passed", async () => {
+    const bookingId = await request(-10);
+    await madeMinutesAgo(bookingId, 130);
+
+    const summary = await runBookingMaintenance({ organizationId });
+    expect(summary.lapsedRequests).toBe(1);
+    expect(summary.remindedRequests).toBe(0);
+    expect(remindersIn(await outboxOf(bookingId))).toHaveLength(0);
   });
 
   test("expires a hold nobody came back for", async () => {

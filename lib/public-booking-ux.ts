@@ -293,3 +293,29 @@ export function bookingRequestSignature(draft: BookingRequestDraft): string {
     draft.locale,
   ].join("\n");
 }
+
+/**
+ * The hour in «Студия ответит до {time}», with the day when it is not today.
+ *
+ * Only the hour was ever printed, which was enough while a request waited two
+ * hours: the answer was due before the day was out. With twelve it is due
+ * tomorrow morning as often as not, and «до 08:30» read at 20:00 promises an
+ * answer that has already been missed. Days are compared on the location's
+ * calendar, the same clock the hour is printed on.
+ */
+export function answerByLabel(
+  dueAt: Date,
+  now: Date,
+  timeZone: string,
+  tag: string,
+): string {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const sameDay = day.format(dueAt) === day.format(now);
+
+  return new Intl.DateTimeFormat(tag, {
+    timeZone,
+    ...(sameDay ? {} : { day: "numeric", month: "long" }),
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(dueAt);
+}

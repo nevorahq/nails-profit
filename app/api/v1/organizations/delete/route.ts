@@ -17,6 +17,7 @@ import {
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { forgetStudioDevices } from "@/lib/push-subscriptions";
 import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
@@ -204,6 +205,10 @@ export async function POST(request: Request) {
       .set({ before: { redacted: true }, after: { redacted: true } })
       .where(eq(auditEvents.organizationId, actor.organizationId));
 
+    // Every phone that would otherwise go on hearing about a studio that no
+    // longer exists. A device is not PII to anonymize; it is an address to drop.
+    const devicesForgotten = await forgetStudioDevices(tx, actor.organizationId);
+
     const removed = await tx
       .delete(memberships)
       .where(eq(memberships.organizationId, actor.organizationId))
@@ -226,6 +231,7 @@ export async function POST(request: Request) {
         avatars_erased: erasedAvatars.length,
         logo_erased: erasedLogo.length === 1,
         expenses_anonymized: anonymizedExpenses.length,
+        devices_forgotten: devicesForgotten,
       },
       requestId: id,
     });

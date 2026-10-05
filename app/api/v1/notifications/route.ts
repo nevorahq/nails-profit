@@ -6,6 +6,7 @@ import { can } from "@/domain/rbac";
 import { formatLocalDate, formatLocalTime, toZonedParts } from "@/domain/timezone";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { scopedSpecialistId } from "@/lib/booking-access";
+import { deviceCountOf, isPushOn } from "@/lib/push-subscriptions";
 import { groupNotices, loadNoticeFeed, loadNoticeReads } from "@/lib/staff-notices";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { bookingModuleRefusal } from "@/lib/booking-http";
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 
   const actor = caller.membership;
   if (!can(actor.role, "bookings", "read")) {
-    return apiSuccess({ pending: [], feed: [], unread: 0, unclosed: 0 }, id);
+    return apiSuccess({ pending: [], feed: [], unread: 0, unclosed: 0, push_hint: false }, id);
   }
   // A no-op today — `bookingModuleRefusal` only refuses writes — but this list
   // is calendar-surface data same as `GET /api/v1/bookings`, so it stays
@@ -94,6 +95,28 @@ export async function GET(request: Request) {
         organizationId: actor.organizationId,
         userId: actor.userId,
       }),
+      /*
+       * «Включите уведомления, чтобы не пропускать заявки», once there is a
+       * request to have missed: push is set up here, this person has not a
+       * single device on it, and a client has already booked online on a chair
+       * they can see. Before the first request the line would be advice about
+       * nothing; after a device exists it would be advice already taken.
+       */
+      pushHint:
+        isPushOn() &&
+        (await deviceCountOf(tx, actor.userId)) === 0 &&
+        (
+          await tx
+            .select({ id: bookings.id })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.source, "public_booking"),
+                ownSpecialistId ? eq(bookings.specialistId, ownSpecialistId) : undefined,
+              ),
+            )
+            .limit(1)
+        ).length > 0,
     };
   });
 
@@ -168,7 +191,13 @@ export async function GET(request: Request) {
   });
 
   return apiSuccess(
-    { pending: items, feed, unread: feed.filter((row) => row.unread).length, unclosed: rows.unclosed },
+    {
+      pending: items,
+      feed,
+      unread: feed.filter((row) => row.unread).length,
+      unclosed: rows.unclosed,
+      push_hint: rows.pushHint,
+    },
     id,
   );
 }

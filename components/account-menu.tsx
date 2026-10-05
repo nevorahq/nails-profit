@@ -9,6 +9,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { type MessageKey } from "@/i18n/t";
 import { useTranslator } from "@/components/lexicon-provider";
 import { authClient } from "@/lib/auth-client";
+import { forgetThisDevice } from "@/lib/push-device";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
 /**
@@ -52,6 +53,13 @@ export function AccountMenu({
      * a sign-out.
      */
     await fetch("/api/v1/preview", { method: "DELETE" }).catch(() => {});
+    /*
+     * After the preview, which would refuse the write, and before the session
+     * goes, which the write needs. A phone handed back or left on the desk must
+     * stop showing this studio's clients on its lock screen; the person's other
+     * devices keep theirs.
+     */
+    await forgetThisDevice().catch(() => {});
     await authClient.signOut();
     // `replace`, not `push`: Back must not return to a page that now redirects.
     router.replace("/login");

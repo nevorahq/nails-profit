@@ -3,6 +3,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { memberships, sessions, specialists, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { forgetPersonDevices } from "@/lib/push-subscriptions";
 import { can, canManageRole } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
@@ -137,6 +138,13 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         and(eq(memberships.id, membershipId), eq(memberships.organizationId, actor.organizationId)),
       );
 
+    // Their phone stops hearing about this studio's clients the moment they
+    // stop being part of it — not when they next happen to sign out.
+    const devicesForgotten = await forgetPersonDevices(tx, {
+      organizationId: actor.organizationId,
+      userId: target.userId,
+    });
+
     await recordAuditEvent(tx, {
       organizationId: actor.organizationId,
       actorUserId: actor.userId,
@@ -144,7 +152,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       entityType: "membership",
       entityId: membershipId,
       before: { email: target.email, role: target.role },
-      after: { specialist_archived: specialist?.id ?? null },
+      after: { specialist_archived: specialist?.id ?? null, devices_forgotten: devicesForgotten },
       requestId: id,
     });
 

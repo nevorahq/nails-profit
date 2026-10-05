@@ -3,6 +3,11 @@ import { and, eq, gt, inArray, isNotNull, lt, lte, ne, or, sql } from "drizzle-o
 import { bookingHolds, bookingLines, bookings } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { createBookingToken, type BookingToken } from "@/domain/booking-token";
+import {
+  confirmationDeadline,
+  DEFAULT_CONFIRMATION_TTL_MINUTES,
+  movedConfirmationDeadline,
+} from "@/domain/confirmation-deadline";
 import type { Interval } from "@/domain/interval";
 import type { LocalizedText } from "@/i18n/localized-text";
 
@@ -334,16 +339,16 @@ export async function createBooking(
   const status = input.confirmationMode === "instant" ? "confirmed" : "pending_confirmation";
 
   // A manual request holds the slot until the studio answers — an unanswered
-  // request still stops someone else taking the time — but never past the
-  // appointment itself, which would leave a booking nobody can act on.
+  // request still stops someone else taking the time — but the client hears
+  // the answer while there is still time to go elsewhere: see
+  // `confirmationDeadline` for the reserve and the floor under it.
   const confirmationDueAt =
     status === "pending_confirmation"
-      ? new Date(
-          Math.min(
-            input.now.getTime() + (input.confirmationTtlMinutes ?? 120) * 60_000,
-            input.interval.start.getTime(),
-          ),
-        )
+      ? confirmationDeadline({
+          now: input.now,
+          ttlMinutes: input.confirmationTtlMinutes ?? DEFAULT_CONFIRMATION_TTL_MINUTES,
+          startsAt: input.interval.start,
+        })
       : null;
 
   const [booking] = await tx
@@ -622,10 +627,14 @@ export async function rescheduleBooking(
       startsAt: input.interval.start,
       endsAt: input.interval.end,
       // A request that has not been answered stays unanswered at its new time,
-      // but never past the appointment it is holding.
+      // and a closer hour pulls its deadline in to that hour's reserve.
       confirmationDueAt:
         booking.status === "pending_confirmation" && booking.confirmationDueAt
-          ? new Date(Math.min(booking.confirmationDueAt.getTime(), input.interval.start.getTime()))
+          ? movedConfirmationDeadline({
+              current: booking.confirmationDueAt,
+              now: input.now,
+              startsAt: input.interval.start,
+            })
           : booking.confirmationDueAt,
       updatedAt: input.now,
       updatedBy: input.actorUserId,
@@ -646,6 +655,37 @@ export async function rescheduleBooking(
 /** The lines a booking carries, for its card and for closing it into a visit. */
 export async function bookingLinesOf(tx: TenantTransaction, bookingId: string) {
   return tx.select().from(bookingLines).where(eq(bookingLines.bookingId, bookingId));
+}
+
+/**
+ * Requests halfway through their window and still unanswered, claimed for the
+ * one reminder each version of them gets.
+ *
+ * Claimed rather than selected: the marker is written by the same statement
+ * that finds the row, so a second cron run — or two overlapping ones — finds
+ * nothing left to remind anybody about. `version` is left where it is on
+ * purpose; the master answering the request this minute is answering the
+ * version she sees, and nothing about the request has changed.
+ *
+ * The midpoint is measured from when the request was made, in SQL, so it is
+ * the database's clock against the database's timestamps.
+ */
+export async function claimRequestsDueForReminder(tx: TenantTransaction, now: Date) {
+  return tx
+    .update(bookings)
+    .set({ staffRemindedVersion: sql`${bookings.version}` })
+    .where(
+      and(
+        eq(bookings.status, "pending_confirmation"),
+        isNotNull(bookings.confirmationDueAt),
+        gt(bookings.confirmationDueAt, now),
+        // A raw fragment binds a Date as nothing the driver can send; the
+        // instant goes as ISO text and is read back as the timestamp it is.
+        sql`${bookings.createdAt} + (${bookings.confirmationDueAt} - ${bookings.createdAt}) / 2 <= ${now.toISOString()}::timestamptz`,
+        sql`${bookings.staffRemindedVersion} is distinct from ${bookings.version}`,
+      ),
+    )
+    .returning({ id: bookings.id, version: bookings.version });
 }
 
 /**
