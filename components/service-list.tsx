@@ -224,7 +224,8 @@ export function ServiceList({
     const data = new FormData(form);
     const price = String(data.get("price") ?? "").trim();
     const duration = String(data.get("duration") ?? "").trim();
-    const materials = materialsShown ? materialsMinorOf(String(data.get("materials") ?? "")) : null;
+    // Only a catalogue manager sets materials; a Master's form has no field.
+    const materials = materialsShown && canEdit ? materialsMinorOf(String(data.get("materials") ?? "")) : null;
 
     const response = await fetch("/api/v1/services", {
       method: "POST",
@@ -402,7 +403,7 @@ export function ServiceList({
                 {t("services.durationMinutes")}
                 <input name="duration" type="number" step="1" min="1" placeholder="90" required />
               </label>
-              {materialsShown && (
+              {materialsShown && canEdit && (
                 <label>
                   {t("services.materials", { currency })}
                   <input name="materials" type="number" step="0.01" min="0" placeholder="35" />
@@ -412,7 +413,7 @@ export function ServiceList({
                 {pending ? t("services.creating") : t("services.add")}
               </button>
             </form>
-            {materialsShown && <p className="muted">{t("services.materialsHint")}</p>}
+            {materialsShown && canEdit && <p className="muted">{t("services.materialsHint")}</p>}
             {error && (
               <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
                 {error}

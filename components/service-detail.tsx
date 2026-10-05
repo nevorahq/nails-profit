@@ -193,7 +193,7 @@ export function ServiceDetail({
         duration_minutes: duration === "" ? null : Number(duration),
         // Only while the field is on screen: a studio counting by purchases
         // must not clear amounts it may switch back to.
-        ...(materialsShown ? { materials_minor: materialsMinorOf(data.get("materials")) } : {}),
+        ...(materialsShown && canManage ? { materials_minor: materialsMinorOf(data.get("materials")) } : {}),
       }),
     });
     await finish(response);
@@ -359,7 +359,8 @@ export function ServiceDetail({
               defaultValue={service.duration_minutes ?? ""}
             />
           </label>
-          {materialsShown && (
+          {/* The catalogue manager's figure: a Master sees what it costs below, not the field. */}
+          {materialsShown && canManage && (
             <label>
               {t("services.materials", { currency })}
               <input
@@ -377,8 +378,8 @@ export function ServiceDetail({
             {t("common.save")}
           </button>
         </form>
-        {materialsShown && <p className="muted">{t("services.materialsHint")}</p>}
-        {materialsShown && materialsHintMinor !== null && (
+        {materialsShown && canManage && <p className="muted">{t("services.materialsHint")}</p>}
+        {materialsShown && canManage && materialsHintMinor !== null && (
           <p className="materials-suggestion">
             {t("services.materialsFromPurchases", { amount: formatMoneyMinor(materialsHintMinor, currency) })}{" "}
             <button
