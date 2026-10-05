@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { CloseDayPanel } from "@/components/close-day-panel";
 import { FirstNumbers } from "@/components/first-numbers";
 import { FirstRun } from "@/components/first-run";
+import { HeadlineCard } from "@/components/headline-card";
 import { MetricIcon } from "@/components/icons";
 import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
@@ -25,11 +26,13 @@ import { localeTag } from "@/i18n/translate";
 import { auth } from "@/lib/auth";
 import { formatBasisPoints, formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
+import { loadHeadline } from "@/lib/headline";
 import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
 import { monthOf } from "@/lib/period";
 import { presetRanges, previousRangeOf, resolveReportPeriod, todayIn } from "@/domain/report-period";
+import { formatLocalDate } from "@/domain/timezone";
 import { loadStartScreen } from "@/lib/first-numbers";
 import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
@@ -282,6 +285,14 @@ export default async function AppPage({
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
 
+  /*
+   * The card follows the filter when the filter is a month, and stays on the
+   * current month otherwise: a year or a span of days has no rent of its own
+   * to subtract, and half a month of rent is a number nobody agreed on.
+   */
+  const currentMonth = formatLocalDate(today).slice(0, 7);
+  const headlineMonth = period.month ?? currentMonth;
+
   const previousDays = previousRangeOf(period);
   const previousRange = previousDays
     ? {
@@ -303,12 +314,14 @@ export default async function AppPage({
     // Section 6.1: a Master sees "только собственные" — resolved from the
     // specialist row carrying their user id, not from the query string.
     let effectiveSpecialist = filters.specialist ?? null;
+    let ownSpecialistId: string | null = null;
     if (scopeFor(membership.role, "dashboard") === "own") {
       const [own] = await tx
         .select({ id: specialists.id })
         .from(specialists)
         .where(eq(specialists.userId, session.user.id))
         .limit(1);
+      ownSpecialistId = own?.id ?? null;
       effectiveSpecialist = own?.id ?? "00000000-0000-0000-0000-000000000000";
     }
 
@@ -392,8 +405,20 @@ export default async function AppPage({
         ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency })
         : null;
 
+    /*
+     * The card the page opens with. A month's figure, never the filter's: for
+     * the owner it is the monthly report's bottom line, read by the very call
+     * that report makes, so the two cannot disagree.
+     */
+    const headline = await loadHeadline(
+      tx,
+      { role: membership.role, month: headlineMonth, currency, organizationId, ownSpecialistId },
+      locale,
+    );
+
     return {
       ...dashboard,
+      headline,
       previousMetrics,
       onboarding,
       monthSetup,
@@ -428,9 +453,8 @@ export default async function AppPage({
    * meant the contribution margin: one screen, one word, two answers.
    *
    * The real figure needs a whole month — rent does not divide into the eleven
-   * days someone picked in the filter — so it lives in `/app/reports/month`,
-   * where recurring costs resolve and the two halves of the ledger are told
-   * apart. The link below is the whole of the fix on this page.
+   * days someone picked in the filter — so it is the card at the top, read
+   * from the monthly report itself, and not a third card in this row.
    *
    * The card is still null whenever the ledger was not read: for a role that
    * may not see it, or for a report narrowed to one master, where the revenue
@@ -497,6 +521,20 @@ export default async function AppPage({
 
   return (
     <main className="app-shell">
+      <HeadlineCard
+        headline={data.headline}
+        locale={locale}
+        currency={currency}
+        month={headlineMonth}
+        isCurrentMonth={headlineMonth === currentMonth}
+        detailsHref={
+          can(membership.role, "expenses", "read")
+            ? headlineMonth === currentMonth
+              ? "/app/reports/month"
+              : `/app/reports/month?month=${headlineMonth}`
+            : null
+        }
+      />
       {closeDay}
       <span className="eyebrow report-period">
         {t("dashboard.eyebrow")} · {periodLabel}
@@ -582,19 +620,6 @@ export default async function AppPage({
               />
             )}
           </div>
-          {/*
-            Where the profit went, said plainly. A figure that quietly
-            disappears from a screen someone reads every morning is worse
-            than the wrong figure it replaced.
-          */}
-          {expensesMinor !== null && (
-            <p className="muted">
-              {t("dashboard.profitMoved")}{" "}
-              <Link className="text-link" href="/app/reports/month">
-                {t("nav.monthReport")}
-              </Link>
-            </p>
-          )}
           {/*
             Said out loud rather than folded in. The currency of the
             organization can be changed and nothing already recorded is

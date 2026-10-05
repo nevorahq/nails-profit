@@ -472,8 +472,6 @@ const ru = {
   "specialists.aggregatesNote":
     "Ваша роль читает цифры студии целиком, но без разбивки по людям: ставка каждого мастера и аккаунт за карточкой скрыты.",
   "nav.monthReport": "Отчёт за месяц",
-  "dashboard.profitMoved":
-    "Прибыль за период считается помесячно — там из маржи вычитаются только те расходы, которые ещё не учтены в визитах:",
 
   "expenses.recurring": "Каждый месяц",
   "expenses.recurringFrom": "С какого дня",
@@ -1121,6 +1119,29 @@ const ru = {
   "dashboard.masterEarnings.studio": "Мастер",
   "dashboard.masterEarnings.solo": "Вы",
   "dashboard.hourly": "В час",
+  "headline.operating.current": "В этом месяце вам осталось",
+  "headline.operating.month": "За {month} вам осталось",
+  "headline.earnings.current": "Ваш заработок за месяц",
+  "headline.earnings.month": "Ваш заработок за {month}",
+  "headline.contribution.current": "Маржинальная прибыль за месяц",
+  "headline.contribution.month": "Маржинальная прибыль за {month}",
+  "headline.contributionHint": "до аренды и постоянных расходов",
+  "headline.atLeast": "не меньше",
+  "headline.split": "Выручка {revenue} − расходы {costs}",
+  "headline.breakEvenToGo": "До точки безубыточности ({target}) осталось {amount}",
+  "headline.breakEvenReached": "Точка безубыточности ({target}) пройдена",
+  "headline.breakEvenBar": "Выручка к точке безубыточности",
+  "headline.floor": {
+    one: "Ещё {count} визит на {revenue} пока не посчитан.",
+    few: "Ещё {count} визита на {revenue} пока не посчитаны.",
+    other: "Ещё {count} визитов на {revenue} пока не посчитаны.",
+  },
+  "headline.floorVisits": {
+    one: "Ещё {count} визит пока не посчитан.",
+    few: "Ещё {count} визита пока не посчитаны.",
+    other: "Ещё {count} визитов пока не посчитаны.",
+  },
+  "headline.details": "Как посчитано →",
 
   "visits.title": "Визиты",
   "visits.noAccess": "У вашей роли нет доступа к визитам.",
@@ -1917,8 +1938,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.aggregatesNote":
     "Rolul dvs. citește cifrele studioului în ansamblu, dar fără defalcare pe persoane: tariful fiecărui maestru și contul din spatele fișei sunt ascunse.",
   "nav.monthReport": "Raport lunar",
-  "dashboard.profitMoved":
-    "Profitul se calculează pe luni — acolo din marjă se scad doar cheltuielile care nu sunt deja luate în calcul în vizite:",
 
   "expenses.recurring": "În fiecare lună",
   "expenses.recurringFrom": "Din ce zi",
@@ -2566,6 +2585,29 @@ const ro: Record<MessageKey, Message> = {
   "dashboard.masterEarnings.studio": "Maestru",
   "dashboard.masterEarnings.solo": "Dvs.",
   "dashboard.hourly": "Pe oră",
+  "headline.operating.current": "Luna aceasta v-au rămas",
+  "headline.operating.month": "În {month} v-au rămas",
+  "headline.earnings.current": "Câștigul dvs. pe lună",
+  "headline.earnings.month": "Câștigul dvs. în {month}",
+  "headline.contribution.current": "Marja de contribuție pe lună",
+  "headline.contribution.month": "Marja de contribuție în {month}",
+  "headline.contributionHint": "înainte de chirie și cheltuielile fixe",
+  "headline.atLeast": "cel puțin",
+  "headline.split": "Încasări {revenue} − cheltuieli {costs}",
+  "headline.breakEvenToGo": "Până la pragul de rentabilitate ({target}) mai sunt {amount}",
+  "headline.breakEvenReached": "Pragul de rentabilitate ({target}) este depășit",
+  "headline.breakEvenBar": "Încasări față de pragul de rentabilitate",
+  "headline.floor": {
+    one: "Încă {count} vizită de {revenue} nu este calculată.",
+    few: "Încă {count} vizite de {revenue} nu sunt calculate.",
+    other: "Încă {count} de vizite de {revenue} nu sunt calculate.",
+  },
+  "headline.floorVisits": {
+    one: "Încă {count} vizită nu este calculată.",
+    few: "Încă {count} vizite nu sunt calculate.",
+    other: "Încă {count} de vizite nu sunt calculate.",
+  },
+  "headline.details": "Cum s-a calculat →",
 
   "visits.title": "Vizite",
   "visits.noAccess": "Rolul dvs. nu are acces la vizite.",
@@ -3356,8 +3398,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.aggregatesNote":
     "Your role reads the studio's figures as a whole, but not broken down by person: each master's rate and the account behind the card are hidden.",
   "nav.monthReport": "Monthly report",
-  "dashboard.profitMoved":
-    "Profit is worked out a month at a time — there the margin loses only the costs the visits have not already taken out:",
 
   "expenses.recurring": "Every month",
   "expenses.recurringFrom": "From which day",
@@ -3995,6 +4035,27 @@ const en: Record<MessageKey, Message> = {
   "dashboard.masterEarnings.studio": "Master",
   "dashboard.masterEarnings.solo": "You",
   "dashboard.hourly": "Per hour",
+  "headline.operating.current": "Left for you this month",
+  "headline.operating.month": "Left for you in {month}",
+  "headline.earnings.current": "Your earnings this month",
+  "headline.earnings.month": "Your earnings in {month}",
+  "headline.contribution.current": "Contribution margin this month",
+  "headline.contribution.month": "Contribution margin in {month}",
+  "headline.contributionHint": "before rent and fixed costs",
+  "headline.atLeast": "at least",
+  "headline.split": "Revenue {revenue} − costs {costs}",
+  "headline.breakEvenToGo": "{amount} to go to break-even ({target})",
+  "headline.breakEvenReached": "Break-even ({target}) passed",
+  "headline.breakEvenBar": "Revenue towards break-even",
+  "headline.floor": {
+    one: "{count} more visit worth {revenue} is not costed yet.",
+    other: "{count} more visits worth {revenue} are not costed yet.",
+  },
+  "headline.floorVisits": {
+    one: "{count} more visit is not costed yet.",
+    other: "{count} more visits are not costed yet.",
+  },
+  "headline.details": "How it adds up →",
 
   "visits.title": "Visits",
   "visits.noAccess": "Your role has no access to visits.",

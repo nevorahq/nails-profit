@@ -998,6 +998,24 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .metric-delta.positive { color: var(--positive); }
 .metric-delta.negative { color: var(--danger); }
 
+/*
+ * The figure the report opens with. The one place on the screen set larger
+ * than a heading, because it is the answer the screen exists to give; on a
+ * phone it is meant to be read before anything is scrolled.
+ */
+.headline-card { display: flex; flex-direction: column; gap: 6rem; margin-top: 0; }
+.headline-month { color: var(--muted); font-size: 13rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.panel h2.headline-label { font-size: 20rem; font-weight: 700; }
+.headline-figure { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4rem 10rem; margin: 2rem 0 4rem; }
+.headline-at-least { color: var(--muted); font-size: 16rem; font-weight: 650; }
+.headline-value { font-size: 52rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.headline-value.metric-negative { color: var(--danger); }
+.headline-note { margin: 0; color: var(--muted); font-size: 15rem; line-height: 1.45; }
+.headline-break-even { display: flex; flex-direction: column; gap: 6rem; margin-top: 6rem; }
+.headline-bar { height: 8rem; border-radius: 4rem; background: var(--leaf-100); overflow: hidden; }
+.headline-bar > span { display: block; height: 100%; border-radius: 4rem; background: var(--positive); }
+.headline-details { align-self: flex-start; margin-top: 6rem; }
+
 /* «Прибыль по услугам»: the same ranking `metrics.ranking` already computes,
    read as bars instead of a table row — the full table stays put further
    down the page for whoever wants every column. */
