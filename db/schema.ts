@@ -19,6 +19,7 @@ import {
 
 import { commissionBases, commissionTypes, type TaxRates } from "@/domain/costing";
 import { expenseCategories } from "@/domain/expense-categories";
+import { materialsCostingModes } from "@/domain/materials-mode";
 import { currencies } from "@/domain/money";
 import { memberRoles } from "@/domain/rbac";
 import type { LocalizedText } from "@/i18n/localized-text";
@@ -419,12 +420,23 @@ export const services = pgTable(
     priceMinor: bigint("price_minor", { mode: "number" }),
     durationMinutes: integer("duration_minutes"),
     currency: currency("currency"),
+    /**
+     * What one sitting of this service uses up in materials, as one sum — no
+     * recipe, no units, no stock (`domain/materials-mode.ts`). Null is «not
+     * given», which costs as nothing and is not reported as a gap: a studio
+     * counting by purchases never fills it in.
+     */
+    materialsMinor: bigint("materials_minor", { mode: "number" }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...auditColumns,
   },
   (table) => [
     index("service_org_idx").on(table.organizationId),
     check("service_price_non_negative", sql`${table.priceMinor} is null or ${table.priceMinor} >= 0`),
+    check(
+      "service_materials_non_negative",
+      sql`${table.materialsMinor} is null or ${table.materialsMinor} >= 0`,
+    ),
     check(
       "service_duration_positive",
       sql`${table.durationMinutes} is null or ${table.durationMinutes} > 0`,
@@ -444,10 +456,22 @@ export const addOns = pgTable(
     // Deltas, not absolutes, and signed: a "short nails" add-on may reduce both.
     priceDeltaMinor: bigint("price_delta_minor", { mode: "number" }).notNull().default(0),
     durationDeltaMinutes: integer("duration_delta_minutes").notNull().default(0),
+    /**
+     * Materials the add-on uses up on top of its service's. Not a delta like
+     * the two above: an add-on can make a visit shorter or cheaper, but it
+     * cannot give gel back.
+     */
+    materialsMinor: bigint("materials_minor", { mode: "number" }),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...auditColumns,
   },
-  (table) => [index("add_on_org_idx").on(table.organizationId)],
+  (table) => [
+    index("add_on_org_idx").on(table.organizationId),
+    check(
+      "add_on_materials_non_negative",
+      sql`${table.materialsMinor} is null or ${table.materialsMinor} >= 0`,
+    ),
+  ],
 );
 
 /** Section 11.2 models AddOn as many-to-many with Service. */
@@ -625,6 +649,37 @@ export const organizationLogos = pgTable(
     check(
       "organization_logo_size",
       sql`octet_length(${table.bytes}) between 1 and 524288`,
+    ),
+  ],
+);
+
+export const materialsCostingMode = pgEnum("materials_costing_mode", materialsCostingModes);
+
+/**
+ * How a studio counted its materials, from which month — `domain/materials-mode.ts`.
+ *
+ * A history, not a column on `organization`: a month already reported must keep
+ * the mode it was costed in when the studio changes its mind later. No row is
+ * `purchases`, which is every studio until it chooses otherwise.
+ */
+export const materialsCostingPeriods = pgTable(
+  "materials_costing_period",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    mode: materialsCostingMode("mode").notNull(),
+    effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
+    ...auditColumns,
+  },
+  (table) => [
+    // One answer per month: choosing again for the same month replaces it.
+    uniqueIndex("materials_costing_period_month_idx").on(table.organizationId, table.effectiveFrom),
+    // A month starts on its first day; anything else would split one.
+    check(
+      "materials_costing_period_month_start",
+      sql`extract(day from ${table.effectiveFrom}) = 1`,
     ),
   ],
 );
@@ -1183,10 +1238,22 @@ export const visitLines = pgTable(
     commissionFixedAmountMinor: bigint("commission_fixed_amount_minor", { mode: "number" }),
     commissionBase: commissionBase("commission_base"),
     durationMinutes: integer("duration_minutes").notNull().default(0),
+    /**
+     * The materials this line used up, copied from the catalogue when the
+     * visit closed in a month counted per service — as the price is, and for
+     * the same reason: editing the amount on the service later must not
+     * re-cost a visit already reported. Null in a month counted by purchases,
+     * on a surcharge line, and on every line closed before this existed.
+     */
+    materialsMinor: bigint("materials_minor", { mode: "number" }),
     ...auditColumns,
   },
   (table) => [
     index("visit_line_visit_idx").on(table.visitId),
+    check(
+      "visit_line_materials_non_negative",
+      sql`${table.materialsMinor} is null or ${table.materialsMinor} >= 0`,
+    ),
     // The same shapes as `visit_commission_shape`, or nothing at all. Text
     // comparisons for the reason given at `commission_rule_shape`.
     check(
@@ -1255,6 +1322,12 @@ export const financialSnapshots = pgTable(
     turnoverTaxMinor: bigint("turnover_tax_minor", { mode: "number" }),
     paymentCommissionMinor: bigint("payment_commission_minor", { mode: "number" }),
     payrollTaxMinor: bigint("payroll_tax_minor", { mode: "number" }),
+    /*
+     * The `costing-v6` term: materials taken off the margin. Null on every
+     * snapshot written before it, for the reason the v2 figures above give —
+     * a zero would claim the visit used none, where nobody had asked.
+     */
+    materialsMinor: bigint("materials_minor", { mode: "number" }),
     contributionMarginMinor: bigint("contribution_margin_minor", { mode: "number" }),
     marginBasisPoints: integer("margin_basis_points"),
     profitPerHourMinor: bigint("profit_per_hour_minor", { mode: "number" }),

@@ -53,6 +53,7 @@ const TABLES_IN_DELETE_ORDER = [
   // than to this list.
   "payment_method",
   "tax_rule",
+  "materials_costing_period",
   "client",
   "labor_cost_rule",
   // Before the rule it belongs to: the FK cascades, but this list is meant to
