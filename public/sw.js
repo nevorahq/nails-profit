@@ -65,8 +65,9 @@ self.addEventListener("notificationclick", (event) => {
         if (new URL(client.url).origin !== self.location.origin) continue;
         if (!new URL(client.url).pathname.startsWith("/app") || !("navigate" in client)) continue;
         try {
-          const moved = await client.navigate(target);
-          await (moved ?? client).focus();
+          // Focus first, while the click still counts as the user's gesture.
+          await client.focus();
+          await client.navigate(target);
           return;
         } catch {
           break;
