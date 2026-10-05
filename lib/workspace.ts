@@ -35,6 +35,11 @@ export type Workspace = Readonly<{
    * language, currency and format; the rule itself is `staffNoticeAudience`.
    */
   staffNotices: "owner" | "owner_and_managers";
+  /**
+   * The studio's own clock. Decides which month the reports open on — never a
+   * month's bounds, which stay the UTC ones every figure is cut at.
+   */
+  timezone: string;
 }>;
 
 /**
@@ -60,6 +65,7 @@ async function loadWorkspace(): Promise<Workspace> {
       type: organizations.type,
       practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
       staffNotices: organizations.staffNotices,
+      timezone: organizations.timezone,
     })
     .from(organizations)
     .where(eq(organizations.id, caller.membership.organizationId))
@@ -75,6 +81,7 @@ async function loadWorkspace(): Promise<Workspace> {
     businessType: organization?.type ?? "solo",
     practicalCapacityBasisPoints: organization?.practicalCapacityBasisPoints ?? 7500,
     staffNotices: organization?.staffNotices ?? "owner",
+    timezone: organization?.timezone ?? "Europe/Chisinau",
   };
 }
 

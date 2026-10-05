@@ -29,6 +29,7 @@ import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
 import { monthOf } from "@/lib/period";
+import { presetRanges, previousRangeOf, resolveReportPeriod, todayIn } from "@/domain/report-period";
 import { loadStartScreen } from "@/lib/first-numbers";
 import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
@@ -263,28 +264,31 @@ export default async function AppPage({
    * hand, and «вчера» reached `new Date` as an Invalid Date while the very same
    * string was quietly ignored by the expense ledger — one address, two
    * behaviours. Ignored here too, so an unusable filter simply is not one.
+   *
+   * Nothing usable means the month the studio is in, by its own clock — see
+   * `domain/report-period.ts` for why only the choice of month is local.
    */
-  const from = isCalendarDay(filters.from) ? filters.from : undefined;
-  const to = isCalendarDay(filters.to) ? filters.to : undefined;
+  const today = todayIn(new Date(), membership.organization.timezone);
+  const period = resolveReportPeriod(
+    {
+      from: isCalendarDay(filters.from) ? filters.from : undefined,
+      to: isCalendarDay(filters.to) ? filters.to : undefined,
+    },
+    today,
+  );
+  const { from, to } = period;
   const organizationId = membership.organization.id;
   const currency = membership.organization.currency;
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
 
-  // The period cards compare against the equal-length window immediately
-  // before the selected one — only defined when a specific period was picked;
-  // "all time" has no prior period to be a delta against.
-  const previousRange =
-    from && to
-      ? (() => {
-          const currentFrom = new Date(`${from}T00:00:00.000Z`);
-          const currentTo = new Date(`${to}T23:59:59.999Z`);
-          const spanMs = currentTo.getTime() - currentFrom.getTime() + 1;
-          const previousTo = new Date(currentFrom.getTime() - 1);
-          const previousFrom = new Date(previousTo.getTime() - spanMs + 1);
-          return { from: previousFrom, to: previousTo };
-        })()
-      : null;
+  const previousDays = previousRangeOf(period);
+  const previousRange = previousDays
+    ? {
+        from: new Date(`${previousDays.from}T00:00:00.000Z`),
+        to: new Date(`${previousDays.to}T23:59:59.999Z`),
+      }
+    : null;
 
   /*
    * The ledger is the whole organization's, and the report can be narrowed to
@@ -489,24 +493,22 @@ export default async function AppPage({
     contributionMarginMinor: metrics.ranking.reduce((s, e) => s + e.contributionMarginMinor, 0),
     commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),
   };
-  const period =
-    from || to
-      ? `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`
-      : t("filters.allTime");
+  const periodLabel = `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`;
 
   return (
     <main className="app-shell">
       {closeDay}
       <span className="eyebrow report-period">
-        {t("dashboard.eyebrow")} · {period}
+        {t("dashboard.eyebrow")} · {periodLabel}
       </span>
 
       <PeriodFilter
         locale={locale}
-        from={filters.from}
-        to={filters.to}
+        from={from}
+        to={to}
         specialistId={filters.specialist}
         people={data.people}
+        presets={{ ranges: presetRanges(today), active: period.preset }}
         /*
           A picker over one person narrows nothing. The capability is still what
           decides whether the report *may* be narrowed — a master may not — and
