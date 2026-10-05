@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import {
+  bookingLines,
   bookingVerifications,
   bookings,
   clients,
@@ -8,13 +9,16 @@ import {
   memberships,
   notificationOutbox,
   organizations,
+  pushSubscriptions,
   specialists,
   users,
 } from "@/db/schema";
 import { db } from "@/db";
 import { withTenant, type TenantTransaction } from "@/db/tenant";
 import { decideAfterFailure } from "@/domain/notification-schedule";
+import { can, scopeFor } from "@/domain/rbac";
 import { areNotificationsEnabled, getPublicAppUrl } from "@/env";
+import { resolveLocalizedText } from "@/i18n/localized-text";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking-service";
 import { bookingPageUrl, issueManageLink } from "@/lib/booking-manage-link";
@@ -29,6 +33,7 @@ import {
   type StaffNotificationTemplate,
 } from "@/lib/notification-message";
 import { notificationProvider, type OutgoingMessage } from "@/lib/notification-provider";
+import { isPushTemplate, renderPush } from "@/lib/push-message";
 import { pollSmsMdDeliveryStatuses } from "@/lib/smsmd-delivery-status";
 
 /**
@@ -318,9 +323,6 @@ async function prepare(
   row: ClaimedRow,
   now: Date,
 ): Promise<Prepared> {
-  // Written by a build that can send to a phone; this one cannot yet.
-  if (row.channel === "push") return { ok: false, code: "push_unavailable" };
-
   const template = asBookingNotificationTemplate(row.template);
   if (!template) {
     /*
@@ -338,6 +340,8 @@ async function prepare(
     );
     return { ok: false, code: "template_unknown" };
   }
+
+  if (row.channel === "push") return preparePush(tx, organizationId, row, template);
 
   const [organization] = await tx
     .select({
@@ -622,6 +626,142 @@ async function staffFacts(
   };
 }
 
+/**
+ * A push for one device, read entirely at delivery like every other message
+ * here: the booking as it stands, the device as it still exists, and the
+ * reader's right to the line as it is now.
+ *
+ * Three things are asked again that were true when the row was written and may
+ * not be any more. The event still holds (`staffMessageStillHolds`): a request
+ * answered in the meantime is not announced as waiting. The device still
+ * belongs to the person it was queued for: a shared tablet handed over is not
+ * told about the previous person's chair. And that person may still read this
+ * booking: a master moved to another card, or out of the team, is not.
+ *
+ * What it says is `renderPush` — time, service, client's name — and nothing
+ * else is read here that could reach a lock screen: no phone, no address.
+ */
+async function preparePush(
+  tx: TenantTransaction,
+  organizationId: string,
+  row: ClaimedRow,
+  template: BookingNotificationTemplate,
+): Promise<Prepared> {
+  if (!isStaffNotificationTemplate(template) || !isPushTemplate(template)) {
+    return { ok: false, code: "push_template_unsupported" };
+  }
+  const subscriptionId = row.payload?.subscriptionId;
+  const userId = row.payload?.userId;
+  if (!row.bookingId || !subscriptionId || !userId) return { ok: false, code: "payload_missing" };
+
+  const [device] = await tx
+    .select()
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.id, subscriptionId))
+    .limit(1);
+  if (!device) return { ok: false, code: "push_device_gone" };
+  if (device.userId !== userId) return { ok: false, code: "push_device_changed_hands" };
+
+  const [found] = await tx
+    .select({
+      startsAt: bookings.startsAt,
+      status: bookings.status,
+      specialistId: bookings.specialistId,
+      clientNameSnapshot: bookings.clientNameSnapshot,
+      clientName: clients.name,
+      timezone: locations.timezone,
+      specialistName: specialists.name,
+      specialistUserId: specialists.userId,
+    })
+    .from(bookings)
+    .innerJoin(locations, eq(locations.id, bookings.locationId))
+    .innerJoin(specialists, eq(specialists.id, bookings.specialistId))
+    .leftJoin(clients, eq(clients.id, bookings.clientId))
+    .where(eq(bookings.id, row.bookingId))
+    .limit(1);
+  if (!found) return { ok: false, code: "booking_missing" };
+  if (!staffMessageStillHolds(template, found.status)) return { ok: false, code: "booking_moved_on" };
+
+  const [member] = await tx
+    .select({ role: memberships.role })
+    .from(memberships)
+    .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)))
+    .limit(1);
+  if (!member || !can(member.role, "bookings", "read")) return { ok: false, code: "push_reader_gone" };
+
+  /*
+   * Whose chair this push is about: the booking's, except for the hour a client
+   * moved out of, which belongs to the previous master — written into the row,
+   * as for that master's email, because the booking now names somebody else.
+   */
+  let startsAt = found.startsAt;
+  let chairUserId = found.specialistUserId;
+  if (template === "booking.staff_released") {
+    const releasedFrom = row.payload?.specialistId;
+    const releasedAt = row.payload?.startsAt;
+    if (!releasedFrom || !releasedAt) return { ok: false, code: "payload_missing" };
+    // Moved back before the queue came round: nothing was released after all.
+    if (releasedFrom === found.specialistId) return { ok: false, code: "booking_moved_on" };
+    const [previous] = await tx
+      .select({ userId: specialists.userId })
+      .from(specialists)
+      .where(eq(specialists.id, releasedFrom))
+      .limit(1);
+    chairUserId = previous?.userId ?? null;
+    startsAt = new Date(releasedAt);
+  }
+
+  const readsWholeStudio = scopeFor(member.role, "bookings") === "all";
+  if (!readsWholeStudio && chairUserId !== userId) return { ok: false, code: "push_not_their_chair" };
+
+  const [organization] = await tx
+    .select({ locale: organizations.locale, type: organizations.type })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  const locale = asLocale(organization?.locale ?? null) ?? "ru";
+
+  const lines = await tx
+    .select({ name: bookingLines.nameSnapshot })
+    .from(bookingLines)
+    .where(eq(bookingLines.bookingId, row.bookingId))
+    .orderBy(asc(bookingLines.createdAt));
+  const service = lines
+    .map((line) => resolveLocalizedText(line.name, locale, locale))
+    .filter((name): name is string => Boolean(name))
+    .join(", ");
+
+  const payload = renderPush({
+    template,
+    locale,
+    when: formatAppointmentTime(startsAt, found.timezone, locale, "sms"),
+    service,
+    client: found.clientNameSnapshot ?? found.clientName,
+    // The chair named only to somebody whose chair it is not, in a studio
+    // that has more than one.
+    specialist:
+      organization?.type !== "solo" && found.specialistUserId !== userId ? found.specialistName : null,
+    bookingId: row.bookingId,
+  });
+
+  return {
+    ok: true,
+    message: {
+      channel: "push",
+      destination: device.endpoint,
+      subject: payload.title,
+      body: JSON.stringify(payload),
+      idempotencyKey: row.idempotencyKey,
+      push: {
+        organizationId,
+        subscriptionId: device.id,
+        p256dh: device.p256dh,
+        auth: device.auth,
+      },
+    },
+  };
+}
+
 async function bookingFacts(
   tx: TenantTransaction,
   row: ClaimedRow,
@@ -629,8 +769,8 @@ async function bookingFacts(
   slug: string | null,
   now: Date,
 ): Promise<Facts> {
-  // A client is never written to on a phone of the studio's; see `prepare`.
-  if (row.channel === "push") return { ok: false, code: "push_unavailable" };
+  // A client is never written to on a phone of the studio's; see `preparePush`.
+  if (row.channel === "push") return { ok: false, code: "push_not_for_clients" };
   if (!row.bookingId) return { ok: false, code: "booking_missing" };
 
   const [found] = await tx

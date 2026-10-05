@@ -17,11 +17,17 @@ import {
   type BookingNotificationTemplate,
   type StaffNotificationTemplate,
 } from "@/lib/notification-message";
+import { can, scopeFor } from "@/domain/rbac";
+import { isPushConfigured } from "@/env";
+import { logEvent } from "@/lib/logger";
+import { isPushTemplate } from "@/lib/push-message";
+import { devicesOf } from "@/lib/push-subscriptions";
 import { recordStaffNotice, type StaffNoticeKind } from "@/lib/staff-notices";
 
 export type { BookingNotificationTemplate };
 
 type Channel = "email" | "sms";
+type OutboxChannel = Channel | "push";
 
 /**
  * Writing to the outbox, roadmap section 7.7: "Notification outbox
@@ -231,6 +237,106 @@ export async function notifyStaff(
       payload: { recipient: "owner" },
     });
   }
+
+  if (target) {
+    await enqueuePush(tx, {
+      organizationId: input.organizationId,
+      bookingId: input.bookingId,
+      template: input.template,
+      occurrence: input.occurrence,
+      specialistId: target.specialistId,
+      audience: "everyone",
+    });
+  }
+}
+
+/**
+ * The same event on the phones of the people who turned push on, phase 7.
+ *
+ * Not the email's recipients. An email is written to an inbox nobody asked to
+ * fill, so who gets one is the studio's setting and kept narrow; a push goes
+ * only to a device its owner switched on, and switching it on is the consent.
+ * So the audience is the bell's — everyone who would see this line there
+ * (decided 05.10.2026): the whole studio for the roles that read the whole
+ * calendar, and her own chair for a master, through the same `scopeFor` the
+ * calendar asks.
+ *
+ * `chair` narrows that to the master whose day it is, for the one event whose
+ * whole studio already hears about it some other way: a client moving off one
+ * master's hour is `staff_rescheduled` for everyone else.
+ *
+ * One row per device rather than per person, so a phone that is gone fails —
+ * and is forgotten — without a working laptop being retried with it.
+ * Off entirely without VAPID keys: nothing is queued that nothing could send.
+ */
+async function enqueuePush(
+  tx: TenantTransaction,
+  input: {
+    organizationId: string;
+    bookingId: string;
+    template: StaffNotificationTemplate;
+    occurrence?: string;
+    /** Whose chair the event is about. */
+    specialistId: string;
+    audience: "everyone" | "chair";
+    /** The hour a client moved out of, which the booking no longer knows. */
+    releasedAt?: Date;
+  },
+) {
+  if (!isPushTemplate(input.template) || !pushIsOn()) return;
+
+  const [chair] = await tx
+    .select({ userId: specialists.userId })
+    .from(specialists)
+    .where(eq(specialists.id, input.specialistId))
+    .limit(1);
+
+  const members = await tx
+    .select({ userId: memberships.userId, role: memberships.role })
+    .from(memberships)
+    .where(eq(memberships.organizationId, input.organizationId));
+
+  const readers = members
+    .filter((member) => can(member.role, "bookings", "read"))
+    .filter((member) => {
+      const ownChair = chair?.userId === member.userId;
+      if (input.audience === "chair") return ownChair;
+      return scopeFor(member.role, "bookings") === "all" || ownChair;
+    })
+    .map((member) => member.userId);
+
+  for (const device of await devicesOf(tx, readers)) {
+    await insertOutbox(tx, {
+      organizationId: input.organizationId,
+      bookingId: input.bookingId,
+      verificationId: null,
+      channel: "push",
+      template: input.template,
+      occurrence: `${input.occurrence ?? "initial"}:push:${device.id}`,
+      payload: {
+        recipient: "member",
+        userId: device.userId,
+        subscriptionId: device.id,
+        ...(input.releasedAt
+          ? { specialistId: input.specialistId, startsAt: input.releasedAt.toISOString() }
+          : {}),
+      },
+    });
+  }
+}
+
+/**
+ * Whether push is configured, without letting a broken configuration fail the
+ * booking this is written inside. Half a key pair is a deployment mistake to
+ * shout about in the log, not a reason a client's request is refused.
+ */
+function pushIsOn(): boolean {
+  try {
+    return isPushConfigured();
+  } catch (error) {
+    logEvent("error", "push.misconfigured", {}, { reason: error instanceof Error ? error.message : "unknown" });
+    return false;
+  }
 }
 
 /**
@@ -416,6 +522,15 @@ export async function notifyReleasedSpecialist(
   });
 
   await queueReleasedMessage(tx, { ...input, template: "booking.staff_released" });
+  await enqueuePush(tx, {
+    organizationId: input.organizationId,
+    bookingId: input.bookingId,
+    template: "booking.staff_released",
+    occurrence: input.occurrence,
+    specialistId: input.specialistId,
+    audience: "chair",
+    releasedAt: input.startsAt,
+  });
 }
 
 /**
@@ -479,7 +594,7 @@ async function insertOutbox(
     organizationId: string;
     bookingId: string | null;
     verificationId: string | null;
-    channel: Channel;
+    channel: OutboxChannel;
     template: BookingNotificationTemplate;
     occurrence?: string;
     scheduledAt?: Date;
@@ -490,6 +605,8 @@ async function insertOutbox(
       /** Which account a `member` row is for — see `staffNoticeAudience`. */
       userId?: string;
       startsAt?: string;
+      /** Which device a push row is for. */
+      subscriptionId?: string;
     } | null;
   },
 ) {

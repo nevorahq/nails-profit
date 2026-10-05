@@ -143,3 +143,8 @@ export async function deviceCountOf(tx: TenantTransaction, userId: string): Prom
     .where(eq(pushSubscriptions.userId, userId));
   return rows.length;
 }
+
+/** The last time a push reached this device, so a dead one can be told from a quiet one. */
+export async function touchDevice(tx: TenantTransaction, id: string, at: Date): Promise<void> {
+  await tx.update(pushSubscriptions).set({ lastSuccessAt: at }).where(eq(pushSubscriptions.id, id));
+}

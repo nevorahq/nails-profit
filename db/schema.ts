@@ -2373,6 +2373,8 @@ export const notificationOutbox = pgTable(
       userId?: string;
       /** ISO 8601; a `jsonb` column holds no timestamps of its own. */
       startsAt?: string;
+      /** The device a `push` row is for; its owner is `userId`. */
+      subscriptionId?: string;
     }>(),
     status: notificationStatus("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),

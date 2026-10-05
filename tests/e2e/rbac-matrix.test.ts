@@ -1002,6 +1002,13 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/push/subscription" }),
   },
   {
+    route: "/api/v1/push/test",
+    method: "POST",
+    allowed: ALL_ROLES,
+    note: "bookings read; a test push to the caller's own device. Without an endpoint this is a 422, never a 403",
+    request: async () => ({ path: "/api/v1/push/test" }),
+  },
+  {
     route: "/api/v1/bookings",
     method: "POST",
     allowed: ["owner", "manager", "master"],

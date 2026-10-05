@@ -5,6 +5,7 @@ import {
   getSmsProviderName,
 } from "@/env";
 import { logEvent } from "@/lib/logger";
+import { pushNotificationProvider } from "@/lib/push-provider";
 
 /**
  * The seam a transactional provider plugs into, roadmap section 7.7.
@@ -21,7 +22,8 @@ import { logEvent } from "@/lib/logger";
  * worth another attempt, an address the provider rejects is not.
  */
 export type OutgoingMessage = Readonly<{
-  channel: "email" | "sms";
+  channel: "email" | "sms" | "push";
+  /** An address, a phone number, or — for push — the device's endpoint. */
   destination: string;
   subject: string;
   body: string;
@@ -43,6 +45,12 @@ export type OutgoingMessage = Readonly<{
   idempotencyKey: string;
   /** Non-PII routing metadata echoed by Resend in signed webhook events. */
   tags?: readonly Readonly<{ name: string; value: string }>[];
+  /**
+   * The device a push is for: its keys, and which row to forget when the push
+   * service says it is gone. `body` is then the JSON payload `public/sw.js`
+   * reads, and `subject` its title for the logs' sake.
+   */
+  push?: Readonly<{ organizationId: string; subscriptionId: string; p256dh: string; auth: string }>;
 }>;
 
 export type DeliveryResult =
@@ -285,8 +293,10 @@ export function setNotificationProvider(provider: NotificationProvider | null) {
  * onboarding can never silently change what sends the emails already in
  * production, and vice versa.
  */
-export function notificationProvider(channel: "email" | "sms"): NotificationProvider {
+export function notificationProvider(channel: "email" | "sms" | "push"): NotificationProvider {
   if (override) return override;
+
+  if (channel === "push") return pushNotificationProvider();
 
   if (channel === "sms") {
     return getSmsProviderName() === "smsmd"
