@@ -330,11 +330,10 @@ export default async function MonthReportPage({
             )}
 
             {/*
-              Not computed, and the reason — but no way out offered any more.
-              «Оплата труда за месяц» is off the settings page (see the switch
-              at the top of `app/app/settings/page.tsx`), so a link to it would
-              be a door onto nothing; `tests/owner-wage-reachable.test.ts` holds
-              the two together. The suggestion still stands on its own: it is
+              Not computed, and the reason — but no way out offered. «Оплата
+              труда за месяц» lives on «Деньги» and only with this same switch
+              on; `tests/owner-wage-reachable.test.ts` holds the two together if
+              a link is ever put back. The suggestion stands on its own: it is
               what the owner already booked themselves at the market rate this
               month, which is the number this line exists to name.
             */}

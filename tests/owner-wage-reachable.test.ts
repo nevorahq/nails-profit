@@ -9,9 +9,10 @@ import { describe, expect, it } from "vitest";
  * worth. The report used to say so with a link to `/app/settings` while
  * `SHOW_ADVANCED_FINANCIAL_SETTINGS` kept the control that answers it off that
  * page: the product asked for a number, offered a door, and put nothing behind
- * it. The report asks for nothing now, and «Оплата труда за месяц» is back on
- * the page for every studio that turns on «Подробная финансовая аналитика» —
- * the same switch that makes the report draw the lines it feeds.
+ * it. The report asks for nothing now, and «Оплата труда за месяц» is on
+ * «Деньги» (it moved there from Настройки) for every studio that turns on
+ * «Подробная финансовая аналитика» — the same switch that makes the report
+ * draw the lines it feeds.
  *
  * Read from the source rather than rendered: there is no renderer in this
  * repository — see `tests/accessibility.test.ts` for why — and "the screen this
@@ -22,15 +23,15 @@ import { describe, expect, it } from "vitest";
  * either order.
  */
 const report = readFileSync("app/app/reports/month/page.tsx", "utf8");
-const settings = readFileSync("app/app/settings/page.tsx", "utf8");
+const money = readFileSync("app/app/expenses/page.tsx", "utf8");
 
 describe("the owner's wage is never asked for through a door onto nothing", () => {
   const sendsPeopleToSettings =
-    report.includes("pl.setOwnerWage") || report.includes('href="/app/settings"');
+    report.includes("pl.setOwnerWage") || report.includes('href="/app/settings"') || report.includes('href="/app/expenses#labour"');
 
-  const settingsOfferTheControl = (() => {
-    if (!settings.includes("<LaborCostManager")) return false;
-    const assignment = /const\s+canReadLabour\s*=([\s\S]*?);/.exec(settings);
+  const moneyOffersTheControl = (() => {
+    if (!money.includes("<LaborCostManager")) return false;
+    const assignment = /const\s+canReadLabour\s*=([\s\S]*?);/.exec(money);
     if (assignment === null) return false;
     return (
       !assignment[1].includes("SHOW_ADVANCED_FINANCIAL_SETTINGS") &&
@@ -39,7 +40,7 @@ describe("the owner's wage is never asked for through a door onto nothing", () =
   })();
 
   it("keeps the instruction and the control together", () => {
-    expect(sendsPeopleToSettings && !settingsOfferTheControl).toBe(false);
+    expect(sendsPeopleToSettings && !moneyOffersTheControl).toBe(false);
   });
 
   /*
@@ -48,9 +49,9 @@ describe("the owner's wage is never asked for through a door onto nothing", () =
    * implication above quietly satisfied by two absences nobody chose.
    */
   it("is where the two of them were last left", () => {
-    expect({ sendsPeopleToSettings, settingsOfferTheControl }).toEqual({
+    expect({ sendsPeopleToSettings, moneyOffersTheControl }).toEqual({
       sendsPeopleToSettings: false,
-      settingsOfferTheControl: true,
+      moneyOffersTheControl: true,
     });
   });
 });
