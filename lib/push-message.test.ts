@@ -52,7 +52,7 @@ describe("a push on a locked phone", () => {
       locale: "ru",
     });
     expect(own.body).not.toContain("Ирина");
-    expect(owners.body).toContain("к Ирина");
+    expect(owners.body).toContain("мастер Ирина");
   });
 
   it("opens the appointment, and keeps one line per appointment", () => {

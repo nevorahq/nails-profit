@@ -397,7 +397,7 @@ const ru = {
   "push.title.test": "Уведомления работают",
   "push.body.test": "Так будут приходить новые заявки и записи.",
   "push.noClient": "Без клиента",
-  "push.toSpecialist": "к {specialist}",
+  "push.toSpecialist": "мастер {specialist}",
   "pushDevice.title": "Уведомления на этом устройстве",
   "pushDevice.lead": "Новые заявки, переносы и отмены придут на этот телефон или компьютер, даже когда приложение закрыто.",
   "pushDevice.stateOn": "включены",
