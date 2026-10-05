@@ -76,6 +76,12 @@ export function ExpenseLedger({
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
+      // The phone's «+» links here by full path, and opens rather than toggles.
+      const quick = (event.target as HTMLElement).closest('a[href="/app/expenses#add-expense"]');
+      if (quick) {
+        setOpen(true);
+        return;
+      }
       const trigger = (event.target as HTMLElement).closest('a[href="#add-expense"]');
       if (!trigger) return;
       event.preventDefault();

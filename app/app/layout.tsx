@@ -36,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       name: organizations.name,
       locale: organizations.locale,
       type: organizations.type,
+      bookingAccess: organizations.bookingAccess,
     })
     .from(organizations)
     .where(eq(organizations.id, caller.membership.organizationId))
@@ -72,6 +73,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }
       }
       stalePreview={stalePreview}
+      bookingOff={organization?.bookingAccess === "off"}
     >
       {children}
     </AppShell>

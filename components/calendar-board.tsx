@@ -606,7 +606,11 @@ export function CalendarBoard({
     }
 
     function onClick(event: MouseEvent) {
-      const trigger = (event.target as HTMLElement).closest('a[href="#new-booking"]');
+      // The phone's «+» (`components/quick-actions.tsx`) links here by full
+      // path, so it is answered on this page as well as on arrival.
+      const trigger = (event.target as HTMLElement).closest(
+        'a[href="#new-booking"], a[href="/app/calendar#new-booking"]',
+      );
       if (!trigger) return;
       event.preventDefault();
       const details = composeRef.current;

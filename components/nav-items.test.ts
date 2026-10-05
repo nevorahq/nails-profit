@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bottomNavFor, moreNavFor, navFor, navGroups, navItems } from "@/components/nav-items";
+import { bottomNavFor, moreNavFor, navFor, navGroups, navItems, quickActionsFor } from "@/components/nav-items";
 import { isActiveSection } from "@/components/nav-link";
 import { memberRoles } from "@/domain/rbac";
 
@@ -119,6 +119,50 @@ describe("navigation", () => {
           .sort(),
       );
     }
+  });
+
+  it("gives each role and each shape of business its own phone bar", () => {
+    /*
+     * The owner's fourth slot is the «+» (`quickActionsFor`), so their bar is
+     * three sections and «Ещё»; «Визиты» is one tap away there. Everyone else
+     * keeps the bar they had. The shape of the business moves no section on
+     * or off the bar — only the heading «Мастера» sits under in «Ещё».
+     */
+    const expected = {
+      owner: ["/app", "/app/calendar", "/app/clients"],
+      manager: ["/app", "/app/calendar", "/app/visits", "/app/clients"],
+      analyst: ["/app", "/app/calendar", "/app/visits", "/app/clients"],
+      master: ["/app", "/app/calendar", "/app/booking"],
+    } as const;
+    for (const role of memberRoles) {
+      for (const businessType of ["solo", "studio"] as const) {
+        expect(bottomNavFor(role, businessType).map((item) => item.href), `${role}/${businessType}`).toEqual(
+          expected[role],
+        );
+      }
+    }
+    expect(moreNavFor("owner").map((item) => item.href)).toContain("/app/visits");
+  });
+
+  it("puts the owner's three ways in behind «+», and nothing behind it for anyone else", () => {
+    expect(quickActionsFor("owner", { bookingOff: false }).map((action) => action.href)).toEqual([
+      "/app/calendar#new-booking",
+      "/app/visits/new",
+      "/app/expenses#add-expense",
+    ]);
+    for (const role of memberRoles.filter((r) => r !== "owner")) {
+      expect(quickActionsFor(role, { bookingOff: false }), role).toEqual([]);
+    }
+    expect(quickActionsFor(undefined, { bookingOff: false })).toEqual([]);
+  });
+
+  it("offers no booking from «+» while the booking module is switched off", () => {
+    // The calendar is read-only then and has no form to open; a visit closed
+    // without an appointment and an expense do not need the module.
+    expect(quickActionsFor("owner", { bookingOff: true }).map((action) => action.href)).toEqual([
+      "/app/visits/new",
+      "/app/expenses#add-expense",
+    ]);
   });
 
   it("backfills a master's bottom bar rather than leaving it half empty", () => {

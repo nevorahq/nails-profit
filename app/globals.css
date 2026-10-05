@@ -2563,6 +2563,69 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   }
 }
 
+/*
+ * The owner's «+», floating over the bar's right end — the corner the cookie
+ * button above was moved out of for the same thumb. Phone only: on a wide
+ * screen each of its three actions has its own button on its own page.
+ */
+.quick-actions { display: none; }
+
+@media (max-width: 680px) {
+  .quick-actions {
+    display: block;
+    position: fixed;
+    z-index: 95;
+    right: 16rem;
+    bottom: calc(81rem + env(safe-area-inset-bottom));
+  }
+
+  .quick-actions-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56rem;
+    height: 56rem;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .quick-actions-toggle::-webkit-details-marker { display: none; }
+  .quick-actions-toggle svg { width: 26rem; height: 26rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; transition: transform var(--duration-fast) var(--ease-standard); }
+  .quick-actions[open] .quick-actions-toggle svg { transform: rotate(45deg); }
+
+  .quick-actions-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10rem);
+    display: grid;
+    gap: 8rem;
+    width: max-content;
+    max-width: calc(100vw - 32rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .quick-actions-menu a {
+    display: block;
+    padding: 12rem 16rem;
+    border: 1rem solid var(--line);
+    border-radius: 4rem;
+    background: var(--surface-strong);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    font-size: 16rem;
+    font-weight: 700;
+    text-align: right;
+    text-decoration: none;
+  }
+}
+
 .more-nav { display: grid; gap: 26rem; margin-top: 22rem; }
 .more-list { display: grid; gap: 8rem; margin: 0; padding: 0; list-style: none; }
 
