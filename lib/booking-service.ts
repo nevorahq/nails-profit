@@ -679,7 +679,9 @@ export async function claimRequestsDueForReminder(tx: TenantTransaction, now: Da
         eq(bookings.status, "pending_confirmation"),
         isNotNull(bookings.confirmationDueAt),
         gt(bookings.confirmationDueAt, now),
-        sql`${bookings.createdAt} + (${bookings.confirmationDueAt} - ${bookings.createdAt}) / 2 <= ${now}`,
+        // A raw fragment binds a Date as nothing the driver can send; the
+        // instant goes as ISO text and is read back as the timestamp it is.
+        sql`${bookings.createdAt} + (${bookings.confirmationDueAt} - ${bookings.createdAt}) / 2 <= ${now.toISOString()}::timestamptz`,
         sql`${bookings.staffRemindedVersion} is distinct from ${bookings.version}`,
       ),
     )
