@@ -480,6 +480,20 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/onboarding/month" }),
   },
   {
+    route: "/api/v1/onboarding/taxes",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Ответ «как вы платите налоги» пишет tax_rule — owner-only, как сами налоги",
+    request: async () => ({ path: "/api/v1/onboarding/taxes", body: { answer: "none" } }),
+  },
+  {
+    route: "/api/v1/onboarding/payments",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Ответ «как платят клиенты» пишет способы оплаты — owner-only, раздел «Деньги»",
+    request: async () => ({ path: "/api/v1/onboarding/payments", body: { methods: ["cash"] } }),
+  },
+  {
     route: "/api/v1/services",
     method: "GET",
     allowed: ALL_ROLES,

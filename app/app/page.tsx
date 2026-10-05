@@ -426,7 +426,7 @@ export default async function AppPage({
      */
     const monthSetup =
       onboarding?.complete && membership.role === "owner"
-        ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency })
+        ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency, organizationId })
         : null;
 
     /*

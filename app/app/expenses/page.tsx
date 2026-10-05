@@ -94,7 +94,7 @@ export default async function ExpensesPage({
   );
 
   const monthGuide = await withTenant(membership.organizationId, (tx) =>
-    loadMonthGuide(tx, { month: monthOf(new Date()), currency }),
+    loadMonthGuide(tx, { month: monthOf(new Date()), currency, organizationId: membership.organizationId }),
   );
 
   return (

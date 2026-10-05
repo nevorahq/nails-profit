@@ -3521,3 +3521,23 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
   .public-booking-loading > span:not(.sr-only) { animation: none !important; }
 }
+
+/*
+ * A question answered by picking: «Что это за выплата?» on the expense form,
+ * «Как вы платите налоги?» and «Как платят клиенты?» on «Деньги». A whole row of
+ * the inline form to itself, because the answer decides which fields follow.
+ */
+.choice-group {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.choice-group legend { padding: 0 0 6rem; color: var(--ink); font-weight: 650; }
+.choice-group label.checkbox-field { padding-bottom: 6rem; }
+.money-question .inline-form { margin-bottom: 0; }
+.money-question .choice-group .inline-field { margin: 0 0 8rem 30rem; max-width: 220rem; }

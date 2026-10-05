@@ -193,7 +193,7 @@ describe("month setup progress over real data", () => {
 
   async function step(key: MonthSetupStep["key"], month = MONTH) {
     const { steps } = await withTenant(organizationId, (tx) =>
-      loadMonthSetup(tx, { month, currency: "MDL" }),
+      loadMonthSetup(tx, { month, currency: "MDL", organizationId }),
     );
     return steps.find((candidate) => candidate.key === key)!;
   }
@@ -230,7 +230,7 @@ describe("month setup progress over real data", () => {
 
   it("starts with neither step done", async () => {
     const progress = await withTenant(organizationId, (tx) =>
-      loadMonthSetup(tx, { month: MONTH, currency: "MDL" }),
+      loadMonthSetup(tx, { month: MONTH, currency: "MDL", organizationId }),
     );
 
     expect(progress.done).toBe(0);

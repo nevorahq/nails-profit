@@ -435,6 +435,13 @@
       "when": 1791200172830,
       "tag": "0061_a_studio_chooses_how_much_finance_it_reads",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791206053060,
+      "tag": "0062_a_studio_answers_for_taxes_and_payments",
+      "breakpoints": true
     }
   ]
 }

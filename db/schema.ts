@@ -230,6 +230,17 @@ export const organizations = pgTable(
      * every figure is computed the same way either side of it.
      */
     detailedAnalytics: boolean("detailed_analytics").notNull().default(false),
+    /**
+     * When the owner answered «Как вы платите налоги?» and «Как платят
+     * клиенты?» — see `lib/money-answers.ts`.
+     *
+     * A rule answers the question by existing, so these matter for the answer
+     * that writes nothing: «не плачу с визита», which a missing rule cannot
+     * tell apart from a question nobody asked. Until one of the two is known,
+     * the report says its profit is before taxes and the bank's fee.
+     */
+    taxesAnsweredAt: timestamp("taxes_answered_at", { withTimezone: true }),
+    paymentsAnsweredAt: timestamp("payments_answered_at", { withTimezone: true }),
     currency: currency("currency").notNull().default("MDL"),
     locale: locale("locale").notNull().default("ru"),
     timezone: text("timezone").notNull().default("Europe/Chisinau"),

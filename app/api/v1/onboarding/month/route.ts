@@ -45,6 +45,7 @@ export async function GET(request: Request) {
     return loadMonthSetup(tx, {
       month: monthOf(new Date()),
       currency: organization?.currency ?? "MDL",
+      organizationId: actor.organizationId,
     });
   });
 

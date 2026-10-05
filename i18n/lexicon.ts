@@ -65,6 +65,12 @@ const bankFee: Layer = {
   },
   "payment.cash": { ru: "Наличные (без платы банку)", ro: "Numerar (fără plată băncii)", en: "Cash (no fee)" },
   "cooperation.commission": { ru: "процент", ro: "procent", en: "percentage" },
+  "money.payments.cardRate": { ru: "Плата банку за карту, %", ro: "Plata băncii pentru card, %", en: "Bank's card fee, %" },
+  "money.beforeTaxes": {
+    ru: "Прибыль показана до налогов и платы банку",
+    ro: "Profitul este arătat înainte de impozite și plata băncii",
+    en: "Profit is shown before taxes and the bank's card fee",
+  },
 };
 
 export const plainWords: Layer = {
