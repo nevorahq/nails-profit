@@ -54,6 +54,7 @@ export function SpecialistDetail({
   publishedLocationIds,
   canManage,
   today,
+  timezone,
 }: {
   person: SpecialistRow;
   services: ServiceOption[];
@@ -81,6 +82,8 @@ export function SpecialistDetail({
   canManage: boolean;
   /** The studio's date, `YYYY-MM-DD`: the first day a rule can change from. */
   today: string;
+  /** The studio's zone, which a scheduled rule's day is read in. */
+  timezone: string;
 }) {
   const t = useTranslator(locale);
   const register = useRegister();
@@ -353,7 +356,7 @@ export function SpecialistDetail({
                 {scheduled && (
                   <span className="unit-hint">
                     {t("rules.scheduled", {
-                      date: new Date(scheduled.active_from).toLocaleDateString(localeTag(locale)),
+                      date: new Date(scheduled.active_from).toLocaleDateString(localeTag(locale), { timeZone: timezone }),
                       rule: describeRule(scheduled, currency, t) ?? "—",
                     })}
                   </span>

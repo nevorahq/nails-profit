@@ -344,6 +344,7 @@ export default async function SettingsPage({
           suggestedOwnerWageMinor={labour.suggestedOwnerWageMinor}
           today={today}
           asOf={asOf.toISOString()}
+          timezone={timezone}
         />
       )}
       {SHOW_ADVANCED_FINANCIAL_SETTINGS && can(membership.role, "bookings", "read") && (
@@ -368,6 +369,7 @@ export default async function SettingsPage({
           rules={taxes}
           today={today}
           asOf={asOf.toISOString()}
+          timezone={timezone}
           locale={locale}
           canEdit={can(membership.role, "expenses", "write")}
         />

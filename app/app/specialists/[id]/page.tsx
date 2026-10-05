@@ -123,6 +123,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
       publishedLocationIds={loaded.publishedLocationIds}
       canManage={canManage}
       today={formatLocalDate(todayIn(new Date(), timezone))}
+      timezone={timezone}
     />
   );
 }

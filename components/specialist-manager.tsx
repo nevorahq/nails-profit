@@ -493,7 +493,7 @@ export function SpecialistManager({
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="40"
+                    placeholder={businessType === "solo" ? "0" : "40"}
                     required
                   />
                   {addCooperation !== "commission" && (

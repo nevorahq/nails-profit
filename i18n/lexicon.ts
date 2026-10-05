@@ -96,6 +96,24 @@ export const plainWords: Layer = {
     en: "The revenue at which the month leaves nothing — at today's prices and costs.",
   },
 
+  // Capacity and break-even, said as what they are for somebody running a table.
+  "capacity.title": { ru: "Загрузка и выход в ноль", ro: "Ocupare și pragul de zero", en: "How full, and breaking even" },
+  "capacity.contributionRatio": {
+    ru: "Доля выручки, что остаётся после визитов",
+    ro: "Partea din încasări care rămâne după vizite",
+    en: "Share of revenue left after visits",
+  },
+  "capacity.breakEven": {
+    ru: "Нужно заработать, чтобы выйти в ноль",
+    ro: "De încasat ca să ieșiți pe zero",
+    en: "Revenue to break even",
+  },
+  "firstNumbers.lead": {
+    ru: "Столько приносит каждая услуга — цена, оплата мастеру и то, что остаётся.",
+    ro: "Atât aduce fiecare serviciu — prețul, plata maestrului și ce rămâne.",
+    en: "This is what each service brings in — the price, the master's pay and what is left.",
+  },
+
   // The plain view has no practical capacity, so its «Подробнее» does not open on one.
   "capacity.utilizationHint": {
     ru: "Считается от расписания, а не от календаря: если мастер выходит три дня в неделю, остальные четыре — не простой, а просто не рабочее время.",
@@ -267,6 +285,11 @@ export const soloWords: Layer = {
     ru: "не задана ставка за работу",
     ro: "nu este stabilită cota pentru muncă",
     en: "no rate set for the work",
+  },
+  "firstNumbers.lead": {
+    ru: "Столько приносит каждая услуга — цена, расходы на неё и то, что остаётся вам.",
+    ro: "Atât aduce fiecare serviciu — prețul, cheltuielile lui și ce vă rămâne.",
+    en: "This is what each service brings in — the price, what it costs and what is left to you.",
   },
   "services.lossWarning": {
     ru: "Услуга работает в минус: расходы на неё больше цены.",

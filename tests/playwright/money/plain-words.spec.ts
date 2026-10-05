@@ -59,6 +59,8 @@ async function registerSolo(baseURL: string, testInfo: TestInfo): Promise<Solo> 
 }
 
 async function pageText(page: Page): Promise<string> {
+  // After hydration: opening a <details> React has not reached yet is a mismatch.
+  await page.waitForLoadState("networkidle");
   await page.evaluate(() => {
     for (const details of document.querySelectorAll("details")) details.open = true;
   });
@@ -149,6 +151,10 @@ test.describe("the plain view, for somebody working alone", () => {
     await expect(report.getByRole("cell", { name: "Загрузка, %" })).toBeVisible();
     await expect(report.getByText("Экономическая прибыль")).toHaveCount(0);
     await expect(report.getByText(/Практическая мощность/)).toHaveCount(0);
+    // Nothing that points at a line the plain view does not draw, and no table
+    // repeating her own month back to her as «начислено мастеру».
+    await expect(report.getByText("до вашего вознаграждения")).toHaveCount(0);
+    await expect(report.getByRole("heading", { name: "По мастерам" })).toHaveCount(0);
 
     await page.goto("/app/settings");
     // Folded behind its button on a phone, open on a wide screen.

@@ -40,12 +40,15 @@ export function TaxRuleManager({
   canEdit,
   today,
   asOf,
+  timezone,
 }: {
   rules: TaxRuleRowView[];
   locale: AppLocale;
   canEdit: boolean;
   /** When the page was read: what «in force» and «still to come» are judged against. */
   asOf: string;
+  /** The studio's zone: a rule starts at its midnight, and is dated by it. */
+  timezone: string;
   /** The studio's date, `YYYY-MM-DD`: the first day a rate can change from. */
   today: string;
 }) {
@@ -120,7 +123,7 @@ export function TaxRuleManager({
   const now = Date.parse(asOf);
   const live = rules.filter((rule) => rule.active_to === null || Date.parse(rule.active_to) > now);
   const closed = rules.filter((rule) => rule.active_to !== null && Date.parse(rule.active_to) <= now);
-  const dateOf = (iso: string) => new Date(iso).toLocaleDateString(localeCode);
+  const dateOf = (iso: string) => new Date(iso).toLocaleDateString(localeCode, { timeZone: timezone });
 
   /** «Изменить с даты» on a row: the form below, already on that tax. */
   function changeFrom(rule: TaxRuleRowView) {

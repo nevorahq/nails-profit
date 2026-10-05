@@ -57,6 +57,7 @@ export function LaborCostManager({
   suggestedOwnerWageMinor,
   today,
   asOf,
+  timezone,
 }: {
   rules: LaborCostRow[];
   specialists: { id: string; name: string }[];
@@ -74,6 +75,8 @@ export function LaborCostManager({
   suggestedOwnerWageMinor: number;
   /** When the page was read: what «in force» and «still to come» are judged against. */
   asOf: string;
+  /** The studio's zone: a rule starts at its midnight, and is dated by it. */
+  timezone: string;
   /** The studio's date, `YYYY-MM-DD`: the first day a rule can change from. */
   today: string;
 }) {
@@ -165,7 +168,7 @@ export function LaborCostManager({
   const now = Date.parse(asOf);
   const live = rules.filter((rule) => rule.active_to === null || Date.parse(rule.active_to) > now);
   const closed = rules.filter((rule) => rule.active_to !== null && Date.parse(rule.active_to) <= now);
-  const dateOf = (iso: string) => new Date(iso).toLocaleDateString(localeCode);
+  const dateOf = (iso: string) => new Date(iso).toLocaleDateString(localeCode, { timeZone: timezone });
 
   /** «Изменить с даты» on a row: the form below, already pointed at that arrangement. */
   function changeFrom(rule: LaborCostRow) {

@@ -284,7 +284,10 @@ export default async function MonthReportPage({
                 <tr className="pl-total">
                   <td>
                     {t("pl.operatingProfit")}{" "}
-                    <span className="unit-hint">{t(businessLabel.operatingProfitHint[businessType])}</span>
+                    {/* «До вознаграждения владельца» points at a line only the detailed view draws. */}
+                    {detailedAnalytics && (
+                      <span className="unit-hint">{t(businessLabel.operatingProfitHint[businessType])}</span>
+                    )}
                   </td>
                   <td className={pl.operatingProfitMinor < 0 ? "metric-negative" : undefined}>
                     {money(pl.operatingProfitMinor)}
@@ -629,7 +632,12 @@ export default async function MonthReportPage({
             )}
           </section>
 
-          {report.masterBreakdown.length > 0 && (
+          {/*
+            Somebody working alone has one row here, and it is the month above
+            again — with «начислено мастеру» about herself. The plain view
+            leaves it out; a second master brings it back.
+          */}
+          {report.masterBreakdown.length > (businessType === "solo" && !detailedAnalytics ? 1 : 0) && (
             <section className="panel">
               <h2>{t("pl.masterBreakdown")}</h2>
               <table className="data-table">
