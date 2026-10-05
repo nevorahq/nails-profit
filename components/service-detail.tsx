@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
@@ -81,6 +81,7 @@ export function ServiceDetail({
   selectedAddOnIds,
   fullyLoaded,
   materialsShown = false,
+  materialsHintMinor = null,
   currency,
   canManage,
   locale,
@@ -98,6 +99,11 @@ export function ServiceDetail({
    * fields would hold a figure nothing reads.
    */
   materialsShown?: boolean;
+  /**
+   * «По вашим закупкам ≈ X на визит» — `lib/materials-hint.ts` — or null when
+   * there is not enough to say, or the reader may not see purchases.
+   */
+  materialsHintMinor?: number | null;
   /** The organization's own, which the price delta is entered in. */
   currency: string;
   /** Writing to the shared catalogue, which a master may not do. */
@@ -133,6 +139,8 @@ export function ServiceDetail({
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Uncontrolled like the rest of the form; the hint only fills it in.
+  const materialsInput = useRef<HTMLInputElement>(null);
   /*
    * Contribution margin is the default and stays the default. It is the figure
    * a price decision is made on — the one that answers "is this service worth
@@ -355,6 +363,7 @@ export function ServiceDetail({
             <label>
               {t("services.materials", { currency })}
               <input
+                ref={materialsInput}
                 name="materials"
                 type="number"
                 step="0.01"
@@ -369,6 +378,21 @@ export function ServiceDetail({
           </button>
         </form>
         {materialsShown && <p className="muted">{t("services.materialsHint")}</p>}
+        {materialsShown && materialsHintMinor !== null && (
+          <p className="materials-suggestion">
+            {t("services.materialsFromPurchases", { amount: formatMoneyMinor(materialsHintMinor, currency) })}{" "}
+            <button
+              className="inline-action"
+              type="button"
+              onClick={() => {
+                if (materialsInput.current) materialsInput.current.value = String(materialsHintMinor / 100);
+                materialsInput.current?.focus();
+              }}
+            >
+              {t("services.materialsUseHint")}
+            </button>
+          </p>
+        )}
       </section>
 
       {(canManage || addOns.length > 0) && (

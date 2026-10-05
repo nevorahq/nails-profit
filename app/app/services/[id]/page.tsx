@@ -8,6 +8,7 @@ import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceDetail, type ServiceDetailData } from "@/components/service-detail";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadPeriodPL, monthOf } from "@/lib/period";
+import { loadMaterialsHint } from "@/lib/materials-hint";
 import { loadMaterialsModes, materialsModeAt, showsMaterialsField } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { getTranslator } from "@/i18n/t";
@@ -53,6 +54,15 @@ export default async function ServicePage({
 
     const modes = await loadMaterialsModes(tx, membership.organizationId);
     const materialsShown = showsMaterialsField(modes);
+    /*
+     * The figure from purchases, for whoever may see them: it is the ledger's
+     * total for three months divided by a count, and a Master reading it could
+     * multiply it back.
+     */
+    const materialsHintMinor =
+      materialsShown && can(membership.role, "expenses", "read")
+        ? await loadMaterialsHint(tx, { organizationId: membership.organizationId, currency })
+        : null;
     const costing = await loadServiceCosting(tx, service, {
       specialistId: specialist?.id ?? null,
       addOnIds: selectedAddOnIds,
@@ -92,6 +102,7 @@ export default async function ServicePage({
         linked: linked.map((row) => row.addOnId),
         fullyLoaded: null,
         materialsShown,
+        materialsHintMinor,
       };
     }
 
@@ -113,6 +124,7 @@ export default async function ServicePage({
       catalogue,
       linked: linked.map((row) => row.addOnId),
       materialsShown,
+      materialsHintMinor,
       fullyLoaded:
         allocated === null || report.capacity.fixedCostRateMinorPerHour === null
           ? null
@@ -165,6 +177,7 @@ export default async function ServicePage({
       selectedAddOnIds={selectedAddOnIds}
       fullyLoaded={loaded.fullyLoaded}
       materialsShown={loaded.materialsShown}
+      materialsHintMinor={loaded.materialsHintMinor}
       currency={currency}
       canManage={canManageCatalogue(membership.role, "services")}
       locale={locale}
