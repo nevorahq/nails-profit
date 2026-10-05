@@ -353,9 +353,11 @@ describe("unanswered requests", () => {
     expect(afterwards.ok).toBe(true);
   });
 
-  test("the confirmation window never outlives the appointment", async () => {
-    // A request made an hour before the slot cannot hold a two-hour window:
-    // that would leave a booking nobody can act on.
+  test("a request close to its appointment still gets fifteen minutes, never more", async () => {
+    // An hour before the slot the two-hour reserve is already behind us, and
+    // the window falls to its floor rather than to nothing — see
+    // `confirmationDeadline`. It used to run to the appointment itself, which
+    // told the client «нет» on the way to the door.
     const closeToStart = new Date(SLOT.start.getTime() - 60 * 60_000);
     await withTenant(organizationId, (tx) =>
       createBooking(tx, {
@@ -382,7 +384,7 @@ describe("unanswered requests", () => {
         ),
       );
 
-    expect(row.due?.toISOString()).toBe(SLOT.start.toISOString());
+    expect(row.due?.toISOString()).toBe(new Date(closeToStart.getTime() + 15 * 60_000).toISOString());
   });
 });
 

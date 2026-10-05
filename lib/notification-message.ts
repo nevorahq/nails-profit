@@ -265,7 +265,7 @@ export const smsNotificationTemplates: readonly BookingNotificationTemplate[] = 
  * an appointment taken at the desk or confirmed by the studio's instant
  * setting, which is why the two are separate templates. A request is the
  * opposite case: it is answered when somebody in the studio next opens the
- * calendar, up to `confirmation_due_at` — two hours by default — and the client
+ * calendar, up to `confirmation_due_at` — twelve hours by default — and the client
  * who sent it is by then doing something else entirely.
  *
  * Leaving it out had a consequence sharper than a missed notice. A public

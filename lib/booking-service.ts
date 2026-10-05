@@ -3,6 +3,11 @@ import { and, eq, gt, inArray, isNotNull, lt, lte, ne, or, sql } from "drizzle-o
 import { bookingHolds, bookingLines, bookings } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { createBookingToken, type BookingToken } from "@/domain/booking-token";
+import {
+  confirmationDeadline,
+  DEFAULT_CONFIRMATION_TTL_MINUTES,
+  movedConfirmationDeadline,
+} from "@/domain/confirmation-deadline";
 import type { Interval } from "@/domain/interval";
 import type { LocalizedText } from "@/i18n/localized-text";
 
@@ -334,16 +339,16 @@ export async function createBooking(
   const status = input.confirmationMode === "instant" ? "confirmed" : "pending_confirmation";
 
   // A manual request holds the slot until the studio answers — an unanswered
-  // request still stops someone else taking the time — but never past the
-  // appointment itself, which would leave a booking nobody can act on.
+  // request still stops someone else taking the time — but the client hears
+  // the answer while there is still time to go elsewhere: see
+  // `confirmationDeadline` for the reserve and the floor under it.
   const confirmationDueAt =
     status === "pending_confirmation"
-      ? new Date(
-          Math.min(
-            input.now.getTime() + (input.confirmationTtlMinutes ?? 120) * 60_000,
-            input.interval.start.getTime(),
-          ),
-        )
+      ? confirmationDeadline({
+          now: input.now,
+          ttlMinutes: input.confirmationTtlMinutes ?? DEFAULT_CONFIRMATION_TTL_MINUTES,
+          startsAt: input.interval.start,
+        })
       : null;
 
   const [booking] = await tx
@@ -622,10 +627,14 @@ export async function rescheduleBooking(
       startsAt: input.interval.start,
       endsAt: input.interval.end,
       // A request that has not been answered stays unanswered at its new time,
-      // but never past the appointment it is holding.
+      // and a closer hour pulls its deadline in to that hour's reserve.
       confirmationDueAt:
         booking.status === "pending_confirmation" && booking.confirmationDueAt
-          ? new Date(Math.min(booking.confirmationDueAt.getTime(), input.interval.start.getTime()))
+          ? movedConfirmationDeadline({
+              current: booking.confirmationDueAt,
+              now: input.now,
+              startsAt: input.interval.start,
+            })
           : booking.confirmationDueAt,
       updatedAt: input.now,
       updatedBy: input.actorUserId,
