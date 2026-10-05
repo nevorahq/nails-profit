@@ -25,6 +25,7 @@ export function HeadlineCard({
   month,
   isCurrentMonth,
   detailsHref,
+  beforeTaxesHref = null,
 }: {
   headline: Headline;
   locale: AppLocale;
@@ -36,6 +37,12 @@ export function HeadlineCard({
   isCurrentMonth: boolean;
   /** The month's own statement, for a role that may open it. */
   detailsHref: string | null;
+  /**
+   * Where the studio says how it pays taxes and how it is paid, while it has
+   * not — see `lib/money-answers.ts`. Null once answered, and for anybody who
+   * could not answer it.
+   */
+  beforeTaxesHref?: string | null;
 }) {
   const t = getTranslator(locale, register);
   const tag = localeTag(locale);
@@ -96,6 +103,17 @@ export function HeadlineCard({
                 })}
           </p>
         </div>
+      )}
+
+      {/* The owner's figure only: a master's earnings and a contribution are
+          not the line a tax or the bank's fee comes off. */}
+      {headline.kind === "operating" && beforeTaxesHref && (
+        <p className="headline-note headline-before-taxes">
+          {t("money.beforeTaxes")} —{" "}
+          <Link className="text-link" href={beforeTaxesHref}>
+            {t("money.beforeTaxesAction")}
+          </Link>
+        </p>
       )}
 
       {headline.floor && (
