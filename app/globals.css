@@ -1049,7 +1049,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .ranking-more dd { margin: 0; color: var(--ink); font-weight: 650; }
 
 @media (max-width: 680px) {
-  .ranking-row { grid-template-columns: minmax(0, 1fr) 30rem 92rem 80rem; gap: 8rem; font-size: 14rem; }
+  .ranking-row { grid-template-columns: minmax(0, 1fr) 26rem 86rem 76rem; gap: 6rem; font-size: 14rem; }
   .ranking-head { font-size: 10rem; }
 }
 
@@ -2571,6 +2571,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .quick-actions { display: none; }
 
 @media (max-width: 680px) {
+  /* Room under the last row for the button as well as for the bar. */
+  body:has(.quick-actions) .app-main > .app-shell { padding-bottom: calc(160rem + env(safe-area-inset-bottom)); }
+
   .quick-actions {
     display: block;
     position: fixed;
@@ -3204,6 +3207,13 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .period-preset:hover { background: var(--sage-300); }
 .period-preset[aria-current="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+
+/* On a phone the four share the row evenly and a long label takes a second
+   line — «Altă perioadă» scrolled out of sight is a button nobody finds. */
+@media (max-width: 680px) {
+  .period-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
+  .period-preset { justify-content: center; padding: 4rem 6rem; font-size: 13rem; line-height: 1.15; text-align: center; white-space: normal; }
+}
 
 /*
  * The client's number in a card, as a call.

@@ -46,7 +46,8 @@ export function HeadlineCard({
 
   return (
     <section className="panel headline-card" aria-labelledby="headline-label">
-      <span className="headline-month">{monthName}</span>
+      {/* «В этом месяце» needs the month named; «За сентябрь» names it itself. */}
+      {isCurrentMonth && <span className="headline-month">{monthName}</span>}
       <h2 className="headline-label" id="headline-label">
         {label}
       </h2>
