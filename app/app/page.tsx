@@ -310,18 +310,36 @@ export default async function AppPage({
    * split per specialist, and the ledger holds nothing that could split it.
    * Both cards drop out together, and the sum is not even asked for.
    */
-  const oneSpecialist = Boolean(filters.specialist);
+  /*
+   * Whose report this may be narrowed to. Reading the whole studio is not
+   * the same permission as reading one person out of it: an analyst holds
+   * «Все агрегаты», and a filter that leaves one master standing turns the
+   * aggregate into that master's month. The scope decides whether the
+   * report is the studio's; `seesIndividualPay` decides whether it can be
+   * pointed at somebody.
+   *
+   * Decided before anything is read, and the query string is honoured only
+   * when it may be: hiding the picker is not access control, and a typed
+   * `?specialist=` used to narrow an analyst's report all the same.
+   */
+  const canFilterBySpecialist =
+    scopeFor(membership.role, "dashboard") === "all" && seesIndividualPay(membership.role);
+  const requestedSpecialist = canFilterBySpecialist ? filters.specialist : undefined;
+
+  const oneSpecialist = Boolean(requestedSpecialist);
 
   const data = await withTenant(organizationId, async (tx) => {
     // Section 6.1: a Master sees "только собственные" — resolved from the
-    // specialist row carrying their user id, not from the query string.
-    let effectiveSpecialist = filters.specialist ?? null;
+    // specialist row carrying their user id, not from the query string. The
+    // effective user's, so an owner previewing a master reads that master's
+    // card rather than their own.
+    let effectiveSpecialist = requestedSpecialist ?? null;
     let ownSpecialistId: string | null = null;
     if (scopeFor(membership.role, "dashboard") === "own") {
       const [own] = await tx
         .select({ id: specialists.id })
         .from(specialists)
-        .where(eq(specialists.userId, session.user.id))
+        .where(eq(specialists.userId, effectiveUserId))
         .limit(1);
       ownSpecialistId = own?.id ?? null;
       effectiveSpecialist = own?.id ?? "00000000-0000-0000-0000-000000000000";
@@ -425,16 +443,7 @@ export default async function AppPage({
       onboarding,
       monthSetup,
       people,
-      /*
-       * Whose report this may be narrowed to. Reading the whole studio is not
-       * the same permission as reading one person out of it: an analyst holds
-       * «Все агрегаты», and a filter that leaves one master standing turns the
-       * aggregate into that master's month. The scope decides whether the
-       * report is the studio's; `seesIndividualPay` decides whether it can be
-       * pointed at somebody.
-       */
-      canFilterBySpecialist:
-        scopeFor(membership.role, "dashboard") === "all" && seesIndividualPay(membership.role),
+      canFilterBySpecialist,
       expenseTotal,
       previousExpenseTotal,
     };
@@ -502,7 +511,7 @@ export default async function AppPage({
         locale={locale}
         role={membership.role}
         active="summary"
-        state={{ from: filters.from, to: filters.to, specialist: filters.specialist, month: period.month }}
+        state={{ from: filters.from, to: filters.to, specialist: requestedSpecialist, month: period.month }}
       />
       <HeadlineCard
         headline={data.headline}
@@ -527,7 +536,7 @@ export default async function AppPage({
         locale={locale}
         from={from}
         to={to}
-        specialistId={filters.specialist}
+        specialistId={requestedSpecialist}
         people={data.people}
         presets={{ ranges: presetRanges(today), active: period.preset }}
         /*
@@ -628,7 +637,7 @@ export default async function AppPage({
           allHref={queryFor("/app/reports/services", {
             from: filters.from,
             to: filters.to,
-            specialist: filters.specialist,
+            specialist: requestedSpecialist,
           })}
         />
       )}
