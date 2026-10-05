@@ -34,13 +34,19 @@ import { useAnchoredPanel } from "@/components/use-anchored-panel";
 export function ExpenseLedger({
   expenses,
   locale,
+  currency,
   businessType,
+  detailedAnalytics,
   monthGuide = null,
   materialsPeriods = [],
   currentMonth = null,
 }: {
   expenses: ExpenseRow[];
   locale: AppLocale;
+  /** The organization's currency, which a draw is recorded in — see the payroll question. */
+  currency: string;
+  /** Whether «Оплата труда за месяц» is on this page for a salary to be set in. */
+  detailedAnalytics: boolean;
   /** Passed through to the guided window; the month's steps read the same to both. */
   businessType: BusinessType;
   /**
@@ -112,6 +118,8 @@ export function ExpenseLedger({
         <div className="compose-inner">
           <ExpenseForm
             locale={locale}
+            currency={currency}
+            detailedAnalytics={detailedAnalytics}
             onAdded={() => {
               setOpen(false);
               // Asked of the server, not assumed: an expense in another
@@ -169,36 +177,87 @@ function toMinorUnits(amount: string): number {
   return Math.round(Number(amount) * 100);
 }
 
-function ExpenseForm({ locale, onAdded }: { locale: AppLocale; onAdded: () => void }) {
+/**
+ * What a payment filed under «Зарплата» actually is. Three different things
+ * arrive under that one word, and only one of them is an expense row:
+ *
+ * - pay for visits, which every closed visit already took off its margin — a
+ *   payment of money owed, recorded as cash only (`domain/expense-classes.ts`);
+ * - a salary, which is not a payment to record but a rule the month owes
+ *   whether anybody comes or not — entered as such, or it would be both
+ *   counted every month and subtracted once more here;
+ * - the owner's own money, which is a draw and reduces no profit at all.
+ *
+ * Asked rather than guessed, and each answer writes to exactly one place.
+ */
+type PayrollKind = "visits" | "salary" | "draw";
+const payrollKinds: readonly PayrollKind[] = ["visits", "salary", "draw"];
+
+function ExpenseForm({
+  locale,
+  currency,
+  detailedAnalytics,
+  onAdded,
+}: {
+  locale: AppLocale;
+  currency: string;
+  detailedAnalytics: boolean;
+  onAdded: () => void;
+}) {
   const router = useRouter();
   const t = useTranslator(locale);
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState<ExpenseCategory>(defaultExpenseCategory);
+  const [payroll, setPayroll] = useState<PayrollKind | null>(null);
+  const payrollKind = category === "payroll" ? payroll : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setError(null);
     const form = event.currentTarget;
     const data = new FormData(form);
+    const name = String(data.get("name") ?? "").trim();
     const note = String(data.get("note") ?? "").trim();
 
-    const response = await fetch("/api/v1/expenses", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: data.get("name"),
-        category: data.get("category"),
-        spent_on: data.get("spent_on"),
-        amount_minor: toMinorUnits(String(data.get("amount") ?? "")),
-        ...(note ? { note } : {}),
-        // The interval starts on the day of the payment: a recurring expense
-        // entered today starts today, and asking twice for one date is a
-        // question nobody wants to answer.
-        ...(data.get("is_recurring") ? { is_recurring: true } : {}),
-      }),
-    });
+    if (category === "payroll" && payrollKind === null) {
+      setError(t("expenses.payroll.choose"));
+      return;
+    }
+    if (payrollKind === "salary") return;
+
+    setPending(true);
+    setError(null);
+
+    const response =
+      payrollKind === "draw"
+        ? await fetch("/api/v1/owner-draws", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              amount_minor: toMinorUnits(String(data.get("amount") ?? "")),
+              currency,
+              occurred_on: data.get("spent_on"),
+              // The draw has one free-text field; the name is what the owner
+              // typed first, so it leads.
+              note: [name, note].filter(Boolean).join(" — ").slice(0, 500),
+            }),
+          })
+        : await fetch("/api/v1/expenses", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: data.get("name"),
+              category,
+              spent_on: data.get("spent_on"),
+              amount_minor: toMinorUnits(String(data.get("amount") ?? "")),
+              ...(note ? { note } : {}),
+              // The interval starts on the day of the payment: a recurring expense
+              // entered today starts today, and asking twice for one date is a
+              // question nobody wants to answer.
+              ...(data.get("is_recurring") ? { is_recurring: true } : {}),
+            }),
+          });
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
@@ -208,6 +267,8 @@ function ExpenseForm({ locale, onAdded }: { locale: AppLocale; onAdded: () => vo
     }
 
     form.reset();
+    setCategory(defaultExpenseCategory);
+    setPayroll(null);
     setPending(false);
     onAdded();
     router.refresh();
@@ -223,38 +284,87 @@ function ExpenseForm({ locale, onAdded }: { locale: AppLocale; onAdded: () => vo
         </label>
         <label>
           {t("expenses.category")}
-          <select name="category" defaultValue={defaultExpenseCategory}>
-            {expenseCategories.map((category) => (
-              <option key={category} value={category}>
-                {t(`expenses.category.${category}`)}
+          <select
+            name="category"
+            value={category}
+            onChange={(event) => {
+              setCategory(event.target.value as ExpenseCategory);
+              setError(null);
+            }}
+          >
+            {expenseCategories.map((option) => (
+              <option key={option} value={option}>
+                {t(`expenses.category.${option}`)}
               </option>
             ))}
           </select>
         </label>
-        <label>
-          {t("expenses.date")}
-          <input name="spent_on" type="date" required defaultValue={today()} />
-        </label>
-        <label>
-          {t("expenses.amount")}
-          <input name="amount" type="number" step="0.01" min="0" required placeholder="1200" />
-        </label>
-        <label>
-          {t("expenses.note")}
-          <input name="note" maxLength={2000} placeholder={t("expenses.notePlaceholder")} />
-        </label>
-        {/*
-          A checkbox rather than a second date field. Rent is entered once and
-          counted every month until it is ended; asking for an end date up front
-          would ask the owner to predict when they will move out.
-        */}
-        <label className="checkbox-field">
-          <input name="is_recurring" type="checkbox" />
-          {t("expenses.recurring")}
-        </label>
-        <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? t("common.saving") : t("common.add")}
-        </button>
+        {category === "payroll" && (
+          <fieldset className="choice-group payroll-question">
+            <legend>{t("expenses.payroll.question")}</legend>
+            {payrollKinds.map((kind) => (
+              <label key={kind} className="checkbox-field">
+                <input
+                  type="radio"
+                  name="payroll_kind"
+                  value={kind}
+                  checked={payroll === kind}
+                  onChange={() => {
+                    setPayroll(kind);
+                    setError(null);
+                  }}
+                />
+                {t(`expenses.payroll.${kind}`)}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        {payrollKind === "salary" ? (
+          <p className="pl-note payroll-salary">
+            {detailedAnalytics ? (
+              <a className="text-link" href="#labour">
+                {t("expenses.payroll.salaryAction")}
+              </a>
+            ) : (
+              <>
+                {t("expenses.payroll.salaryDetailedOff")}{" "}
+                <a className="text-link" href="/app/settings">
+                  {t("expenses.payroll.salaryDetailedOffAction")}
+                </a>
+              </>
+            )}
+          </p>
+        ) : (
+          <>
+            <label>
+              {t("expenses.date")}
+              <input name="spent_on" type="date" required defaultValue={today()} />
+            </label>
+            <label>
+              {t("expenses.amount")}
+              <input name="amount" type="number" step="0.01" min="0" required placeholder="1200" />
+            </label>
+            <label>
+              {t("expenses.note")}
+              <input name="note" maxLength={2000} placeholder={t("expenses.notePlaceholder")} />
+            </label>
+            {/*
+              A checkbox rather than a second date field. Rent is entered once and
+              counted every month until it is ended; asking for an end date up front
+              would ask the owner to predict when they will move out. A draw is
+              money taken once, so it has none.
+            */}
+            {payrollKind !== "draw" && (
+              <label className="checkbox-field">
+                <input name="is_recurring" type="checkbox" />
+                {t("expenses.recurring")}
+              </label>
+            )}
+            <button className="primary-button" type="submit" disabled={pending}>
+              {pending ? t("common.saving") : t("common.add")}
+            </button>
+          </>
+        )}
       </form>
       {error && (
         <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
@@ -460,6 +570,17 @@ function ExpenseTable({
                         </option>
                       ))}
                     </select>
+                    {/*
+                      The add form asks what a payroll payment is; a row already
+                      written cannot be turned into a salary rule or a draw from
+                      here without being written twice, so the way there is said
+                      instead — delete it, add it again, and answer the question.
+                    */}
+                    {edit.category === "payroll" && expense.category !== "payroll" && (
+                      <span className="muted payroll-edit-hint" role="note">
+                        {t("expenses.payroll.editHint")}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <input

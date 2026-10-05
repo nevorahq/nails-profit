@@ -37,6 +37,7 @@ import { monthOf } from "@/lib/period";
 import { presetRanges, previousRangeOf, resolveReportPeriod, todayIn } from "@/domain/report-period";
 import { formatLocalDate } from "@/domain/timezone";
 import { loadStartScreen } from "@/lib/first-numbers";
+import { firstUnansweredHref, loadMoneyAnswers } from "@/lib/money-answers";
 import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 
@@ -426,7 +427,7 @@ export default async function AppPage({
      */
     const monthSetup =
       onboarding?.complete && membership.role === "owner"
-        ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency })
+        ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency, organizationId })
         : null;
 
     /*
@@ -440,9 +441,19 @@ export default async function AppPage({
       locale,
     );
 
+    /*
+     * Whether the card's profit is before taxes and the bank's fee because
+     * nobody has said what they are. Asked only of whoever could answer — the
+     * questions live on «Деньги», which is the owner's.
+     */
+    const beforeTaxesHref = can(membership.role, "expenses", "read")
+      ? firstUnansweredHref(await loadMoneyAnswers(tx, organizationId))
+      : null;
+
     return {
       ...dashboard,
       headline,
+      beforeTaxesHref,
       previousMetrics,
       onboarding,
       monthSetup,
@@ -525,6 +536,7 @@ export default async function AppPage({
         currency={currency}
         month={headlineMonth}
         isCurrentMonth={headlineMonth === currentMonth}
+        beforeTaxesHref={data.beforeTaxesHref}
         detailsHref={
           can(membership.role, "expenses", "read")
             ? headlineMonth === currentMonth

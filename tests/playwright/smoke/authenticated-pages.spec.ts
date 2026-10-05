@@ -30,7 +30,7 @@ const OWNER_PAGES = [
   ["/app/specialists", "Specialists"],
   ["/app/visits", "Visits"],
   ["/app/visits/new", "Visits"],
-  ["/app/expenses", "Expenses"],
+  ["/app/expenses", "Money"],
   // The report's tabs, under the report's name.
   ["/app/reports/services", "Report"],
   ["/app/reports/month", "Report"],
@@ -111,7 +111,7 @@ test.describe("authenticated smoke", () => {
     // Section 6.1 in the interface: refusals are sentences, not blank screens,
     // and each says whose the section is rather than «forbidden».
     for (const [path, refusal] of [
-      ["/app/expenses", "Expenses are the owner's alone."],
+      ["/app/expenses", "Money is the owner's alone."],
       ["/app/reports/month", "The monthly report is the owner's alone."],
       ["/app/import", "Your role may not import data."],
     ] as const) {

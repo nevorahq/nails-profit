@@ -2,52 +2,22 @@ import { asc, eq, isNull } from "drizzle-orm";
 
 import { BillingSettings, type CheckoutConfig, type SubscriptionStatusRow } from "@/components/billing-settings";
 import { DataManagement } from "@/components/data-management";
-import { LaborCostManager, type LaborCostRow } from "@/components/labor-cost-manager";
 import { OrganizationLogo } from "@/components/organization-logo";
 import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
-import { PaymentMethodManager, type PaymentMethodRow } from "@/components/payment-method-manager";
-import { TaxRuleManager, type TaxRuleRowView } from "@/components/tax-rule-manager";
 import { MaterialsModeSetting } from "@/components/materials-mode-setting";
-import {
-  laborCostRules,
-  memberships,
-  organizations,
-  organizationSubscriptions,
-  paymentMethods,
-  specialists,
-  taxRules,
-  users,
-} from "@/db/schema";
+import { memberships, organizationSubscriptions, specialists, users } from "@/db/schema";
 import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
-import { loadDashboard } from "@/lib/dashboard";
 import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mode";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
-import { monthBounds, monthOf } from "@/lib/period";
 import { AccountDeletion } from "@/components/account-deletion";
-import { todayIn } from "@/domain/report-period";
-import { formatLocalDate } from "@/domain/timezone";
 import { requireWorkspace } from "@/lib/workspace";
 import { registerOf } from "@/i18n/lexicon";
-
-/**
- * Temporarily keep the acquiring and visit-tax controls off the settings page
- * without deleting their data, APIs or effect on snapshots. Flip this single
- * switch when the product is ready to expose them again.
- *
- * «Оплата труда за месяц» and the reserve are no longer behind it: they are
- * what economic profit and «Можно вывести» are computed from, and those lines
- * belong to the studio's own «Подробная финансовая аналитика» now. A studio
- * that turns it on is offered the controls that feed them; one that leaves it
- * off reads neither the lines nor the controls.
- * `tests/owner-wage-reachable.test.ts` holds the report and this page together.
- */
-const SHOW_ADVANCED_FINANCIAL_SETTINGS = false;
 
 export default async function SettingsPage({
   searchParams,
@@ -67,7 +37,6 @@ export default async function SettingsPage({
     businessType,
     staffNotices,
     detailedAnalytics,
-    timezone,
   } = workspace;
   const register = registerOf(workspace);
 
@@ -75,10 +44,6 @@ export default async function SettingsPage({
   const canReadOrg = can(membership.role, "organization_settings", "read");
   const canReadData = can(membership.role, "data_export", "read");
   const canReadFinancialSettings = can(membership.role, "expenses", "read");
-  const canReadLabour = detailedAnalytics && canReadFinancialSettings;
-  // The studio's date, the first a versioned rule can change from.
-  const asOf = new Date();
-  const today = formatLocalDate(todayIn(asOf, timezone));
 
   /*
    * The studio's own mark, which stands where `BrandMark`'s flower does until
@@ -90,92 +55,10 @@ export default async function SettingsPage({
   const logoVersion = canReadOrg ? await loadOrganizationLogoVersion(membership.organizationId) : null;
 
   /*
-   * The labour rules, whom they are for, and what the owner has already booked
-   * themselves this month.
-   *
-   * The last of those goes into the form as its starting value: it is the
-   * market rate the owner charged their own visits at, and it is the figure
-   * that makes the add-back and the imputed wage cancel exactly. Read through
-   * `loadDashboard` rather than a query of its own, so it is the same
-   * aggregate the monthly report shows.
-   */
-  const labour = canReadLabour
-    ? await withTenant(membership.organizationId, async (tx) => {
-        const rules: LaborCostRow[] = (
-          await tx
-            .select({
-              id: laborCostRules.id,
-              recipient: laborCostRules.recipient,
-              specialist_id: laborCostRules.specialistId,
-              label: laborCostRules.label,
-              basis: laborCostRules.basis,
-              amount_minor: laborCostRules.amountMinor,
-              basis_points: laborCostRules.basisPoints,
-              payroll_tax_basis_points: laborCostRules.payrollTaxBasisPoints,
-              active_from: laborCostRules.activeFrom,
-              active_to: laborCostRules.activeTo,
-            })
-            .from(laborCostRules)
-            .orderBy(asc(laborCostRules.activeFrom))
-        ).map((rule) => ({
-          ...rule,
-          active_from: rule.active_from.toISOString(),
-          active_to: rule.active_to?.toISOString() ?? null,
-        }));
-
-        const people = await tx
-          .select({ id: specialists.id, name: specialists.name })
-          .from(specialists)
-          .where(isNull(specialists.archivedAt))
-          .orderBy(asc(specialists.name));
-
-        const [organization] = await tx
-          .select({ reserveMinor: organizations.withdrawalReserveMinor })
-          .from(organizations)
-          .where(eq(organizations.id, membership.organizationId))
-          .limit(1);
-
-        const { from, to } = monthBounds(monthOf(new Date()));
-        const dashboard = await loadDashboard(tx, { from, to }, locale);
-
-        return {
-          rules,
-          people,
-          reserveMinor: organization?.reserveMinor ?? 0,
-          suggestedOwnerWageMinor: dashboard.metrics.principalLabourMinor,
-        };
-      })
-    : null;
-
-  /*
-   * The acquirer's terms and the tax rates.
-   *
-   * Read under different capabilities and shown to different people: a manager
-   * closes visits and needs to see which methods exist, while a tax rate is the
-   * owner's business in the same way rent is.
-   */
-  const methods: PaymentMethodRow[] =
-    SHOW_ADVANCED_FINANCIAL_SETTINGS && can(membership.role, "bookings", "read")
-    ? await withTenant(membership.organizationId, (tx) =>
-        tx
-          .select({
-            id: paymentMethods.id,
-            name: paymentMethods.name,
-            kind: paymentMethods.kind,
-            commission_basis_points: paymentMethods.commissionBasisPoints,
-            fixed_fee_minor: paymentMethods.fixedFeeMinor,
-            is_default: paymentMethods.isDefault,
-          })
-          .from(paymentMethods)
-          .where(isNull(paymentMethods.archivedAt))
-          .orderBy(asc(paymentMethods.createdAt)),
-      )
-    : [];
-
-  /*
-   * How the studio counts materials, for whoever sees its costs. Not behind
-   * the advanced flag: it decides what the month's profit subtracts, which is
-   * not an advanced question.
+   * How the studio counts materials, for whoever sees its costs. It stays
+   * here rather than moving to «Деньги» with the taxes, the payment methods
+   * and the labour rules: it is a way of counting, chosen from a month on, not
+   * money that comes or goes.
    */
   const materials = canReadFinancialSettings
     ? await withTenant(membership.organizationId, async (tx) => {
@@ -189,29 +72,6 @@ export default async function SettingsPage({
             .map((period) => ({ mode: period.mode, month: period.effectiveFrom.slice(0, 7) })),
         };
       })
-    : null;
-
-  const taxes: TaxRuleRowView[] | null =
-    SHOW_ADVANCED_FINANCIAL_SETTINGS && canReadFinancialSettings
-    ? (
-        await withTenant(membership.organizationId, (tx) =>
-          tx
-            .select({
-              id: taxRules.id,
-              kind: taxRules.kind,
-              basis_points: taxRules.basisPoints,
-              remittable: taxRules.remittable,
-              active_from: taxRules.activeFrom,
-              active_to: taxRules.activeTo,
-            })
-            .from(taxRules)
-            .orderBy(asc(taxRules.activeFrom)),
-        )
-      ).map((rule) => ({
-        ...rule,
-        active_from: rule.active_from.toISOString(),
-        active_to: rule.active_to?.toISOString() ?? null,
-      }))
     : null;
 
   const subscriptionRow = canReadOrg
@@ -332,29 +192,6 @@ export default async function SettingsPage({
           locale={locale}
         />
       )}
-      {labour && (
-        <LaborCostManager
-          rules={labour.rules}
-          specialists={labour.people}
-          currency={currency}
-          locale={locale}
-          businessType={businessType}
-          reserveMinor={labour.reserveMinor}
-          canEdit={can(membership.role, "expenses", "write")}
-          suggestedOwnerWageMinor={labour.suggestedOwnerWageMinor}
-          today={today}
-          asOf={asOf.toISOString()}
-          timezone={timezone}
-        />
-      )}
-      {SHOW_ADVANCED_FINANCIAL_SETTINGS && can(membership.role, "bookings", "read") && (
-        <PaymentMethodManager
-          methods={methods}
-          currency={currency}
-          locale={locale}
-          canEdit={can(membership.role, "organization_settings", "write")}
-        />
-      )}
       {materials && (
         <MaterialsModeSetting
           current={materials.current}
@@ -362,16 +199,6 @@ export default async function SettingsPage({
           currentMonth={materials.currentMonth}
           canEdit={can(membership.role, "organization_settings", "write")}
           locale={locale}
-        />
-      )}
-      {taxes && (
-        <TaxRuleManager
-          rules={taxes}
-          today={today}
-          asOf={asOf.toISOString()}
-          timezone={timezone}
-          locale={locale}
-          canEdit={can(membership.role, "expenses", "write")}
         />
       )}
       {canReadTeam && (

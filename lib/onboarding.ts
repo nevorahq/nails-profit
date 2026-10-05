@@ -13,6 +13,7 @@ import type { TenantTransaction } from "@/db/tenant";
 import { expensesForMonth } from "@/domain/expense-periods";
 import { materialsModeFor } from "@/domain/materials-mode";
 import { loadMonthRota } from "@/lib/capacity";
+import { loadMoneyAnswers } from "@/lib/money-answers";
 
 /**
  * The two checklists a studio is walked through, and the shape they share.
@@ -56,8 +57,9 @@ export type OnboardingProgress = ChecklistProgress<"specialist" | "service">;
  * being a path and becomes a chore. This one only appears once the first one is
  * finished.
  */
-export type MonthSetupStep = ChecklistStep<"overhead" | "rota">;
-export type MonthSetupProgress = ChecklistProgress<"overhead" | "rota">;
+export type MonthSetupKey = "overhead" | "rota" | "taxes" | "payments";
+export type MonthSetupStep = ChecklistStep<MonthSetupKey>;
+export type MonthSetupProgress = ChecklistProgress<MonthSetupKey>;
 
 function summarize<Key extends string>(steps: readonly ChecklistStep<Key>[]): ChecklistProgress<Key> {
   const done = steps.filter((step) => step.done).length;
@@ -270,7 +272,7 @@ export async function loadSetupGuide(
  */
 export async function loadMonthGuide(
   tx: TenantTransaction,
-  options: { month: string; currency: string },
+  options: { month: string; currency: string; organizationId: string },
 ): Promise<{ done: number; total: number } | null> {
   const [closedVisits] = await tx.select({ value: count() }).from(visits);
   if (closedVisits.value === 0) return null;
@@ -282,13 +284,19 @@ export async function loadMonthGuide(
 /**
  * What the month's report is still missing, measured the same way.
  *
- * Both steps are read for the month being reported rather than for all time: a
- * studio that entered its rent in January and stopped is not set up for March,
- * and a checklist that remembered January would say it was.
+ * The first two steps are read for the month being reported rather than for
+ * all time: a studio that entered its rent in January and stopped is not set up
+ * for March, and a checklist that remembered January would say it was.
+ *
+ * The last two are not monthly, and are here anyway. A tax rate and a bank's
+ * fee are answered once and hold until changed, but until they are answered
+ * every profit on the report is before them — the same kind of hole as a month
+ * with no rent in it, and the guide is where a hole in the month is pointed
+ * at. See `lib/money-answers.ts` for what counts as an answer.
  */
 export async function loadMonthSetup(
   tx: TenantTransaction,
-  options: { month: string; currency: string },
+  options: { month: string; currency: string; organizationId: string },
 ): Promise<MonthSetupProgress> {
   /*
    * The live ledger, not the month's rows — a recurring row is stored once with
@@ -332,8 +340,12 @@ export async function loadMonthSetup(
   // report does not see.
   const { scheduledMinutes } = await loadMonthRota(tx, options.month);
 
-  return summarize<"overhead" | "rota">([
+  const answers = await loadMoneyAnswers(tx, options.organizationId);
+
+  return summarize<MonthSetupKey>([
     { key: "overhead", done: hasOverhead, href: "/app/expenses" },
     { key: "rota", done: scheduledMinutes > 0, href: "/app/booking" },
+    { key: "taxes", done: answers.taxes, href: "/app/expenses#taxes" },
+    { key: "payments", done: answers.payments, href: "/app/expenses#payments" },
   ]);
 }

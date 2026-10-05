@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { GoalPanel } from "@/components/goal-panel";
-import type { ChecklistProgress } from "@/lib/onboarding";
+import type { ChecklistProgress, MonthSetupKey } from "@/lib/onboarding";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { stepMessageKey } from "@/i18n/step-labels";
@@ -130,7 +130,7 @@ export function MonthSetupPanel({
   locale,
   register = writtenRegister,
 }: {
-  progress: ChecklistProgress<"overhead" | "rota">;
+  progress: ChecklistProgress<MonthSetupKey>;
   locale: AppLocale;
   /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
   register?: Register;

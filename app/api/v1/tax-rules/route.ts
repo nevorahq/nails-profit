@@ -1,13 +1,13 @@
-import { and, asc, eq, isNull, inArray } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { z } from "zod";
 
-import { organizations, taxRules } from "@/db/schema";
+import { taxRules } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
-import { planRuleChange, RULE_CHANGE_REFUSALS } from "@/domain/rule-change";
-import { recordAuditEvent } from "@/lib/audit";
+import { RULE_CHANGE_REFUSALS } from "@/domain/rule-change";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { createTaxRule } from "@/lib/tax-rules";
 
 /**
  * Taxes that attach to a visit: VAT, turnover tax, contributions on commission.
@@ -90,71 +90,19 @@ export async function POST(request: Request) {
 
   const data = parsed.data;
 
-  const created = await withTenant(actor.organizationId, async (tx) => {
-    /*
-     * A new rate closes the old one at the same instant.
-     *
-     * Two live rules of one kind would be a data error `selectTaxRates` has to
-     * guess its way out of, and the guess it makes — take the newer — is a
-     * fallback rather than a design. Closing here is the design. Locked, so
-     * that two changes sent at once cannot both close the same rule.
-     */
-    const [organization] = await tx
-      .select({ timezone: organizations.timezone })
-      .from(organizations)
-      .where(eq(organizations.id, actor.organizationId));
-    const current = await tx
-      .select({ id: taxRules.id, activeFrom: taxRules.activeFrom })
-      .from(taxRules)
-      .where(and(eq(taxRules.kind, data.kind), isNull(taxRules.activeTo)))
-      .for("update");
-
-    const plan = planRuleChange({
-      current,
-      effectiveDate: data.effective_date,
-      now: new Date(),
-      timezone: organization.timezone,
-    });
-    if (!plan.ok) return { ok: false as const, reason: plan.reason };
-    const activeFrom = plan.open.activeFrom;
-
-    if (plan.close.ids.length > 0) {
-      await tx
-        .update(taxRules)
-        .set({ activeTo: plan.close.activeTo, updatedBy: actor.userId, updatedAt: new Date() })
-        .where(inArray(taxRules.id, [...plan.close.ids]));
-    }
-
-    const [row] = await tx
-      .insert(taxRules)
-      .values({
-        organizationId: actor.organizationId,
+  const created = await withTenant(actor.organizationId, (tx) =>
+    createTaxRule(
+      tx,
+      actor,
+      {
         kind: data.kind,
         basisPoints: data.basis_points,
-        remittable: data.remittable ?? true,
-        activeFrom,
-        createdBy: actor.userId,
-        updatedBy: actor.userId,
-      })
-      .returning();
-
-    await recordAuditEvent(tx, {
-      organizationId: actor.organizationId,
-      actorUserId: actor.userId,
-      eventType: "tax_rule.created",
-      entityType: "tax_rule",
-      entityId: row.id,
-      after: {
-        kind: row.kind,
-        basis_points: row.basisPoints,
-        remittable: row.remittable,
-        active_from: row.activeFrom,
+        remittable: data.remittable,
+        effectiveDate: data.effective_date,
       },
-      requestId: id,
-    });
-
-    return { ok: true as const, row };
-  });
+      id,
+    ),
+  );
 
   if (!created.ok) {
     const refusal = RULE_CHANGE_REFUSALS[created.reason];

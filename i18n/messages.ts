@@ -55,6 +55,7 @@ export const errorMessages = {
     MATERIALS_MODE_PAST_MONTH: "Прошедший месяц уже посчитан — выберите текущий или следующий",
     RULE_DATE_IN_PAST: "Изменить правило можно с сегодняшнего дня или позже",
     RULE_DATE_BEFORE_CURRENT: "Действующее правило начинается в этот день или позже — выберите дату после него",
+    ALREADY_ANSWERED: "Ответ уже записан — изменить его можно в блоке ниже",
   },
   ro: {
     UNAUTHENTICATED: "Este necesară autentificarea",
@@ -102,6 +103,7 @@ export const errorMessages = {
     MATERIALS_MODE_PAST_MONTH: "Luna trecută este deja calculată — alegeți luna curentă sau următoarea",
     RULE_DATE_IN_PAST: "Regula se poate schimba de azi sau de la o zi ulterioară",
     RULE_DATE_BEFORE_CURRENT: "Regula în vigoare începe în această zi sau mai târziu — alegeți o dată după ea",
+    ALREADY_ANSWERED: "Răspunsul este deja înregistrat — îl puteți schimba în blocul de mai jos",
   },
   en: {
     UNAUTHENTICATED: "Authentication is required",
@@ -149,6 +151,7 @@ export const errorMessages = {
     MATERIALS_MODE_PAST_MONTH: "A past month is already counted — choose this month or a later one",
     RULE_DATE_IN_PAST: "A rule can change from today or a later day",
     RULE_DATE_BEFORE_CURRENT: "The rule in force starts on or after that day — choose a later date",
+    ALREADY_ANSWERED: "The answer is already recorded — change it in the block below",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>;
 

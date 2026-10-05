@@ -60,7 +60,7 @@ export default async function BookingSetupPage() {
    */
   const monthGuide = can(membership.role, "expenses", "read")
     ? await withTenant(membership.organizationId, (tx) =>
-        loadMonthGuide(tx, { month: monthOf(new Date()), currency }),
+        loadMonthGuide(tx, { month: monthOf(new Date()), currency, organizationId: membership.organizationId }),
       )
     : null;
 

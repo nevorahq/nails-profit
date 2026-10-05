@@ -17,6 +17,7 @@ import { formatBasisPoints, formatHours, formatMoneyMinor } from "@/lib/format";
 import { ReportTabs } from "@/components/report-tabs";
 import { currentMonthIn, monthRange } from "@/domain/report-period";
 import { isMonth, loadPeriodPL, monthBounds } from "@/lib/period";
+import { firstUnansweredHref, loadMoneyAnswers } from "@/lib/money-answers";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -70,7 +71,7 @@ export default async function MonthReportPage({
    * `principalLabourMinor` is zero both for a studio that has no principal and
    * for one whose principal worked no visits this month.
    */
-  const { report, soloWithoutPrincipal, unclosed } = await withTenant(
+  const { report, soloWithoutPrincipal, unclosed, beforeTaxesHref } = await withTenant(
     membership.organizationId,
     async (tx) => {
       const report = await loadPeriodPL(
@@ -96,9 +97,17 @@ export default async function MonthReportPage({
         { now: new Date(), locale, endedFrom: bounds.from, endedTo: bounds.to },
       );
 
+      /*
+       * Until the studio has said how it pays taxes and how its clients pay,
+       * every line below is before them. Said once, over the statement, with
+       * the way to answer — the answer is what makes the line go.
+       */
+      const beforeTaxesHref = firstUnansweredHref(await loadMoneyAnswers(tx, membership.organizationId));
+
       return {
         report,
         unclosed,
+        beforeTaxesHref,
         soloWithoutPrincipal: soloNeedsPrincipal(
           businessType,
           people.map((person) => person.isPrincipal),
@@ -180,6 +189,15 @@ export default async function MonthReportPage({
             {t("nav.specialists")}
           </Link>
         </div>
+      )}
+
+      {beforeTaxesHref && (
+        <p className="warning-banner pl-before-taxes">
+          {t("money.beforeTaxes")} —{" "}
+          <Link className="text-link" href={beforeTaxesHref}>
+            {t("money.beforeTaxesAction")}
+          </Link>
+        </p>
       )}
 
       {report.excludedRows > 0 && (
@@ -330,11 +348,10 @@ export default async function MonthReportPage({
             )}
 
             {/*
-              Not computed, and the reason — but no way out offered any more.
-              «Оплата труда за месяц» is off the settings page (see the switch
-              at the top of `app/app/settings/page.tsx`), so a link to it would
-              be a door onto nothing; `tests/owner-wage-reachable.test.ts` holds
-              the two together. The suggestion still stands on its own: it is
+              Not computed, and the reason — but no way out offered. «Оплата
+              труда за месяц» lives on «Деньги» and only with this same switch
+              on; `tests/owner-wage-reachable.test.ts` holds the two together if
+              a link is ever put back. The suggestion stands on its own: it is
               what the owner already booked themselves at the market rate this
               month, which is the number this line exists to name.
             */}

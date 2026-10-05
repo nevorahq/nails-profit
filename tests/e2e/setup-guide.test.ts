@@ -189,17 +189,19 @@ describe("the guided setup", () => {
     expect((await progress()).done).toBe(before.done);
   });
 
-  test("hands the month its own two steps once the first run is over", async () => {
+  test("hands the month its own four steps once the first run is over", async () => {
     /*
      * The second checklist, and the reason it is a separate list rather than
-     * steps four and five: it is measured for one month, and both figures are
-     * ones the report is wrong without. Until they are in, operating profit
-     * equals the contribution margin and there is no break-even beside it.
+     * more steps of the first: every figure in it is one the report is wrong
+     * without. Without overhead and a rota, operating profit equals the
+     * contribution margin and there is no break-even beside it; without the
+     * taxes and payments answers, every profit is before what the state and
+     * the bank take.
      */
     const month = new Date().toISOString().slice(0, 7);
     expect(await monthProgress()).toMatchObject({
       done: 0,
-      total: 2,
+      total: 4,
       complete: false,
       next: "overhead",
     });
@@ -228,7 +230,15 @@ describe("the guided setup", () => {
       intervals: [{ weekday: 1, start: "09:00", end: "18:00" }],
     });
 
-    expect(await monthProgress()).toMatchObject({ done: 2, total: 2, complete: true, next: null });
+    expect(await monthProgress()).toMatchObject({ done: 2, total: 4, complete: false, next: "taxes" });
+
+    // «Не плачу с визита» and «только наличные» are answers: they finish the
+    // month without a single rate in it.
+    await owner.post("/api/v1/onboarding/taxes", { answer: "none" });
+    expect(await monthProgress()).toMatchObject({ done: 3, complete: false, next: "payments" });
+    await owner.post("/api/v1/onboarding/payments", { methods: ["cash"] });
+
+    expect(await monthProgress()).toMatchObject({ done: 4, total: 4, complete: true, next: null });
   });
 
   test("is not the master's list", async () => {
