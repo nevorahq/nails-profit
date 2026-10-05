@@ -38,6 +38,8 @@ const OWNER_PAGES = [
   ["/app/import", "Import"],
   ["/app/settings", "Settings"],
   ["/app/more", "More"],
+  // Reached from every «More» under a hint, not from the navigation.
+  ["/app/how", "How it is counted"],
 ] as const;
 
 test.describe("authenticated smoke", () => {
@@ -99,6 +101,7 @@ test.describe("authenticated smoke", () => {
       ["/app/booking", "Online booking"],
       ["/app/settings", "Settings"],
       ["/app/more", "More"],
+      ["/app/how", "How it is counted"],
     ] as const) {
       const response = await page.goto(path);
       expect(response?.status(), `${path} should answer 200 for a master`).toBe(200);

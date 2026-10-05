@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { TipField, tipMinorOf, toMajorUnits } from "@/components/paid-field";
-import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -36,7 +36,8 @@ export function VisitAdjustForm({
   locale: AppLocale;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const localeCode = localeTag(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -77,7 +78,13 @@ export function VisitAdjustForm({
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? t("visits.adjustFailed"));
+      // By code first: MISSING_COMMISSION_RULE is worded for who reads it, and
+      // the server's own message is English.
+      setError(
+        payload?.error?.code
+          ? getErrorMessage(payload.error.code, payload.error.message ?? t("visits.adjustFailed"), locale, register)
+          : (payload?.error?.message ?? t("visits.adjustFailed")),
+      );
       return;
     }
 

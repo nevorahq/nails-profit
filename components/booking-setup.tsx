@@ -14,7 +14,8 @@ import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
-import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { type MessageKey, type Translate } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { PublicAddressEditor } from "@/components/public-address-editor";
 import { localeTag } from "@/i18n/translate";
 import { formatLongDate } from "@/lib/format";
@@ -197,7 +198,7 @@ export function BookingSetup({
   locale: AppLocale;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

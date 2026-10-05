@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm";
 
 import { AppShell } from "@/components/app-shell";
+import { LexiconProvider } from "@/components/lexicon-provider";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { organizationLogoUrl } from "@/domain/avatar-image";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
+import { registerOf } from "@/i18n/lexicon";
 import { getActiveMembership } from "@/lib/membership";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { readPreviewCookie } from "@/lib/preview-request";
@@ -37,6 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       locale: organizations.locale,
       type: organizations.type,
       bookingAccess: organizations.bookingAccess,
+      detailedAnalytics: organizations.detailedAnalytics,
     })
     .from(organizations)
     .where(eq(organizations.id, caller.membership.organizationId))
@@ -56,26 +59,39 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // and asks the banner to clear the dead cookie — see its `stale` prop.
   const stalePreview = preview === null && (await readPreviewCookie()) !== null;
 
+  /*
+   * Who every screen under the shell is talking to — the format and the
+   * detailed-analytics switch, read once here. Client components take it from
+   * the provider; the shell and the server pages pass it to `getTranslator`.
+   */
+  const register = registerOf({
+    businessType: (organization?.type ?? "solo") as BusinessType,
+    detailedAnalytics: organization?.detailedAnalytics ?? false,
+  });
+
   return (
-    <AppShell
-      locale={(organization?.locale ?? "ru") as AppLocale}
-      role={caller.membership.role}
-      businessType={(organization?.type ?? "solo") as BusinessType}
-      organizationName={organization?.name ?? ""}
-      organizationLogo={organizationLogoUrl(logoVersion)}
-      userEmail={caller.membership.userEmail}
-      preview={
-        preview && {
-          targetName: preview.targetName,
-          targetEmail: preview.targetEmail,
-          targetRole: preview.targetRole,
-          actorEmail: preview.actorEmail,
+    <LexiconProvider register={register}>
+      <AppShell
+        register={register}
+        locale={(organization?.locale ?? "ru") as AppLocale}
+        role={caller.membership.role}
+        businessType={(organization?.type ?? "solo") as BusinessType}
+        organizationName={organization?.name ?? ""}
+        organizationLogo={organizationLogoUrl(logoVersion)}
+        userEmail={caller.membership.userEmail}
+        preview={
+          preview && {
+            targetName: preview.targetName,
+            targetEmail: preview.targetEmail,
+            targetRole: preview.targetRole,
+            actorEmail: preview.actorEmail,
+          }
         }
-      }
-      stalePreview={stalePreview}
-      bookingOff={organization?.bookingAccess === "off"}
-    >
-      {children}
-    </AppShell>
+        stalePreview={stalePreview}
+        bookingOff={organization?.bookingAccess === "off"}
+      >
+        {children}
+      </AppShell>
+    </LexiconProvider>
   );
 }

@@ -113,6 +113,8 @@ const ru = {
   "settings.staffNotices": "Письма о заявках",
   "settings.staffNotices.owner": "Только владельцу",
   "settings.staffNotices.owner_and_managers": "Владельцу и управляющим",
+  "settings.detailedAnalytics": "Подробная финансовая аналитика",
+  "settings.detailedAnalyticsHint": "Выключено — отчёты говорят тремя словами: выручка, расходы, осталось. Включено — добавляются экономическая прибыль, оплата вашего труда, резерв и «Можно вывести», мощность и прежние финансовые термины. Цифры от этого не меняются.",
   "currency.rub": "рубль",
   "settings.saved": "Сохранено",
   "settings.studioName": "Название студии",
@@ -436,6 +438,27 @@ const ru = {
   "common.minutes": "мин",
 
 
+  "common.more": "Подробнее",
+  "common.howCounted": "Как считается — на примере одного визита",
+  "how.title": "Как считается",
+  "how.lead": "Один визит студии — от цены до того, сколько он приносит в час. Каждая цифра в приложении считается так же.",
+  "how.visitTitle": "Визит",
+  "how.visitSetup": "Маникюр с покрытием за {price}, полтора часа, у мастера, которому студия платит {rate} от чека.",
+  "how.price": "Цена",
+  "how.masterPay": "Оплата мастеру, {rate}",
+  "how.materials": "Материалы на этот визит",
+  "how.left": "Осталось",
+  "how.leftNote": "Это и есть «осталось» на карточке услуги и в отчёте: цена минус всё, чего стоил сам визит.",
+  "how.leftDetailed": "В подробной аналитике та же строка называется маржинальной прибылью.",
+  "how.hourTitle": "В час",
+  "how.perHour": "{left} за {hours} — это {perHour} в час. По этой цифре видно, какая услуга выгоднее: дорогая и долгая может приносить в час меньше дешёвой и быстрой.",
+  "how.monthTitle": "Месяц",
+  "how.month": "{visits} таких визитов оставляют {leftAfterVisits}. Из этого вычитается то, за что не платит ни один визит в отдельности: аренда, коммунальные, оклады — {fixed}.",
+  "how.monthLeft": "Осталось за месяц",
+  "how.monthNote": "Если эта цифра меньше нуля, месяц убыточный, и отчёт показывает её с минусом — не нулём.",
+  "how.solo": "Если вы работаете одна, строки оплаты мастеру у вас нет: ставка за вашу работу по умолчанию 0 %, и всё, что осталось после материалов, — ваше.",
+  "how.detailedTitle": "Подробная аналитика",
+  "how.detailed": "Включённая в Настройках, она добавляет к «осталось за месяц» оценку вашего собственного труда: экономическая прибыль — это то, что остаётся после неё, а «Можно вывести» — экономическая прибыль за вычетом резерва, который вы оставляете в деле.",
   "services.name": "Название услуги",
   "services.durationMinutes": "Длительность, мин",
   "services.priceIn": "Цена, {currency}",
@@ -462,6 +485,7 @@ const ru = {
   // typo. The second sentence leads instead.
   "services.fullyLoadedHint":
     "Оплата труда мастера сюда не входит — она уже вычтена комиссией выше, и второй раз вычитать её нельзя. Добавлена только доля аренды и окладов: {rate} за час практической мощности по данным за {month}",
+  "services.fullyLoadedHintShort": "Добавлена доля аренды и окладов: {rate} за час, по данным за {month}.",
   "services.fullyLoadedFormula": "Доля постоянных =",
 
   "addOns.name": "Название",
@@ -515,6 +539,7 @@ const ru = {
     "Комиссия, начисленная владельцу, — это стоимость его труда: столько пришлось бы платить наёмному мастеру, и без неё услуги не сравнить между собой. Но эти деньги из бизнеса не ушли, поэтому в месяце они возвращаются обратно.",
   "pl.principalHint.solo":
     "Комиссия по вашим визитам — это стоимость вашего труда: столько вы платили бы мастеру за ту же работу, и без неё услуги не сравнить между собой. Но эти деньги из бизнеса не ушли, поэтому в месяце они возвращаются обратно.",
+  "pl.principalHintShort": "Оплата владельца за его же визиты возвращается в прибыль месяца — из бизнеса она не ушла.",
   "pl.overhead": "Постоянные расходы",
   "pl.materialsReconciliation": "Расходники: списано по нормам {used} · закуплено {bought}",
   "pl.materialsReconciliationHint": "В прибыль идёт списанное по нормам услуг; закупки этого месяца — только в движение денег, чтобы не вычесть их дважды.",
@@ -536,11 +561,16 @@ const ru = {
     "Оклад мастера и стоимость труда владельца — одно и то же: деньги, которые должен месяц, а не отдельный визит. Оклад вычитается из операционной прибыли, труд владельца — после неё. Правило не редактируется: новое закрывает старое, чтобы прошлые месяцы остались со своими цифрами.",
   "labor.hint.solo":
     "Стоимость вашего труда — деньги, которые должен месяц, а не отдельный визит. Вычитается после операционной прибыли: сначала видно, сколько заработал бизнес, потом — сколько из этого ваша зарплата. Правило не редактируется: новое закрывает старое, чтобы прошлые месяцы остались со своими цифрами.",
+  "labor.hintShort": "Оплата, которую должен месяц, а не отдельный визит.",
   "labor.who": "Кому",
   "labor.arrangement": "Условие",
   "labor.since": "С",
   "labor.none": "Пока ничего не задано.",
-  "labor.close": "Завершить",
+  "rules.changeFrom": "Изменить с даты",
+  "rules.from": "С даты",
+  "rules.pastUnchanged": "Прошлые визиты и месяцы не изменятся — они уже посчитаны по прежнему правилу.",
+  "rules.scheduled": "с {date}: {rule}",
+  "rules.startsOn": "начнёт действовать {date}",
   "labor.historyTitle": {
     one: "Завершённое правило ({count})",
     few: "Завершённые правила ({count})",
@@ -602,6 +632,7 @@ const ru = {
   "cash.net": "Чистый денежный поток",
   "cash.hint":
     "Прибыль и деньги — разные вещи, и расходиться они должны. Прибыль считается по начислению: комиссия мастера входит в неё в момент визита, а не когда вы её выплатили. Здесь наоборот — событие это платёж.",
+  "cash.hintShort": "Деньги на счёте и прибыль расходятся — так и должно быть.",
   "cash.gapNone": "Прибыль и денежный поток за месяц совпали.",
   "cash.gapEarnedMore": "Заработано больше, чем осело на счёте, на {amount}: закупки впрок, ваши выводы, ещё не оплаченные счета.",
   "cash.gapBankedMore": "На счёте осело больше, чем заработано, на {amount}: часть расходов месяца ещё не ушла.",
@@ -621,10 +652,12 @@ const ru = {
   "capacity.practical": "Практическая мощность ({rate})",
   "capacity.booked": "Занято визитами",
   "capacity.utilization": "Загрузка",
+  "capacity.utilizationPercent": "Загрузка, %",
   "capacity.hours": "{value} ч",
   "capacity.perHour": "{amount} / ч",
   "capacity.utilizationHint":
     "Практическая мощность — та доля часов расписания, которую реально удаётся продать: перерывы, уборка, опоздания и окна между записями. Считается от расписания, а не от календаря: если мастер выходит три дня в неделю, остальные четыре — не простой, а просто не рабочее время.",
+  "capacity.utilizationHintShort": "Загрузка — какая доля рабочих часов по расписанию занята визитами.",
   "capacity.noRota":
     "Расписание не заполнено, поэтому загрузку и стоимость часа посчитать не из чего. Точка безубыточности ниже считается и без расписания.",
   "capacity.openSchedule": "Заполнить расписание",
@@ -679,6 +712,7 @@ const ru = {
   "tax.title": "Налоги с визита",
   "tax.hint":
     "Ставки, которые применяются к каждому визиту. Меняются версиями: новая ставка закрывает старую, а прошлые месяцы продолжают считаться по той, что действовала тогда. Фиксированный платёж в месяц сюда не вносится — он записывается в расходы как повторяющийся, иначе одна и та же сумма вычтется дважды.",
+  "tax.hintShort": "Ставки налогов, которые применяются к каждому визиту.",
   "tax.kind": "Налог",
   "tax.kind.vat": "НДС",
   "tax.kind.turnover": "Налог с оборота",
@@ -906,6 +940,7 @@ const ru = {
     "Для аренды и оклада укажите 0: с визита не удерживается ничего. Правило нужно всё равно — без него визит не закроется.",
   "specialists.imputedHint":
     "Это не выплата: столько вы платили бы мастеру за ту же работу. Из этой цифры считается себестоимость визита — без неё услуги не сравнить между собой, — а в отчёте месяца она возвращается в прибыль, потому что из бизнеса не ушла.",
+  "specialists.imputedHintShort": "Это не выплата, а цена вашего часа: из неё считается себестоимость визита.",
   "specialists.account": "Аккаунт",
   "specialists.linkHint":
     "Пока мастер не связан с аккаунтом, он не видит своих визитов и не может закрыть визит: права «только свои» опираются на эту связь.",
@@ -1587,6 +1622,8 @@ const ro: Record<MessageKey, Message> = {
   "settings.staffNotices": "E-mailuri despre programări",
   "settings.staffNotices.owner": "Doar proprietarului",
   "settings.staffNotices.owner_and_managers": "Proprietarului și managerilor",
+  "settings.detailedAnalytics": "Analiză financiară detaliată",
+  "settings.detailedAnalyticsHint": "Dezactivat — rapoartele vorbesc în trei cuvinte: încasări, cheltuieli, rămâne. Activat — se adaugă profitul economic, plata muncii dvs., rezerva și «Se poate retrage», capacitatea și termenii financiari de până acum. Cifrele nu se schimbă.",
   "currency.rub": "rublă",
   "settings.saved": "Salvat",
   "settings.studioName": "Denumirea salonului",
@@ -1914,6 +1951,27 @@ const ro: Record<MessageKey, Message> = {
   "common.minutes": "min",
 
 
+  "common.more": "Detalii",
+  "common.howCounted": "Cum se calculează — pe exemplul unei vizite",
+  "how.title": "Cum se calculează",
+  "how.lead": "O vizită la studio — de la preț până la cât aduce pe oră. Fiecare cifră din aplicație se calculează la fel.",
+  "how.visitTitle": "Vizita",
+  "how.visitSetup": "Manichiură cu ojă la {price}, o oră și jumătate, la un maestru pe care studioul îl plătește cu {rate} din bon.",
+  "how.price": "Prețul",
+  "how.masterPay": "Plata maestrului, {rate}",
+  "how.materials": "Materialele pentru această vizită",
+  "how.left": "Rămâne",
+  "how.leftNote": "Acesta este «rămâne» de pe fișa serviciului și din raport: prețul minus tot ce a costat vizita însăși.",
+  "how.leftDetailed": "În analiza detaliată același rând se numește marjă de contribuție.",
+  "how.hourTitle": "Pe oră",
+  "how.perHour": "{left} în {hours} înseamnă {perHour} pe oră. După această cifră se vede ce serviciu e mai avantajos: unul scump și lung poate aduce pe oră mai puțin decât unul ieftin și rapid.",
+  "how.monthTitle": "Luna",
+  "how.month": "{visits} astfel de vizite lasă {leftAfterVisits}. Din asta se scade ce nu plătește nicio vizită în parte: chiria, utilitățile, salariile — {fixed}.",
+  "how.monthLeft": "Rămâne pe lună",
+  "how.monthNote": "Dacă această cifră e sub zero, luna e în pierdere, iar raportul o arată cu minus — nu ca zero.",
+  "how.solo": "Dacă lucrați singură, rândul plății maestrului nu există la dvs.: cota pentru munca dvs. este implicit 0 %, iar tot ce rămâne după materiale este al dvs.",
+  "how.detailedTitle": "Analiza detaliată",
+  "how.detailed": "Activată în Setări, ea adaugă la «rămâne pe lună» evaluarea propriei munci: profitul economic este ce rămâne după ea, iar «Se poate retrage» este profitul economic minus rezerva pe care o lăsați în afacere.",
   "services.name": "Denumirea serviciului",
   "services.durationMinutes": "Durata, min",
   "services.priceIn": "Preț, {currency}",
@@ -1937,6 +1995,7 @@ const ro: Record<MessageKey, Message> = {
   "services.afterFixed": "Rămâne după cheltuielile fixe",
   "services.fullyLoadedHint":
     "S-a adăugat partea de chirie și salarii: {rate} pe oră de capacitate practică, după datele din {month}. Plata muncii maestrului nu intră aici — a fost deja scăzută prin comisionul de mai sus și nu poate fi scăzută a doua oară.",
+  "services.fullyLoadedHintShort": "S-a adăugat partea de chirie și salarii: {rate} pe oră, după datele din {month}.",
   "services.fullyLoadedFormula": "Partea fixă =",
 
   "addOns.name": "Denumire",
@@ -1990,6 +2049,7 @@ const ro: Record<MessageKey, Message> = {
     "Comisionul calculat proprietarului este costul muncii sale: atât ați plăti unui maestru angajat, iar fără el serviciile nu pot fi comparate. Dar acești bani nu au ieșit din afacere, deci în lună se adaugă înapoi.",
   "pl.principalHint.solo":
     "Comisionul de pe vizitele dvs. este costul muncii dvs.: atât ați plăti unui maestru pentru aceeași muncă, iar fără el serviciile nu pot fi comparate. Dar acești bani nu au ieșit din afacere, deci în lună se adaugă înapoi.",
+  "pl.principalHintShort": "Plata proprietarului pentru propriile vizite se întoarce în profitul lunii — din afacere nu a plecat.",
   "pl.overhead": "Cheltuieli fixe",
   "pl.materialsReconciliation": "Consumabile: scăzute după norme {used} · cumpărate {bought}",
   "pl.materialsReconciliationHint": "În profit intră ce s-a scăzut după normele serviciilor; achizițiile lunii merg doar în fluxul de numerar, ca să nu fie scăzute de două ori.",
@@ -2011,11 +2071,16 @@ const ro: Record<MessageKey, Message> = {
     "Salariul maestrului și costul muncii proprietarului sunt același lucru: bani datorați de lună, nu de o vizită anume. Salariul se scade din profitul operațional, munca proprietarului — după el. Regula nu se editează: una nouă o închide pe cea veche, ca lunile trecute să rămână cu cifrele lor.",
   "labor.hint.solo":
     "Costul muncii dvs. înseamnă bani datorați de lună, nu de o vizită anume. Se scade după profitul operațional: mai întâi se vede cât a câștigat afacerea, apoi cât din asta este salariul dvs. Regula nu se editează: una nouă o închide pe cea veche, ca lunile trecute să rămână cu cifrele lor.",
+  "labor.hintShort": "Plata datorată de lună, nu de o vizită anume.",
   "labor.who": "Cui",
   "labor.arrangement": "Condiție",
   "labor.since": "Din",
   "labor.none": "Nimic stabilit încă.",
-  "labor.close": "Încheie",
+  "rules.changeFrom": "Modifică de la o dată",
+  "rules.from": "De la data",
+  "rules.pastUnchanged": "Vizitele și lunile trecute nu se schimbă — sunt deja calculate după regula de până acum.",
+  "rules.scheduled": "de la {date}: {rule}",
+  "rules.startsOn": "intră în vigoare pe {date}",
   "labor.historyTitle": {
     one: "Regulă încheiată ({count})",
     few: "Reguli încheiate ({count})",
@@ -2077,6 +2142,7 @@ const ro: Record<MessageKey, Message> = {
   "cash.net": "Flux net de numerar",
   "cash.hint":
     "Profitul și banii sunt lucruri diferite și este normal să nu coincidă. Profitul se contabilizează pe bază de angajamente: comisionul maestrului intră în el în momentul vizitei, nu când a fost plătit. Aici este invers — evenimentul este plata.",
+  "cash.hintShort": "Banii din cont și profitul diferă — așa și trebuie.",
   "cash.gapNone": "Profitul și fluxul de numerar al lunii au coincis.",
   "cash.gapEarnedMore": "S-a câștigat cu {amount} mai mult decât a rămas în cont: stocuri, retragerile dumneavoastră, facturi încă neplătite.",
   "cash.gapBankedMore": "În cont a rămas cu {amount} mai mult decât s-a câștigat: o parte din cheltuielile lunii încă nu au ieșit.",
@@ -2096,10 +2162,12 @@ const ro: Record<MessageKey, Message> = {
   "capacity.practical": "Capacitate practică ({rate})",
   "capacity.booked": "Ocupate de vizite",
   "capacity.utilization": "Grad de ocupare",
+  "capacity.utilizationPercent": "Grad de ocupare, %",
   "capacity.hours": "{value} h",
   "capacity.perHour": "{amount} / h",
   "capacity.utilizationHint":
     "Capacitatea practică este partea din orele programului care chiar poate fi vândută: pauze, curățenie, întârzieri și ferestre între programări. Se calculează din program, nu din calendar: dacă maestrul lucrează trei zile pe săptămână, celelalte patru nu sunt timp nefolosit, ci pur și simplu nu sunt timp de lucru.",
+  "capacity.utilizationHintShort": "Gradul de ocupare — ce parte din orele de lucru din program este ocupată de vizite.",
   "capacity.noRota":
     "Programul nu este completat, așa că gradul de ocupare și costul orei nu au din ce fi calculate. Pragul de rentabilitate de mai jos se calculează și fără program.",
   "capacity.openSchedule": "Completează programul",
@@ -2154,6 +2222,7 @@ const ro: Record<MessageKey, Message> = {
   "tax.title": "Impozite pe vizită",
   "tax.hint":
     "Cotele care se aplică fiecărei vizite. Se schimbă prin versiuni: o cotă nouă o închide pe cea veche, iar lunile trecute rămân calculate după cea care era în vigoare atunci. Plata fixă lunară nu se introduce aici — ea se trece la cheltuieli ca rând recurent, altfel aceeași sumă s-ar scădea de două ori.",
+  "tax.hintShort": "Cotele de taxe care se aplică fiecărei vizite.",
   "tax.kind": "Impozit",
   "tax.kind.vat": "TVA",
   "tax.kind.turnover": "Impozit pe cifra de afaceri",
@@ -2381,6 +2450,7 @@ const ro: Record<MessageKey, Message> = {
     "Pentru chirie și salariu indicați 0: din vizită nu se reține nimic. Regula este oricum necesară — fără ea vizita nu poate fi finalizată.",
   "specialists.imputedHint":
     "Nu este o plată: atât ați plăti unui maestru pentru aceeași muncă. Din această cifră se calculează costul vizitei — fără ea serviciile nu pot fi comparate între ele — iar în raportul lunar ea se întoarce în profit, pentru că nu a plecat din afacere.",
+  "specialists.imputedHintShort": "Nu este o plată, ci prețul orei dvs.: din el se calculează costul vizitei.",
   "specialists.account": "Cont",
   "specialists.linkHint":
     "Până când maestrul nu este legat de un cont, nu își vede vizitele și nu poate închide una: drepturile „doar ale mele” se sprijină pe această legătură.",
@@ -3060,6 +3130,8 @@ const en: Record<MessageKey, Message> = {
   "settings.staffNotices": "Emails about bookings",
   "settings.staffNotices.owner": "The owner only",
   "settings.staffNotices.owner_and_managers": "The owner and the managers",
+  "settings.detailedAnalytics": "Detailed financial analytics",
+  "settings.detailedAnalyticsHint": "Off — the reports speak in three words: revenue, costs, left. On — economic profit, the pay for your own work, the reserve and «Safe to withdraw», capacity and the usual finance terms come back. No figure changes either way.",
   "currency.rub": "rouble",
   "settings.saved": "Saved",
   "settings.studioName": "Studio name",
@@ -3384,6 +3456,27 @@ const en: Record<MessageKey, Message> = {
   "common.minutes": "min",
 
 
+  "common.more": "More",
+  "common.howCounted": "How it is counted — one visit, step by step",
+  "how.title": "How it is counted",
+  "how.lead": "One studio visit, from its price to what it brings in an hour. Every figure in the app is counted the same way.",
+  "how.visitTitle": "The visit",
+  "how.visitSetup": "A gel manicure at {price}, an hour and a half, with a master the studio pays {rate} of the bill.",
+  "how.price": "Price",
+  "how.masterPay": "The master's pay, {rate}",
+  "how.materials": "Materials for this visit",
+  "how.left": "Left",
+  "how.leftNote": "This is the «left» on the service card and in the report: the price less everything the visit itself cost.",
+  "how.leftDetailed": "Detailed analytics calls the same line the contribution margin.",
+  "how.hourTitle": "An hour",
+  "how.perHour": "{left} over {hours} is {perHour} an hour. That is the figure that shows which service pays better: a long, expensive one can bring in less an hour than a quick, cheap one.",
+  "how.monthTitle": "The month",
+  "how.month": "{visits} visits like it leave {leftAfterVisits}. Out of that comes what no single visit pays for: rent, utilities, salaries — {fixed}.",
+  "how.monthLeft": "Left for the month",
+  "how.monthNote": "If this figure is below zero the month lost money, and the report shows it with a minus — not as zero.",
+  "how.solo": "If you work alone there is no master's-pay line: the rate for your own work is 0% unless you set one, and everything left after materials is yours.",
+  "how.detailedTitle": "Detailed analytics",
+  "how.detailed": "Turned on in Settings, it adds a value for your own work to «left for the month»: economic profit is what remains after it, and «Safe to withdraw» is economic profit less the reserve you keep in the business.",
   "services.name": "Service name",
   "services.durationMinutes": "Duration, min",
   "services.priceIn": "Price, {currency}",
@@ -3406,6 +3499,7 @@ const en: Record<MessageKey, Message> = {
   "services.afterFixed": "Left after fixed costs",
   "services.fullyLoadedHint":
     "A share of rent and salaries has been added: {rate} per hour of practical capacity, from {month}. The master's pay is not in it — the commission above already took that out, and it cannot be taken twice.",
+  "services.fullyLoadedHintShort": "A share of rent and salaries is added: {rate} an hour, from {month}.",
   "services.fullyLoadedFormula": "Share of fixed costs =",
 
   "addOns.name": "Name",
@@ -3459,6 +3553,7 @@ const en: Record<MessageKey, Message> = {
     "A commission booked to the owner is the cost of their work: it is what a hired master would have cost, and without it services cannot be compared. But the money never left the business, so the month adds it back.",
   "pl.principalHint.solo":
     "The commission on your own visits is the cost of your work: it is what you would pay a master for the same job, and without it services cannot be compared. But the money never left the business, so the month adds it back.",
+  "pl.principalHintShort": "The owner's pay for their own visits comes back into the month's profit — it never left the business.",
   "pl.overhead": "Fixed costs",
   "pl.materialsReconciliation": "Materials: used by the amounts on services {used} · bought {bought}",
   "pl.materialsReconciliationHint": "The profit takes what the services used up; this month's purchases go to the cash flow only, so they are not subtracted twice.",
@@ -3480,11 +3575,16 @@ const en: Record<MessageKey, Message> = {
     "A master's salary and what the owner's work is worth are the same thing: money the month owes rather than any one visit. A salary comes out of the operating profit; the owner's labour comes out after it. Rules are not edited — a new one closes the old, so past months keep the figures they reported.",
   "labor.hint.solo":
     "What your own work is worth is money the month owes rather than any one visit. It comes out after the operating profit: first what the business earned, then how much of it is your wage. Rules are not edited — a new one closes the old, so past months keep the figures they reported.",
+  "labor.hintShort": "Pay the month owes rather than any one visit.",
   "labor.who": "Whose",
   "labor.arrangement": "Arrangement",
   "labor.since": "Since",
   "labor.none": "Nothing set yet.",
-  "labor.close": "End it",
+  "rules.changeFrom": "Change from a date",
+  "rules.from": "From",
+  "rules.pastUnchanged": "Past visits and months will not change — they are already counted by the previous rule.",
+  "rules.scheduled": "from {date}: {rule}",
+  "rules.startsOn": "takes effect on {date}",
   "labor.historyTitle": {
     one: "Ended rule ({count})",
     other: "Ended rules ({count})",
@@ -3544,6 +3644,7 @@ const en: Record<MessageKey, Message> = {
   "cash.net": "Net cash",
   "cash.hint":
     "Profit and cash are different things, and they are supposed to differ. Profit is counted as it is earned: the master's commission enters it at the visit, not when it was paid out. Here it is the other way round — the payment is the event.",
+  "cash.hintShort": "Cash and profit differ — they are meant to.",
   "cash.gapNone": "Profit and cash agreed this month.",
   "cash.gapEarnedMore": "Earned {amount} more than stayed in the account: stock bought ahead, your own draws, bills not yet paid.",
   "cash.gapBankedMore": "The account grew {amount} more than the month earned: some of its costs have not gone out yet.",
@@ -3563,10 +3664,12 @@ const en: Record<MessageKey, Message> = {
   "capacity.practical": "Practical capacity ({rate})",
   "capacity.booked": "Taken by visits",
   "capacity.utilization": "Utilization",
+  "capacity.utilizationPercent": "Utilization, %",
   "capacity.hours": "{value} h",
   "capacity.perHour": "{amount} / h",
   "capacity.utilizationHint":
     "Practical capacity is the share of rostered hours that can actually be sold: breaks, cleaning, late arrivals and gaps between appointments take the rest. It is measured against the rota, not the calendar — a master who works three days a week is not idle the other four, those are simply not working hours.",
+  "capacity.utilizationHintShort": "Utilization is the share of rostered working hours taken up by visits.",
   "capacity.noRota":
     "There is no rota yet, so utilization and the cost of an hour have nothing to be computed from. The break-even figure below does not need one.",
   "capacity.openSchedule": "Set up the rota",
@@ -3621,6 +3724,7 @@ const en: Record<MessageKey, Message> = {
   "tax.title": "Taxes on a visit",
   "tax.hint":
     "The rates that apply to every visit. They change by version: a new rate closes the old one, and past months go on being costed at the rate that was true in them. A fixed monthly payment does not belong here — it is a recurring row in the expense ledger, and entering it twice is how a sum gets subtracted twice.",
+  "tax.hintShort": "The tax rates applied to every visit.",
   "tax.kind": "Tax",
   "tax.kind.vat": "VAT",
   "tax.kind.turnover": "Turnover tax",
@@ -3842,6 +3946,7 @@ const en: Record<MessageKey, Message> = {
     "For a rented chair or a salary, enter 0: nothing is taken from the visit. The rule is still needed — without one the visit cannot be closed.",
   "specialists.imputedHint":
     "Not a payment: it is what you would pay a specialist for the same work. A visit's cost is worked out from this figure — without it there is no comparing one service against another — and the month report adds it back into profit, because it never left the business.",
+  "specialists.imputedHintShort": "Not a payment but the price of your hour: a visit's cost is worked out from it.",
   "specialists.account": "Account",
   "specialists.linkHint":
     "Until a specialist is linked to an account they see none of their visits and cannot close one: every “own” permission resolves through this link.",

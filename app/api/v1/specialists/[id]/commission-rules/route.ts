@@ -1,10 +1,11 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { commissionRuleServices, commissionRules, services, specialists } from "@/db/schema";
+import { commissionRuleServices, commissionRules, organizations, services, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { commissionBases, commissionTypes } from "@/domain/costing";
 import { canManageCatalogue } from "@/domain/rbac";
+import { planRuleChange, RULE_CHANGE_REFUSALS } from "@/domain/rule-change";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -33,6 +34,13 @@ const ruleSchema = z
      * is what every rule written before this did.
      */
     covered_service_ids: z.array(z.uuid()).max(200).optional(),
+    /**
+     * The studio's day the rule takes over from, `YYYY-MM-DD`; absent is now.
+     * Today or later: a visit closed earlier keeps the rule it was snapshotted
+     * with whatever happens here, and a day already gone would leave the
+     * rules saying something the visits do not. See `domain/rule-change.ts`.
+     */
+    effective_date: z.iso.date().optional(),
   })
   .refine(
     (value) => {
@@ -88,13 +96,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (!service) return { failure: "SERVICE_NOT_FOUND" as const };
     }
 
-    const activeFrom = new Date();
-
-    // Close the open rule of the same scope. Past queries still resolve to it,
-    // because active_to only ends it from this instant forward.
-    await tx
-      .update(commissionRules)
-      .set({ activeTo: activeFrom, updatedBy: actor.userId, updatedAt: activeFrom, version: sql`${commissionRules.version} + 1` })
+    const [organization] = await tx
+      .select({ timezone: organizations.timezone })
+      .from(organizations)
+      .where(eq(organizations.id, actor.organizationId));
+    // The open rule of the same scope, locked so that two changes sent at once
+    // cannot both close it.
+    const current = await tx
+      .select({ id: commissionRules.id, activeFrom: commissionRules.activeFrom })
+      .from(commissionRules)
       .where(
         and(
           eq(commissionRules.specialistId, specialist.id),
@@ -103,7 +113,31 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             : eq(commissionRules.serviceId, serviceId),
           isNull(commissionRules.activeTo),
         ),
-      );
+      )
+      .for("update");
+
+    const plan = planRuleChange({
+      current,
+      effectiveDate: parsed.data.effective_date,
+      now: new Date(),
+      timezone: organization.timezone,
+    });
+    if (!plan.ok) return { failure: "RULE_CHANGE" as const, reason: plan.reason };
+    const activeFrom = plan.open.activeFrom;
+
+    // Close it where the new one opens. Past queries still resolve to it,
+    // because active_to only ends it from that instant forward.
+    if (plan.close.ids.length > 0) {
+      await tx
+        .update(commissionRules)
+        .set({
+          activeTo: plan.close.activeTo,
+          updatedBy: actor.userId,
+          updatedAt: new Date(),
+          version: sql`${commissionRules.version} + 1`,
+        })
+        .where(inArray(commissionRules.id, [...plan.close.ids]));
+    }
 
     const [rule] = await tx
       .insert(commissionRules)
@@ -171,6 +205,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   });
 
   if ("failure" in result) {
+    if (result.failure === "RULE_CHANGE") {
+      const refusal = RULE_CHANGE_REFUSALS[result.reason];
+      return apiError(422, refusal.code, refusal.message, requestIdentifier, {
+        fieldErrors: [{ field: "effective_date", code: result.reason, message: refusal.message }],
+      });
+    }
     return result.failure === "SPECIALIST_NOT_FOUND"
       ? apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", requestIdentifier)
       : apiError(404, "SERVICE_NOT_FOUND", "No service with this ID", requestIdentifier);

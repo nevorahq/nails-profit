@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ChromeIcon } from "@/components/icons";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { settledReads, withLocalReads } from "@/lib/notice-reads";
 import { playNotificationChime, unlockNotificationChime } from "@/lib/notification-chime";
@@ -97,7 +98,7 @@ async function fetchNotifications(locale: AppLocale, fallback: string): Promise<
  * list actually grows, not just any refresh.
  */
 export function NotificationsMenu({ locale }: { locale: AppLocale }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const loadFailed = t("notifications.loadFailed");
 
   const [open, setOpen] = useState(false);

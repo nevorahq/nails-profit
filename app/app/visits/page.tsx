@@ -19,6 +19,7 @@ import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
@@ -31,8 +32,10 @@ export default async function VisitsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; specialist?: string; visit?: string }>;
 }) {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
 
   if (!can(membership.role, "bookings", "read")) {

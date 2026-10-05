@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { formatMonth, monthNames, parseMonth, queryFor, yearOptions } from "@/lib/filter-bar";
 
 const PATH = "/app/reports/month";
@@ -35,7 +35,7 @@ export function MonthPicker({
   /** `YYYY-MM` where the studio is now, read on the server rather than the clock. */
   thisMonth: string;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
 
   const anchor = parseMonth(month) ?? parseMonth(thisMonth)!;

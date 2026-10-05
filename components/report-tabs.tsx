@@ -3,6 +3,7 @@ import Link from "next/link";
 import { can, type MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { queryFor } from "@/lib/filter-bar";
 
 export type ReportTab = "summary" | "services" | "month";
@@ -42,16 +43,19 @@ export function reportTabs(
 
 export function ReportTabs({
   locale,
+  register = writtenRegister,
   role,
   active,
   state,
 }: {
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   role: MemberRole;
   active: ReportTab;
   state: Parameters<typeof reportTabs>[1];
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
 
   return (
     <nav className="report-tabs" aria-label={t("report.tabs")}>

@@ -9,6 +9,9 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
+import { todayIn } from "@/domain/report-period";
+import { formatLocalDate } from "@/domain/timezone";
+import { registerOf } from "@/i18n/lexicon";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
 import { loadBookabilityFacts } from "@/lib/specialist-bookability";
 import { requireWorkspace } from "@/lib/workspace";
@@ -28,8 +31,10 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
   // one, and before the error a malformed uuid would raise inside the driver.
   if (!z.uuid().safeParse(id).success) notFound();
 
-  const { membership, locale, currency, businessType } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType, timezone } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "commissions", "read")) {
     return (
@@ -117,6 +122,8 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
       places={loaded.places}
       publishedLocationIds={loaded.publishedLocationIds}
       canManage={canManage}
+      today={formatLocalDate(todayIn(new Date(), timezone))}
+      timezone={timezone}
     />
   );
 }

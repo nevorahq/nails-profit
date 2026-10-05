@@ -7,6 +7,7 @@ import { clients, financialSnapshots, specialists, visitLines, visits } from "@/
 import { withTenant } from "@/db/tenant";
 import { can, scopeFor } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
@@ -20,8 +21,10 @@ export default async function ClientCardPage({
   const { id: clientId } = await params;
   if (!z.uuid().safeParse(clientId).success) notFound();
 
-  const { membership, locale, currency } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
   const tag = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, tag);
 

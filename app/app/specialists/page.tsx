@@ -8,13 +8,16 @@ import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/r
 import { SpecialistManager } from "@/components/specialist-manager";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { loadSetupGuide } from "@/lib/onboarding";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function SpecialistsPage() {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "commissions", "read")) {
     return (

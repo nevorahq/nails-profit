@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 
 /**
  * Removing a visit recorded by hand.
@@ -21,7 +21,8 @@ import { getTranslator } from "@/i18n/t";
  */
 export function VisitDeleteButton({ visitId, locale }: { visitId: string; locale: AppLocale }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +34,7 @@ export function VisitDeleteButton({ visitId, locale }: { visitId: string; locale
     const response = await fetch(`/api/v1/visits/${visitId}`, { method: "DELETE" });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(getErrorMessage(body?.error?.code, t("visits.deleteFailed"), locale));
+      setError(getErrorMessage(body?.error?.code, t("visits.deleteFailed"), locale, register));
       setPending(false);
       setConfirming(false);
       return;

@@ -1,3 +1,5 @@
+import { errorWordFor, writtenRegister, type Register } from "@/i18n/lexicon";
+
 export const supportedLocales = ["ru", "ro", "en"] as const;
 export type AppLocale = (typeof supportedLocales)[number];
 
@@ -51,6 +53,8 @@ export const errorMessages = {
     MISSING_COMMISSION_RULE: "У мастера нет правила комиссии",
     PUBLIC_BOOKING_UNAVAILABLE: "Онлайн-запись здесь пока недоступна — сохраните прайс без неё",
     MATERIALS_MODE_PAST_MONTH: "Прошедший месяц уже посчитан — выберите текущий или следующий",
+    RULE_DATE_IN_PAST: "Изменить правило можно с сегодняшнего дня или позже",
+    RULE_DATE_BEFORE_CURRENT: "Действующее правило начинается в этот день или позже — выберите дату после него",
   },
   ro: {
     UNAUTHENTICATED: "Este necesară autentificarea",
@@ -96,6 +100,8 @@ export const errorMessages = {
     MISSING_COMMISSION_RULE: "Maestrul nu are regulă de comision",
     PUBLIC_BOOKING_UNAVAILABLE: "Programarea online nu este încă disponibilă aici — salvați prețurile fără ea",
     MATERIALS_MODE_PAST_MONTH: "Luna trecută este deja calculată — alegeți luna curentă sau următoarea",
+    RULE_DATE_IN_PAST: "Regula se poate schimba de azi sau de la o zi ulterioară",
+    RULE_DATE_BEFORE_CURRENT: "Regula în vigoare începe în această zi sau mai târziu — alegeți o dată după ea",
   },
   en: {
     UNAUTHENTICATED: "Authentication is required",
@@ -141,15 +147,26 @@ export const errorMessages = {
     MISSING_COMMISSION_RULE: "The specialist has no commission rule",
     PUBLIC_BOOKING_UNAVAILABLE: "Online booking is not available here yet — save the prices without it",
     MATERIALS_MODE_PAST_MONTH: "A past month is already counted — choose this month or a later one",
+    RULE_DATE_IN_PAST: "A rule can change from today or a later day",
+    RULE_DATE_BEFORE_CURRENT: "The rule in force starts on or after that day — choose a later date",
   },
 } as const satisfies Record<AppLocale, Record<string, string>>;
 
 export type ErrorCode = keyof (typeof errorMessages)["en"];
 
-/** Translates a server error code, falling back to the server's own message. */
-export function getErrorMessage(code: string, fallback: string, locale: AppLocale = "ru") {
+/**
+ * Translates a server error code, falling back to the server's own message.
+ * The register words the few codes that depend on who reads them — see
+ * `errorWordFor` in `i18n/lexicon.ts`.
+ */
+export function getErrorMessage(
+  code: string,
+  fallback: string,
+  locale: AppLocale = "ru",
+  register: Register = writtenRegister,
+) {
   const table: Record<string, string> = errorMessages[locale] ?? errorMessages.ru;
-  return table[code] ?? fallback;
+  return errorWordFor(code, register, locale) ?? table[code] ?? fallback;
 }
 
 export const messages = {

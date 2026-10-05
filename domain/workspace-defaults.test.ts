@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   currencyForTimezone,
   DEFAULT_COMMISSION_PERCENT,
+  defaultCommissionBasisPointsFor,
   DEFAULT_WORKWEEK,
 } from "@/domain/workspace-defaults";
 import { currencies } from "@/domain/money";
@@ -83,5 +84,15 @@ describe("the defaults the setup screen arrives with", () => {
     // and neither is a default.
     expect(DEFAULT_COMMISSION_PERCENT).toBeGreaterThan(0);
     expect(DEFAULT_COMMISSION_PERCENT).toBeLessThan(100);
+  });
+
+  it("writes a studio's cards at that rate", () => {
+    expect(defaultCommissionBasisPointsFor("studio")).toBe(4_000);
+  });
+
+  it("books nothing for the work of somebody working alone", () => {
+    // Still a rule — a visit cannot close without one — but at zero, so the
+    // service card shows the whole price as hers rather than an imputed wage.
+    expect(defaultCommissionBasisPointsFor("solo")).toBe(0);
   });
 });

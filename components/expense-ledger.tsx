@@ -13,7 +13,7 @@ import { materialsModeFor, type MaterialsModePeriod } from "@/domain/materials-m
 import type { ExpenseRow } from "@/lib/expenses";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import {
   SetupGuideDialog,
   useSetupGuide,
@@ -172,7 +172,7 @@ function toMinorUnits(amount: string): number {
 
 function ExpenseForm({ locale, onAdded }: { locale: AppLocale; onAdded: () => void }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -287,7 +287,7 @@ function ExpenseTable({
   currentMonth: string | null;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [editPending, setEditPending] = useState(false);

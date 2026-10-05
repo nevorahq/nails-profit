@@ -9,6 +9,7 @@ import { resolveLocalizedText } from "@/i18n/localized-text";
 import { ClientContact } from "@/components/client-contact";
 import { parseContactChannels } from "@/domain/contact-channels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { mayActOnSpecialist } from "@/lib/booking-access";
 import { bookingLinesOf, loadBooking } from "@/lib/booking-service";
@@ -24,8 +25,10 @@ import { requireWorkspace } from "@/lib/workspace";
  * booking row — that row only knows where the appointment ended up.
  */
 export default async function BookingCardPage({ params }: { params: Promise<{ id: string }> }) {
-  const { membership, locale, currency } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
   const tag = localeTag(locale);
 
   if (!can(membership.role, "bookings", "read")) {

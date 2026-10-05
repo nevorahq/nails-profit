@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { avatarUrl } from "@/domain/avatar-image";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { squareImage } from "@/lib/square-image";
 
 /**
@@ -52,7 +52,7 @@ export function SpecialistPhoto({
   withName?: boolean;
   locale: AppLocale;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);

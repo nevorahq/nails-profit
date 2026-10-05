@@ -18,7 +18,8 @@ import {
 import { resolveLocalizedText, type LocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 
 /**
@@ -155,7 +156,7 @@ export function ServiceList({
   /** The organization's, which the materials are typed in. */
   currency?: string;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
   const guide = useSetupGuide(setupGuide);
 

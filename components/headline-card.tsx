@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Headline } from "@/domain/headline";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -19,6 +20,7 @@ import { formatMoneyMinor } from "@/lib/format";
 export function HeadlineCard({
   headline,
   locale,
+  register = writtenRegister,
   currency,
   month,
   isCurrentMonth,
@@ -26,6 +28,8 @@ export function HeadlineCard({
 }: {
   headline: Headline;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   currency: string;
   /** `YYYY-MM` the figure is for. */
   month: string;
@@ -33,7 +37,7 @@ export function HeadlineCard({
   /** The month's own statement, for a role that may open it. */
   detailsHref: string | null;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const tag = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, tag);
   const monthName = new Intl.DateTimeFormat(tag, { month: "long", year: "numeric", timeZone: "UTC" }).format(

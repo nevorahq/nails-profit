@@ -1,14 +1,17 @@
 import { isNull } from "drizzle-orm";
 import Link from "next/link";
 
+import { Hint } from "@/components/hint";
 import { MonthPicker } from "@/components/month-picker";
 import { specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { basicPL } from "@/domain/basic-pl";
 import { soloNeedsPrincipal } from "@/domain/principal";
 import { can } from "@/domain/rbac";
 import type { ExpenseCategory } from "@/domain/expense-categories";
 import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatHours, formatMoneyMinor } from "@/lib/format";
 import { ReportTabs } from "@/components/report-tabs";
@@ -33,8 +36,10 @@ export default async function MonthReportPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { membership, locale, currency, businessType, timezone } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType, timezone, detailedAnalytics } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "expenses", "read")) {
     return (
@@ -102,6 +107,16 @@ export default async function MonthReportPage({
     },
   );
   const pl = report.pl;
+  /*
+   * The plain view nets a principal's commission into the costs instead of
+   * adding it back on a line of its own — see `domain/basic-pl.ts`. The bottom
+   * line is the same operating profit either way.
+   */
+  const plain = basicPL(pl);
+  const labourShownMinor = detailedAnalytics ? pl.labourCostMinor : plain.paidToMastersMinor;
+  const showLabour = detailedAnalytics || labourShownMinor > 0;
+  const lastVisitCost =
+    pl.paymentCommissionMinor > 0 ? "acquiring" : pl.payrollTaxMinor > 0 ? "payroll" : showLabour ? "labour" : null;
   const capacity = report.capacity;
   const cash = report.cashFlow;
   // A column of zeros for a studio nobody tips is noise; it appears with the first tip.
@@ -140,6 +155,7 @@ export default async function MonthReportPage({
   return (
     <main className="app-shell">
       <ReportTabs
+        register={register}
         locale={locale}
         role={membership.role}
         active="month"
@@ -214,12 +230,20 @@ export default async function MonthReportPage({
                     <td>{cost(pl.turnoverTaxMinor)}</td>
                   </tr>
                 )}
-                <tr className={pl.payrollTaxMinor > 0 || pl.paymentCommissionMinor > 0 ? undefined : "pl-subtotal"}>
-                  <td className="pl-label">{t(businessLabel.labour[businessType])}</td>
-                  <td>{cost(pl.labourCostMinor)}</td>
-                </tr>
+                {/*
+                  The plain view prints only the work somebody else was paid
+                  for, and nothing at all when that is nobody — a woman working
+                  alone at a rate of zero would otherwise read «0» for her own
+                  hands.
+                */}
+                {showLabour && (
+                  <tr className={lastVisitCost === "labour" ? "pl-subtotal" : undefined}>
+                    <td className="pl-label">{t(businessLabel.labour[businessType])}</td>
+                    <td>{cost(labourShownMinor)}</td>
+                  </tr>
+                )}
                 {pl.payrollTaxMinor > 0 && (
-                  <tr className={pl.paymentCommissionMinor > 0 ? undefined : "pl-subtotal"}>
+                  <tr className={lastVisitCost === "payroll" ? "pl-subtotal" : undefined}>
                     <td className="pl-label">{t("pl.payrollTax")}</td>
                     <td>{cost(pl.payrollTaxMinor)}</td>
                   </tr>
@@ -232,14 +256,16 @@ export default async function MonthReportPage({
                 )}
                 <tr>
                   <td>{t("pl.contributionMargin")}</td>
-                  <td>{money(pl.contributionMarginMinor)}</td>
+                  <td>
+                    {money(detailedAnalytics ? pl.contributionMarginMinor : plain.leftAfterVisitsMinor)}
+                  </td>
                 </tr>
                 {/*
                   Shown only when there is one to show. A studio whose owner does
                   not take visits should not be asked to read a line of zero and
                   wonder what it was for.
                 */}
-                {pl.principalLabourMinor > 0 && (
+                {detailedAnalytics && pl.principalLabourMinor > 0 && (
                   <tr className="pl-addback">
                     <td className="pl-label">{t(businessLabel.principalAddBack[businessType])}</td>
                     <td>+ {money(pl.principalLabourMinor)}</td>
@@ -258,7 +284,10 @@ export default async function MonthReportPage({
                 <tr className="pl-total">
                   <td>
                     {t("pl.operatingProfit")}{" "}
-                    <span className="unit-hint">{t(businessLabel.operatingProfitHint[businessType])}</span>
+                    {/* «До вознаграждения владельца» points at a line only the detailed view draws. */}
+                    {detailedAnalytics && (
+                      <span className="unit-hint">{t(businessLabel.operatingProfitHint[businessType])}</span>
+                    )}
                   </td>
                   <td className={pl.operatingProfitMinor < 0 ? "metric-negative" : undefined}>
                     {money(pl.operatingProfitMinor)}
@@ -279,7 +308,7 @@ export default async function MonthReportPage({
                   than printing a zero: zero is the claim that their time is
                   free, and it would read as profit nobody earned.
                 */}
-                {pl.ownerWageMinor !== null && pl.economicProfitMinor !== null && (
+                {detailedAnalytics && pl.ownerWageMinor !== null && pl.economicProfitMinor !== null && (
                   <>
                     <tr className="pl-subtotal">
                       <td className="pl-label">{t(businessLabel.ownerWage[businessType])}</td>
@@ -296,7 +325,9 @@ export default async function MonthReportPage({
               </tbody>
             </table>
 
-            {pl.economicProfitMinor !== null && <p className="pl-note">{t("pl.economicProfitHint")}</p>}
+            {detailedAnalytics && pl.economicProfitMinor !== null && (
+              <p className="pl-note">{t("pl.economicProfitHint")}</p>
+            )}
 
             {/*
               Not computed, and the reason — but no way out offered any more.
@@ -307,7 +338,7 @@ export default async function MonthReportPage({
               what the owner already booked themselves at the market rate this
               month, which is the number this line exists to name.
             */}
-            {pl.ownerWageMinor === null && (
+            {detailedAnalytics && pl.ownerWageMinor === null && (
               <p className="pl-note">
                 {pl.principalLabourMinor > 0
                   ? t("pl.ownerWageMissing", { suggested: money(pl.principalLabourMinor) })
@@ -315,7 +346,7 @@ export default async function MonthReportPage({
               </p>
             )}
 
-            {pl.safeToWithdrawMinor !== null && report.withdrawalReserveMinor > 0 && (
+            {detailedAnalytics && pl.safeToWithdrawMinor !== null && report.withdrawalReserveMinor > 0 && (
               <p className="pl-note">
                 <strong>
                   {t("pl.safeToWithdraw")}: {money(pl.safeToWithdrawMinor)}
@@ -324,7 +355,15 @@ export default async function MonthReportPage({
               </p>
             )}
 
-            {pl.principalLabourMinor > 0 && <p className="pl-note">{t(businessLabel.principalHint[businessType])}</p>}
+            {detailedAnalytics && pl.principalLabourMinor > 0 && (
+              <Hint
+                short={t("pl.principalHintShort")}
+                more={t(businessLabel.principalHint[businessType])}
+                moreLabel={t("common.more")}
+                howLabel={t("common.howCounted")}
+                className="pl-note"
+              />
+            )}
 
             {pl.incompleteVisits > 0 && (
               <div className="warning-banner">
@@ -429,7 +468,13 @@ export default async function MonthReportPage({
                 </tr>
               </tbody>
             </table>
-            <p className="pl-note">{t("cash.hint")}</p>
+            <Hint
+              short={t("cash.hintShort")}
+              more={t("cash.hint")}
+              moreLabel={t("common.more")}
+              howLabel={t("common.howCounted")}
+              className="pl-note"
+            />
             {/* Part of why the account outgrew the profit, named rather than
                 left to read as a cost that has not gone out yet. */}
             {cash.tipsMinor > cash.tipsPaidOutMinor && (
@@ -456,40 +501,60 @@ export default async function MonthReportPage({
             {capacity.practicalMinutes > 0 ? (
               <>
                 <table className="data-table pl-table">
-                  <tbody>
-                    <tr>
-                      <td>{t("capacity.scheduled")}</td>
-                      <td>{hours(capacity.scheduledMinutes)}</td>
-                    </tr>
-                    <tr className="pl-subtotal">
-                      <td className="pl-label">
-                        {t("capacity.practical", {
-                          rate: formatBasisPoints(capacity.practicalCapacityBasisPoints, localeCode),
-                        })}
-                      </td>
-                      <td>{hours(capacity.practicalMinutes)}</td>
-                    </tr>
-                    <tr>
-                      <td>{t("capacity.booked")}</td>
-                      <td>{hours(capacity.bookedMinutes)}</td>
-                    </tr>
-                    <tr className="pl-total">
-                      <td>{t("capacity.utilization")}</td>
-                      <td>{formatBasisPoints(capacity.utilizationBasisPoints, localeCode)}</td>
-                    </tr>
-                    {capacity.operatingProfitPerPracticalHourMinor !== null && (
-                      <tr className="pl-ratio">
-                        <td colSpan={2}>
-                          {t("capacity.profitPerPracticalHour")}:{" "}
-                          {t("capacity.perHour", {
-                            amount: money(capacity.operatingProfitPerPracticalHourMinor),
+                  {/*
+                    The plain view keeps one line of the four: how full the
+                    rota was. Practical capacity is a management-accounting
+                    idea, and the hours it is built from are the detail.
+                  */}
+                  {detailedAnalytics ? (
+                    <tbody>
+                      <tr>
+                        <td>{t("capacity.scheduled")}</td>
+                        <td>{hours(capacity.scheduledMinutes)}</td>
+                      </tr>
+                      <tr className="pl-subtotal">
+                        <td className="pl-label">
+                          {t("capacity.practical", {
+                            rate: formatBasisPoints(capacity.practicalCapacityBasisPoints, localeCode),
                           })}
                         </td>
+                        <td>{hours(capacity.practicalMinutes)}</td>
                       </tr>
-                    )}
-                  </tbody>
+                      <tr>
+                        <td>{t("capacity.booked")}</td>
+                        <td>{hours(capacity.bookedMinutes)}</td>
+                      </tr>
+                      <tr className="pl-total">
+                        <td>{t("capacity.utilization")}</td>
+                        <td>{formatBasisPoints(capacity.utilizationBasisPoints, localeCode)}</td>
+                      </tr>
+                      {capacity.operatingProfitPerPracticalHourMinor !== null && (
+                        <tr className="pl-ratio">
+                          <td colSpan={2}>
+                            {t("capacity.profitPerPracticalHour")}:{" "}
+                            {t("capacity.perHour", {
+                              amount: money(capacity.operatingProfitPerPracticalHourMinor),
+                            })}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  ) : (
+                    <tbody>
+                      <tr className="pl-total">
+                        <td>{t("capacity.utilizationPercent")}</td>
+                        <td>{formatBasisPoints(capacity.utilizationBasisPoints, localeCode)}</td>
+                      </tr>
+                    </tbody>
+                  )}
                 </table>
-                <p className="pl-note">{t("capacity.utilizationHint")}</p>
+                <Hint
+                  short={t("capacity.utilizationHintShort")}
+                  more={t("capacity.utilizationHint")}
+                  moreLabel={t("common.more")}
+                  howLabel={t("common.howCounted")}
+                  className="pl-note"
+                />
               </>
             ) : (
               /*
@@ -511,7 +576,7 @@ export default async function MonthReportPage({
                   <td>{t("capacity.fixedCosts")}</td>
                   <td>{money(capacity.fixedCostMinor)}</td>
                 </tr>
-                {capacity.fixedCostRateMinorPerHour !== null && (
+                {detailedAnalytics && capacity.fixedCostRateMinorPerHour !== null && (
                   <tr className="pl-ratio">
                     <td colSpan={2}>
                       {t("capacity.ratePerHour")}:{" "}
@@ -536,7 +601,7 @@ export default async function MonthReportPage({
                           : t("capacity.toGo", { amount: money(capacity.revenueToBreakEvenMinor ?? 0) })}
                       </td>
                     </tr>
-                    {capacity.breakEvenWithOwnerWageMinor !== null && (
+                    {detailedAnalytics && capacity.breakEvenWithOwnerWageMinor !== null && (
                       <tr>
                         <td className="pl-label">
                           {t(businessLabel.breakEvenWithWage[businessType])}
@@ -562,12 +627,17 @@ export default async function MonthReportPage({
             ) : (
               <p className="pl-note">{t("capacity.breakEvenHint")}</p>
             )}
-            {capacity.fixedCostRateMinorPerHour !== null && (
+            {detailedAnalytics && capacity.fixedCostRateMinorPerHour !== null && (
               <p className="pl-note">{t("capacity.rateHint")}</p>
             )}
           </section>
 
-          {report.masterBreakdown.length > 0 && (
+          {/*
+            Somebody working alone has one row here, and it is the month above
+            again — with «начислено мастеру» about herself. The plain view
+            leaves it out; a second master brings it back.
+          */}
+          {report.masterBreakdown.length > (businessType === "solo" && !detailedAnalytics ? 1 : 0) && (
             <section className="panel">
               <h2>{t("pl.masterBreakdown")}</h2>
               <table className="data-table">

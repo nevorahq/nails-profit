@@ -9,6 +9,7 @@ import { withTenant } from "@/db/tenant";
 import { can, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { presetRanges, resolveReportPeriod, todayIn } from "@/domain/report-period";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { isCalendarDay } from "@/lib/expenses";
@@ -30,8 +31,10 @@ export default async function ServicesReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; specialist?: string }>;
 }) {
-  const { membership, locale, currency, businessType, timezone } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType, timezone } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "dashboard", "read")) {
     return (
@@ -106,6 +109,7 @@ export default async function ServicesReportPage({
   return (
     <main className="app-shell">
       <ReportTabs
+        register={register}
         locale={locale}
         role={membership.role}
         active="services"
@@ -131,6 +135,7 @@ export default async function ServicesReportPage({
       )}
 
       <ServiceRankingTable
+        register={register}
         metrics={metrics}
         locale={locale}
         currency={currency}

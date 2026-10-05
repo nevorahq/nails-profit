@@ -8,7 +8,8 @@ import { parseLocalTime } from "@/domain/timezone";
 import { parseIntegerValue, parseMoneyMinor } from "@/domain/import-values";
 import type { AppLocale } from "@/i18n/messages";
 import { getErrorMessage } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import type { OpeningSetupView } from "@/lib/opening-setup";
 
 type Row = {
@@ -59,7 +60,8 @@ export function OpeningSetup({
   /** The deployment's own switch: with public booking off there is no page to open. */
   bookingAvailable: boolean;
 }>) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() => [
     ...view.services.map((service) => ({
@@ -127,7 +129,7 @@ export function OpeningSetup({
     if (!response?.ok) {
       const payload = await response?.json().catch(() => null);
       const code = payload?.error?.code;
-      setError(code ? getErrorMessage(code, t("openingSetup.failed"), locale) : t("openingSetup.failed"));
+      setError(code ? getErrorMessage(code, t("openingSetup.failed"), locale, register) : t("openingSetup.failed"));
       setPending(false);
       return;
     }

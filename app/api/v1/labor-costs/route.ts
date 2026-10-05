@@ -1,9 +1,10 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { laborCostRules, specialists } from "@/db/schema";
+import { laborCostRules, organizations, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
+import { planRuleChange, RULE_CHANGE_REFUSALS } from "@/domain/rule-change";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -28,7 +29,12 @@ const ruleShape = z
     /** 1500 = 15% of the month's revenue. */
     basis_points: z.int().min(0).max(10_000).optional(),
     payroll_tax_basis_points: z.int().min(0).max(10_000).optional(),
-    active_from: z.iso.datetime().optional(),
+    /**
+     * The studio's day the new rule takes over from, `YYYY-MM-DD`; absent is
+     * now. Today or later — a labour rule is read per month, and backdating it
+     * would rewrite a month already reported. See `domain/rule-change.ts`.
+     */
+    effective_date: z.iso.date().optional(),
   })
   .refine(
     (value) =>
@@ -98,7 +104,6 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
-  const activeFrom = data.active_from ? new Date(data.active_from) : new Date();
 
   const created = await withTenant(actor.organizationId, async (tx) => {
     if (data.specialist_id) {
@@ -107,7 +112,7 @@ export async function POST(request: Request) {
         .from(specialists)
         .where(and(eq(specialists.id, data.specialist_id), isNull(specialists.archivedAt)))
         .limit(1);
-      if (!person) return null;
+      if (!person) return { ok: false as const, reason: "specialist_not_found" as const };
     }
 
     /*
@@ -118,9 +123,14 @@ export async function POST(request: Request) {
      * at the same instant is also what keeps `selectLaborRules` from having two
      * live rows for one person, which would pay them twice.
      */
-    await tx
-      .update(laborCostRules)
-      .set({ activeTo: activeFrom, updatedBy: actor.userId, updatedAt: new Date() })
+    const [organization] = await tx
+      .select({ timezone: organizations.timezone })
+      .from(organizations)
+      .where(eq(organizations.id, actor.organizationId));
+    // Locked, so that two changes sent at once cannot both close the same rule.
+    const current = await tx
+      .select({ id: laborCostRules.id, activeFrom: laborCostRules.activeFrom })
+      .from(laborCostRules)
       .where(
         and(
           eq(laborCostRules.recipient, data.recipient),
@@ -129,7 +139,24 @@ export async function POST(request: Request) {
             : isNull(laborCostRules.specialistId),
           isNull(laborCostRules.activeTo),
         ),
-      );
+      )
+      .for("update");
+
+    const plan = planRuleChange({
+      current,
+      effectiveDate: data.effective_date,
+      now: new Date(),
+      timezone: organization.timezone,
+    });
+    if (!plan.ok) return { ok: false as const, reason: plan.reason };
+    const activeFrom = plan.open.activeFrom;
+
+    if (plan.close.ids.length > 0) {
+      await tx
+        .update(laborCostRules)
+        .set({ activeTo: plan.close.activeTo, updatedBy: actor.userId, updatedAt: new Date() })
+        .where(inArray(laborCostRules.id, [...plan.close.ids]));
+    }
 
     const [row] = await tx
       .insert(laborCostRules)
@@ -164,25 +191,32 @@ export async function POST(request: Request) {
       requestId: id,
     });
 
-    return row;
+    return { ok: true as const, row };
   });
 
-  if (!created) {
-    return apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", id);
+  if (!created.ok) {
+    if (created.reason === "specialist_not_found") {
+      return apiError(404, "SPECIALIST_NOT_FOUND", "No specialist with this ID", id);
+    }
+    const refusal = RULE_CHANGE_REFUSALS[created.reason];
+    return apiError(422, refusal.code, refusal.message, id, {
+      fieldErrors: [{ field: "effective_date", code: created.reason, message: refusal.message }],
+    });
   }
+  const row = created.row;
 
   return apiSuccess(
     {
-      id: created.id,
-      recipient: created.recipient,
-      specialist_id: created.specialistId,
-      label: created.label,
-      basis: created.basis,
-      amount_minor: created.amountMinor,
-      basis_points: created.basisPoints,
-      payroll_tax_basis_points: created.payrollTaxBasisPoints,
-      active_from: created.activeFrom,
-      active_to: created.activeTo,
+      id: row.id,
+      recipient: row.recipient,
+      specialist_id: row.specialistId,
+      label: row.label,
+      basis: row.basis,
+      amount_minor: row.amountMinor,
+      basis_points: row.basisPoints,
+      payroll_tax_basis_points: row.payrollTaxBasisPoints,
+      active_from: row.activeFrom,
+      active_to: row.activeTo,
     },
     id,
     201,

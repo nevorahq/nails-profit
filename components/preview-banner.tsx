@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 
 export type PreviewBannerContext = Readonly<{
   targetName: string;
@@ -46,7 +47,7 @@ export function PreviewBanner({
   locale: AppLocale;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {

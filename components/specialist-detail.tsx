@@ -4,10 +4,14 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { Hint } from "@/components/hint";
 import { SpecialistPhoto } from "@/components/specialist-photo";
-import type { AppLocale } from "@/i18n/messages";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { localeTag } from "@/i18n/translate";
 import type { BusinessType } from "@/i18n/business-labels";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { EffectiveDateField, effectiveDateFrom } from "@/components/effective-date-field";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { WEEKDAY_KEYS } from "@/components/booking-setup";
 import { bookabilityOf } from "@/domain/bookability";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
@@ -49,6 +53,8 @@ export function SpecialistDetail({
   places,
   publishedLocationIds,
   canManage,
+  today,
+  timezone,
 }: {
   person: SpecialistRow;
   services: ServiceOption[];
@@ -74,8 +80,13 @@ export function SpecialistDetail({
   /** Addresses a client can actually open, for the verdict on those places. */
   publishedLocationIds: readonly string[];
   canManage: boolean;
+  /** The studio's date, `YYYY-MM-DD`: the first day a rule can change from. */
+  today: string;
+  /** The studio's zone, which a scheduled rule's day is read in. */
+  timezone: string;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const router = useRouter();
   /*
    * Addresses this card is at and has no week for. One is enough to offer the
@@ -112,7 +123,12 @@ export function SpecialistDetail({
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? t("common.saveFailed"));
+      const code = body?.error?.code;
+      setError(
+        code
+          ? getErrorMessage(code, body.error.message ?? t("common.saveFailed"), locale, register)
+          : t("common.saveFailed"),
+      );
       setPending(false);
       return false;
     }
@@ -170,7 +186,7 @@ export function SpecialistDetail({
     // An absent service_id is «все услуги», which is what a default rule is.
     await send(
       `/api/v1/specialists/${person.id}/commission-rules`,
-      { ...rule, ...(service ? { service_id: service } : {}) },
+      { ...rule, ...(service ? { service_id: service } : {}), ...effectiveDateFrom(data, today) },
       form,
     );
   }
@@ -236,6 +252,7 @@ export function SpecialistDetail({
   }
 
   const rule = describeRule(person.default_rule, currency, t);
+  const scheduled = person.scheduled_default_rule ?? null;
   const verdict = bookabilityOf({
     publishedLocationIds,
     ...factsFor(places),
@@ -330,6 +347,19 @@ export function SpecialistDetail({
                   <a className="badge-warning badge-link" href="#commission">
                     {t("specialists.notSet")}
                   </a>
+                )}
+                {/*
+                  A change set for a later day. The rate above stays the one
+                  visits close with until then, and saying so here is what
+                  stops the owner from setting it a second time.
+                */}
+                {scheduled && (
+                  <span className="unit-hint">
+                    {t("rules.scheduled", {
+                      date: new Date(scheduled.active_from).toLocaleDateString(localeTag(locale), { timeZone: timezone }),
+                      rule: describeRule(scheduled, currency, t) ?? "—",
+                    })}
+                  </span>
                 )}
               </dd>
             </div>
@@ -511,28 +541,38 @@ export function SpecialistDetail({
             )}
             <label>
               {t("specialists.value")}
-              <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
+              <input
+                name="rule_value"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder={businessType === "solo" ? "0" : "40"}
+                required
+              />
               {person.cooperation_type !== "commission" && (
                 <span className="muted">{t("specialists.zeroRuleHint")}</span>
               )}
-              {/*
-                The one field on this page a solo studio cannot answer from
-                what the product has told it.
-                
-                This is where somebody working alone is sent by «Первый
-                расчёт» — the card exists from the moment the workspace does,
-                and the rate is all that is missing — so an empty box with a
-                «40» in grey is the whole of the first task the product sets.
-                What it is asking for is not a payment to anybody: it is the
-                price of the hour, which is what makes two services
-                comparable, and which the month's report then hands straight
-                back (`domain/period-pl.ts`). Said here rather than only in
-                that report, which is a fortnight away.
-              */}
-              {businessType === "solo" && person.is_principal && (
-                <span className="muted">{t("specialists.imputedHint")}</span>
-              )}
             </label>
+            {/*
+              The one field on this page a solo studio cannot answer from
+              what the product has told it.
+              
+              Registration writes her a rule at zero now, so this is where she
+              comes only to change it. What it asks for is not a payment to
+              anybody: it is the price of the hour, which is what makes two
+              services comparable, and which the month's report then hands
+              straight back (`domain/period-pl.ts`). Said here rather than only
+              in that report, which is a fortnight away — and outside the
+              label, where a «Подробнее» would toggle the field.
+            */}
+            {businessType === "solo" && person.is_principal && (
+              <Hint
+                short={t("specialists.imputedHintShort")}
+                more={t("specialists.imputedHint")}
+                moreLabel={t("common.more")}
+                howLabel={t("common.howCounted")}
+              />
+            )}
             {ruleType !== "fixed" && (
               <label>
                 {t("specialists.commissionBase")}
@@ -542,6 +582,7 @@ export function SpecialistDetail({
                 </select>
               </label>
             )}
+            <EffectiveDateField today={today} locale={locale} />
             <button className="primary-button" type="submit" disabled={pending}>
               {pending ? t("common.saving") : t("common.save")}
             </button>

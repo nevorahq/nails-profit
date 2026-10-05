@@ -8,7 +8,8 @@ import { canManageRole, type MemberRole } from "@/domain/rbac";
 import type { BusinessType } from "@/i18n/business-labels";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { INVITABLE_ROLES, ROLE_HINTS } from "@/i18n/role-labels";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 
 export type TeamMember = {
   /** The membership, not the account — removing one never touches the other. */
@@ -85,7 +86,8 @@ export function TeamManager({
   currentUserId: string;
   currentRole: MemberRole;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [previewing, setPreviewing] = useState<string | null>(null);
@@ -106,7 +108,7 @@ export function TeamManager({
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       const code = body?.error?.code;
-      setError(getErrorMessage(code, body?.error?.message ?? t("team.removeFailed"), locale));
+      setError(getErrorMessage(code, body?.error?.message ?? t("team.removeFailed"), locale, register));
       setConfirmRemove(null);
       setPending(false);
       return;
@@ -271,7 +273,7 @@ export function TeamManager({
       // is — including the two that are the owner's to act on: the link is
       // there to copy, and somebody has to fix the configuration.
       const body = await response.json().catch(() => null);
-      setError(getErrorMessage(body?.error?.code, t("team.sendFailed"), locale));
+      setError(getErrorMessage(body?.error?.code, t("team.sendFailed"), locale, register));
       return;
     }
 

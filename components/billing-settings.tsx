@@ -1,6 +1,7 @@
 import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 
 export type SubscriptionStatusRow = {
@@ -34,13 +35,16 @@ export function BillingSettings({
   checkout,
   organizationId,
   locale,
+  register = writtenRegister,
 }: {
   subscription: SubscriptionStatusRow | null;
   checkout: CheckoutConfig;
   organizationId: string;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
 
   return (
     <section className="panel">

@@ -1,20 +1,23 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { Hint } from "@/components/hint";
+import { EffectiveDateField, effectiveDateFrom } from "@/components/effective-date-field";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints } from "@/lib/format";
 
 /**
  * Taxes that attach to a visit.
  *
- * Versioned, like the labour rules: there is no «изменить», because a rate that
- * changed in July must leave June reporting June's. A new rate closes the old
- * one, and the closed ones stay on screen folded away — they are what past
- * months were costed by.
+ * Versioned, like the labour rules: a rate that changed in July must leave June
+ * reporting June's, so there is no edit in place. «Изменить с даты» writes the
+ * new rate from a day and the endpoint closes the old one at that instant; a
+ * tax that stops is a rate of zero from that day. The closed ones stay on
+ * screen folded away — they are what past months were costed by.
  *
  * A fixed monthly payment is not entered here. It belongs in the expense ledger
  * as a recurring row, and having two places to enter the same money is how a
@@ -35,13 +38,24 @@ export function TaxRuleManager({
   rules,
   locale,
   canEdit,
+  today,
+  asOf,
+  timezone,
 }: {
   rules: TaxRuleRowView[];
   locale: AppLocale;
   canEdit: boolean;
+  /** When the page was read: what «in force» and «still to come» are judged against. */
+  asOf: string;
+  /** The studio's zone: a rule starts at its midnight, and is dated by it. */
+  timezone: string;
+  /** The studio's date, `YYYY-MM-DD`: the first day a rate can change from. */
+  today: string;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
+  const rateField = useRef<HTMLInputElement>(null);
   const localeCode = localeTag(locale);
 
   const [open, setOpen] = useState(false);
@@ -60,7 +74,12 @@ export function TaxRuleManager({
     setPending(false);
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? t("common.saveFailed"));
+      const code = body?.error?.code;
+      setError(
+        code
+          ? getErrorMessage(code, body.error.message ?? t("common.saveFailed"), locale, register)
+          : t("common.saveFailed"),
+      );
       return false;
     }
     form?.reset();
@@ -86,6 +105,7 @@ export function TaxRuleManager({
         // Only VAT is ever handed on; for the other two the flag has no meaning
         // and the server stores its default.
         ...(kind === "vat" ? { remittable: data.get("remittable") === "on" } : {}),
+        ...effectiveDateFrom(data, today),
       },
       "POST",
       form,
@@ -98,8 +118,19 @@ export function TaxRuleManager({
     return rule.kind === "vat" && !rule.remittable ? `${rate} · ${t("tax.notRemitted")}` : rate;
   }
 
-  const live = rules.filter((rule) => rule.active_to === null);
-  const closed = rules.filter((rule) => rule.active_to !== null);
+  // In force or still to come, against history — see the same split in
+  // `labor-cost-manager.tsx`: a rate changed from a later day is still paid until then.
+  const now = Date.parse(asOf);
+  const live = rules.filter((rule) => rule.active_to === null || Date.parse(rule.active_to) > now);
+  const closed = rules.filter((rule) => rule.active_to !== null && Date.parse(rule.active_to) <= now);
+  const dateOf = (iso: string) => new Date(iso).toLocaleDateString(localeCode, { timeZone: timezone });
+
+  /** «Изменить с даты» on a row: the form below, already on that tax. */
+  function changeFrom(rule: TaxRuleRowView) {
+    setKind(rule.kind);
+    setError(null);
+    rateField.current?.focus();
+  }
 
   return (
     <>
@@ -131,7 +162,12 @@ export function TaxRuleManager({
         <div className="add-form-inner">
           <section className="panel">
             <h2>{t("tax.title")}</h2>
-            <p className="muted">{t("tax.hint")}</p>
+            <Hint
+              short={t("tax.hintShort")}
+              more={t("tax.hint")}
+              moreLabel={t("common.more")}
+              howLabel={t("common.howCounted")}
+            />
 
             {error && (
               <div className="form-error" role="alert">
@@ -161,17 +197,19 @@ export function TaxRuleManager({
                     <td>{t(`tax.kind.${rule.kind}`)}</td>
                     <td>{describe(rule)}</td>
                     <td className="labor-since">
-                      {new Date(rule.active_from).toLocaleDateString(localeCode)}
+                      {Date.parse(rule.active_from) > now
+                        ? t("rules.startsOn", { date: dateOf(rule.active_from) })
+                        : dateOf(rule.active_from)}
                     </td>
                     <td>
                       {canEdit && (
                         <button
-                          className="inline-action danger"
+                          className="inline-action"
                           type="button"
                           disabled={pending}
-                          onClick={() => send(`/api/v1/tax-rules/${rule.id}`, null, "DELETE")}
+                          onClick={() => changeFrom(rule)}
                         >
-                          {t("labor.close")}
+                          {t("rules.changeFrom")}
                         </button>
                       )}
                     </td>
@@ -186,9 +224,7 @@ export function TaxRuleManager({
                 <ul className="compact-list">
                   {closed.map((rule) => (
                     <li key={rule.id}>
-                      {t(`tax.kind.${rule.kind}`)}: {describe(rule)} —{" "}
-                      {new Date(rule.active_from).toLocaleDateString(localeCode)} …{" "}
-                      {new Date(rule.active_to!).toLocaleDateString(localeCode)}
+                      {t(`tax.kind.${rule.kind}`)}: {describe(rule)} — {dateOf(rule.active_from)} … {dateOf(rule.active_to!)}
                     </li>
                   ))}
                 </ul>
@@ -213,15 +249,25 @@ export function TaxRuleManager({
                 </label>
                 <label>
                   {t("tax.rate")}
-                  <input name="rate" type="number" step="0.01" min="0" max="100" required placeholder="20" />
+                  <input
+                    ref={rateField}
+                    name="rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    required
+                    placeholder="20"
+                  />
                 </label>
                 {kind === "vat" && (
                   <label className="checkbox-field">
                     <input name="remittable" type="checkbox" defaultChecked /> {t("tax.remittable")}
                   </label>
                 )}
+                <EffectiveDateField today={today} locale={locale} />
                 <button className="primary-button" type="submit" disabled={pending}>
-                  {pending ? t("common.saving") : t("common.add")}
+                  {pending ? t("common.saving") : t("common.save")}
                 </button>
               </form>
             )}

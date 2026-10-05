@@ -6,6 +6,7 @@ import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { stepMessageKey } from "@/i18n/step-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 
 /**
  * The path to a first number, roadmap phase 4 "onboarding progress".
@@ -29,11 +30,14 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
 function ChecklistPanel<Key extends string>({
   progress,
   locale,
+  register = writtenRegister,
   businessType,
   prefix,
 }: {
   progress: ChecklistProgress<Key>;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   businessType: BusinessType;
   /**
    * Which family of strings names the steps: `<prefix>.<step key>`. Only the
@@ -42,7 +46,7 @@ function ChecklistPanel<Key extends string>({
    */
   prefix: "onboarding";
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const label = (step: string) => t(stepMessageKey(`${prefix}.${step}`, businessType));
 
   return (
@@ -84,16 +88,20 @@ function ChecklistPanel<Key extends string>({
 export function OnboardingPanel({
   progress,
   locale,
+  register = writtenRegister,
   businessType,
 }: {
   progress: ChecklistProgress<"specialist" | "service">;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   businessType: BusinessType;
 }) {
   return (
     <ChecklistPanel
       progress={progress}
       locale={locale}
+      register={register}
       businessType={businessType}
       prefix="onboarding"
     />
@@ -120,11 +128,14 @@ export function OnboardingPanel({
 export function MonthSetupPanel({
   progress,
   locale,
+  register = writtenRegister,
 }: {
   progress: ChecklistProgress<"overhead" | "rota">;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const next = progress.next;
   if (!next) return null;
 

@@ -12,6 +12,7 @@ import { loadMaterialsHint } from "@/lib/materials-hint";
 import { loadMaterialsModes, materialsModeAt, showsMaterialsField } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ServicePage({
@@ -21,8 +22,10 @@ export default async function ServicePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ add_ons?: string }>;
 }) {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType, detailedAnalytics } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
   const { id } = await params;
   // The chosen add-on set comes from the URL so the server can compute the
   // costing and a shared link reproduces the same numbers.
@@ -88,8 +91,13 @@ export default async function ServicePage({
      *
      * It also costs four extra queries, which is the second reason not to run
      * it for every reader of the catalogue.
+     *
+     * And it is detailed analytics: a share of the rent spread over practical
+     * capacity is an allocation, not money a visit costs, so the plain view
+     * leaves the switch out with the rest of the economist's lines.
      */
     const showsFixedCosts =
+      detailedAnalytics &&
       costing.status === "complete" &&
       costing.currency === currency &&
       can(membership.role, "expenses", "read");

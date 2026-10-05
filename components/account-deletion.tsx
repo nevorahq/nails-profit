@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { authClient } from "@/lib/auth-client";
 
 /**
@@ -43,7 +43,8 @@ export function AccountDeletion({
    */
   variant?: "button" | "link";
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
@@ -68,7 +69,7 @@ export function AccountDeletion({
         code === "CONFIRMATION_MISMATCH"
           ? t("settings.accountMismatch")
           : code
-            ? getErrorMessage(code, body.error.message ?? t("settings.accountFailed"), locale)
+            ? getErrorMessage(code, body.error.message ?? t("settings.accountFailed"), locale, register)
             : t("settings.accountFailed"),
       );
       setPending(false);

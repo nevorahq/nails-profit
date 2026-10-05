@@ -12,8 +12,8 @@ import {
   type ServiceLine,
 } from "@/components/service-lines-field";
 
-import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -78,7 +78,8 @@ export function VisitCloseForm({
   locale: AppLocale;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   /*
    * The services of the visit, each with its own add-ons. One to begin with,
    * which is every visit most studios close; «+ ещё услуга» adds the pedicure.
@@ -175,7 +176,13 @@ export function VisitCloseForm({
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setError(payload?.error?.message ?? t("closeVisit.saveFailed"));
+      // By code first: MISSING_COMMISSION_RULE is worded for who reads it, and
+      // the server's own message is English.
+      setError(
+        payload?.error?.code
+          ? getErrorMessage(payload.error.code, payload.error.message ?? t("closeVisit.saveFailed"), locale, register)
+          : (payload?.error?.message ?? t("closeVisit.saveFailed")),
+      );
       setPending(false);
       return;
     }

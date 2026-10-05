@@ -254,11 +254,12 @@ test.describe("authentication UI", () => {
     await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByRole("heading", { level: 2, name: "Your figures" })).toBeVisible();
     const manicure = page.getByRole("row", { name: /Manicure/ });
-    // 350.00 at 40%: 140.00 to the person doing the work, 210.00 kept — and the
-    // hour is the hour, so the hourly is the same figure.
+    // Registered at a rate of nothing: the whole 350.00 is hers, no imputed
+    // 140.00 is taken off it, and the column that would say «0» is not drawn.
     await expect(manicure).toContainText("350");
-    await expect(manicure).toContainText("140");
-    await expect(manicure).toContainText("210");
+    await expect(manicure).not.toContainText("140");
+    await expect(manicure).not.toContainText("210");
+    await expect(manicure.getByRole("cell")).toHaveCount(5);
 
     /*
      * And the page clients book on is live now, with its address on the same
@@ -336,9 +337,9 @@ test.describe("authentication UI", () => {
      * who works here.
      */
     await expect(page).toHaveURL(/\/app$/);
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Add a specialist and their commission rule" }),
-    ).toBeVisible();
+    // In the plain words a new studio is registered with: what a master is
+    // paid, not «commission» (`i18n/lexicon.ts`).
+    await expect(page.getByRole("heading", { level: 2, name: "Add a specialist and their pay" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Add a specialist" })).toHaveAttribute(
       "href",
       "/app/specialists#add-specialist",

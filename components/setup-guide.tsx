@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { stepMessageKey } from "@/i18n/step-labels";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 
 /**
  * Where the checklist stood when the page was drawn, or null once the guided
@@ -148,7 +149,7 @@ export function SetupGuideDialog({
   onStay?: () => void;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const { reached, dismiss } = guide;
   const primary = useRef<HTMLButtonElement>(null);
   const say = (name: string) => t(`${strings}.${name}` as MessageKey);

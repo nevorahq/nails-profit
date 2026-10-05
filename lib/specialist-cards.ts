@@ -21,6 +21,18 @@ export type SpecialistRow = {
     fixed_amount_minor: number | null;
     base: string;
   } | null;
+  /**
+   * A change of the default rule set for a later day with «Изменить с даты»,
+   * the earliest one. The rule above is still the one visits are closed with
+   * until `active_from`.
+   */
+  scheduled_default_rule?: {
+    type: string;
+    basis_points: number | null;
+    fixed_amount_minor: number | null;
+    base: string;
+    active_from: string;
+  } | null;
   service_exceptions: {
     service_id: string | null;
     type: string;
@@ -128,6 +140,9 @@ export async function loadSpecialistCards(
       theirs.filter((rule) => rule.serviceId === null),
       "",
     );
+    const scheduled = theirs
+      .filter((rule) => rule.serviceId === null && rule.activeFrom > now)
+      .sort((a, b) => a.activeFrom.getTime() - b.activeFrom.getTime())[0];
     const exceptions = theirs.filter(
       (rule) =>
         rule.serviceId !== null &&
@@ -149,6 +164,15 @@ export async function loadSpecialistCards(
             basis_points: defaultRule.basisPoints,
             fixed_amount_minor: defaultRule.fixedAmountMinor,
             base: defaultRule.base,
+          }
+        : null,
+      scheduled_default_rule: scheduled
+        ? {
+            type: scheduled.type,
+            basis_points: scheduled.basisPoints,
+            fixed_amount_minor: scheduled.fixedAmountMinor,
+            base: scheduled.base,
+            active_from: scheduled.activeFrom.toISOString(),
           }
         : null,
       service_exceptions: exceptions.map((rule) => ({

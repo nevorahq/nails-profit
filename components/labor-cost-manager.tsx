@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { AppLocale } from "@/i18n/messages";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
-import { getTranslator } from "@/i18n/t";
+import { Hint } from "@/components/hint";
+import { EffectiveDateField, effectiveDateFrom } from "@/components/effective-date-field";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 
@@ -25,9 +27,11 @@ import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
  * `domain/capacity.ts`, which is the question «заплатила ли я себе» in a
  * number. Without a rule here that number does not exist.
  *
- * There is no edit. A rule is closed and a new one written, because a month
- * already reported has to keep the salary that was true in it; the API works
- * the same way, so «изменить» here would be a lie about what the button does.
+ * There is no edit in place. A month already reported has to keep the salary
+ * that was true in it, so a change is a new rule from a day — «Изменить с
+ * даты» — and the endpoint closes the old one at that same instant. Stopping a
+ * wage is the same act with zero in it; there is no separate «Завершить», whose
+ * second half (writing the new rule) is exactly what used to be forgotten.
  */
 export type LaborCostRow = {
   id: string;
@@ -51,6 +55,9 @@ export function LaborCostManager({
   reserveMinor,
   canEdit,
   suggestedOwnerWageMinor,
+  today,
+  asOf,
+  timezone,
 }: {
   rules: LaborCostRow[];
   specialists: { id: string; name: string }[];
@@ -66,9 +73,17 @@ export function LaborCostManager({
    * and the wage cancel exactly.
    */
   suggestedOwnerWageMinor: number;
+  /** When the page was read: what «in force» and «still to come» are judged against. */
+  asOf: string;
+  /** The studio's zone: a rule starts at its midnight, and is dated by it. */
+  timezone: string;
+  /** The studio's date, `YYYY-MM-DD`: the first day a rule can change from. */
+  today: string;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
+  const valueField = useRef<HTMLInputElement>(null);
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
 
@@ -77,6 +92,7 @@ export function LaborCostManager({
   const [error, setError] = useState<string | null>(null);
   const [recipient, setRecipient] = useState<"owner" | "specialist">("owner");
   const [basis, setBasis] = useState<"fixed_monthly" | "percent_revenue">("fixed_monthly");
+  const [specialistId, setSpecialistId] = useState(specialists[0]?.id ?? "");
   const [reserve, setReserve] = useState(String(reserveMinor / 100));
   const isSolo = businessType === "solo";
 
@@ -91,7 +107,12 @@ export function LaborCostManager({
     setPending(false);
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? t("common.saveFailed"));
+      const code = body?.error?.code;
+      setError(
+        code
+          ? getErrorMessage(code, body.error.message ?? t("common.saveFailed"), locale, register)
+          : t("common.saveFailed"),
+      );
       return false;
     }
     form?.reset();
@@ -112,13 +133,14 @@ export function LaborCostManager({
 
     const ok = await send("/api/v1/labor-costs", {
       recipient,
-      ...(recipient === "specialist" ? { specialist_id: data.get("specialist_id") } : {}),
+      ...(recipient === "specialist" ? { specialist_id: specialistId } : {}),
       label: String(data.get("label") ?? "").trim() || undefined,
       basis,
       ...(basis === "fixed_monthly"
         ? { amount_minor: Math.round(value * 100) }
         : { basis_points: Math.round(value * 100) }),
       payroll_tax_basis_points: Math.round(tax * 100),
+      ...effectiveDateFrom(data, today),
     });
     if (ok) setOpen(false);
   }
@@ -138,8 +160,24 @@ export function LaborCostManager({
     return specialists.find((person) => person.id === rule.specialist_id)?.name ?? rule.label ?? "—";
   }
 
-  const live = rules.filter((rule) => rule.active_to === null);
-  const closed = rules.filter((rule) => rule.active_to !== null);
+  /*
+   * In force or still to come, against history. A rule changed from a later
+   * day is closed at that day, not now: until then it is the one being paid,
+   * and it belongs in the table beside the rule that will replace it.
+   */
+  const now = Date.parse(asOf);
+  const live = rules.filter((rule) => rule.active_to === null || Date.parse(rule.active_to) > now);
+  const closed = rules.filter((rule) => rule.active_to !== null && Date.parse(rule.active_to) <= now);
+  const dateOf = (iso: string) => new Date(iso).toLocaleDateString(localeCode, { timeZone: timezone });
+
+  /** «Изменить с даты» on a row: the form below, already pointed at that arrangement. */
+  function changeFrom(rule: LaborCostRow) {
+    setRecipient(rule.recipient);
+    if (rule.specialist_id) setSpecialistId(rule.specialist_id);
+    setBasis(rule.basis);
+    setError(null);
+    valueField.current?.focus();
+  }
 
   /*
    * «Кому» over a column with one possible answer.
@@ -179,7 +217,12 @@ export function LaborCostManager({
         <div className="add-form-inner">
           <section className="panel">
             <h2>{t("labor.title")}</h2>
-            <p className="muted">{t(businessLabel.laborHint[businessType])}</p>
+            <Hint
+              short={t("labor.hintShort")}
+              more={t(businessLabel.laborHint[businessType])}
+              moreLabel={t("common.more")}
+              howLabel={t("common.howCounted")}
+            />
 
             {error && (
               <div className="form-error" role="alert">
@@ -213,16 +256,20 @@ export function LaborCostManager({
                       </td>
                     )}
                     <td>{describe(rule)}</td>
-                    <td className="labor-since">{new Date(rule.active_from).toLocaleDateString(localeCode)}</td>
+                    <td className="labor-since">
+                      {Date.parse(rule.active_from) > now
+                        ? t("rules.startsOn", { date: dateOf(rule.active_from) })
+                        : dateOf(rule.active_from)}
+                    </td>
                     <td>
                       {canEdit && (
                         <button
-                          className="inline-action danger"
+                          className="inline-action"
                           type="button"
                           disabled={pending}
-                          onClick={() => send(`/api/v1/labor-costs/${rule.id}`, null, "DELETE")}
+                          onClick={() => changeFrom(rule)}
                         >
-                          {t("labor.close")}
+                          {t("rules.changeFrom")}
                         </button>
                       )}
                     </td>
@@ -243,9 +290,7 @@ export function LaborCostManager({
                 <ul className="compact-list">
                   {closed.map((rule) => (
                     <li key={rule.id}>
-                      {nameOf(rule)}: {describe(rule)} —{" "}
-                      {new Date(rule.active_from).toLocaleDateString(localeCode)} …{" "}
-                      {new Date(rule.active_to!).toLocaleDateString(localeCode)}
+                      {nameOf(rule)}: {describe(rule)} — {dateOf(rule.active_from)} … {dateOf(rule.active_to!)}
                     </li>
                   ))}
                 </ul>
@@ -280,7 +325,12 @@ export function LaborCostManager({
                     {recipient === "specialist" && (
                       <label>
                         {t("specialists.specialist")}
-                        <select name="specialist_id" required>
+                        <select
+                          name="specialist_id"
+                          required
+                          value={specialistId}
+                          onChange={(event) => setSpecialistId(event.target.value)}
+                        >
                           {specialists.map((person) => (
                             <option key={person.id} value={person.id}>
                               {person.name}
@@ -307,6 +357,7 @@ export function LaborCostManager({
                 <label>
                   {basis === "fixed_monthly" ? t("labor.amount", { currency }) : t("labor.rate")}
                   <input
+                    ref={valueField}
                     name="value"
                     type="number"
                     step="0.01"
@@ -331,8 +382,10 @@ export function LaborCostManager({
                   <input name="label" maxLength={200} placeholder={t("labor.labelPlaceholder")} />
                 </label>
 
+                <EffectiveDateField today={today} locale={locale} />
+
                 <button className="primary-button" type="submit" disabled={pending}>
-                  {pending ? t("common.saving") : t("common.add")}
+                  {pending ? t("common.saving") : t("common.save")}
                 </button>
               </form>
             )}

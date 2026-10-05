@@ -6,6 +6,7 @@ import { ToolIcon } from "@/components/icons";
 import { expenseCategories, isExpenseCategory } from "@/domain/expense-categories";
 import { can } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { loadExpenses } from "@/lib/expenses";
 import { loadMaterialsModes, monthIn } from "@/lib/materials-mode";
 import { loadMonthGuide } from "@/lib/onboarding";
@@ -28,8 +29,10 @@ export default async function ExpensesPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; category?: string }>;
 }) {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   // Owner alone, reading included: the ledger holds rent and payroll. Everyone
   // else is turned away here and again by every handler under

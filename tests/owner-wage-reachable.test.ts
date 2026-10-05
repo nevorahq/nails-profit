@@ -9,8 +9,9 @@ import { describe, expect, it } from "vitest";
  * worth. The report used to say so with a link to `/app/settings` while
  * `SHOW_ADVANCED_FINANCIAL_SETTINGS` kept the control that answers it off that
  * page: the product asked for a number, offered a door, and put nothing behind
- * it. «Оплата труда за месяц» is hidden again now — and this time the report
- * asks for nothing, which is the other way to close the same gap.
+ * it. The report asks for nothing now, and «Оплата труда за месяц» is back on
+ * the page for every studio that turns on «Подробная финансовая аналитика» —
+ * the same switch that makes the report draw the lines it feeds.
  *
  * Read from the source rather than rendered: there is no renderer in this
  * repository — see `tests/accessibility.test.ts` for why — and "the screen this
@@ -31,7 +32,10 @@ describe("the owner's wage is never asked for through a door onto nothing", () =
     if (!settings.includes("<LaborCostManager")) return false;
     const assignment = /const\s+canReadLabour\s*=([\s\S]*?);/.exec(settings);
     if (assignment === null) return false;
-    return !assignment[1].includes("SHOW_ADVANCED_FINANCIAL_SETTINGS");
+    return (
+      !assignment[1].includes("SHOW_ADVANCED_FINANCIAL_SETTINGS") &&
+      assignment[1].includes("detailedAnalytics")
+    );
   })();
 
   it("keeps the instruction and the control together", () => {
@@ -46,7 +50,7 @@ describe("the owner's wage is never asked for through a door onto nothing", () =
   it("is where the two of them were last left", () => {
     expect({ sendsPeopleToSettings, settingsOfferTheControl }).toEqual({
       sendsPeopleToSettings: false,
-      settingsOfferTheControl: false,
+      settingsOfferTheControl: true,
     });
   });
 });

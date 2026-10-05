@@ -7,7 +7,7 @@ import { currencies, type Currency } from "@/domain/money";
 import { catalogueEntry } from "@/domain/service-catalogue";
 import {
   currencyForTimezone,
-  DEFAULT_COMMISSION_PERCENT,
+  defaultCommissionBasisPointsFor,
   DEFAULT_SERVICE,
   DEFAULT_WORKWEEK,
 } from "@/domain/workspace-defaults";
@@ -147,7 +147,7 @@ export function WorkspaceSetup({
         // placeholder.
         ...(businessType === "studio" && ownerWorks && ownerName ? { owner_name: ownerName } : {}),
         ...(bookingAvailable ? { publish_booking: publishBooking } : {}),
-        commission_basis_points: DEFAULT_COMMISSION_PERCENT * 100,
+        commission_basis_points: defaultCommissionBasisPointsFor(businessType),
         ...(service
           ? {
               services: [

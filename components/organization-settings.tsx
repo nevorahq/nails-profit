@@ -8,7 +8,8 @@ import { currencies, type Currency } from "@/domain/money";
 import { ORGANIZATION_NAME_PATTERN } from "@/domain/organization-name";
 import { checkSlug, slugify } from "@/domain/slug";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { type MessageKey, type Translate } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeNames } from "@/i18n/locale-names";
 import { localeTag } from "@/i18n/translate";
 
@@ -48,6 +49,7 @@ export function OrganizationSettings({
   locale,
   currency,
   staffNotices,
+  detailedAnalytics,
   canEdit,
   startOpen = false,
 }: {
@@ -59,11 +61,13 @@ export function OrganizationSettings({
   currency: string;
   /** Who besides the working master hears about a booking. */
   staffNotices: StaffNotices;
+  /** «Подробная финансовая аналитика» — see the column in `db/schema.ts`. */
+  detailedAnalytics: boolean;
   canEdit: boolean;
   startOpen?: boolean;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +83,12 @@ export function OrganizationSettings({
    * question is put once, after the rename, with the warning beside it.
    */
   const [suggestedSlug, setSuggestedSlug] = useState<string | null>(null);
+  /*
+   * The switch moves when it is pressed, not when the server has answered and
+   * the page re-rendered: a checkbox that ignores the click for a second reads
+   * as broken. A refusal puts it back.
+   */
+  const [detailed, setDetailed] = useState(detailedAnalytics);
 
   async function rename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,7 +125,8 @@ export function OrganizationSettings({
     locale?: AppLocale;
     currency?: string;
     staff_notices?: StaffNotices;
-  }) {
+    detailed_analytics?: boolean;
+  }): Promise<boolean> {
     setPending(true);
     setError(null);
     setSaved(false);
@@ -130,12 +141,13 @@ export function OrganizationSettings({
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       setError(body?.error?.message ?? "—");
-      return;
+      return false;
     }
     setSaved(true);
     // The whole interface re-renders in the new language, so the server has to
     // produce it: the dictionary is chosen on the server, not in the browser.
     router.refresh();
+    return true;
   }
 
   return (
@@ -277,6 +289,29 @@ export function OrganizationSettings({
         */}
       </div>
 
+
+      {/*
+        The owner's to choose, like the rest of this panel: the endpoint asks
+        `can(…, "organization_settings", "write")` again, so a manager who
+        reached this control would be refused by the server, not by the
+        disabled attribute.
+      */}
+      <div className="inline-form">
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={detailed}
+            disabled={!canEdit || pending}
+            onChange={async (event) => {
+              const next = event.target.checked;
+              setDetailed(next);
+              if (!(await change({ detailed_analytics: next }))) setDetailed(!next);
+            }}
+          />
+          {t("settings.detailedAnalytics")}
+        </label>
+      </div>
+      <p className="muted">{t("settings.detailedAnalyticsHint")}</p>
 
       {/*
         The practical capacity rate is still not offered: it stays at the

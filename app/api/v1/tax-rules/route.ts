@@ -1,9 +1,10 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { taxRules } from "@/db/schema";
+import { organizations, taxRules } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
+import { planRuleChange, RULE_CHANGE_REFUSALS } from "@/domain/rule-change";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -31,7 +32,11 @@ const ruleShape = z.object({
    * revenue, for a business that shows VAT on a document but does not remit it.
    */
   remittable: z.boolean().optional(),
-  active_from: z.iso.datetime().optional(),
+  /**
+   * The studio's day the new rate takes over from, `YYYY-MM-DD`; absent is
+   * now. Today or later — see `domain/rule-change.ts`.
+   */
+  effective_date: z.iso.date().optional(),
 });
 
 export async function GET(request: Request) {
@@ -84,7 +89,6 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
-  const activeFrom = data.active_from ? new Date(data.active_from) : new Date();
 
   const created = await withTenant(actor.organizationId, async (tx) => {
     /*
@@ -92,12 +96,34 @@ export async function POST(request: Request) {
      *
      * Two live rules of one kind would be a data error `selectTaxRates` has to
      * guess its way out of, and the guess it makes — take the newer — is a
-     * fallback rather than a design. Closing here is the design.
+     * fallback rather than a design. Closing here is the design. Locked, so
+     * that two changes sent at once cannot both close the same rule.
      */
-    await tx
-      .update(taxRules)
-      .set({ activeTo: activeFrom, updatedBy: actor.userId, updatedAt: new Date() })
-      .where(and(eq(taxRules.kind, data.kind), isNull(taxRules.activeTo)));
+    const [organization] = await tx
+      .select({ timezone: organizations.timezone })
+      .from(organizations)
+      .where(eq(organizations.id, actor.organizationId));
+    const current = await tx
+      .select({ id: taxRules.id, activeFrom: taxRules.activeFrom })
+      .from(taxRules)
+      .where(and(eq(taxRules.kind, data.kind), isNull(taxRules.activeTo)))
+      .for("update");
+
+    const plan = planRuleChange({
+      current,
+      effectiveDate: data.effective_date,
+      now: new Date(),
+      timezone: organization.timezone,
+    });
+    if (!plan.ok) return { ok: false as const, reason: plan.reason };
+    const activeFrom = plan.open.activeFrom;
+
+    if (plan.close.ids.length > 0) {
+      await tx
+        .update(taxRules)
+        .set({ activeTo: plan.close.activeTo, updatedBy: actor.userId, updatedAt: new Date() })
+        .where(inArray(taxRules.id, [...plan.close.ids]));
+    }
 
     const [row] = await tx
       .insert(taxRules)
@@ -127,17 +153,24 @@ export async function POST(request: Request) {
       requestId: id,
     });
 
-    return row;
+    return { ok: true as const, row };
   });
+
+  if (!created.ok) {
+    const refusal = RULE_CHANGE_REFUSALS[created.reason];
+    return apiError(422, refusal.code, refusal.message, id, {
+      fieldErrors: [{ field: "effective_date", code: created.reason, message: refusal.message }],
+    });
+  }
 
   return apiSuccess(
     {
-      id: created.id,
-      kind: created.kind,
-      basis_points: created.basisPoints,
-      remittable: created.remittable,
-      active_from: created.activeFrom,
-      active_to: created.activeTo,
+      id: created.row.id,
+      kind: created.row.kind,
+      basis_points: created.row.basisPoints,
+      remittable: created.row.remittable,
+      active_from: created.row.activeFrom,
+      active_to: created.row.activeTo,
     },
     id,
     201,

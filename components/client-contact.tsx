@@ -6,7 +6,7 @@ import { ContactIcon } from "@/components/icons";
 import { offeredChannels, type ContactChannelMarks } from "@/domain/contact-channels";
 import { contactWays, type ContactChannel } from "@/domain/contact-links";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
 /**
@@ -48,7 +48,7 @@ export function ClientContact({
   /** What anybody has said about reaching this client. Empty means nobody has. */
   marks?: ContactChannelMarks;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [open, setOpen] = useState(false);
   const { root, trigger } = useDismissiblePanel(open, () => setOpen(false));
   /*

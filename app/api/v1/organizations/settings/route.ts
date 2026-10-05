@@ -35,6 +35,11 @@ const settingsSchema = z
      * than the rota is a claim this figure does not make.
      */
     practical_capacity_basis_points: z.int().min(1).max(10_000).optional(),
+    /**
+     * «Подробная финансовая аналитика». Wording and visibility only — see the
+     * column in `db/schema.ts` — and the owner's, like everything here.
+     */
+    detailed_analytics: z.boolean().optional(),
     /** Who besides the working master is written to — see `staffNoticeAudience`. */
     staff_notices: z.enum(["owner", "owner_and_managers"]).optional(),
     // Renaming goes through the same rule as naming: a studio must not be able
@@ -122,6 +127,7 @@ export async function PATCH(request: Request) {
           withdrawal_reserve_minor: organizations.withdrawalReserveMinor,
           practical_capacity_basis_points: organizations.practicalCapacityBasisPoints,
           staff_notices: organizations.staffNotices,
+          detailed_analytics: organizations.detailedAnalytics,
         })
         .from(organizations)
         .where(eq(organizations.id, actor.organizationId))
@@ -132,6 +138,7 @@ export async function PATCH(request: Request) {
         withdrawal_reserve_minor: reserve,
         practical_capacity_basis_points: practicalCapacity,
         staff_notices: staffNotices,
+        detailed_analytics: detailedAnalytics,
         ...columns
       } = parsed.data;
       const [row] = await tx
@@ -144,6 +151,7 @@ export async function PATCH(request: Request) {
             ? { practicalCapacityBasisPoints: practicalCapacity }
             : {}),
           ...(staffNotices !== undefined ? { staffNotices } : {}),
+          ...(detailedAnalytics !== undefined ? { detailedAnalytics } : {}),
           updatedBy: actor.userId,
           updatedAt: new Date(),
           version: sql`${organizations.version} + 1`,
@@ -159,6 +167,7 @@ export async function PATCH(request: Request) {
           withdrawal_reserve_minor: organizations.withdrawalReserveMinor,
           practical_capacity_basis_points: organizations.practicalCapacityBasisPoints,
           staff_notices: organizations.staffNotices,
+          detailed_analytics: organizations.detailedAnalytics,
         });
 
       await recordAuditEvent(tx, {

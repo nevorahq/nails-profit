@@ -8,6 +8,7 @@ import type { Currency } from "@/domain/money";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import type { FirstNumberRow } from "@/lib/first-numbers";
@@ -31,6 +32,7 @@ import type { FirstNumberRow } from "@/lib/first-numbers";
 export function FirstNumbers({
   rows,
   locale,
+  register = writtenRegister,
   businessType,
   currency,
   bookingSlug,
@@ -39,6 +41,8 @@ export function FirstNumbers({
 }: {
   rows: readonly FirstNumberRow[];
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   /** «Комиссия мастера» is a stranger's wage to a woman reading about her own. */
   businessType: BusinessType;
   currency: Currency;
@@ -56,9 +60,15 @@ export function FirstNumbers({
    */
   closeDay?: ReactNode;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
+  /*
+   * A column of zeros is a question nobody asked. Somebody working alone is
+   * registered at a rate of nothing (`defaultCommissionBasisPointsFor`), and
+   * her first screen would otherwise open on a column saying her work costs 0.
+   */
+  const paysForWork = rows.some((row) => row.commissionMinor !== 0);
 
   return (
     <main className="app-shell">
@@ -75,7 +85,7 @@ export function FirstNumbers({
               <tr>
                 <th>{t("dashboard.service")}</th>
                 <th>{t("services.priceIn", { currency })}</th>
-                <th>{t(businessLabel.serviceCommission[businessType])}</th>
+                {paysForWork && <th>{t(businessLabel.serviceCommission[businessType])}</th>}
                 <th>{t(businessLabel.serviceKept[businessType])}</th>
                 <th>{t("dashboard.margin")}</th>
                 <th>{t("dashboard.hourly")}</th>
@@ -86,7 +96,7 @@ export function FirstNumbers({
                 <tr key={row.id}>
                   <td>{row.name}</td>
                   <td>{money(row.priceMinor)}</td>
-                  <td>{money(row.commissionMinor)}</td>
+                  {paysForWork && <td>{money(row.commissionMinor)}</td>}
                   <td className={row.contributionMarginMinor < 0 ? "metric-negative" : ""}>
                     {money(row.contributionMarginMinor)}
                   </td>
