@@ -66,3 +66,49 @@ export function contactWays(phone: string | null): readonly ContactWay[] {
     .map((channel) => ({ channel, href: contactLink(channel, phone) }))
     .filter((way): way is ContactWay => way.href !== null);
 }
+
+/** Where a written message can go: the messengers, and the SMS the number always allows. */
+export type MessageChannel = "whatsapp" | "telegram" | "viber" | "sms";
+
+export type MessageWay = Readonly<{
+  channel: MessageChannel;
+  href: string;
+  /**
+   * Whether the link carries the text itself. Only WhatsApp and SMS take a
+   * body together with a recipient; Telegram and Viber open the chat with the
+   * number and nothing in it, so the text has to travel on the clipboard.
+   */
+  carriesText: boolean;
+}>;
+
+/**
+ * A message to this number, already written, by each way that can send one.
+ *
+ * Unlike `contactLink` there is no «call»: a message is the thing being sent.
+ * SMS is always offered, because the number alone makes it possible; the
+ * messengers only when somebody said the client uses them (`offered`), and
+ * first, because a free message they read is better than a paid one.
+ */
+export function messageWays(
+  phone: string | null,
+  text: string,
+  offered: readonly ContactChannel[],
+): readonly MessageWay[] {
+  const digits = phone ? digitsOf(phone) : null;
+  if (!digits) return [];
+  const body = encodeURIComponent(text);
+
+  const ways: MessageWay[] = [];
+  if (offered.includes("whatsapp")) {
+    ways.push({ channel: "whatsapp", href: `https://wa.me/${digits}?text=${body}`, carriesText: true });
+  }
+  if (offered.includes("telegram")) {
+    ways.push({ channel: "telegram", href: contactLink("telegram", phone!)!, carriesText: false });
+  }
+  if (offered.includes("viber")) {
+    ways.push({ channel: "viber", href: contactLink("viber", phone!)!, carriesText: false });
+  }
+  // `?&body=` rather than `?body=`: iOS reads the first, Android both.
+  ways.push({ channel: "sms", href: `sms:+${digits}?&body=${body}`, carriesText: true });
+  return ways;
+}
