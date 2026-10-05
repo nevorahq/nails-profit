@@ -4,7 +4,7 @@ import { z } from "zod";
 import { services, specialists } from "@/db/schema";
 import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
-import { can } from "@/domain/rbac";
+import { can, canManageCatalogue } from "@/domain/rbac";
 import { supportedLocales } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -117,6 +117,16 @@ export async function POST(request: Request) {
     return apiError(422, "VALIDATION_ERROR", "The request body is invalid", id, {
       fieldErrors: toFieldErrors(parsed.error.issues),
     });
+  }
+
+  /*
+   * A Master may add a service — `create_only` — but not say what it uses up.
+   * The amount comes off every master's margin on that service, which is the
+   * catalogue manager's figure to set, as changing the price afterwards is.
+   * Refused rather than dropped, so a client that sends it learns why.
+   */
+  if (parsed.data.materials_minor != null && !canManageCatalogue(actor.role, "services")) {
+    return apiError(403, "FORBIDDEN", "This role cannot set a service's materials", id);
   }
 
   const service = await withTenant(actor.organizationId, async (tx) => {

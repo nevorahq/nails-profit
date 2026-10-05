@@ -123,3 +123,42 @@ describe("materials on an add-on", () => {
     expect(errorCodeOf(refused)).toBe("ADD_ON_NOT_FOUND");
   });
 });
+
+describe("materials on a service a Master creates", () => {
+  test("are refused, while the service itself can still be added without them", async () => {
+    const master = await inviteMember(studio.owner, "materials-creator@studio.example", "master");
+    const count = async () => dataOf<unknown[]>(await studio.owner.get("/api/v1/services")).length;
+    const before = await count();
+
+    const refused = await master.post("/api/v1/services", {
+      name: { ru: "Френч" },
+      price_minor: 40_000,
+      duration_minutes: 60,
+      materials_minor: 2_000,
+    });
+    expect(refused.status).toBe(403);
+    expect(errorCodeOf(refused)).toBe("FORBIDDEN");
+    expect(await count()).toBe(before);
+
+    const added = await master.post("/api/v1/services", {
+      name: { ru: "Френч" },
+      price_minor: 40_000,
+      duration_minutes: 60,
+    });
+    expect(added.status).toBe(201);
+    expect(await count()).toBe(before + 1);
+  });
+
+  test("are a catalogue manager's to give at creation", async () => {
+    const manager = await inviteMember(studio.owner, "materials-manager@studio.example", "manager");
+    const created = await manager.post("/api/v1/services", {
+      name: { ru: "Наращивание" },
+      price_minor: 90_000,
+      duration_minutes: 150,
+      materials_minor: 8_000,
+    });
+    expect(created.status).toBe(201);
+    const service = dataOf<{ id: string }>(created);
+    expect(dataOf<{ materials_minor: number }>(await studio.owner.get(`/api/v1/services/${service.id}`)).materials_minor).toBe(8_000);
+  });
+});
