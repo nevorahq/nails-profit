@@ -12,6 +12,8 @@ import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel"
 import { PeriodFilter } from "@/components/period-filter";
 import { ProfitBars } from "@/components/profit-bars";
 import { ProfitTrendChart } from "@/components/profit-trend-chart";
+import { ReportTabs } from "@/components/report-tabs";
+import { ServiceRankingTable } from "@/components/service-ranking";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
@@ -20,11 +22,11 @@ import { buildProfitTrend } from "@/domain/dashboard-metrics";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { isPilotAccessEnforced, isPublicBookingEnabled } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
-import { businessLabel, type BusinessType } from "@/i18n/business-labels";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { auth } from "@/lib/auth";
-import { formatBasisPoints, formatMoneyMinor, formatPercentDelta } from "@/lib/format";
+import { formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { loadHeadline } from "@/lib/headline";
 import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
@@ -509,18 +511,16 @@ export default async function AppPage({
     valueMinor: point.profitMinor,
   }));
 
-  const rankingTotals = {
-    // The visits the ranking was built from, once each: a visit of a manicure
-    // and a pedicure is a row in both, and summing the rows would count it twice.
-    visits: metrics.costedVisits,
-    revenueMinor: metrics.ranking.reduce((s, e) => s + e.revenueMinor, 0),
-    contributionMarginMinor: metrics.ranking.reduce((s, e) => s + e.contributionMarginMinor, 0),
-    commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),
-  };
   const periodLabel = `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`;
 
   return (
     <main className="app-shell">
+      <ReportTabs
+        locale={locale}
+        role={membership.role}
+        active="summary"
+        state={{ from: filters.from, to: filters.to, specialist: filters.specialist, month: period.month }}
+      />
       <HeadlineCard
         headline={data.headline}
         locale={locale}
@@ -653,61 +653,13 @@ export default async function AppPage({
         </div>
       )}
 
-      <section className="panel">
-        <h2>{t("dashboard.rankingTitle")}</h2>
-        <p className="muted">{t("dashboard.rankingHint")}</p>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t("dashboard.service")}</th>
-              <th>{t("dashboard.visitCount")}</th>
-              {!isMaster && <th>{t("dashboard.revenue")}</th>}
-              {!isMaster && <th>{t(businessLabel.masterEarnings[businessType])}</th>}
-              <th>{isMaster ? t("dashboard.commission") : t("dashboard.keeps")}</th>
-              {!isMaster && <th>{t("dashboard.margin")}</th>}
-              <th>{t("dashboard.hourly")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.ranking.map((entry) => (
-              <tr key={entry.serviceId ?? entry.serviceName}>
-                <td>{entry.serviceName}</td>
-                <td>{entry.visits}</td>
-                {!isMaster && <td>{money(entry.revenueMinor)}</td>}
-                {!isMaster && <td>{money(entry.commissionMinor)}</td>}
-                {isMaster ? (
-                  <td>{money(entry.commissionMinor)}</td>
-                ) : (
-                  <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                    {money(entry.contributionMarginMinor)}
-                  </td>
-                )}
-                {!isMaster && <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>}
-                <td className={(entry.profitPerHourMinor ?? 0) < 0 ? "metric-negative" : ""}>
-                  {entry.profitPerHourMinor === null ? "—" : money(entry.profitPerHourMinor)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th>{t("visits.total")}</th>
-              <td>{rankingTotals.visits}</td>
-              {!isMaster && <td>{money(rankingTotals.revenueMinor)}</td>}
-              {!isMaster && <td>{money(rankingTotals.commissionMinor)}</td>}
-              {isMaster ? (
-                <td>{money(rankingTotals.commissionMinor)}</td>
-              ) : (
-                <td className={rankingTotals.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                  {money(rankingTotals.contributionMarginMinor)}
-                </td>
-              )}
-              {!isMaster && <td />}
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </section>
+      <ServiceRankingTable
+        metrics={metrics}
+        locale={locale}
+        currency={currency}
+        businessType={businessType}
+        isMaster={isMaster}
+      />
     </main>
   );
 }

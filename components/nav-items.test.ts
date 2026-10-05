@@ -15,7 +15,6 @@ describe("navigation", () => {
   it("covers every route the app answers on", () => {
     expect(navItems.map((item) => item.href)).toEqual([
       "/app",
-      "/app/reports/month",
       "/app/calendar",
       "/app/booking",
       "/app/visits",
@@ -70,20 +69,30 @@ describe("navigation", () => {
     ]);
   });
 
-  it("offers Затраты and the monthly report to the owner and to nobody else", () => {
-    // Both are the owner's ledger of rent and payroll — one as rows, one as a
-    // total — and the `expenses` capability denies every other role even the
-    // read. A link that can only ever answer "нет доступа" is not worth drawing.
+  it("offers Затраты to the owner and to nobody else", () => {
+    // The owner's ledger of rent and payroll, and the `expenses` capability
+    // denies every other role even the read. A link that can only ever answer
+    // "нет доступа" is not worth drawing.
     for (const role of memberRoles) {
       const hrefs = navFor(role).map((item) => item.href);
       expect(hrefs.includes("/app/expenses")).toBe(role === "owner");
-      expect(hrefs.includes("/app/reports/month")).toBe(role === "owner");
+    }
+  });
+
+  it("keeps the monthly report a tab of «Отчёт» rather than a section of its own", () => {
+    // One question, one door: «Месяц подробно» is drawn by the report's tabs,
+    // for the owner alone (`components/report-tabs.test.ts`).
+    for (const role of memberRoles) {
+      for (const businessType of ["solo", "studio"] as const) {
+        const hrefs = navFor(role, businessType).map((item) => item.href);
+        expect(hrefs.filter((href) => href.startsWith("/app/reports")), `${role}/${businessType}`).toEqual([]);
+      }
     }
   });
 
   it("shows every other section to the roles that are not a master", () => {
     for (const role of memberRoles.filter((r) => r !== "master")) {
-      const expected = role === "owner" ? navItems.length : navItems.length - 2;
+      const expected = role === "owner" ? navItems.length : navItems.length - 1;
       expect(navFor(role)).toHaveLength(expected);
     }
   });
@@ -132,6 +141,16 @@ describe("active section", () => {
     expect(isActiveSection("/app", "/app")).toBe(true);
     expect(isActiveSection("/app/calendar", "/app")).toBe(false);
     expect(isActiveSection("/app/settings", "/app")).toBe(false);
+  });
+
+  it("keeps Отчёт lit on its own tabs, and only on those", () => {
+    expect(isActiveSection("/app/reports/month", "/app")).toBe(true);
+    expect(isActiveSection("/app/reports/services", "/app")).toBe(true);
+    expect(isActiveSection("/app/reports", "/app")).toBe(false);
+    expect(isActiveSection("/app/reportsheet", "/app")).toBe(false);
+    for (const item of navItems.filter((candidate) => candidate.href !== "/app")) {
+      expect(isActiveSection("/app/reports/month", item.href), item.href).toBe(false);
+    }
   });
 
   it("does not match a route that merely starts with the same letters", () => {

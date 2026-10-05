@@ -28,7 +28,6 @@ export type NavItem = Readonly<{
 
 export type IconName =
   | "report"
-  | "monthReport"
   | "calendar"
   | "booking"
   | "visits"
@@ -41,8 +40,13 @@ export type IconName =
   | "more";
 
 export const navItems: readonly NavItem[] = [
+  /*
+   * One «Отчёт», with «Итог», «Услуги» and «Месяц подробно» as its tabs
+   * (`components/report-tabs.tsx`). The month used to be a section of its own
+   * beside it, which put the same question — how much is left — behind two
+   * doors with two different answers depending on the day of the month.
+   */
   { href: "/app", key: "nav.dashboard", group: "primary", icon: "report" },
-  { href: "/app/reports/month", key: "nav.monthReport", group: "primary", icon: "monthReport" },
 
   { href: "/app/calendar", key: "nav.calendar", group: "work", icon: "calendar" },
   { href: "/app/booking", key: "nav.booking", group: "work", icon: "booking" },
@@ -96,9 +100,10 @@ const MASTER_HIDDEN: ReadonlySet<string> = new Set([
  * and the `expenses` capability grants it to the owner alone, reading included.
  * Elsewhere this file leaves a link in place and lets the page refuse, because
  * those pages still show the role *something*. This one would show a refusal
- * and nothing else, so the link goes too.
+ * and nothing else, so the link goes too. «Месяц подробно» follows the same
+ * rule one level down, as a tab the report draws only for the owner.
  */
-const OWNER_ONLY: ReadonlySet<string> = new Set(["/app/expenses", "/app/reports/month"]);
+const OWNER_ONLY: ReadonlySet<string> = new Set(["/app/expenses"]);
 
 /**
  * The one section whose group depends on the shape of the business.

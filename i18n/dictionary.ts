@@ -32,6 +32,10 @@ const ru = {
   "nav.signOut": "Выйти",
   "nav.signingOut": "Выходим…",
   "nav.notifications": "Уведомления",
+  "report.tabs": "Разделы отчёта",
+  "report.tabSummary": "Итог",
+  "report.tabServices": "Услуги",
+  "report.tabMonth": "Месяц подробно",
   "notifications.loading": "Загрузка…",
   "notifications.loadFailed": "Не удалось загрузить уведомления",
   "notifications.empty": "Нет заявок, ждущих подтверждения",
@@ -471,7 +475,6 @@ const ru = {
   "specialists.readOnlyNote": "Ваша роль видит только собственный результат и не может менять правила комиссии.",
   "specialists.aggregatesNote":
     "Ваша роль читает цифры студии целиком, но без разбивки по людям: ставка каждого мастера и аккаунт за карточкой скрыты.",
-  "nav.monthReport": "Отчёт за месяц",
 
   "expenses.recurring": "Каждый месяц",
   "expenses.recurringFrom": "С какого дня",
@@ -1497,6 +1500,10 @@ const ro: Record<MessageKey, Message> = {
   "nav.signOut": "Deconectare",
   "nav.signingOut": "Se deconectează…",
   "nav.notifications": "Notificări",
+  "report.tabs": "Secțiunile raportului",
+  "report.tabSummary": "Rezumat",
+  "report.tabServices": "Servicii",
+  "report.tabMonth": "Luna în detaliu",
   "notifications.loading": "Se încarcă…",
   "notifications.loadFailed": "Notificările nu s-au putut încărca",
   "notifications.empty": "Nu există cereri care așteaptă confirmare",
@@ -1937,7 +1944,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.readOnlyNote": "Rolul dvs. vede doar rezultatul propriu și nu poate schimba regulile de comision.",
   "specialists.aggregatesNote":
     "Rolul dvs. citește cifrele studioului în ansamblu, dar fără defalcare pe persoane: tariful fiecărui maestru și contul din spatele fișei sunt ascunse.",
-  "nav.monthReport": "Raport lunar",
 
   "expenses.recurring": "În fiecare lună",
   "expenses.recurringFrom": "Din ce zi",
@@ -2961,6 +2967,10 @@ const en: Record<MessageKey, Message> = {
   "nav.signOut": "Sign out",
   "nav.signingOut": "Signing out…",
   "nav.notifications": "Notifications",
+  "report.tabs": "Report sections",
+  "report.tabSummary": "Summary",
+  "report.tabServices": "Services",
+  "report.tabMonth": "Month in detail",
   "notifications.loading": "Loading…",
   "notifications.loadFailed": "Could not load notifications",
   "notifications.empty": "No requests waiting on confirmation",
@@ -3397,7 +3407,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.readOnlyNote": "Your role sees only its own result and cannot change commission rules.",
   "specialists.aggregatesNote":
     "Your role reads the studio's figures as a whole, but not broken down by person: each master's rate and the account behind the card are hidden.",
-  "nav.monthReport": "Monthly report",
 
   "expenses.recurring": "Every month",
   "expenses.recurringFrom": "From which day",

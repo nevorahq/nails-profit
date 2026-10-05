@@ -1016,6 +1016,16 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .headline-bar > span { display: block; height: 100%; border-radius: 4rem; background: var(--positive); }
 .headline-details { align-self: flex-start; margin-top: 6rem; }
 
+/*
+ * «Итог · Услуги · Месяц подробно». Underlined rather than boxed: they are the
+ * sections of one page, and drawn as buttons they would read as three more
+ * things to press beside the period's own.
+ */
+.report-tabs { display: flex; gap: 22rem; margin: 0 0 16rem; border-bottom: 1rem solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.report-tab { flex: none; padding: 8rem 0 10rem; margin-bottom: -1rem; border-bottom: 3rem solid transparent; color: var(--muted); font-size: 16rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.report-tab:hover { color: var(--ink); }
+.report-tab[aria-current="page"] { border-bottom-color: var(--accent); color: var(--ink); }
+
 /* «Прибыль по услугам»: the same ranking `metrics.ranking` already computes,
    read as bars instead of a table row — the full table stays put further
    down the page for whoever wants every column. */
