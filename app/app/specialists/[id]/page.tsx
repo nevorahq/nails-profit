@@ -9,6 +9,8 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
+import { todayIn } from "@/domain/report-period";
+import { formatLocalDate } from "@/domain/timezone";
 import { registerOf } from "@/i18n/lexicon";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
 import { loadBookabilityFacts } from "@/lib/specialist-bookability";
@@ -30,7 +32,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
   if (!z.uuid().safeParse(id).success) notFound();
 
   const workspace = await requireWorkspace();
-  const { membership, locale, currency, businessType } = workspace;
+  const { membership, locale, currency, businessType, timezone } = workspace;
   const register = registerOf(workspace);
   const t = getTranslator(locale, register);
 
@@ -120,6 +122,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
       places={loaded.places}
       publishedLocationIds={loaded.publishedLocationIds}
       canManage={canManage}
+      today={formatLocalDate(todayIn(new Date(), timezone))}
     />
   );
 }

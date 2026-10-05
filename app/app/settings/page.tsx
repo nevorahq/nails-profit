@@ -30,6 +30,8 @@ import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { monthBounds, monthOf } from "@/lib/period";
 import { AccountDeletion } from "@/components/account-deletion";
+import { todayIn } from "@/domain/report-period";
+import { formatLocalDate } from "@/domain/timezone";
 import { requireWorkspace } from "@/lib/workspace";
 import { registerOf } from "@/i18n/lexicon";
 
@@ -65,6 +67,7 @@ export default async function SettingsPage({
     businessType,
     staffNotices,
     detailedAnalytics,
+    timezone,
   } = workspace;
   const register = registerOf(workspace);
 
@@ -73,6 +76,9 @@ export default async function SettingsPage({
   const canReadData = can(membership.role, "data_export", "read");
   const canReadFinancialSettings = can(membership.role, "expenses", "read");
   const canReadLabour = detailedAnalytics && canReadFinancialSettings;
+  // The studio's date, the first a versioned rule can change from.
+  const asOf = new Date();
+  const today = formatLocalDate(todayIn(asOf, timezone));
 
   /*
    * The studio's own mark, which stands where `BrandMark`'s flower does until
@@ -336,6 +342,8 @@ export default async function SettingsPage({
           reserveMinor={labour.reserveMinor}
           canEdit={can(membership.role, "expenses", "write")}
           suggestedOwnerWageMinor={labour.suggestedOwnerWageMinor}
+          today={today}
+          asOf={asOf.toISOString()}
         />
       )}
       {SHOW_ADVANCED_FINANCIAL_SETTINGS && can(membership.role, "bookings", "read") && (
@@ -358,6 +366,8 @@ export default async function SettingsPage({
       {taxes && (
         <TaxRuleManager
           rules={taxes}
+          today={today}
+          asOf={asOf.toISOString()}
           locale={locale}
           canEdit={can(membership.role, "expenses", "write")}
         />

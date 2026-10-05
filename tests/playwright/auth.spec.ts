@@ -337,9 +337,9 @@ test.describe("authentication UI", () => {
      * who works here.
      */
     await expect(page).toHaveURL(/\/app$/);
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Add a specialist and their commission rule" }),
-    ).toBeVisible();
+    // In the plain words a new studio is registered with: what a master is
+    // paid, not «commission» (`i18n/lexicon.ts`).
+    await expect(page.getByRole("heading", { level: 2, name: "Add a specialist and their pay" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Add a specialist" })).toHaveAttribute(
       "href",
       "/app/specialists#add-specialist",

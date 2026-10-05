@@ -1083,6 +1083,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .hint-more p { margin: 6rem 0 6rem; color: var(--muted); font-size: 13rem; line-height: 1.6; }
 .hint-more .text-link { font-size: 13rem; }
 .inline-form > .hint { flex-basis: 100%; margin: 0; font-size: 13rem; font-weight: 400; }
+/* «Прошлые визиты не изменятся» under the date of a rule change: its own row. */
+.inline-form > .rule-date-note { flex-basis: 100%; margin: -8rem 0 0; }
 .compact-list { margin: 0; padding-left: 18rem; font-size: 14rem; }
 .compact-list li { line-height: 1.5; }
 

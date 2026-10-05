@@ -6,10 +6,12 @@ import { useRouter } from "next/navigation";
 
 import { Hint } from "@/components/hint";
 import { SpecialistPhoto } from "@/components/specialist-photo";
-import type { AppLocale } from "@/i18n/messages";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
+import { localeTag } from "@/i18n/translate";
 import type { BusinessType } from "@/i18n/business-labels";
 import { type MessageKey } from "@/i18n/t";
-import { useTranslator } from "@/components/lexicon-provider";
+import { EffectiveDateField, effectiveDateFrom } from "@/components/effective-date-field";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { WEEKDAY_KEYS } from "@/components/booking-setup";
 import { bookabilityOf } from "@/domain/bookability";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
@@ -51,6 +53,7 @@ export function SpecialistDetail({
   places,
   publishedLocationIds,
   canManage,
+  today,
 }: {
   person: SpecialistRow;
   services: ServiceOption[];
@@ -76,8 +79,11 @@ export function SpecialistDetail({
   /** Addresses a client can actually open, for the verdict on those places. */
   publishedLocationIds: readonly string[];
   canManage: boolean;
+  /** The studio's date, `YYYY-MM-DD`: the first day a rule can change from. */
+  today: string;
 }) {
   const t = useTranslator(locale);
+  const register = useRegister();
   const router = useRouter();
   /*
    * Addresses this card is at and has no week for. One is enough to offer the
@@ -114,7 +120,12 @@ export function SpecialistDetail({
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error?.message ?? t("common.saveFailed"));
+      const code = body?.error?.code;
+      setError(
+        code
+          ? getErrorMessage(code, body.error.message ?? t("common.saveFailed"), locale, register)
+          : t("common.saveFailed"),
+      );
       setPending(false);
       return false;
     }
@@ -172,7 +183,7 @@ export function SpecialistDetail({
     // An absent service_id is «все услуги», which is what a default rule is.
     await send(
       `/api/v1/specialists/${person.id}/commission-rules`,
-      { ...rule, ...(service ? { service_id: service } : {}) },
+      { ...rule, ...(service ? { service_id: service } : {}), ...effectiveDateFrom(data, today) },
       form,
     );
   }
@@ -238,6 +249,7 @@ export function SpecialistDetail({
   }
 
   const rule = describeRule(person.default_rule, currency, t);
+  const scheduled = person.scheduled_default_rule ?? null;
   const verdict = bookabilityOf({
     publishedLocationIds,
     ...factsFor(places),
@@ -332,6 +344,19 @@ export function SpecialistDetail({
                   <a className="badge-warning badge-link" href="#commission">
                     {t("specialists.notSet")}
                   </a>
+                )}
+                {/*
+                  A change set for a later day. The rate above stays the one
+                  visits close with until then, and saying so here is what
+                  stops the owner from setting it a second time.
+                */}
+                {scheduled && (
+                  <span className="unit-hint">
+                    {t("rules.scheduled", {
+                      date: new Date(scheduled.active_from).toLocaleDateString(localeTag(locale)),
+                      rule: describeRule(scheduled, currency, t) ?? "—",
+                    })}
+                  </span>
                 )}
               </dd>
             </div>
@@ -554,6 +579,7 @@ export function SpecialistDetail({
                 </select>
               </label>
             )}
+            <EffectiveDateField today={today} locale={locale} />
             <button className="primary-button" type="submit" disabled={pending}>
               {pending ? t("common.saving") : t("common.save")}
             </button>
