@@ -125,3 +125,23 @@ describe("totals", () => {
     expect(totals).toEqual({ overhead: 0, cash_only: 0 });
   });
 });
+
+describe("expensesForMonth in a month counted per service", () => {
+  const rows = [
+    row({ id: "gel", category: "materials", amountMinor: 50_000, spentOn: "2026-11-03" }),
+    row({ id: "rent", category: "rent", amountMinor: 300_000, spentOn: "2026-11-01" }),
+  ];
+
+  it("keeps the purchase in the month, as cash only, so it is not subtracted twice", () => {
+    const resolved = expensesForMonth(rows, "2026-11", "per_service");
+    expect(resolved.map((expense) => [expense.id, expense.class])).toEqual([
+      ["gel", "cash_only"],
+      ["rent", "overhead"],
+    ]);
+    expect(totalByClass(resolved)).toEqual({ overhead: 300_000, cash_only: 50_000 });
+  });
+
+  it("counts it as a cost when the month is counted by purchases, which is the default", () => {
+    expect(totalByClass(expensesForMonth(rows, "2026-11"))).toEqual({ overhead: 350_000, cash_only: 0 });
+  });
+});

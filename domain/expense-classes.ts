@@ -1,4 +1,5 @@
 import { expenseCategories, type ExpenseCategory } from "@/domain/expense-categories";
+import { DEFAULT_MATERIALS_MODE, type MaterialsCostingMode } from "@/domain/materials-mode";
 
 /**
  * Whether a recorded expense belongs in the month's profit, or only in its cash.
@@ -24,7 +25,7 @@ import { expenseCategories, type ExpenseCategory } from "@/domain/expense-catego
  */
 export type ExpenseClass = "overhead" | "cash_only";
 
-export const expenseClassOf: Readonly<Record<ExpenseCategory, ExpenseClass>> = {
+const CLASS_BY_CATEGORY: Readonly<Record<ExpenseCategory, ExpenseClass>> = {
   rent: "overhead",
   // Wages reach the report through `financial_snapshot.commission_minor` for
   // per-visit work, and through `labor_cost_rule` for a salary. A payroll line
@@ -41,11 +42,44 @@ export const expenseClassOf: Readonly<Record<ExpenseCategory, ExpenseClass>> = {
   other: "overhead",
 };
 
-export function isOverhead(category: ExpenseCategory): boolean {
-  return expenseClassOf[category] === "overhead";
+/** The two categories a studio counting per service has already costed visit by visit. */
+const MATERIAL_CATEGORIES: ReadonlySet<ExpenseCategory> = new Set(["materials", "consumables"]);
+
+/**
+ * The class of a category in a month counted the given way.
+ *
+ * In a month counted per service (`domain/materials-mode.ts`) every visit has
+ * already taken its materials off its own margin, so the purchases of
+ * `materials` and `consumables` are the payment for them, not a second cost —
+ * the same reasoning as payroll above. In a month counted by purchases they
+ * are the cost, as they have been since the material engine went.
+ *
+ * The mode is the month's, not today's: the caller resolves it with
+ * `materialsModeFor`, which is what keeps a month already reported as it was.
+ */
+export function expenseClassOf(
+  category: ExpenseCategory,
+  mode: MaterialsCostingMode = DEFAULT_MATERIALS_MODE,
+): ExpenseClass {
+  if (mode === "per_service" && MATERIAL_CATEGORIES.has(category)) return "cash_only";
+  return CLASS_BY_CATEGORY[category];
+}
+
+export function isOverhead(
+  category: ExpenseCategory,
+  mode: MaterialsCostingMode = DEFAULT_MATERIALS_MODE,
+): boolean {
+  return expenseClassOf(category, mode) === "overhead";
 }
 
 /** Every category, in the order the interface offers them, grouped by class. */
-export function categoriesOfClass(expenseClass: ExpenseClass): readonly ExpenseCategory[] {
-  return expenseCategories.filter((category) => expenseClassOf[category] === expenseClass);
+export function categoriesOfClass(
+  expenseClass: ExpenseClass,
+  mode: MaterialsCostingMode = DEFAULT_MATERIALS_MODE,
+): readonly ExpenseCategory[] {
+  return expenseCategories.filter((category) => expenseClassOf(category, mode) === expenseClass);
+}
+
+export function isMaterialCategory(category: ExpenseCategory): boolean {
+  return MATERIAL_CATEGORIES.has(category);
 }

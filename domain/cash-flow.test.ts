@@ -20,7 +20,7 @@ function spent(
     recurringFrom: null,
     recurringTo: null,
     month: "2026-03",
-    class: expenseClassOf[category],
+    class: expenseClassOf(category),
   };
 }
 
@@ -53,7 +53,7 @@ describe("buildCashFlow", () => {
     // The profit statement holds this row back — the work already reached it
     // through each visit's commission. Here the payment is the event, but it is
     // reported on its own line rather than added to the ledger's total.
-    expect(expenseClassOf.payroll).toBe("cash_only");
+    expect(expenseClassOf("payroll")).toBe("cash_only");
     expect(result.ledgerPayrollMinor).toBe(15_000_00);
     expect(result.spentFromLedgerMinor).toBe(0);
   });

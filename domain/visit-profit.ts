@@ -46,6 +46,13 @@ export type VisitLineSnapshot = Readonly<{
    * services. See `domain/visit-commission.ts`.
    */
   commissionTerms?: CommissionTerms | null;
+  /**
+   * The materials this line used up, as snapshotted when the visit closed.
+   * Null or absent is none: a month counted by purchases, a surcharge, a line
+   * closed before materials came back. Taken in full whatever was discounted
+   * or refunded — the gel was poured either way.
+   */
+  materialsMinor?: number | null;
 }>;
 
 export type VisitProfitInput = Readonly<{
@@ -156,8 +163,11 @@ export function calculateVisitProfit(input: VisitProfitInput): VisitProfit {
   const estimatedDuration = input.actualDurationMinutes === null;
   const durationMinutes = input.actualDurationMinutes ?? input.plannedDurationMinutes;
 
+  const materialsMinor = input.lines.reduce((total, line) => total + (line.materialsMinor ?? 0), 0);
+
   const costing = calculateCosting({
     priceMinor: revenueMinor,
+    materialsMinor,
     durationMinutes,
     currency: input.currency,
     commission: { type: "fixed", amountMinor: commission.totalMinor },

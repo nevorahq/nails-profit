@@ -351,3 +351,42 @@ describe("hybrid commission and the commission base", () => {
     ).toThrow("commission.amountMinor");
   });
 });
+
+describe("costing-v6: materials", () => {
+  const base: CostingInput = {
+    priceMinor: 60_000,
+    durationMinutes: 90,
+    currency: "MDL",
+    commission: { type: "percentage", basisPoints: 4_000 },
+  };
+
+  it("costs a service without materials exactly as costing-v5 did", () => {
+    const without = calculateCosting(base);
+    expect(without.materialsMinor).toBe(0);
+    expect(without.contributionMarginMinor).toBe(36_000);
+    expect(without.explanation.some((step) => step.startsWith("materials:"))).toBe(false);
+  });
+
+  it("takes materials off the margin, and not off the master's base", () => {
+    const result = calculateCosting({ ...base, materialsMinor: 3_500 });
+    expect(result).toMatchObject({
+      commissionMinor: 24_000,
+      materialsMinor: 3_500,
+      contributionMarginMinor: 32_500,
+      formulaVersion: "costing-v6",
+    });
+    expect(result.profitPerHourMinor).toBe(21_667);
+    expect(result.explanation).toContain("materials:3500");
+  });
+
+  it("reports a loss as a loss when materials outweigh what is left", () => {
+    const result = calculateCosting({ ...base, materialsMinor: 40_000 });
+    expect(result.contributionMarginMinor).toBe(-4_000);
+    expect(result.marginBasisPoints).toBe(-667);
+  });
+
+  it("refuses an amount that is not a whole number of minor units", () => {
+    expect(() => calculateCosting({ ...base, materialsMinor: -1 })).toThrow(RangeError);
+    expect(() => calculateCosting({ ...base, materialsMinor: 1.5 })).toThrow(RangeError);
+  });
+});

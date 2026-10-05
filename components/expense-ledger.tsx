@@ -519,7 +519,7 @@ function ExpenseTable({ expenses, locale }: { expenses: ExpenseRow[]; locale: Ap
                     category here, and here is where it is decided whether the
                     amount will reduce the month's profit or only its cash.
                   */}
-                  {expenseClassOf[expense.category] === "cash_only" && (
+                  {expenseClassOf(expense.category) === "cash_only" && (
                     <span className="unit-hint">{t("expenses.classCashOnly")}</span>
                   )}
                 </td>
