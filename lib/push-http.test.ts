@@ -22,6 +22,8 @@ describe("a push endpoint", () => {
     "https://localhost/api/v1/ops/notifications",
     "https://fcm.googleapis.com.attacker.example/send/abc",
     "https://evilpush.apple.com.example/x",
+    "/api/v1/ops/notifications",
+    "not a url",
   ])("refuses %s", (endpoint) => {
     expect(endpointSchema.safeParse(endpoint).success).toBe(false);
   });

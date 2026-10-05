@@ -84,7 +84,9 @@ export function isPushServiceHost(host: string): boolean {
 export const endpointSchema = z
   .url({ protocol: /^https$/ })
   .max(2_048)
-  .refine((value) => isPushServiceHost(new URL(value).hostname), "Not a known push service");
+  // Zod runs this even after `url` refused the value, so it must not throw on
+  // a string that is not a URL at all.
+  .refine((value) => URL.canParse(value) && isPushServiceHost(new URL(value).hostname), "Not a known push service");
 
 /** URL-safe base64, the encoding `PushSubscription.toJSON()` uses for both keys. */
 const base64url = (max: number) => z.string().regex(/^[A-Za-z0-9_-]+=*$/).min(16).max(max);
