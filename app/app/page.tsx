@@ -488,7 +488,13 @@ export default async function AppPage({
     valueMinor: point.profitMinor,
   }));
 
-  const periodLabel = `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`;
+  // A month by its name, the way the card above names it; any other span by
+  // its two days, an open end said in words.
+  const periodLabel = period.month
+    ? new Intl.DateTimeFormat(localeCode, { month: "long", year: "numeric", timeZone: "UTC" }).format(
+        new Date(`${period.month}-01T00:00:00.000Z`),
+      )
+    : `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`;
 
   return (
     <main className="app-shell">

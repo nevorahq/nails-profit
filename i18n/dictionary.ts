@@ -1086,7 +1086,7 @@ const ru = {
   "filters.year": "Год",
   "filters.custom": "Свой период",
 
-  "dashboard.eyebrow": "Studio Ledger",
+  "dashboard.eyebrow": "Период",
   "dashboard.noAccess": "У вашей роли нет доступа к отчётам.",
   "pilot.accessTitle": "Доступ к пилоту ещё не открыт",
   "pilot.accessBody":
@@ -2561,7 +2561,7 @@ const ro: Record<MessageKey, Message> = {
   "filters.year": "Anul",
   "filters.custom": "Altă perioadă",
 
-  "dashboard.eyebrow": "Studio Ledger",
+  "dashboard.eyebrow": "Perioada",
   "dashboard.noAccess": "Rolul dvs. nu are acces la rapoarte.",
   "pilot.accessTitle": "Accesul la pilot nu este încă deschis",
   "pilot.accessBody":
@@ -4021,7 +4021,7 @@ const en: Record<MessageKey, Message> = {
   "filters.year": "Year",
   "filters.custom": "Custom",
 
-  "dashboard.eyebrow": "Studio Ledger",
+  "dashboard.eyebrow": "Period",
   "dashboard.noAccess": "Your role has no access to reports.",
   "pilot.accessTitle": "Pilot access is not open yet",
   "pilot.accessBody":
