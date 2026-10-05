@@ -1249,6 +1249,18 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calendar-facts dt { color: var(--muted); font-size: 12rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .calendar-facts dd { margin: 0; font-size: 15rem; }
 
+/* «Следующая запись» under a closed appointment: three intervals, then times. */
+.next-visit { display: grid; gap: 10rem; margin-top: 14rem; padding-top: 14rem; border-top: 1rem solid var(--line); }
+.next-visit h3 { margin: 0; font-size: 15rem; }
+.next-visit p { margin: 0; }
+.next-visit-intervals { display: flex; flex-wrap: wrap; gap: 8rem; }
+.next-visit-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(68rem, 1fr)); gap: 6rem; }
+.next-visit-intervals button, .next-visit-slots button { min-height: 44rem; padding-inline: 12rem; }
+.next-visit-slots button { padding-inline: 4rem; justify-content: center; text-align: center; }
+.next-visit-intervals button[aria-pressed="true"] { border-color: var(--accent); background: var(--sage-300); color: var(--forest-950); }
+.next-visit-day { display: grid; gap: 6rem; }
+.next-visit-day > p { font-weight: 700; font-size: 14rem; }
+
 /* --- Phase 7.3: public booking --- */
 
 .public-booking-shell { min-height: 100vh; padding: 22rem clamp(18rem, 5vw, 72rem) 72rem; }

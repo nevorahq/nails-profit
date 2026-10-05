@@ -15,6 +15,7 @@ import {
 } from "@/components/calendar-free-time";
 import { ServiceLinesField, toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
+import { NextVisit } from "@/components/next-visit";
 import { PaidField, TipField, tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { ToolIcon } from "@/components/icons";
@@ -1285,6 +1286,15 @@ export function CalendarBoard({
                           {t("calendar.openCard")}
                         </Link>
                       </p>
+
+                      {/*
+                        Asked the moment the visit is closed, on the card that
+                        has just turned grey: the client is still at the desk,
+                        and the next visit is one question away.
+                      */}
+                      {canWrite && booking.status === "completed" && booking.clientId && (
+                        <NextVisit bookingId={booking.id} locale={locale} localeTag={localeTag} />
+                      )}
 
                       {canWrite && LIVE_STATUSES.has(booking.status) && (
                         <div className="calendar-actions">

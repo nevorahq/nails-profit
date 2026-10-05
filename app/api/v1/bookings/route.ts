@@ -51,6 +51,12 @@ const createBookingSchema = z
     client_id: z.uuid().nullable().optional(),
     workplace_id: z.uuid().nullable().optional(),
     starts_at: z.iso.datetime(),
+    /**
+     * «Следующая запись», taken from a closed appointment
+     * (`GET /api/v1/bookings/[id]/next-slots`). The booking is the same booking
+     * in every other respect; the source is what the return rate counts.
+     */
+    source: z.enum(["staff", "rebooking"]).default("staff"),
   })
   .superRefine(refineServiceSelection);
 
@@ -220,7 +226,7 @@ async function handlePost(request: Request) {
         workplaceId: parsed.data.workplace_id ?? null,
         clientId: parsed.data.client_id ?? null,
         interval,
-        source: "staff",
+        source: parsed.data.source,
         // Staff bookings are agreed with the client on the spot, so they are
         // confirmed whatever the public page's confirmation mode is.
         confirmationMode: "instant",
@@ -258,7 +264,7 @@ async function handlePost(request: Request) {
           specialist_id: parsed.data.specialist_id,
           starts_at: interval.start,
           ends_at: interval.end,
-          source: "staff",
+          source: parsed.data.source,
         },
         requestId: id,
       });

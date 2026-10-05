@@ -1038,6 +1038,13 @@ const cases: readonly Case[] = [
     request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/preview` }),
   },
   {
+    route: "/api/v1/bookings/[id]/next-slots",
+    method: "GET",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write: times to book the same sitting again, which an Analyst cannot take",
+    request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/next-slots?weeks=3` }),
+  },
+  {
     route: "/api/v1/bookings/[id]",
     method: "PATCH",
     allowed: ["owner", "manager", "master"],
