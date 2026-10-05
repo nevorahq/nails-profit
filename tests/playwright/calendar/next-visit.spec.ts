@@ -92,6 +92,16 @@ test.describe("the next appointment, from a closed one", () => {
     await expect(booked).toContainText("Confirmed");
     await page.screenshot({ path: testInfo.outputPath("next-visit-booked-375.png"), fullPage: true });
 
+    // And the report counts it: one visit from the calendar, booked again. The
+    // period is named rather than left to the month, which a run just after
+    // midnight on the 1st would otherwise split.
+    await page.goto(`/app?from=${isoDate(startsAt)}&to=${isoDate(daysFromToday(0))}`);
+    const rebook = page.locator(".insight-panel", { hasText: "Repeat bookings" });
+    await expect(rebook).toContainText("Booked their next visit");
+    await expect(rebook).toContainText("100%");
+    await expect(rebook).toContainText("1 of 1 visits from the calendar");
+    await page.screenshot({ path: testInfo.outputPath("rebook-rate-375.png"), fullPage: true });
+
     expect(errors).toEqual([]);
     await context.close();
   });
