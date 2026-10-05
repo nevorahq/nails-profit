@@ -3542,3 +3542,38 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .money-question .inline-form { margin-bottom: 0; }
 .money-question .choice-group .inline-field { margin: 0 0 8rem 30rem; max-width: 220rem; }
 .payroll-edit-hint { display: block; max-width: 260rem; margin-top: 6rem; font-size: 12rem; line-height: 1.4; white-space: normal; }
+
+/*
+ * «Уведомления на этом устройстве», in «Настройки» and at the foot of the bell.
+ * The state beside the title in words, not only in colour (section 7.8).
+ */
+.push-switch { display: grid; gap: 10rem; }
+.push-switch p { margin: 0; }
+.push-switch-state { display: flex; align-items: baseline; gap: 8rem; flex-wrap: wrap; }
+.push-switch-on,
+.push-switch-off { font-size: 13rem; font-weight: 700; padding: 2rem 8rem; border-radius: 999rem; }
+.push-switch-on { background: var(--leaf-100); color: var(--forest-950); border: 1rem solid var(--sage-600); }
+.push-switch-off { background: var(--surface); color: var(--muted); border: 1rem solid var(--line); }
+.push-switch-compact {
+  margin-top: 8rem;
+  padding: 10rem 12rem 4rem;
+  border-top: 1rem solid var(--line);
+  font-size: 13rem;
+}
+.push-switch-compact .muted { font-size: 12rem; line-height: 1.5; }
+.push-switch-compact .primary-button,
+.push-switch-compact .secondary-button { min-height: 36rem; padding: 6rem 14rem; font-size: 14rem; }
+.push-switch-compact .form-error { padding: 8rem; font-size: 12rem; }
+
+/* The one-time nudge at the top of the bell, after the first request. */
+.notifications-push-hint {
+  display: grid;
+  gap: 8rem;
+  margin: 0 0 6rem;
+  padding: 10rem 12rem;
+  border-radius: 4rem;
+  background: var(--warning-soft);
+  border: 1rem solid var(--warning-border);
+  font-size: 13rem;
+}
+.notifications-push-hint p { margin: 0; color: var(--ink); font-weight: 650; }

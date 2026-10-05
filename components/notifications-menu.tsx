@@ -7,6 +7,7 @@ import { ChromeIcon } from "@/components/icons";
 import type { AppLocale } from "@/i18n/messages";
 import { type MessageKey } from "@/i18n/t";
 import { useTranslator } from "@/components/lexicon-provider";
+import { PushDeviceSwitch } from "@/components/push-device-switch";
 import { localeTag } from "@/i18n/translate";
 import { settledReads, withLocalReads } from "@/lib/notice-reads";
 import { playNotificationChime, unlockNotificationChime } from "@/lib/notification-chime";
@@ -343,6 +344,10 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
               </ul>
             </>
           )}
+
+          {/* This device's switch, where somebody who just missed a request
+              is looking — the same control as in «Настройки». */}
+          <PushDeviceSwitch locale={locale} compact />
         </div>
       )}
     </div>
