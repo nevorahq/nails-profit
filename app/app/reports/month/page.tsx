@@ -11,7 +11,9 @@ import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatHours, formatMoneyMinor } from "@/lib/format";
-import { isMonth, loadPeriodPL, monthBounds, monthOf } from "@/lib/period";
+import { ReportTabs } from "@/components/report-tabs";
+import { currentMonthIn, monthRange } from "@/domain/report-period";
+import { isMonth, loadPeriodPL, monthBounds } from "@/lib/period";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -31,7 +33,7 @@ export default async function MonthReportPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
+  const { membership, locale, currency, businessType, timezone } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "expenses", "read")) {
@@ -45,7 +47,9 @@ export default async function MonthReportPage({
   const filters = await searchParams;
   // An unusable month is no month: the same rule the ledger's own date filter
   // follows, so a hand-edited query string cannot decide what is queried.
-  const month = isMonth(filters.month) ? filters.month : monthOf(new Date());
+  // The month the studio is in by its own clock, the same one `/app` opens on.
+  const thisMonth = currentMonthIn(new Date(), timezone);
+  const month = isMonth(filters.month) ? filters.month : thisMonth;
 
   /*
    * The report, and the one fact that decides whether it can be believed.
@@ -135,6 +139,13 @@ export default async function MonthReportPage({
 
   return (
     <main className="app-shell">
+      <ReportTabs
+        locale={locale}
+        role={membership.role}
+        active="month"
+        // The current month is the other tabs' default, so it is left unsaid.
+        state={month === thisMonth ? { month } : { ...monthRange(month), month }}
+      />
       <span className="eyebrow report-period">
         {t("pl.eyebrow")} · {monthLabel}
       </span>
@@ -143,7 +154,7 @@ export default async function MonthReportPage({
         locale={locale}
         localeTag={localeCode}
         month={month}
-        thisMonth={monthOf(new Date())}
+        thisMonth={thisMonth}
       />
 
       {soloWithoutPrincipal && (

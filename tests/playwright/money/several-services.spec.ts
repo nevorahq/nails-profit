@@ -77,7 +77,8 @@ for (const width of [null, 375] as const) {
       await noSidewaysScroll(page);
 
       // The ranking has a row for each service, and its total counts the visit once.
-      await page.goto("/app");
+      // Every column lives on «Услуги»; «Итог» shows the short form.
+      await page.goto("/app/reports/services");
       const ranking = page.locator("table.data-table").filter({ has: page.locator("tfoot") }).last();
       await expect(ranking.locator("tbody tr")).toHaveCount(2);
       await expect(ranking.locator("tfoot td").first()).toHaveText("1");

@@ -6,11 +6,13 @@ import { redirect } from "next/navigation";
 import { CloseDayPanel } from "@/components/close-day-panel";
 import { FirstNumbers } from "@/components/first-numbers";
 import { FirstRun } from "@/components/first-run";
+import { HeadlineCard } from "@/components/headline-card";
 import { MetricIcon } from "@/components/icons";
 import { MonthSetupPanel, OnboardingPanel } from "@/components/onboarding-panel";
 import { PeriodFilter } from "@/components/period-filter";
-import { ProfitBars } from "@/components/profit-bars";
 import { ProfitTrendChart } from "@/components/profit-trend-chart";
+import { ReportTabs } from "@/components/report-tabs";
+import { ServiceRankingCompact } from "@/components/service-ranking-compact";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
@@ -19,16 +21,20 @@ import { buildProfitTrend } from "@/domain/dashboard-metrics";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { isPilotAccessEnforced, isPublicBookingEnabled } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
-import { businessLabel, type BusinessType } from "@/i18n/business-labels";
+import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
+import { queryFor } from "@/lib/filter-bar";
 import { auth } from "@/lib/auth";
-import { formatBasisPoints, formatMoneyMinor, formatPercentDelta } from "@/lib/format";
+import { formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
+import { loadHeadline } from "@/lib/headline";
 import { isCalendarDay, sumExpensesMinor } from "@/lib/expenses";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
 import { monthOf } from "@/lib/period";
+import { presetRanges, previousRangeOf, resolveReportPeriod, todayIn } from "@/domain/report-period";
+import { formatLocalDate } from "@/domain/timezone";
 import { loadStartScreen } from "@/lib/first-numbers";
 import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
@@ -263,28 +269,39 @@ export default async function AppPage({
    * hand, and «вчера» reached `new Date` as an Invalid Date while the very same
    * string was quietly ignored by the expense ledger — one address, two
    * behaviours. Ignored here too, so an unusable filter simply is not one.
+   *
+   * Nothing usable means the month the studio is in, by its own clock — see
+   * `domain/report-period.ts` for why only the choice of month is local.
    */
-  const from = isCalendarDay(filters.from) ? filters.from : undefined;
-  const to = isCalendarDay(filters.to) ? filters.to : undefined;
+  const today = todayIn(new Date(), membership.organization.timezone);
+  const period = resolveReportPeriod(
+    {
+      from: isCalendarDay(filters.from) ? filters.from : undefined,
+      to: isCalendarDay(filters.to) ? filters.to : undefined,
+    },
+    today,
+  );
+  const { from, to } = period;
   const organizationId = membership.organization.id;
   const currency = membership.organization.currency;
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
 
-  // The period cards compare against the equal-length window immediately
-  // before the selected one — only defined when a specific period was picked;
-  // "all time" has no prior period to be a delta against.
-  const previousRange =
-    from && to
-      ? (() => {
-          const currentFrom = new Date(`${from}T00:00:00.000Z`);
-          const currentTo = new Date(`${to}T23:59:59.999Z`);
-          const spanMs = currentTo.getTime() - currentFrom.getTime() + 1;
-          const previousTo = new Date(currentFrom.getTime() - 1);
-          const previousFrom = new Date(previousTo.getTime() - spanMs + 1);
-          return { from: previousFrom, to: previousTo };
-        })()
-      : null;
+  /*
+   * The card follows the filter when the filter is a month, and stays on the
+   * current month otherwise: a year or a span of days has no rent of its own
+   * to subtract, and half a month of rent is a number nobody agreed on.
+   */
+  const currentMonth = formatLocalDate(today).slice(0, 7);
+  const headlineMonth = period.month ?? currentMonth;
+
+  const previousDays = previousRangeOf(period);
+  const previousRange = previousDays
+    ? {
+        from: new Date(`${previousDays.from}T00:00:00.000Z`),
+        to: new Date(`${previousDays.to}T23:59:59.999Z`),
+      }
+    : null;
 
   /*
    * The ledger is the whole organization's, and the report can be narrowed to
@@ -299,12 +316,14 @@ export default async function AppPage({
     // Section 6.1: a Master sees "только собственные" — resolved from the
     // specialist row carrying their user id, not from the query string.
     let effectiveSpecialist = filters.specialist ?? null;
+    let ownSpecialistId: string | null = null;
     if (scopeFor(membership.role, "dashboard") === "own") {
       const [own] = await tx
         .select({ id: specialists.id })
         .from(specialists)
         .where(eq(specialists.userId, session.user.id))
         .limit(1);
+      ownSpecialistId = own?.id ?? null;
       effectiveSpecialist = own?.id ?? "00000000-0000-0000-0000-000000000000";
     }
 
@@ -388,8 +407,20 @@ export default async function AppPage({
         ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency })
         : null;
 
+    /*
+     * The card the page opens with. A month's figure, never the filter's: for
+     * the owner it is the monthly report's bottom line, read by the very call
+     * that report makes, so the two cannot disagree.
+     */
+    const headline = await loadHeadline(
+      tx,
+      { role: membership.role, month: headlineMonth, currency, organizationId, ownSpecialistId },
+      locale,
+    );
+
     return {
       ...dashboard,
+      headline,
       previousMetrics,
       onboarding,
       monthSetup,
@@ -424,9 +455,8 @@ export default async function AppPage({
    * meant the contribution margin: one screen, one word, two answers.
    *
    * The real figure needs a whole month — rent does not divide into the eleven
-   * days someone picked in the filter — so it lives in `/app/reports/month`,
-   * where recurring costs resolve and the two halves of the ledger are told
-   * apart. The link below is the whole of the fix on this page.
+   * days someone picked in the filter — so it is the card at the top, read
+   * from the monthly report itself, and not a third card in this row.
    *
    * The card is still null whenever the ledger was not read: for a role that
    * may not see it, or for a report narrowed to one master, where the revenue
@@ -443,29 +473,6 @@ export default async function AppPage({
       ? formatPercentDelta(expensesMinor, previousExpensesMinor, localeCode)
       : null;
 
-  // «Прибыль по услугам»: the top of the same ranking the full table below
-  // shows, with everything past it folded into one «Прочее» bar so five bars
-  // stay readable regardless of how many services the catalogue has.
-  const TOP_SERVICES_SHOWN = 4;
-  const topServices = metrics.ranking.slice(0, TOP_SERVICES_SHOWN);
-  const otherServices = metrics.ranking.slice(TOP_SERVICES_SHOWN);
-  const profitByServiceEntries = [
-    ...topServices.map((entry) => ({
-      key: entry.serviceId ?? entry.serviceName,
-      label: entry.serviceName,
-      valueMinor: entry.contributionMarginMinor,
-    })),
-    ...(otherServices.length > 0
-      ? [
-          {
-            key: "__other__",
-            label: t("dashboard.otherServices"),
-            valueMinor: otherServices.reduce((total, entry) => total + entry.contributionMarginMinor, 0),
-          },
-        ]
-      : []),
-  ];
-
   // «Диаграмма прибыли»: bucketed by `buildProfitTrend` (day or month, decided
   // from the actual spread of the data), labelled here since that is where
   // the viewer's locale lives.
@@ -481,32 +488,48 @@ export default async function AppPage({
     valueMinor: point.profitMinor,
   }));
 
-  const rankingTotals = {
-    // The visits the ranking was built from, once each: a visit of a manicure
-    // and a pedicure is a row in both, and summing the rows would count it twice.
-    visits: metrics.costedVisits,
-    revenueMinor: metrics.ranking.reduce((s, e) => s + e.revenueMinor, 0),
-    contributionMarginMinor: metrics.ranking.reduce((s, e) => s + e.contributionMarginMinor, 0),
-    commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),
-  };
-  const period =
-    from || to
-      ? `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`
-      : t("filters.allTime");
+  // A month by its name, the way the card above names it; any other span by
+  // its two days, an open end said in words.
+  const periodLabel = period.month
+    ? new Intl.DateTimeFormat(localeCode, { month: "long", year: "numeric", timeZone: "UTC" }).format(
+        new Date(`${period.month}-01T00:00:00.000Z`),
+      )
+    : `${from ?? t("filters.periodStart")} — ${to ?? t("filters.periodToday")}`;
 
   return (
     <main className="app-shell">
+      <ReportTabs
+        locale={locale}
+        role={membership.role}
+        active="summary"
+        state={{ from: filters.from, to: filters.to, specialist: filters.specialist, month: period.month }}
+      />
+      <HeadlineCard
+        headline={data.headline}
+        locale={locale}
+        currency={currency}
+        month={headlineMonth}
+        isCurrentMonth={headlineMonth === currentMonth}
+        detailsHref={
+          can(membership.role, "expenses", "read")
+            ? headlineMonth === currentMonth
+              ? "/app/reports/month"
+              : `/app/reports/month?month=${headlineMonth}`
+            : null
+        }
+      />
       {closeDay}
       <span className="eyebrow report-period">
-        {t("dashboard.eyebrow")} · {period}
+        {t("dashboard.eyebrow")} · {periodLabel}
       </span>
 
       <PeriodFilter
         locale={locale}
-        from={filters.from}
-        to={filters.to}
+        from={from}
+        to={to}
         specialistId={filters.specialist}
         people={data.people}
+        presets={{ ranges: presetRanges(today), active: period.preset }}
         /*
           A picker over one person narrows nothing. The capability is still what
           decides whether the report *may* be narrowed — a master may not — and
@@ -581,19 +604,6 @@ export default async function AppPage({
             )}
           </div>
           {/*
-            Where the profit went, said plainly. A figure that quietly
-            disappears from a screen someone reads every morning is worse
-            than the wrong figure it replaced.
-          */}
-          {expensesMinor !== null && (
-            <p className="muted">
-              {t("dashboard.profitMoved")}{" "}
-              <Link className="text-link" href="/app/reports/month">
-                {t("nav.monthReport")}
-              </Link>
-            </p>
-          )}
-          {/*
             Said out loud rather than folded in. The currency of the
             organization can be changed and nothing already recorded is
             converted, so a ledger can hold both — and a card that quietly
@@ -608,79 +618,34 @@ export default async function AppPage({
         </section>
       )}
 
-      {!isMaster && profitByServiceEntries.length > 0 && (
-        <div className="report-charts-grid">
-          <section className="panel">
-            <h2>{t("dashboard.profitByService")}</h2>
-            <ProfitBars entries={profitByServiceEntries} formatMoney={money} />
-          </section>
-          <section className="panel">
-            <h2>{t("dashboard.profitTrend")}</h2>
-            <ProfitTrendChart
-              points={profitTrendPoints}
-              formatMoney={money}
-              emptyLabel={t("dashboard.profitTrendEmpty")}
-              title={t("dashboard.profitTrend")}
-            />
-          </section>
-        </div>
+      {metrics.ranking.length > 0 && (
+        <ServiceRankingCompact
+          ranking={metrics.ranking}
+          locale={locale}
+          currency={currency}
+          businessType={businessType}
+          isMaster={isMaster}
+          allHref={queryFor("/app/reports/services", {
+            from: filters.from,
+            to: filters.to,
+            specialist: filters.specialist,
+          })}
+        />
       )}
 
-      <section className="panel">
-        <h2>{t("dashboard.rankingTitle")}</h2>
-        <p className="muted">{t("dashboard.rankingHint")}</p>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t("dashboard.service")}</th>
-              <th>{t("dashboard.visitCount")}</th>
-              {!isMaster && <th>{t("dashboard.revenue")}</th>}
-              {!isMaster && <th>{t(businessLabel.masterEarnings[businessType])}</th>}
-              <th>{isMaster ? t("dashboard.commission") : t("dashboard.keeps")}</th>
-              {!isMaster && <th>{t("dashboard.margin")}</th>}
-              <th>{t("dashboard.hourly")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.ranking.map((entry) => (
-              <tr key={entry.serviceId ?? entry.serviceName}>
-                <td>{entry.serviceName}</td>
-                <td>{entry.visits}</td>
-                {!isMaster && <td>{money(entry.revenueMinor)}</td>}
-                {!isMaster && <td>{money(entry.commissionMinor)}</td>}
-                {isMaster ? (
-                  <td>{money(entry.commissionMinor)}</td>
-                ) : (
-                  <td className={entry.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                    {money(entry.contributionMarginMinor)}
-                  </td>
-                )}
-                {!isMaster && <td>{formatBasisPoints(entry.marginBasisPoints, localeTag(locale))}</td>}
-                <td className={(entry.profitPerHourMinor ?? 0) < 0 ? "metric-negative" : ""}>
-                  {entry.profitPerHourMinor === null ? "—" : money(entry.profitPerHourMinor)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th>{t("visits.total")}</th>
-              <td>{rankingTotals.visits}</td>
-              {!isMaster && <td>{money(rankingTotals.revenueMinor)}</td>}
-              {!isMaster && <td>{money(rankingTotals.commissionMinor)}</td>}
-              {isMaster ? (
-                <td>{money(rankingTotals.commissionMinor)}</td>
-              ) : (
-                <td className={rankingTotals.contributionMarginMinor < 0 ? "metric-negative" : ""}>
-                  {money(rankingTotals.contributionMarginMinor)}
-                </td>
-              )}
-              {!isMaster && <td />}
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </section>
+      {/* «Прибыль по услугам» as bars lives on «Услуги» now, beside the table it
+          draws; the trend over time is the one chart that answers «Итог». */}
+      {!isMaster && metrics.ranking.length > 0 && (
+        <section className="panel">
+          <h2>{t("dashboard.profitTrend")}</h2>
+          <ProfitTrendChart
+            points={profitTrendPoints}
+            formatMoney={money}
+            emptyLabel={t("dashboard.profitTrendEmpty")}
+            title={t("dashboard.profitTrend")}
+          />
+        </section>
+      )}
     </main>
   );
 }

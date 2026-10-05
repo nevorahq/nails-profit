@@ -166,6 +166,10 @@ export async function seedStudio(
     // English, so the assertions read the same strings the dictionary ships
     // rather than a translation that may be revised.
     locale: "en",
+    // The fixture's one zone, so the month the report opens on is the month
+    // the visits closed «now» are counted in, on the last evening of a month
+    // as on any other.
+    timezone: TIMEZONE,
   });
 
   const slug = `pw-${suffix}`.slice(0, 40);

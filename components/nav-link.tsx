@@ -9,10 +9,10 @@ import { usePathname } from "next/navigation";
  * A prefix match, so `/app/calendar/{id}` keeps Календарь lit while an
  * appointment card is open — the user has not left the section by opening one
  * of its rows. `/app` is the exception: it is a prefix of every other route, so
- * it only matches itself.
+ * it matches only itself and its own tabs under `/app/reports`.
  */
 export function isActiveSection(pathname: string, href: string): boolean {
-  if (href === "/app") return pathname === "/app";
+  if (href === "/app") return pathname === "/app" || pathname.startsWith("/app/reports/");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

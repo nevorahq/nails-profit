@@ -31,7 +31,9 @@ const OWNER_PAGES = [
   ["/app/visits", "Visits"],
   ["/app/visits/new", "Visits"],
   ["/app/expenses", "Expenses"],
-  ["/app/reports/month", "Monthly report"],
+  // The report's tabs, under the report's name.
+  ["/app/reports/services", "Report"],
+  ["/app/reports/month", "Report"],
   ["/app/booking", "Online booking"],
   ["/app/import", "Import"],
   ["/app/settings", "Settings"],
@@ -91,6 +93,7 @@ test.describe("authenticated smoke", () => {
 
     for (const [path, title] of [
       ["/app", "Report"],
+      ["/app/reports/services", "Report"],
       ["/app/calendar", "Calendar"],
       ["/app/services", "Services"],
       ["/app/booking", "Online booking"],

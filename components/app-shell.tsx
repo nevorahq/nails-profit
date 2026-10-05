@@ -2,11 +2,12 @@ import Link from "next/link";
 
 import { AccountMenu } from "@/components/account-menu";
 import { BrandMark, NavIcon } from "@/components/icons";
-import { bottomNavFor, navFor, navGroups, type NavItem } from "@/components/nav-items";
+import { bottomNavFor, navFor, navGroups, quickActionsFor, type NavItem } from "@/components/nav-items";
 import type { BusinessType } from "@/i18n/business-labels";
 import { NavLink } from "@/components/nav-link";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { PreviewBanner, type PreviewBannerContext } from "@/components/preview-banner";
+import { QuickActions } from "@/components/quick-actions";
 import { TopbarTitle } from "@/components/topbar-title";
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
@@ -40,6 +41,7 @@ export function AppShell({
   userEmail,
   preview = null,
   stalePreview = false,
+  bookingOff = false,
 }: {
   children: React.ReactNode;
   locale: AppLocale;
@@ -63,10 +65,16 @@ export function AppShell({
    */
   preview?: PreviewBannerContext | null;
   stalePreview?: boolean;
+  /** The booking module is switched off, so there is no form to book from. */
+  bookingOff?: boolean;
 }) {
   const t = getTranslator(locale);
   const items = navFor(role, businessType);
   const bottom = bottomNavFor(role, businessType);
+  const quickActions = quickActionsFor(role, { bookingOff }).map((action) => ({
+    href: action.href,
+    label: t(action.key),
+  }));
   const titles = [
     ...items.map((item) => ({ href: item.href, title: t(item.key) })),
     { href: "/app/more", title: t("nav.more") },
@@ -168,6 +176,8 @@ export function AppShell({
             </li>
           </ul>
         </nav>
+
+        <QuickActions actions={quickActions} openLabel={t("quick.open")} closeLabel={t("quick.close")} />
       </div>
     </div>
   );

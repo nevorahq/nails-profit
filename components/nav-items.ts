@@ -1,4 +1,4 @@
-import type { MemberRole } from "@/domain/rbac";
+import { can, type MemberRole } from "@/domain/rbac";
 import type { BusinessType } from "@/i18n/business-labels";
 import type { MessageKey } from "@/i18n/t";
 
@@ -28,7 +28,6 @@ export type NavItem = Readonly<{
 
 export type IconName =
   | "report"
-  | "monthReport"
   | "calendar"
   | "booking"
   | "visits"
@@ -41,8 +40,13 @@ export type IconName =
   | "more";
 
 export const navItems: readonly NavItem[] = [
+  /*
+   * One «Отчёт», with «Итог», «Услуги» and «Месяц подробно» as its tabs
+   * (`components/report-tabs.tsx`). The month used to be a section of its own
+   * beside it, which put the same question — how much is left — behind two
+   * doors with two different answers depending on the day of the month.
+   */
   { href: "/app", key: "nav.dashboard", group: "primary", icon: "report" },
-  { href: "/app/reports/month", key: "nav.monthReport", group: "primary", icon: "monthReport" },
 
   { href: "/app/calendar", key: "nav.calendar", group: "work", icon: "calendar" },
   { href: "/app/booking", key: "nav.booking", group: "work", icon: "booking" },
@@ -96,9 +100,10 @@ const MASTER_HIDDEN: ReadonlySet<string> = new Set([
  * and the `expenses` capability grants it to the owner alone, reading included.
  * Elsewhere this file leaves a link in place and lets the page refuse, because
  * those pages still show the role *something*. This one would show a refusal
- * and nothing else, so the link goes too.
+ * and nothing else, so the link goes too. «Месяц подробно» follows the same
+ * rule one level down, as a tab the report draws only for the owner.
  */
-const OWNER_ONLY: ReadonlySet<string> = new Set(["/app/expenses", "/app/reports/month"]);
+const OWNER_ONLY: ReadonlySet<string> = new Set(["/app/expenses"]);
 
 /**
  * The one section whose group depends on the shape of the business.
@@ -151,19 +156,57 @@ const BOTTOM_PREFERENCE: readonly string[] = [
   "/app/clients",
 ];
 
+/**
+ * The owner's bar: three sections and «Ещё», no backfill.
+ *
+ * The owner's fourth slot went to «+» (`quickActionsFor`): what they reached
+ * «Визиты» for on a phone was almost always to add one, and the list itself is
+ * one tap away in «Ещё». Every other role keeps the bar it had.
+ */
+const OWNER_BOTTOM: readonly string[] = ["/app", "/app/calendar", "/app/clients"];
+
 export function bottomNavFor(
   role?: MemberRole,
   businessType: BusinessType = "studio",
 ): readonly NavItem[] {
   const allowed = navFor(role, businessType);
-  const chosen = BOTTOM_PREFERENCE.map((href) => allowed.find((item) => item.href === href)).filter(
-    (item): item is NavItem => item !== undefined,
-  );
+  const pick = (hrefs: readonly string[]) =>
+    hrefs
+      .map((href) => allowed.find((item) => item.href === href))
+      .filter((item): item is NavItem => item !== undefined);
 
+  if (role === "owner") return pick(OWNER_BOTTOM);
+
+  const chosen = pick(BOTTOM_PREFERENCE);
   // Backfill keeps four direct destinations if future role rules hide one of
   // the preferred sections.
   const backfill = allowed.filter((item) => !chosen.includes(item) && item.group === "work");
   return [...chosen, ...backfill].slice(0, 4);
+}
+
+export type QuickAction = Readonly<{ href: string; key: MessageKey }>;
+
+/**
+ * The phone's «+», for the owner: the three things they start from anywhere.
+ *
+ * Each one is offered only when the role may do it — asked of the capability
+ * matrix, as the page behind it asks again on arrival — and booking only while
+ * the module takes bookings: with it switched off the calendar is read-only
+ * and its form is not there to open. The hrefs are the anchors those pages
+ * already open their forms on.
+ */
+export function quickActionsFor(
+  role: MemberRole | undefined,
+  options: Readonly<{ bookingOff: boolean }>,
+): readonly QuickAction[] {
+  if (role !== "owner") return [];
+  return [
+    ...(can(role, "bookings", "write") && !options.bookingOff
+      ? [{ href: "/app/calendar#new-booking", key: "quick.booking" as const }]
+      : []),
+    ...(can(role, "bookings", "write") ? [{ href: "/app/visits/new", key: "quick.visit" as const }] : []),
+    ...(can(role, "expenses", "write") ? [{ href: "/app/expenses#add-expense", key: "quick.expense" as const }] : []),
+  ];
 }
 
 /** Everything the bottom bar could not fit — the contents of the «Ещё» screen. */

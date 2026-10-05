@@ -20,15 +20,6 @@ const PATHS: Readonly<Record<IconName, React.ReactNode>> = {
       <path d="M7 15l4-5 3 3 5-6" />
     </>
   ),
-  // Отчёт за месяц — a sheet with its bottom line ruled off, the way the P&L
-  // draws one under the figure it totals.
-  monthReport: (
-    <>
-      <rect x="4" y="3" width="16" height="18" rx="2" />
-      <path d="M8 8h8M8 12h5" />
-      <path d="M8 17h8" />
-    </>
-  ),
   // Календарь — a month with its days marked.
   calendar: (
     <>
