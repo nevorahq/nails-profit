@@ -6,7 +6,8 @@ import { FormEvent, useState } from "react";
 import { materialsCostingModes, type MaterialsCostingMode } from "@/domain/materials-mode";
 import type { AppLocale } from "@/i18n/messages";
 import { getErrorMessage } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 
 /**
@@ -32,7 +33,8 @@ export function MaterialsModeSetting({
   canEdit: boolean;
   locale: AppLocale;
 }>) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function MaterialsModeSetting({
     if (!response?.ok) {
       const payload = await response?.json().catch(() => null);
       const code = payload?.error?.code;
-      setError(code ? getErrorMessage(code, t("common.saveFailed"), locale) : t("common.saveFailed"));
+      setError(code ? getErrorMessage(code, t("common.saveFailed"), locale, register) : t("common.saveFailed"));
       return;
     }
     setSaved(true);

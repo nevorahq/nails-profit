@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 
@@ -68,7 +68,7 @@ export function LaborCostManager({
   suggestedOwnerWageMinor: number;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
 

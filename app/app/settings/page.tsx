@@ -31,6 +31,7 @@ import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { monthBounds, monthOf } from "@/lib/period";
 import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
+import { registerOf } from "@/i18n/lexicon";
 
 /**
  * Temporarily keep the acquiring and visit-tax controls off the settings page
@@ -54,6 +55,7 @@ export default async function SettingsPage({
   // `?edit=name` is how «Изменить название студии» on «Онлайн-запись» asks for
   // the studio's panel to arrive unfolded at its name.
   const { edit } = await searchParams;
+  const workspace = await requireWorkspace();
   const {
     membership,
     organizationName,
@@ -63,7 +65,8 @@ export default async function SettingsPage({
     businessType,
     staffNotices,
     detailedAnalytics,
-  } = await requireWorkspace();
+  } = workspace;
+  const register = registerOf(workspace);
 
   const canReadTeam = can(membership.role, "user_management", "read");
   const canReadOrg = can(membership.role, "organization_settings", "read");
@@ -316,6 +319,7 @@ export default async function SettingsPage({
       )}
       {canReadOrg && (
         <BillingSettings
+          register={register}
           subscription={subscription}
           checkout={checkout}
           organizationId={membership.organizationId}

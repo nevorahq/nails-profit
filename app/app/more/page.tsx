@@ -2,6 +2,7 @@ import { NavIcon } from "@/components/icons";
 import { moreNavFor, navGroups } from "@/components/nav-items";
 import { NavLink } from "@/components/nav-link";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { requireWorkspace } from "@/lib/workspace";
 
 /**
@@ -20,8 +21,10 @@ import { requireWorkspace } from "@/lib/workspace";
  * screen the sidebar already shows everything this page lists.
  */
 export default async function MorePage() {
-  const { membership, locale, businessType } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, businessType } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
   const items = moreNavFor(membership.role, businessType);
 
   return (

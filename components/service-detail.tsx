@@ -6,7 +6,8 @@ import { FormEvent, useRef, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { roundRatio } from "@/domain/money";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
@@ -116,7 +117,7 @@ export function ServiceDetail({
   businessType: BusinessType;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
 
   /** What an option does to this service's price and time, beside its name. */
   function deltaLabel(addOn: ServiceAddOn) {
@@ -160,6 +161,7 @@ export function ServiceDetail({
    * server, where practical capacity lives.
    */
   const complete = service.costing.status === "complete" ? service.costing : null;
+  const chargesForWork = !(businessType === "solo" && complete?.commission_minor === 0);
   const fixedShareMinor =
     complete && fullyLoaded && withFixedCosts ? fullyLoaded.allocated_fixed_cost_minor : null;
   const keptMinor = complete
@@ -543,7 +545,14 @@ export function ServiceDetail({
             )}
             <div className="metric-grid">
               <Metric label={t("services.servicePrice")} value={formatMoneyMinor(service.costing.price_minor, service.costing.currency)} />
-              <Metric label={t(businessLabel.serviceCommission[businessType])} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
+              {/*
+                Somebody working alone at a rate of nothing (the default since
+                she registers at 0%) would read «− 0» for her own hands; the
+                line comes back the moment the rate is anything else.
+              */}
+              {chargesForWork && (
+                <Metric label={t(businessLabel.serviceCommission[businessType])} value={`− ${formatMoneyMinor(service.costing.commission_minor, service.costing.currency)}`} />
+              )}
               {(service.costing.materials_minor ?? 0) > 0 && (
                 <Metric
                   label={t("services.materialsLine")}
@@ -615,8 +624,13 @@ export function ServiceDetail({
             <details className="breakdown">
               <summary>{t("services.howCounted")}</summary>
               <p>
-                {formatMoneyMinor(service.costing.price_minor, service.costing.currency)} −{" "}
-                {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} ({t(businessLabel.serviceCommissionWord[businessType])}){" "}
+                {formatMoneyMinor(service.costing.price_minor, service.costing.currency)}{" "}
+                {chargesForWork && (
+                  <>
+                    − {formatMoneyMinor(service.costing.commission_minor, service.costing.currency)} (
+                    {t(businessLabel.serviceCommissionWord[businessType])}){" "}
+                  </>
+                )}
                 {(service.costing.materials_minor ?? 0) > 0 && (
                   <>
                     − {formatMoneyMinor(service.costing.materials_minor!, service.costing.currency)} (

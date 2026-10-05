@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 
 /**
  * The five steps of INT-002 as one screen: upload, mapping, validation preview,
@@ -59,7 +60,7 @@ const encodingLabels: Record<string, string> = {
 
 export function ImportWizard({ entities, locale }: { entities: string[]; locale: AppLocale }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [entity, setEntity] = useState(entities[0] ?? "service");
   const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<Result | null>(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -46,7 +46,7 @@ export function PaidField({
   locale: AppLocale;
   onChange: (value: string) => void;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
   const hintId = `${id}-hint`;
   const unreadable = value.trim() !== "" && toMinorUnits(value) === null;
@@ -107,7 +107,7 @@ export function TipField({
   locale: AppLocale;
   onChange: (value: string) => void;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const hintId = `${id}-hint`;
   const unreadable = tipMinorOf(value) === null;
 

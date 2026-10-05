@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { ChromeIcon } from "@/components/icons";
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { authClient } from "@/lib/auth-client";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
 
@@ -32,7 +33,7 @@ export function AccountMenu({
   role: MemberRole;
   userEmail: string;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
 
   const [open, setOpen] = useState(false);

@@ -23,6 +23,7 @@ import { isPilotAccessEnforced, isPublicBookingEnabled } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { queryFor } from "@/lib/filter-bar";
 import { auth } from "@/lib/auth";
@@ -124,7 +125,8 @@ export default async function AppPage({
   const locale = membership.organization.locale as AppLocale;
   // Wording only: `organization.type` reaches no figure on this page.
   const businessType = membership.organization.type as BusinessType;
-  const t = getTranslator(locale);
+  const register = registerOf({ businessType, detailedAnalytics: membership.organization.detailedAnalytics });
+  const t = getTranslator(locale, register);
 
   const pilotStatus =
     isPilotAccessEnforced()
@@ -224,6 +226,7 @@ export default async function AppPage({
     if (start?.kind === "goal" && start.progress.next) {
       return (
         <FirstRun
+          register={register}
           progress={start.progress}
           next={start.progress.next}
           locale={locale}
@@ -234,6 +237,7 @@ export default async function AppPage({
     if (start?.kind === "numbers") {
       return (
         <FirstNumbers
+          register={register}
           rows={start.rows}
           locale={locale}
           businessType={businessType}
@@ -508,12 +512,14 @@ export default async function AppPage({
   return (
     <main className="app-shell">
       <ReportTabs
+        register={register}
         locale={locale}
         role={membership.role}
         active="summary"
         state={{ from: filters.from, to: filters.to, specialist: requestedSpecialist, month: period.month }}
       />
       <HeadlineCard
+        register={register}
         headline={data.headline}
         locale={locale}
         currency={currency}
@@ -557,6 +563,7 @@ export default async function AppPage({
       */}
       {data.onboarding && !data.onboarding.complete && (
         <OnboardingPanel
+          register={register}
           progress={data.onboarding}
           locale={locale}
           businessType={businessType}
@@ -564,7 +571,7 @@ export default async function AppPage({
       )}
 
       {data.monthSetup && !data.monthSetup.complete && (
-        <MonthSetupPanel progress={data.monthSetup} locale={locale} />
+        <MonthSetupPanel progress={data.monthSetup} locale={locale} register={register} />
       )}
 
       {metrics.incompleteVisits > 0 && (
@@ -629,6 +636,7 @@ export default async function AppPage({
 
       {metrics.ranking.length > 0 && (
         <ServiceRankingCompact
+          register={register}
           ranking={metrics.ranking}
           locale={locale}
           currency={currency}

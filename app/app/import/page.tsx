@@ -6,13 +6,16 @@ import { importJobs } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { importableEntities } from "@/domain/import-templates";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { canImport } from "@/lib/import-flow";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ImportPage() {
-  const { membership, locale } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   // Only the entities this role may actually write. Offering a choice that will
   // be refused at confirm wastes the owner's file and their trust.

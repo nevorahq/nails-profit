@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { soloNeedsPrincipal } from "@/domain/principal";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { NameCombobox } from "@/components/name-combobox";
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import { describeRule, ruleFromForm } from "@/lib/commission-rule";
@@ -85,7 +86,7 @@ export function SpecialistManager({
   setupGuide?: SetupGuideBaseline;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const guide = useSetupGuide(setupGuide);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

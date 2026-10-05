@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import type { DayRange, PeriodPreset } from "@/domain/report-period";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { queryFor } from "@/lib/filter-bar";
 
 /**
@@ -52,7 +52,7 @@ export function PeriodFilter({
     active: PeriodPreset | "custom";
   }>;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
   const path = usePathname();
   // Open on arrival when the period is already one of the user's own making —

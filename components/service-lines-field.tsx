@@ -2,7 +2,7 @@
 
 import { MAX_SERVICES } from "@/domain/service-limit";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 
 /**
  * The services of one sitting, each with its own add-ons.
@@ -94,7 +94,7 @@ export function ServiceLinesField({
   locale: AppLocale;
   onChange: (lines: ServiceLine[]) => void;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const next = nextServiceId(lines, services);
 
   const replace = (index: number, line: ServiceLine) =>

@@ -10,11 +10,14 @@ import { loadMaterialsModes, materialsModeAt, showsMaterialsField } from "@/lib/
 import { loadServiceCosting } from "@/lib/service-costing";
 import { loadSetupGuide } from "@/lib/onboarding";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ServicesPage() {
-  const { membership, locale, businessType, currency } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, businessType, currency } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "services", "read")) {
     return (

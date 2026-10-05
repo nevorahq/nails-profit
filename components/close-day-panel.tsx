@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 import type { UnclosedBooking } from "@/lib/unclosed-bookings";
@@ -36,7 +36,8 @@ export function CloseDayPanel({
   showSpecialist: boolean;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeTag(locale));
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export function CloseDayPanel({
       } | null;
       setError(
         failure?.error
-          ? getErrorMessage(failure.error.code, failure.error.message, locale)
+          ? getErrorMessage(failure.error.code, failure.error.message, locale, register)
           : t("closeVisit.saveFailed"),
       );
       return;

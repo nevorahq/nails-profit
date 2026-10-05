@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { WEEKDAY_KEYS } from "@/components/booking-setup";
 import { bookabilityOf } from "@/domain/bookability";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
@@ -75,7 +76,7 @@ export function SpecialistDetail({
   publishedLocationIds: readonly string[];
   canManage: boolean;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
   /*
    * Addresses this card is at and has no week for. One is enough to offer the

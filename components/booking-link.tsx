@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 
 /**
  * The address clients book at, handed over rather than described.
@@ -18,7 +18,7 @@ import { getTranslator } from "@/i18n/t";
  * worse than none.
  */
 export function BookingLink({ slug, locale }: { slug: string; locale: AppLocale }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [copied, setCopied] = useState(false);
   const path = `/book/${slug}`;
 

@@ -12,6 +12,7 @@ import { TopbarTitle } from "@/components/topbar-title";
 import type { MemberRole } from "@/domain/rbac";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 
 /**
  * The frame every signed-in screen sits in, replacing the row of eleven tabs
@@ -34,6 +35,7 @@ import { getTranslator } from "@/i18n/t";
 export function AppShell({
   children,
   locale,
+  register = writtenRegister,
   role,
   businessType,
   organizationName,
@@ -45,6 +47,8 @@ export function AppShell({
 }: {
   children: React.ReactNode;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   role: MemberRole;
   /** Which heading «Мастера» sits under; see `groupOf` in `nav-items.ts`. */
   businessType: BusinessType;
@@ -68,7 +72,7 @@ export function AppShell({
   /** The booking module is switched off, so there is no form to book from. */
   bookingOff?: boolean;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const items = navFor(role, businessType);
   const bottom = bottomNavFor(role, businessType);
   const quickActions = quickActionsFor(role, { bookingOff }).map((action) => ({

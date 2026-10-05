@@ -15,6 +15,7 @@ import { can } from "@/domain/rbac";
 import { VisitCloseForm, type CloseFormAddOn, type CloseFormService } from "@/components/visit-close-form";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator, type Translate } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { requireWorkspace } from "@/lib/workspace";
 
 async function loadCatalogue(
@@ -67,8 +68,10 @@ async function loadCatalogue(
 }
 
 export default async function NewVisitPage() {
-  const { membership, locale, currency } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "bookings", "write")) {
     return (

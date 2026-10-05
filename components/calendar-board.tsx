@@ -29,7 +29,8 @@ import {
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { specialistOptions } from "@/lib/specialist-options";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { formatLongDate, formatMoneyMinor } from "@/lib/format";
 
 /**
@@ -220,7 +221,8 @@ export function CalendarBoard({
   locale: AppLocale;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
+  const register = useRegister();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -301,7 +303,7 @@ export function CalendarBoard({
     }
     setError(
       code
-        ? getErrorMessage(code, failure?.error?.message ?? t("common.saveFailed"), locale)
+        ? getErrorMessage(code, failure?.error?.message ?? t("common.saveFailed"), locale, register)
         : t("common.saveFailed"),
     );
     return false;

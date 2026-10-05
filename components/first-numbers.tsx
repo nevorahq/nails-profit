@@ -8,6 +8,7 @@ import type { Currency } from "@/domain/money";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 import type { FirstNumberRow } from "@/lib/first-numbers";
@@ -31,6 +32,7 @@ import type { FirstNumberRow } from "@/lib/first-numbers";
 export function FirstNumbers({
   rows,
   locale,
+  register = writtenRegister,
   businessType,
   currency,
   bookingSlug,
@@ -39,6 +41,8 @@ export function FirstNumbers({
 }: {
   rows: readonly FirstNumberRow[];
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   /** «Комиссия мастера» is a stranger's wage to a woman reading about her own. */
   businessType: BusinessType;
   currency: Currency;
@@ -56,7 +60,7 @@ export function FirstNumbers({
    */
   closeDay?: ReactNode;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
   /*

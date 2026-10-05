@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
 
@@ -37,7 +37,7 @@ export function OwnerDrawLedger({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const localeCode = localeTag(locale);
 
   const [open, setOpen] = useState(false);

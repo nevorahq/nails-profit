@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { checkSlug, SLUG_MAX_LENGTH, type SlugProblem } from "@/domain/slug";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey } from "@/i18n/t";
+import { type MessageKey } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 
 /**
  * Where the studio's public booking page lives, and the one place it can be moved.
@@ -51,7 +52,7 @@ export function PublicAddressEditor({
   onDone?: () => void;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [editing, setEditing] = useState(suggested !== undefined);
   const [draft, setDraft] = useState(suggested ?? slug ?? "");
   const [error, setError] = useState<string | null>(null);

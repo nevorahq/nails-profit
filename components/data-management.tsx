@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { authClient } from "@/lib/auth-client";
 
 export function DataManagement({
@@ -18,7 +18,7 @@ export function DataManagement({
   canExport: boolean;
   canDelete: boolean;
 }) {
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const router = useRouter();
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);

@@ -2,6 +2,7 @@ import type { DashboardMetrics } from "@/domain/dashboard-metrics";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 
@@ -15,17 +16,20 @@ import { formatBasisPoints, formatMoneyMinor } from "@/lib/format";
 export function ServiceRankingTable({
   metrics,
   locale,
+  register = writtenRegister,
   currency,
   businessType,
   isMaster,
 }: {
   metrics: DashboardMetrics;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   currency: string;
   businessType: BusinessType;
   isMaster: boolean;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   const tag = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, tag);
 
@@ -38,6 +42,10 @@ export function ServiceRankingTable({
     commissionMinor: metrics.ranking.reduce((s, e) => s + e.commissionMinor, 0),
   };
 
+  // A column of zeros under «Оплата вашего труда» for somebody working alone
+  // at a rate of nothing — the same column `FirstNumbers` leaves out.
+  const earnings = !isMaster && !(businessType === "solo" && totals.commissionMinor === 0);
+
   return (
     <section className="panel">
       <h2>{t("dashboard.rankingTitle")}</h2>
@@ -48,7 +56,7 @@ export function ServiceRankingTable({
             <th>{t("dashboard.service")}</th>
             <th>{t("dashboard.visitCount")}</th>
             {!isMaster && <th>{t("dashboard.revenue")}</th>}
-            {!isMaster && <th>{t(businessLabel.masterEarnings[businessType])}</th>}
+            {earnings && <th>{t(businessLabel.masterEarnings[businessType])}</th>}
             <th>{isMaster ? t("dashboard.commission") : t("dashboard.keeps")}</th>
             {!isMaster && <th>{t("dashboard.margin")}</th>}
             <th>{t("dashboard.hourly")}</th>
@@ -60,7 +68,7 @@ export function ServiceRankingTable({
               <td>{entry.serviceName}</td>
               <td>{entry.visits}</td>
               {!isMaster && <td>{money(entry.revenueMinor)}</td>}
-              {!isMaster && <td>{money(entry.commissionMinor)}</td>}
+              {earnings && <td>{money(entry.commissionMinor)}</td>}
               {isMaster ? (
                 <td>{money(entry.commissionMinor)}</td>
               ) : (
@@ -80,7 +88,7 @@ export function ServiceRankingTable({
             <th>{t("visits.total")}</th>
             <td>{totals.visits}</td>
             {!isMaster && <td>{money(totals.revenueMinor)}</td>}
-            {!isMaster && <td>{money(totals.commissionMinor)}</td>}
+            {earnings && <td>{money(totals.commissionMinor)}</td>}
             {isMaster ? (
               <td>{money(totals.commissionMinor)}</td>
             ) : (

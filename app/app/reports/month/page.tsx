@@ -10,6 +10,7 @@ import { can } from "@/domain/rbac";
 import type { ExpenseCategory } from "@/domain/expense-categories";
 import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatBasisPoints, formatHours, formatMoneyMinor } from "@/lib/format";
 import { ReportTabs } from "@/components/report-tabs";
@@ -34,8 +35,10 @@ export default async function MonthReportPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { membership, locale, currency, businessType, timezone, detailedAnalytics } = await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, locale, currency, businessType, timezone, detailedAnalytics } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   if (!can(membership.role, "expenses", "read")) {
     return (
@@ -151,6 +154,7 @@ export default async function MonthReportPage({
   return (
     <main className="app-shell">
       <ReportTabs
+        register={register}
         locale={locale}
         role={membership.role}
         active="month"

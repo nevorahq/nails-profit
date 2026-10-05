@@ -14,6 +14,7 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { zonedToday } from "@/domain/availability";
 import { getTranslator } from "@/i18n/t";
+import { registerOf } from "@/i18n/lexicon";
 import { alternativeSlots, loadSlotContext } from "@/lib/availability-service";
 import { loadMonthGuide } from "@/lib/onboarding";
 import { monthOf } from "@/lib/period";
@@ -45,9 +46,10 @@ import type { MemberRole } from "@/domain/rbac";
 const SLOT_HORIZON_DAYS = 14;
 
 export default async function BookingSetupPage() {
-  const { membership, bookingAccess, locale, organizationSlug, organizationName, currency, businessType } =
-    await requireWorkspace();
-  const t = getTranslator(locale);
+  const workspace = await requireWorkspace();
+  const { membership, bookingAccess, locale, organizationSlug, organizationName, currency, businessType } = workspace;
+  const register = registerOf(workspace);
+  const t = getTranslator(locale, register);
 
   /*
    * The rota is step two of «Расчёт месяца», and this is where it is filled in.

@@ -4,6 +4,7 @@ import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { stepMessageKey } from "@/i18n/step-labels";
 import { getTranslator } from "@/i18n/t";
+import { writtenRegister, type Register } from "@/i18n/lexicon";
 
 /**
  * What a studio sees on `/app` before it has closed a single visit.
@@ -20,12 +21,15 @@ export function FirstRun({
   progress,
   next,
   locale,
+  register = writtenRegister,
   businessType,
 }: {
   progress: OnboardingProgress;
   /** The step to point at. Resolved by the caller, so this cannot render goal-less. */
   next: OnboardingStep;
   locale: AppLocale;
+  /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
+  register?: Register;
   /**
    * Whose first run this is. The first step is written twice — a studio hires
    * a master, somebody working alone prices their own hour — and this is the
@@ -33,7 +37,7 @@ export function FirstRun({
    */
   businessType: BusinessType;
 }) {
-  const t = getTranslator(locale);
+  const t = getTranslator(locale, register);
   /*
    * The step before this one, so «назад» is a step of the run rather than the
    * browser's own button. Null on the first step: behind it is the studio form,

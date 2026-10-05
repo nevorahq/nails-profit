@@ -1,3 +1,5 @@
+import { errorWordFor, writtenRegister, type Register } from "@/i18n/lexicon";
+
 export const supportedLocales = ["ru", "ro", "en"] as const;
 export type AppLocale = (typeof supportedLocales)[number];
 
@@ -146,10 +148,19 @@ export const errorMessages = {
 
 export type ErrorCode = keyof (typeof errorMessages)["en"];
 
-/** Translates a server error code, falling back to the server's own message. */
-export function getErrorMessage(code: string, fallback: string, locale: AppLocale = "ru") {
+/**
+ * Translates a server error code, falling back to the server's own message.
+ * The register words the few codes that depend on who reads them — see
+ * `errorWordFor` in `i18n/lexicon.ts`.
+ */
+export function getErrorMessage(
+  code: string,
+  fallback: string,
+  locale: AppLocale = "ru",
+  register: Register = writtenRegister,
+) {
   const table: Record<string, string> = errorMessages[locale] ?? errorMessages.ru;
-  return table[code] ?? fallback;
+  return errorWordFor(code, register, locale) ?? table[code] ?? fallback;
 }
 
 export const messages = {

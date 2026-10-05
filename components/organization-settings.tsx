@@ -8,7 +8,8 @@ import { currencies, type Currency } from "@/domain/money";
 import { ORGANIZATION_NAME_PATTERN } from "@/domain/organization-name";
 import { checkSlug, slugify } from "@/domain/slug";
 import type { AppLocale } from "@/i18n/messages";
-import { getTranslator, type MessageKey, type Translate } from "@/i18n/t";
+import { type MessageKey, type Translate } from "@/i18n/t";
+import { useTranslator } from "@/components/lexicon-provider";
 import { localeNames } from "@/i18n/locale-names";
 import { localeTag } from "@/i18n/translate";
 
@@ -66,7 +67,7 @@ export function OrganizationSettings({
   startOpen?: boolean;
 }) {
   const router = useRouter();
-  const t = getTranslator(locale);
+  const t = useTranslator(locale);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);

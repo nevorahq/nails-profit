@@ -18,6 +18,11 @@ import type { MessageKey } from "@/i18n/t";
  * Keep it that way. A label belongs here only when the other variant would be
  * wrong, not merely less pleasant: every entry is a sentence that has to be
  * written twice and translated three times forever.
+ *
+ * Words that have to change across whole screens rather than at one call site
+ * — «комиссия» for somebody working alone, the finance dictionary in the plain
+ * view — are not entries here: they are replaced in the dictionary itself, by
+ * register, in `i18n/lexicon.ts`.
  */
 export type BusinessType = "solo" | "studio";
 
