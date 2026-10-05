@@ -21,7 +21,7 @@ export default async function ServicePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ add_ons?: string }>;
 }) {
-  const { membership, locale, currency, businessType } = await requireWorkspace();
+  const { membership, locale, currency, businessType, detailedAnalytics } = await requireWorkspace();
   const t = getTranslator(locale);
   const { id } = await params;
   // The chosen add-on set comes from the URL so the server can compute the
@@ -88,8 +88,13 @@ export default async function ServicePage({
      *
      * It also costs four extra queries, which is the second reason not to run
      * it for every reader of the catalogue.
+     *
+     * And it is detailed analytics: a share of the rent spread over practical
+     * capacity is an allocation, not money a visit costs, so the plain view
+     * leaves the switch out with the rest of the economist's lines.
      */
     const showsFixedCosts =
+      detailedAnalytics &&
       costing.status === "complete" &&
       costing.currency === currency &&
       can(membership.role, "expenses", "read");
