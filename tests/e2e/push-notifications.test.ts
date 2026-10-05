@@ -19,6 +19,7 @@ const vapid = webpush.generateVAPIDKeys();
 const previous = {
   publicKey: process.env.VAPID_PUBLIC_KEY,
   privateKey: process.env.VAPID_PRIVATE_KEY,
+  subject: process.env.VAPID_SUBJECT,
 };
 
 function device(name = crypto.randomUUID()) {
@@ -42,6 +43,9 @@ let master: Actor;
 beforeAll(async () => {
   process.env.VAPID_PUBLIC_KEY = vapid.publicKey;
   process.env.VAPID_PRIVATE_KEY = vapid.privateKey;
+  // Stated, not inherited: CI has no SUPPORT_EMAIL and serves http://localhost,
+  // so the subject a deployment falls back to does not exist there.
+  process.env.VAPID_SUBJECT = "mailto:push@studio.example";
   await resetDatabase();
   studio = await createCanonicalStudio("push-owner@studio.example");
   otherStudio = await createCanonicalStudio("push-other@studio.example", "Other Studio");
@@ -49,8 +53,14 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  process.env.VAPID_PUBLIC_KEY = previous.publicKey;
-  process.env.VAPID_PRIVATE_KEY = previous.privateKey;
+  for (const [name, value] of [
+    ["VAPID_PUBLIC_KEY", previous.publicKey],
+    ["VAPID_PRIVATE_KEY", previous.privateKey],
+    ["VAPID_SUBJECT", previous.subject],
+  ] as const) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   await closeTestConnections();
 });
 

@@ -24,6 +24,7 @@ const vapid = webpush.generateVAPIDKeys();
 const previous = {
   publicKey: process.env.VAPID_PUBLIC_KEY,
   privateKey: process.env.VAPID_PRIVATE_KEY,
+  subject: process.env.VAPID_SUBJECT,
   flag: process.env.PUBLIC_BOOKING_ENABLED,
 };
 
@@ -117,6 +118,9 @@ function capture() {
 beforeAll(async () => {
   process.env.VAPID_PUBLIC_KEY = vapid.publicKey;
   process.env.VAPID_PRIVATE_KEY = vapid.privateKey;
+  // Stated, not inherited: CI has no SUPPORT_EMAIL and serves http://localhost,
+  // so the subject a deployment falls back to does not exist there.
+  process.env.VAPID_SUBJECT = "mailto:push@studio.example";
   process.env.PUBLIC_BOOKING_ENABLED = "true";
   await resetDatabase();
 
@@ -165,6 +169,7 @@ afterAll(async () => {
   for (const [name, value] of [
     ["VAPID_PUBLIC_KEY", previous.publicKey],
     ["VAPID_PRIVATE_KEY", previous.privateKey],
+    ["VAPID_SUBJECT", previous.subject],
     ["PUBLIC_BOOKING_ENABLED", previous.flag],
   ] as const) {
     if (value === undefined) delete process.env[name];
