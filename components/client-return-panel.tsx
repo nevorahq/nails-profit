@@ -5,12 +5,10 @@ import { useState } from "react";
 
 import { ContactIcon } from "@/components/icons";
 import { useTranslator } from "@/components/lexicon-provider";
+import { BOOKING_LINK_TOKEN } from "@/domain/client-return";
 import { offeredChannels, type ContactChannelMarks } from "@/domain/contact-channels";
 import { messageWays, type MessageChannel } from "@/domain/contact-links";
 import type { AppLocale } from "@/i18n/messages";
-
-/** What the server leaves in the message where the booking page's address goes. */
-export const BOOKING_LINK_TOKEN = "__BOOKING_LINK__";
 
 /** How many rows show before «Показать ещё»: a list worth working through, not a wall. */
 const FIRST_ROWS = 10;

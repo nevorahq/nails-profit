@@ -13,6 +13,17 @@
  * median down to «comes daily».
  */
 
+/**
+ * Where the message the server writes leaves room for the booking page's
+ * address, which only the browser knows the host of.
+ *
+ * Here rather than beside the panel that fills it in: a constant exported from
+ * a `"use client"` module reaches a Server Component as a client reference, not
+ * as its value, and the first live run put the text of a function into a
+ * message to a client.
+ */
+export const BOOKING_LINK_TOKEN = "__BOOKING_LINK__";
+
 /** The slack past a client's own interval before they are worth a message. */
 export const RETURN_GRACE_DAYS = 7;
 

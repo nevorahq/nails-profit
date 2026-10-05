@@ -1,14 +1,11 @@
 import { asc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { ClientManager, type ClientRow } from "@/components/client-manager";
-import {
-  BOOKING_LINK_TOKEN,
-  ClientReturnPanel,
-  type ReturnPanelRow,
-} from "@/components/client-return-panel";
+import { ClientReturnPanel, type ReturnPanelRow } from "@/components/client-return-panel";
 import { ToolIcon } from "@/components/icons";
 import { clients, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { BOOKING_LINK_TOKEN } from "@/domain/client-return";
 import { can, scopeFor } from "@/domain/rbac";
 import { supportedLocales, type AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
