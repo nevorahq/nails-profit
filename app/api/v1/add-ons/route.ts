@@ -20,6 +20,8 @@ const addOnSchema = z.object({
     .refine((value) => Object.keys(value).length > 0, { message: "At least one language is required" }),
   price_delta_minor: z.int().default(0),
   duration_delta_minutes: z.int().default(0),
+  /** What the add-on uses up on top of its service; null is «not given». */
+  materials_minor: z.int().min(0).max(100_000_000).nullable().optional(),
 });
 
 export async function GET(request: Request) {
@@ -43,6 +45,7 @@ export async function GET(request: Request) {
       name: row.name,
       price_delta_minor: row.priceDeltaMinor,
       duration_delta_minutes: row.durationDeltaMinutes,
+      materials_minor: row.materialsMinor,
     })),
     id,
   );
@@ -77,6 +80,7 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         priceDeltaMinor: parsed.data.price_delta_minor,
         durationDeltaMinutes: parsed.data.duration_delta_minutes,
+        materialsMinor: parsed.data.materials_minor ?? null,
         createdBy: actor.userId,
         updatedBy: actor.userId,
       })
@@ -91,6 +95,7 @@ export async function POST(request: Request) {
       after: {
         price_delta_minor: created.priceDeltaMinor,
         duration_delta_minutes: created.durationDeltaMinutes,
+        materials_minor: created.materialsMinor,
       },
       requestId: id,
     });

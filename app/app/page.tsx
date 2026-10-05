@@ -214,7 +214,7 @@ export default async function AppPage({
   }
 
   if (canManageCatalogue(membership.role, "services")) {
-    const start = await withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale));
+    const start = await withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale, membership.organization.id));
     if (start?.kind === "goal" && start.progress.next) {
       return (
         <FirstRun

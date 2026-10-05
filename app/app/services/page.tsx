@@ -6,13 +6,14 @@ import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceList, type ServiceRow } from "@/components/service-list";
 import { resolveLocalizedText } from "@/i18n/localized-text";
+import { loadMaterialsModes, materialsModeAt, showsMaterialsField } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { loadSetupGuide } from "@/lib/onboarding";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ServicesPage() {
-  const { membership, locale, businessType } = await requireWorkspace();
+  const { membership, locale, businessType, currency } = await requireWorkspace();
   const t = getTranslator(locale);
 
   if (!can(membership.role, "services", "read")) {
@@ -36,7 +37,10 @@ export default async function ServicesPage() {
     ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
     : null;
 
-  const rows: ServiceRow[] = await withTenant(membership.organizationId, async (tx) => {
+  const { rows, materialsShown } = await withTenant(membership.organizationId, async (tx) => {
+    // Read once for the page: the mode is the month's, not each service's.
+    const modes = await loadMaterialsModes(tx, membership.organizationId);
+    const materialsMode = materialsModeAt(modes);
     const [specialist] = await tx
       .select({ id: specialists.id })
       .from(specialists)
@@ -50,15 +54,19 @@ export default async function ServicesPage() {
       .where(isNull(services.archivedAt))
       .orderBy(asc(services.createdAt));
 
-    return Promise.all(
+    const costed: ServiceRow[] = await Promise.all(
       catalogue.map(async (service) => {
-        const costing = await loadServiceCosting(tx, service, { specialistId: specialist?.id ?? null });
+        const costing = await loadServiceCosting(tx, service, {
+          specialistId: specialist?.id ?? null,
+          materialsMode,
+        });
         return {
           id: service.id,
           displayName: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
           price_minor: service.priceMinor,
           duration_minutes: service.durationMinutes,
           currency: service.currency,
+          materials_minor: service.materialsMinor,
           costing:
             costing.status === "complete"
               ? {
@@ -71,6 +79,7 @@ export default async function ServicesPage() {
         };
       }),
     );
+    return { rows: costed, materialsShown: showsMaterialsField(modes) };
   });
 
   // Two different permissions on one screen: a Master may add a service, and
@@ -117,6 +126,8 @@ export default async function ServicesPage() {
         canCreate={canCreate}
         canEdit={canEdit}
         setupGuide={setupGuide}
+        materialsShown={materialsShown}
+        currency={currency}
       />
     </main>
   );

@@ -458,6 +458,8 @@ const ru = {
   "addOns.name": "Название",
   "addOns.priceDelta": "Изменение цены, {currency}",
   "addOns.timeDelta": "Изменение времени, мин",
+  "addOns.materials": "Расходники опции, {currency}",
+  "addOns.materialsTitle": "Расходники опций",
   "addOns.negativeHint":
     "Значения могут быть отрицательными: короткая длина может и стоить меньше, и занимать меньше времени.",
 
@@ -839,6 +841,9 @@ const ru = {
   "services.margin": "Маржа",
   "services.perHour": "Прибыль в час",
   "services.priceAndDuration": "Цена и длительность",
+  "services.materials": "Расходники на услугу, {currency}",
+  "services.materialsHint": "Сколько материалов уходит на одну такую услугу: гель, пилки, перчатки. Пусто — не учитываются.",
+  "services.materialsLine": "Расходники",
   "services.addOns": "Опции",
   "services.offeredWith": "Предлагаются с этой услугой",
   "services.whatYouKeep": "Что остаётся вам",
@@ -1880,6 +1885,8 @@ const ro: Record<MessageKey, Message> = {
   "addOns.name": "Denumire",
   "addOns.priceDelta": "Modificarea prețului, {currency}",
   "addOns.timeDelta": "Modificarea timpului, min",
+  "addOns.materials": "Consumabile opțiune, {currency}",
+  "addOns.materialsTitle": "Consumabile pentru opțiuni",
   "addOns.negativeHint":
     "Valorile pot fi negative: o lungime mai scurtă poate costa mai puțin și dura mai puțin.",
 
@@ -2261,6 +2268,9 @@ const ro: Record<MessageKey, Message> = {
   "services.margin": "Marjă",
   "services.perHour": "Profit pe oră",
   "services.priceAndDuration": "Preț și durată",
+  "services.materials": "Consumabile per serviciu, {currency}",
+  "services.materialsHint": "Cât material se consumă la un astfel de serviciu: gel, pile, mănuși. Gol — nu se iau în calcul.",
+  "services.materialsLine": "Consumabile",
   "services.addOns": "Opțiuni",
   "services.offeredWith": "Se oferă cu acest serviciu",
   "services.whatYouKeep": "Ce vă rămâne",
@@ -3296,6 +3306,8 @@ const en: Record<MessageKey, Message> = {
   "addOns.name": "Name",
   "addOns.priceDelta": "Price change, {currency}",
   "addOns.timeDelta": "Time change, min",
+  "addOns.materials": "Add-on materials, {currency}",
+  "addOns.materialsTitle": "Materials of add-ons",
   "addOns.negativeHint":
     "Values may be negative: a shorter length can cost less and take less time.",
 
@@ -3669,6 +3681,9 @@ const en: Record<MessageKey, Message> = {
   "services.margin": "Margin",
   "services.perHour": "Profit per hour",
   "services.priceAndDuration": "Price and duration",
+  "services.materials": "Materials per service, {currency}",
+  "services.materialsHint": "What one sitting of this service uses up: gel, files, gloves. Leave it empty to leave them out.",
+  "services.materialsLine": "Materials",
   "services.addOns": "Add-ons",
   "services.offeredWith": "Offered with this service",
   "services.whatYouKeep": "What you keep",

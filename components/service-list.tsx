@@ -48,6 +48,8 @@ export type ServiceRow = {
   price_minor: number | null;
   duration_minutes: number | null;
   currency: string | null;
+  /** Null is «not given»; shown and edited only while `materialsShown`. */
+  materials_minor?: number | null;
   costing:
     | {
         status: "complete";
@@ -93,7 +95,14 @@ type EditState = {
   name: string;
   price: string;
   duration: string;
+  materials: string;
 };
+
+/** «12,50» or «12.50» as minor units; empty is null — not given, not zero. */
+function materialsMinorOf(typed: string): number | null {
+  const value = typed.trim().replace(",", ".");
+  return value === "" ? null : Math.round(Number(value) * 100);
+}
 
 const cellInput: React.CSSProperties = {
   width: "100%",
@@ -113,6 +122,8 @@ export function ServiceList({
   canCreate = true,
   canEdit = true,
   setupGuide = null,
+  materialsShown = false,
+  currency = "MDL",
 }: {
   services: ServiceRow[];
   /** Whose work the «останется» column is counted after. Wording only. */
@@ -135,6 +146,14 @@ export function ServiceList({
    * offering a control that could only fail.
    */
   canEdit?: boolean;
+  /**
+   * Whether the studio counts materials per service now or from a month it
+   * has already chosen (`lib/materials-mode.ts`). Counting by purchases, the
+   * column would be a figure nothing reads.
+   */
+  materialsShown?: boolean;
+  /** The organization's, which the materials are typed in. */
+  currency?: string;
 }) {
   const t = getTranslator(locale);
   const router = useRouter();
@@ -205,6 +224,7 @@ export function ServiceList({
     const data = new FormData(form);
     const price = String(data.get("price") ?? "").trim();
     const duration = String(data.get("duration") ?? "").trim();
+    const materials = materialsShown ? materialsMinorOf(String(data.get("materials") ?? "")) : null;
 
     const response = await fetch("/api/v1/services", {
       method: "POST",
@@ -215,6 +235,7 @@ export function ServiceList({
         name: nameForSubmit(String(data.get("name") ?? ""), pickedKind, locale),
         ...(price ? { price_minor: Math.round(Number(price) * 100) } : {}),
         ...(duration ? { duration_minutes: Number(duration) } : {}),
+        ...(materials !== null ? { materials_minor: materials } : {}),
       }),
     });
 
@@ -242,6 +263,10 @@ export function ServiceList({
       name: service.displayName,
       price: service.price_minor !== null ? String(service.price_minor / 100) : "",
       duration: service.duration_minutes !== null ? String(service.duration_minutes) : "",
+      materials:
+        service.materials_minor !== null && service.materials_minor !== undefined
+          ? String(service.materials_minor / 100)
+          : "",
     });
     setEditError(null);
     setConfirmDeleteId(null);
@@ -267,6 +292,9 @@ export function ServiceList({
         name: { [locale]: edit.name.trim() },
         ...(priceVal !== "" ? { price_minor: Math.round(Number(priceVal) * 100) } : { price_minor: null }),
         ...(durationVal !== "" ? { duration_minutes: Number(durationVal) } : { duration_minutes: null }),
+        // Sent only while the field is on screen: a studio counting by
+        // purchases must not clear amounts it may switch back to.
+        ...(materialsShown ? { materials_minor: materialsMinorOf(edit.materials) } : {}),
       }),
     });
 
@@ -374,10 +402,17 @@ export function ServiceList({
                 {t("services.durationMinutes")}
                 <input name="duration" type="number" step="1" min="1" placeholder="90" required />
               </label>
+              {materialsShown && (
+                <label>
+                  {t("services.materials", { currency })}
+                  <input name="materials" type="number" step="0.01" min="0" placeholder="35" />
+                </label>
+              )}
               <button className="primary-button" type="submit" disabled={pending}>
                 {pending ? t("services.creating") : t("services.add")}
               </button>
             </form>
+            {materialsShown && <p className="muted">{t("services.materialsHint")}</p>}
             {error && (
               <div className="form-error" role="alert" style={{ marginTop: "12rem" }}>
                 {error}
@@ -394,6 +429,7 @@ export function ServiceList({
             <th>{t("services.service")}</th>
             <th>{t("common.price")}</th>
             <th>{t("common.duration")}</th>
+            {materialsShown && <th>{t("services.materialsLine")}</th>}
             <th>{t(businessLabel.serviceKept[businessType])}</th>
             <th>{t("services.margin")}</th>
             <th>{t("services.perHour")}</th>
@@ -403,7 +439,7 @@ export function ServiceList({
         <tbody>
           {services.length === 0 && (
             <tr>
-              <td colSpan={7} className="muted">
+              <td colSpan={materialsShown ? 8 : 7} className="muted">
                 {t("services.none")}
               </td>
             </tr>
@@ -449,6 +485,19 @@ export function ServiceList({
                       style={cellInput}
                     />
                   </td>
+                  {materialsShown && (
+                    <td>
+                      <input
+                        aria-label={t("services.materialsLine")}
+                        value={edit.materials}
+                        onChange={(e) => setEdit({ ...edit, materials: e.target.value })}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        style={cellInput}
+                      />
+                    </td>
+                  )}
                   {/* Расчётные колонки — пусты при редактировании */}
                   <td />
                   <td />
@@ -491,6 +540,13 @@ export function ServiceList({
                     : formatMoneyMinor(service.price_minor, service.currency ?? "MDL")}
                 </td>
                 <td>{formatDuration(service.duration_minutes)}</td>
+                {materialsShown && (
+                  <td>
+                    {service.materials_minor === null || service.materials_minor === undefined
+                      ? "—"
+                      : formatMoneyMinor(service.materials_minor, service.currency ?? currency)}
+                  </td>
+                )}
                 {service.costing.status === "complete" ? (
                   <>
                     <td className={service.costing.contribution_margin_minor < 0 ? "metric-negative" : ""}>

@@ -4,6 +4,7 @@ import { addOns, commissionRules, services } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { selectCommissionRule, toCommission } from "@/domain/commission";
 import { calculateCosting, type CostingResult } from "@/domain/costing";
+import type { MaterialsCostingMode } from "@/domain/materials-mode";
 import type { Currency } from "@/domain/money";
 
 /**
@@ -40,7 +41,17 @@ export type ServiceCosting = Readonly<
 export async function loadServiceCosting(
   tx: TenantTransaction,
   service: typeof services.$inferSelect,
-  options: { specialistId?: string | null; at?: Date; addOnIds?: readonly string[] } = {},
+  options: {
+    specialistId?: string | null;
+    at?: Date;
+    addOnIds?: readonly string[];
+    /**
+     * How the studio counts materials this month (`lib/materials-mode.ts`).
+     * Absent is `purchases`: the amounts on services are not this costing's
+     * business, and a caller that has not asked costs exactly as before.
+     */
+    materialsMode?: MaterialsCostingMode;
+  } = {},
 ): Promise<ServiceCosting> {
   const at = options.at ?? new Date();
   const reasons: ServiceCostingReason[] = [];
@@ -92,8 +103,16 @@ export async function loadServiceCosting(
     return { status: "incomplete", reasons };
   }
 
+  // Null on either is «not given», which costs as nothing rather than as a gap.
+  const materialsMinor =
+    options.materialsMode === "per_service"
+      ? (service.materialsMinor ?? 0) +
+        selectedAddOns.reduce((total, addOn) => total + (addOn.materialsMinor ?? 0), 0)
+      : 0;
+
   const currency = (service.currency ?? "MDL") as Currency;
   const costing = calculateCosting({
+    materialsMinor,
     priceMinor: priceMinor!,
     durationMinutes: durationMinutes!,
     currency,

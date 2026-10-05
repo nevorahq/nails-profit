@@ -533,6 +533,16 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/add-ons", body: { name: { ru: "Опция" } } }),
   },
   {
+    route: "/api/v1/add-ons/[id]",
+    method: "PATCH",
+    allowed: CATALOGUE_MANAGERS,
+    note: "services write; an add-on's materials cost every master's visit with it",
+    request: async (fixture) => ({
+      path: `/api/v1/add-ons/${fixture.addOnId}`,
+      body: { materials_minor: 1_000 },
+    }),
+  },
+  {
     route: "/api/v1/specialists",
     method: "GET",
     allowed: ALL_ROLES,

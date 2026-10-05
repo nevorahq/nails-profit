@@ -8,6 +8,7 @@ import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceDetail, type ServiceDetailData } from "@/components/service-detail";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadPeriodPL, monthOf } from "@/lib/period";
+import { loadMaterialsModes, materialsModeAt, showsMaterialsField } from "@/lib/materials-mode";
 import { loadServiceCosting } from "@/lib/service-costing";
 import { getTranslator } from "@/i18n/t";
 import { requireWorkspace } from "@/lib/workspace";
@@ -50,9 +51,12 @@ export default async function ServicePage({
       .orderBy(asc(specialists.createdAt), asc(specialists.id))
       .limit(1);
 
+    const modes = await loadMaterialsModes(tx, membership.organizationId);
+    const materialsShown = showsMaterialsField(modes);
     const costing = await loadServiceCosting(tx, service, {
       specialistId: specialist?.id ?? null,
       addOnIds: selectedAddOnIds,
+      materialsMode: materialsModeAt(modes),
     });
 
     const catalogue = await tx
@@ -81,7 +85,14 @@ export default async function ServicePage({
       can(membership.role, "expenses", "read");
 
     if (!showsFixedCosts) {
-      return { service, costing, catalogue, linked: linked.map((row) => row.addOnId), fullyLoaded: null };
+      return {
+        service,
+        costing,
+        catalogue,
+        linked: linked.map((row) => row.addOnId),
+        fullyLoaded: null,
+        materialsShown,
+      };
     }
 
     const month = monthOf(new Date());
@@ -101,6 +112,7 @@ export default async function ServicePage({
       costing,
       catalogue,
       linked: linked.map((row) => row.addOnId),
+      materialsShown,
       fullyLoaded:
         allocated === null || report.capacity.fixedCostRateMinorPerHour === null
           ? null
@@ -120,6 +132,7 @@ export default async function ServicePage({
     price_minor: loaded.service.priceMinor,
     duration_minutes: loaded.service.durationMinutes,
     currency: loaded.service.currency,
+    materials_minor: loaded.service.materialsMinor,
     costing:
       loaded.costing.status === "complete"
         ? {
@@ -129,6 +142,7 @@ export default async function ServicePage({
             price_minor: loaded.costing.costing.priceMinor,
             duration_minutes: loaded.costing.costing.durationMinutes,
             commission_minor: loaded.costing.costing.commissionMinor,
+            materials_minor: loaded.costing.costing.materialsMinor,
             contribution_margin_minor: loaded.costing.costing.contributionMarginMinor,
             margin_basis_points: loaded.costing.costing.marginBasisPoints,
             profit_per_hour_minor: loaded.costing.costing.profitPerHourMinor,
@@ -145,10 +159,12 @@ export default async function ServicePage({
         displayName: resolveLocalizedText(addOn.name, locale, locale) ?? t("common.unnamed"),
         price_delta_minor: addOn.priceDeltaMinor,
         duration_delta_minutes: addOn.durationDeltaMinutes,
+        materials_minor: addOn.materialsMinor,
       }))}
       linkedAddOnIds={loaded.linked}
       selectedAddOnIds={selectedAddOnIds}
       fullyLoaded={loaded.fullyLoaded}
+      materialsShown={loaded.materialsShown}
       currency={currency}
       canManage={canManageCatalogue(membership.role, "services")}
       locale={locale}
