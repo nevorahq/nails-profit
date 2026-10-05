@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { AppLocale } from "@/i18n/messages";
 import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
+import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
 export type ClientRow = {
   id: string;
@@ -117,10 +118,8 @@ export function ClientManager({
    * second «Добавить клиента» directly under the header's own button. A
    * `.compose-wrap` collapsed by class has no such leftover strip.
    */
-  // Lazy so it reads the real hash on the client's own first render rather
-  // than in a follow-up effect — `location` does not exist during the
-  // server's render of this "use client" component.
-  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-client");
+  // Open on a full page load too when the address names it — see `useAnchoredPanel`.
+  const [addOpen, setAddOpen] = useAnchoredPanel("add-client");
   const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,7 +132,7 @@ export function ClientManager({
 
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, []);
+  }, [setAddOpen]);
 
   useEffect(() => {
     if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });

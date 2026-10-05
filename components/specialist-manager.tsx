@@ -18,6 +18,7 @@ import {
   useSetupGuide,
   type SetupGuideBaseline,
 } from "@/components/setup-guide";
+import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
 export type OrganizationMember = {
   user_id: string;
@@ -127,10 +128,8 @@ export function SpecialistManager({
    * The other two panels below (link an account, service exception) keep
    * their older mobile-only toggle — only «Добавить мастера» was asked for.
    */
-  // Lazy so it reads the real hash on the client's own first render rather
-  // than in a follow-up effect — `location` does not exist during the
-  // server's render of this "use client" component.
-  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-specialist");
+  // Open on a full page load too when the address names it — see `useAnchoredPanel`.
+  const [addOpen, setAddOpen] = useAnchoredPanel("add-specialist");
   const addRef = useRef<HTMLDivElement>(null);
   const rateRef = useRef<HTMLInputElement>(null);
 
@@ -144,7 +143,7 @@ export function SpecialistManager({
 
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, []);
+  }, [setAddOpen]);
 
   useEffect(() => {
     if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });

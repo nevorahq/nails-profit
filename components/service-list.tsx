@@ -21,6 +21,7 @@ import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { type MessageKey } from "@/i18n/t";
 import { useTranslator } from "@/components/lexicon-provider";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
+import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
 /**
  * What goes into `service.name`, which is localized while the form has one box.
@@ -180,10 +181,8 @@ export function ServiceList({
    * second «Добавить услугу» directly under the header's own button. A
    * `.compose-wrap` collapsed by class has no such leftover strip.
    */
-  // Lazy so it reads the real hash on the client's own first render rather
-  // than in a follow-up effect — `location` does not exist during the
-  // server's render of this "use client" component.
-  const [addOpen, setAddOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-service");
+  // Open on a full page load too when the address names it — see `useAnchoredPanel`.
+  const [addOpen, setAddOpen] = useAnchoredPanel("add-service");
   const [addName, setAddName] = useState("");
   /**
    * The catalogue entry the name came from, kept so the other two languages can
@@ -207,7 +206,7 @@ export function ServiceList({
 
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, []);
+  }, [setAddOpen]);
 
   useEffect(() => {
     if (addOpen) addRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });

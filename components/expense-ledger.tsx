@@ -21,6 +21,7 @@ import {
 } from "@/components/setup-guide";
 import { localeTag } from "@/i18n/translate";
 import { formatDay, formatMoneyMinor } from "@/lib/format";
+import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
 /*
  * The add form and the table are two components rather than one: the form lives
@@ -68,10 +69,8 @@ export function ExpenseLedger({
    * — while closed, putting a second «Добавить» directly under the header's own
    * button. A `.compose-wrap` collapsed by class leaves no such strip.
    */
-  // Lazy so it reads the real hash on the client's own first render rather than
-  // in a follow-up effect — `location` does not exist during the server's
-  // render of this "use client" component.
-  const [open, setOpen] = useState(() => typeof window !== "undefined" && location.hash === "#add-expense");
+  // Open on a full page load too when the address names it — see `useAnchoredPanel`.
+  const [open, setOpen] = useAnchoredPanel("add-expense");
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -90,7 +89,7 @@ export function ExpenseLedger({
 
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     if (open) panel.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
