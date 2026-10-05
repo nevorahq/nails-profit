@@ -50,6 +50,14 @@ export const IMPORT_CONFIRM_RULE: RateLimitRule = { limit: 20, windowSeconds: 3_
 export const AVATAR_UPLOAD_RULE: RateLimitRule = { limit: 60, windowSeconds: 3_600 };
 /** An invitation token is 256 bits, so this is about cost, not about guessing odds. */
 export const INVITATION_ACCEPT_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
+/**
+ * Turning push on or off on a device, which the switch also re-sends whenever it
+ * is drawn, so the browser and the table cannot drift apart. Far more than a
+ * person flipping it needs, far less than a loop of new subscriptions.
+ */
+export const PUSH_SUBSCRIPTION_RULE: RateLimitRule = { limit: 60, windowSeconds: 3_600 };
+/** «Проверить» sends a real push through a real push service each time. */
+export const PUSH_TEST_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
 /** Public booking has separate buckets so slot browsing cannot consume create allowance. */
 export const PUBLIC_BOOKING_READ_RULE: RateLimitRule = { limit: 120, windowSeconds: 60 };
 export const PUBLIC_BOOKING_AVAILABILITY_RULE: RateLimitRule = { limit: 60, windowSeconds: 60 };

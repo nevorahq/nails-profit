@@ -981,6 +981,27 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/notifications/read", method: "POST" as const }),
   },
   {
+    route: "/api/v1/push/subscription",
+    method: "GET",
+    allowed: ALL_ROLES,
+    note: "bookings read, the bell's gate: a push says what a line of the bell says. Whether push exists and this person's device count",
+    request: async () => ({ path: "/api/v1/push/subscription" }),
+  },
+  {
+    route: "/api/v1/push/subscription",
+    method: "PUT",
+    allowed: ALL_ROLES,
+    note: "bookings read; subscribes the caller's own device, never anyone else's. Without a body this is a 422 (or 503 with push unconfigured), never a 403",
+    request: async () => ({ path: "/api/v1/push/subscription" }),
+  },
+  {
+    route: "/api/v1/push/subscription",
+    method: "DELETE",
+    allowed: ALL_ROLES,
+    note: "bookings read; forgets the caller's own device. Without an endpoint this is a 422, never a 403",
+    request: async () => ({ path: "/api/v1/push/subscription" }),
+  },
+  {
     route: "/api/v1/bookings",
     method: "POST",
     allowed: ["owner", "manager", "master"],
