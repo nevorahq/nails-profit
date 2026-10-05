@@ -2103,10 +2103,26 @@ export const bookings = pgTable(
      * request at that moment is not refused for a change nobody made to it.
      */
     staffRemindedVersion: integer("staff_reminded_version"),
+    /**
+     * The closed appointment this one was booked from, «Следующая запись».
+     *
+     * `source = rebooking` says how an appointment came to be; this says after
+     * which visit, and the return rate needs the second: «what share of visits
+     * left with the next one booked» is counted per visit, and a source alone
+     * cannot tell two rebookings of one visit from one each of two. `set null`,
+     * because deleting the old appointment must not take the new one with it.
+     */
+    rebookedFromBookingId: uuid("rebooked_from_booking_id").references(
+      (): AnyPgColumn => bookings.id,
+      { onDelete: "set null" },
+    ),
     ...auditColumns,
   },
   (table) => [
     index("booking_org_starts_idx").on(table.organizationId, table.startsAt),
+    index("booking_rebooked_from_idx")
+      .on(table.rebookedFromBookingId)
+      .where(sql`${table.rebookedFromBookingId} is not null`),
     index("booking_specialist_starts_idx").on(table.specialistId, table.startsAt),
     index("booking_location_starts_idx").on(table.locationId, table.startsAt),
     index("booking_client_idx").on(table.clientId),

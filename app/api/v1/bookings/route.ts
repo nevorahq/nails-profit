@@ -20,7 +20,7 @@ import {
   notifyBooking,
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
-import { bookingLinesOf, createBooking, type BookingStatus } from "@/lib/booking-service";
+import { bookingLinesOf, createBooking, loadBooking, type BookingStatus } from "@/lib/booking-service";
 import { isExclusionViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors, timedRoute } from "@/lib/http";
 import { claimIdempotencyKey, fingerprintOf, recordIdempotentResult } from "@/lib/idempotency";
@@ -52,11 +52,12 @@ const createBookingSchema = z
     workplace_id: z.uuid().nullable().optional(),
     starts_at: z.iso.datetime(),
     /**
-     * «Следующая запись», taken from a closed appointment
+     * «Следующая запись»: the closed appointment this one is booked after
      * (`GET /api/v1/bookings/[id]/next-slots`). The booking is the same booking
-     * in every other respect; the source is what the return rate counts.
+     * in every other respect; it is recorded as a rebooking of that visit,
+     * which is what the return rate counts.
      */
-    source: z.enum(["staff", "rebooking"]).default("staff"),
+    rebooked_from_booking_id: z.uuid().optional(),
   })
   .superRefine(refineServiceSelection);
 
@@ -208,6 +209,27 @@ async function handlePost(request: Request) {
         if (assignable !== "ok") return { failure: assignable };
       }
 
+      /*
+       * A rebooking names the visit it followed, and the claim is checked
+       * rather than taken: a closed appointment, of this same client, in a
+       * calendar the caller may act on. Otherwise any desk booking could be
+       * filed as one, and the return rate would count what nobody did.
+       */
+      const rebookedFrom = parsed.data.rebooked_from_booking_id
+        ? await loadBooking(tx, parsed.data.rebooked_from_booking_id)
+        : null;
+      if (
+        parsed.data.rebooked_from_booking_id &&
+        (!rebookedFrom ||
+          rebookedFrom.status !== "completed" ||
+          !rebookedFrom.clientId ||
+          rebookedFrom.clientId !== (parsed.data.client_id ?? null) ||
+          !(await mayActOnSpecialist(tx, actor, rebookedFrom.specialistId)))
+      ) {
+        return { failure: "REBOOKED_FROM_INVALID" as const };
+      }
+      const source = rebookedFrom ? ("rebooking" as const) : ("staff" as const);
+
       const draft = await loadBookingDraftFor(tx, {
         items,
         specialistId: parsed.data.specialist_id,
@@ -226,7 +248,8 @@ async function handlePost(request: Request) {
         workplaceId: parsed.data.workplace_id ?? null,
         clientId: parsed.data.client_id ?? null,
         interval,
-        source: parsed.data.source,
+        source,
+        rebookedFromBookingId: rebookedFrom?.id ?? null,
         // Staff bookings are agreed with the client on the spot, so they are
         // confirmed whatever the public page's confirmation mode is.
         confirmationMode: "instant",
@@ -264,7 +287,7 @@ async function handlePost(request: Request) {
           specialist_id: parsed.data.specialist_id,
           starts_at: interval.start,
           ends_at: interval.end,
-          source: parsed.data.source,
+          source,
         },
         requestId: id,
       });
@@ -349,6 +372,13 @@ async function handlePost(request: Request) {
           return apiError(422, "SERVICE_NOT_OFFERED", "The specialist does not perform this service", id);
         case "SERVICE_NOT_BOOKABLE":
           return apiError(422, "SERVICE_NOT_BOOKABLE", "The service has no bookable duration", id);
+        case "REBOOKED_FROM_INVALID":
+          return apiError(
+            422,
+            "REBOOKED_FROM_INVALID",
+            "A rebooking follows a closed appointment of the same client",
+            id,
+          );
         case "SLOT_UNAVAILABLE":
           logEvent(
             "info",

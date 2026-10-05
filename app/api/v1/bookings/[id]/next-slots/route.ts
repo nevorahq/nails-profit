@@ -29,7 +29,7 @@ const weeksSchema = z.coerce.number().int().min(1).max(12);
  * is not a suggestion.
  *
  * Only an answer. The booking itself is made by `POST /api/v1/bookings` with
- * `source: "rebooking"`, so it is confirmed, written to the client and put in
+ * `rebooked_from_booking_id`, so it is confirmed, written to the client and put in
  * the master's day exactly as any other booking taken by staff — a second way
  * to create an appointment would be a second set of those rules to keep.
  *

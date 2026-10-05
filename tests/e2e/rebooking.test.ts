@@ -10,8 +10,8 @@ import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/stu
 
 /**
  * «Следующая запись», roadmap phase 8: from a closed appointment, the same
- * sitting N weeks on, booked through the one staff path with `source:
- * "rebooking"`.
+ * sitting N weeks on, booked through the one staff path naming the visit it
+ * follows (`rebooked_from_booking_id`).
  */
 type Booking = { id: string; version: number; status: string; source: string; starts_at: string };
 type Suggestion = {
@@ -133,7 +133,7 @@ describe("the next appointment from a closed one", () => {
       services: suggestion.services,
       service_id: undefined,
       starts_at: startsAt,
-      source: "rebooking",
+      rebooked_from_booking_id: visit.id,
     });
 
     expect(created.status).toBe("confirmed");
@@ -141,6 +141,7 @@ describe("the next appointment from a closed one", () => {
 
     const [row] = await adminDb.select().from(bookings).where(eq(bookings.id, created.id));
     expect(row.source).toBe("rebooking");
+    expect(row.rebookedFromBookingId).toBe(visit.id);
 
     // The same messages the staff path writes: the client's confirmation and
     // the line in the master's feed.
@@ -182,6 +183,47 @@ describe("the next appointment from a closed one", () => {
       expect(response.status).toBe(422);
       expect(errorCodeOf(response)).toBe("VALIDATION_ERROR");
     }
+  });
+});
+
+describe("a rebooking names a visit it really followed", () => {
+  let other: string;
+
+  beforeAll(async () => {
+    other = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/clients", { name: "Другая", email: "rebook-other@studio.example" }),
+    ).id;
+  });
+
+  async function refused(body: Record<string, unknown>, actor: Actor = studio.owner) {
+    const response = await actor.post(
+      "/api/v1/bookings",
+      {
+        location_id: locationId,
+        specialist_id: studio.specialistId,
+        service_id: studio.serviceId,
+        client_id: clientId,
+        starts_at: `${isoDay(weekdayAhead(3, 11))}T08:00:00.000Z`,
+        ...body,
+      },
+      { "idempotency-key": `rebook-refused-${crypto.randomUUID()}` },
+    );
+    expect(response.status).toBe(422);
+    expect(errorCodeOf(response)).toBe("REBOOKED_FROM_INVALID");
+  }
+
+  test("not one that has not been closed", async () => {
+    const open = await book({ starts_at: `${isoDay(weekdayAhead(3, 12))}T08:00:00.000Z` });
+    await refused({ rebooked_from_booking_id: open.id });
+  });
+
+  test("not another client's visit", async () => {
+    const visit = await closed({ starts_at: `${isoDay(weekdayAhead(3, 13))}T08:00:00.000Z` }, 8);
+    await refused({ rebooked_from_booking_id: visit.id, client_id: other });
+  });
+
+  test("not an id that names nothing", async () => {
+    await refused({ rebooked_from_booking_id: crypto.randomUUID() });
   });
 });
 

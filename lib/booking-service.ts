@@ -295,6 +295,8 @@ export type CreateBookingInput = Readonly<{
   clientNameSnapshot?: string | null;
   interval: Interval;
   source: "public_booking" | "staff" | "rebooking" | "waitlist" | "import" | "api";
+  /** The closed appointment a rebooking follows; see the column in `db/schema.ts`. */
+  rebookedFromBookingId?: string | null;
   /** `instant` confirms on creation; `manual` leaves a request the studio answers. */
   confirmationMode: "instant" | "manual";
   confirmationTtlMinutes?: number;
@@ -364,6 +366,7 @@ export async function createBooking(
       endsAt: input.interval.end,
       status,
       source: input.source,
+      rebookedFromBookingId: input.rebookedFromBookingId ?? null,
       confirmationDueAt,
       confirmedAt: status === "confirmed" ? input.now : null,
       createdBy: input.actorUserId,

@@ -138,6 +138,7 @@ export function bookingPayload(
     ends_at: booking.endsAt,
     status: booking.status,
     source: booking.source,
+    rebooked_from_booking_id: booking.rebookedFromBookingId,
     confirmation_due_at: booking.confirmationDueAt,
     confirmed_at: booking.confirmedAt,
     cancelled_at: booking.cancelledAt,

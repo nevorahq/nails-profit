@@ -30,9 +30,8 @@ type Suggestion = Readonly<{
  * of the same master for the same sitting, and one more tap books it.
  *
  * The booking goes through `POST /api/v1/bookings` like any other taken by
- * staff — confirmed, written to the client, put in the master's day — with
- * `source: "rebooking"` as the only difference, which is what the return rate
- * counts.
+ * staff — confirmed, written to the client, put in the master's day — naming
+ * the appointment it follows, which is what the return rate counts.
  */
 export function NextVisit({
   bookingId,
@@ -102,7 +101,7 @@ export function NextVisit({
         client_id: found.client_id,
         services: found.services,
         starts_at: startsAt,
-        source: "rebooking",
+        rebooked_from_booking_id: bookingId,
       }),
     });
     setPending(false);

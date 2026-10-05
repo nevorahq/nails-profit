@@ -1,0 +1,3 @@
+ALTER TABLE "booking" ADD COLUMN "rebooked_from_booking_id" uuid;--> statement-breakpoint
+ALTER TABLE "booking" ADD CONSTRAINT "booking_rebooked_from_booking_id_booking_id_fk" FOREIGN KEY ("rebooked_from_booking_id") REFERENCES "public"."booking"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "booking_rebooked_from_idx" ON "booking" USING btree ("rebooked_from_booking_id") WHERE "booking"."rebooked_from_booking_id" is not null;
