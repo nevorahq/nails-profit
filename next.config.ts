@@ -21,7 +21,22 @@ const nextConfig: NextConfig = {
         : []),
     ];
 
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      /*
+       * The push worker, always fetched fresh. A browser otherwise keeps a
+       * worker it has for up to a day, and a fix to what a notification opens
+       * would reach a master's phone tomorrow. The file is a few hundred bytes
+       * and checked rarely, so revalidating it costs nothing.
+       */
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
   },
 };
 
