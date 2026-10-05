@@ -47,6 +47,8 @@ const notDrawnInPlainView = (key: string) =>
     "capacity.rateHint",
     "capacity.profitPerPracticalHour",
     "capacity.practical",
+    // `/app/how` names the detailed view's term only to whoever has it on.
+    "how.leftDetailed",
   ].includes(key);
 
 /** Messages only ever shown to somebody working alone. */

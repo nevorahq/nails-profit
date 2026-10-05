@@ -82,6 +82,8 @@ export function AppShell({
   const titles = [
     ...items.map((item) => ({ href: item.href, title: t(item.key) })),
     { href: "/app/more", title: t("nav.more") },
+    // Reached from every «Подробнее», not from the navigation.
+    { href: "/app/how", title: t("how.title") },
   ];
 
   return (
