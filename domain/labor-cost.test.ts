@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   laborCostTotals,
   monthlyLaborCostMinor,
+  monthlyWageMinor,
   selectLaborRules,
   type LaborCostRuleRow,
 } from "@/domain/labor-cost";
@@ -122,6 +123,19 @@ describe("monthlyLaborCostMinor", () => {
     });
 
     expect(monthlyLaborCostMinor(share, { revenueMinor: 333_333 })).toBe(50_000 + 5_000);
+  });
+});
+
+describe("monthlyWageMinor", () => {
+  it("is what the person is owed, without the contributions the month also pays", () => {
+    const salary = rule({ id: "s", amountMinor: 500_00, payrollTaxBasisPoints: 2_400 });
+    expect(monthlyWageMinor(salary, { revenueMinor: 0 })).toBe(500_00);
+    expect(monthlyLaborCostMinor(salary, { revenueMinor: 0 })).toBe(620_00);
+  });
+
+  it("takes a share of revenue the same way the cost does", () => {
+    const share = rule({ id: "p", basis: "percent_revenue", amountMinor: null, basisPoints: 1_000 });
+    expect(monthlyWageMinor(share, { revenueMinor: 1_234_56 })).toBe(123_46);
   });
 });
 

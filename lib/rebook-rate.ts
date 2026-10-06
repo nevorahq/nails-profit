@@ -3,14 +3,15 @@ import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { bookings, visits } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { rebookRate, type RebookRate } from "@/domain/rebook-rate";
-import type { DashboardFilters } from "@/lib/dashboard";
+import { studioVisitsOnly, type DashboardFilters } from "@/lib/dashboard";
 
 /**
  * «Записались на следующий раз» over the report's own period and scope.
  *
  * The same filters `loadDashboard` takes, read the same way — the visit's
- * closing time inside the period, narrowed to one master when the report is —
- * so the rate and the cards above it are about the same visits. The rule for
+ * closing time inside the period, narrowed to one master when the report is,
+ * a renter's left out when it is not — so the rate and the cards above it are
+ * about the same visits. The rule for
  * which of them count lives in `domain/rebook-rate.ts`.
  */
 export async function loadRebookRate(tx: TenantTransaction, filters: DashboardFilters): Promise<RebookRate> {
@@ -31,6 +32,7 @@ export async function loadRebookRate(tx: TenantTransaction, filters: DashboardFi
         filters.from ? gte(visits.completedAt, filters.from) : undefined,
         filters.to ? lte(visits.completedAt, filters.to) : undefined,
         filters.specialistId ? eq(visits.specialistId, filters.specialistId) : undefined,
+        studioVisitsOnly(filters),
       ),
     );
 

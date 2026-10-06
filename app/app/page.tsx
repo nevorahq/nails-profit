@@ -549,6 +549,7 @@ export default async function AppPage({
         register={register}
         locale={locale}
         role={membership.role}
+        businessType={businessType}
         active="summary"
         state={{ from: filters.from, to: filters.to, specialist: requestedSpecialist, month: period.month }}
       />

@@ -289,7 +289,7 @@ describe("every way a photo goes takes its object with it", () => {
     const exported = dataOf<{ format_version: number; visit_photos: { id: string; url: string; storagePath?: string }[] }>(
       await studio.owner.get("/api/v1/organizations/export"),
     );
-    expect(exported.format_version).toBe(6);
+    expect(exported.format_version).toBe(7);
     const listed = exported.visit_photos.find((item) => item.id === photo.id);
     // A driver that does not sign links to the application's own address.
     expect(listed?.url).toBe(photo.url);

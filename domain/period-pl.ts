@@ -8,7 +8,9 @@ import { byCategory, totalByClass, type ResolvedExpense } from "@/domain/expense
  *
  * Two levels, and the order of the lines is the argument:
  *
- *   Выручка
+ *   Выручка от визитов
+ *   + доход от аренды кресел (ежемесячно, без переменных затрат)
+ *   = Выручка
  *   − материалы            (потребление по визитам, не закупка)
  *   − оплата труда         (комиссии по снапшотам визитов)
  *   = Contribution Margin
@@ -46,11 +48,24 @@ export type PeriodPLInput = Readonly<{
   laborRules?: readonly LaborCostRuleRow[];
   /** What the owner keeps back before anything counts as safe to take out. */
   withdrawalReserveMinor?: number;
+  /**
+   * Rent owed this month by masters renting a chair (`domain/chair-rent.ts`).
+   * Absent means none. Their visits are already out of `metrics`.
+   */
+  chairRentMinor?: number;
 }>;
 
 export type PeriodPL = Readonly<{
   month: string;
 
+  /** What the studio's own visits took. Renters' visits are not in it. */
+  visitRevenueMinor: number;
+  /**
+   * Rent from masters renting a chair. Revenue with no variable cost against
+   * it, so it reaches the contribution margin whole.
+   */
+  chairRentMinor: number;
+  /** The two above together: everything the studio earned this month. */
   revenueMinor: number;
   /**
    * What the state and the bank took at the level of the visit. Already inside
@@ -78,7 +93,8 @@ export type PeriodPL = Readonly<{
    * Operating profit over the period's whole revenue, in basis points. Null
    * when nothing was earned, where a ratio has no meaning.
    *
-   * The denominator is every visit's revenue, not only the costed ones. Pairing
+   * The denominator is every visit's revenue, not only the costed ones, and the
+   * chairs' rent with it. Pairing
    * a full month of overhead with a partial month of revenue would report a
    * margin higher than the business earned, and of the two directions to be
    * wrong in, this product must not be the one that flatters. Whenever
@@ -121,10 +137,16 @@ export function buildPeriodPL(input: PeriodPLInput): PeriodPL {
   const cashOnly = input.expenses.filter((row) => row.class === "cash_only");
   const totals = totalByClass(input.expenses);
 
+  // A wage set as a share of revenue is a share of the work done here, so it
+  // is read off the visits; a renter's rent is nobody's wage base.
   const labour = laborCostTotals(input.laborRules ?? [], { revenueMinor: metrics.revenueMinor });
 
+  const chairRentMinor = input.chairRentMinor ?? 0;
+  const revenueMinor = metrics.revenueMinor + chairRentMinor;
+  const contributionMarginMinor = metrics.contributionMarginMinor + chairRentMinor;
+
   const operatingProfitMinor =
-    metrics.contributionMarginMinor +
+    contributionMarginMinor +
     metrics.principalLabourMinor -
     labour.salariedMinor -
     totals.overhead;
@@ -145,13 +167,15 @@ export function buildPeriodPL(input: PeriodPLInput): PeriodPL {
   return {
     month: input.month,
 
-    revenueMinor: metrics.revenueMinor,
+    visitRevenueMinor: metrics.revenueMinor,
+    chairRentMinor,
+    revenueMinor,
     vatMinor: metrics.vatMinor,
     turnoverTaxMinor: metrics.turnoverTaxMinor,
     payrollTaxMinor: metrics.payrollTaxMinor,
     paymentCommissionMinor: metrics.paymentCommissionMinor,
     labourCostMinor: metrics.labourCostMinor,
-    contributionMarginMinor: metrics.contributionMarginMinor,
+    contributionMarginMinor,
 
     principalLabourMinor: metrics.principalLabourMinor,
     salariedLabourMinor: labour.salariedMinor,
@@ -159,9 +183,7 @@ export function buildPeriodPL(input: PeriodPLInput): PeriodPL {
     overheadByCategory: byCategory(overhead),
     operatingProfitMinor,
     operatingMarginBasisPoints:
-      metrics.revenueMinor === 0
-        ? null
-        : roundRatio(operatingProfitMinor * 10_000, metrics.revenueMinor),
+      revenueMinor === 0 ? null : roundRatio(operatingProfitMinor * 10_000, revenueMinor),
 
     ownerWageMinor: labour.ownerMinor,
     economicProfitMinor,

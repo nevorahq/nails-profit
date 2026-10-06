@@ -112,6 +112,7 @@ export default async function ServicesReportPage({
         register={register}
         locale={locale}
         role={membership.role}
+        businessType={businessType}
         active="services"
         state={{ from: filters.from, to: filters.to, specialist: filters.specialist, month: period.month }}
       />

@@ -95,7 +95,12 @@ export async function createService(
 
 export async function createSpecialist(
   organizationId: string,
-  options: { name?: string; userId?: string; isPrincipal?: boolean } = {},
+  options: {
+    name?: string;
+    userId?: string;
+    isPrincipal?: boolean;
+    cooperationType?: "commission" | "rent" | "staff";
+  } = {},
 ) {
   const [specialist] = await adminDb
     .insert(specialists)
@@ -104,6 +109,7 @@ export async function createSpecialist(
       name: options.name ?? "Мастер",
       userId: options.userId ?? null,
       isPrincipal: options.isPrincipal ?? false,
+      cooperationType: options.cooperationType ?? "commission",
     })
     .returning();
   return specialist;

@@ -282,6 +282,32 @@ describe("buildCapacityView", () => {
     expect(view.breakEvenRevenueMinor).not.toBeNull();
   });
 
+  it("lets the chairs' rent pay its part before the visits are asked to", () => {
+    const view = buildCapacityView({ ...base, chairRentMinor: 3_000_00 });
+
+    expect(view.fixedCostMinor).toBe(12_000_00);
+    expect(view.chairRentMinor).toBe(3_000_00);
+    expect(view.fixedCostToEarnMinor).toBe(9_000_00);
+    // 9 000 over 75 practical hours, and the break-even of the 9 000 alone at
+    // the visits' own ratio of 45%.
+    expect(view.fixedCostRateMinorPerHour).toBe(120_00);
+    expect(view.breakEvenRevenueMinor).toBe(20_000_00);
+  });
+
+  it("is past break-even at no visits when the rent covers every fixed cost", () => {
+    const view = buildCapacityView({
+      ...base,
+      revenueMinor: 0,
+      contributionMarginMinor: 0,
+      principalLabourMinor: 0,
+      chairRentMinor: 15_000_00,
+    });
+
+    expect(view.fixedCostToEarnMinor).toBe(0);
+    expect(view.breakEvenRevenueMinor).toBe(0);
+    expect(view.revenueToBreakEvenMinor).toBe(0);
+  });
+
   it("carries a loss through profit per practical hour", () => {
     const view = buildCapacityView({ ...base, operatingProfitMinor: -3_000_00 });
 

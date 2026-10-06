@@ -14,10 +14,12 @@ import {
 import { db } from "@/db";
 import { withTenant } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
+import { paidPerVisit } from "@/domain/cooperation";
 import { commissionBases, commissionTypes } from "@/domain/costing";
 import { DEFAULT_WORKWEEK } from "@/domain/workspace-defaults";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { zeroDefaultRule } from "@/lib/cooperation";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -79,7 +81,8 @@ const createSpecialistSchema = z.object({
   sort_order: z.int().min(0).max(1_000).optional(),
   // RES-005: a commission specialist needs a default rule. Optional here so the
   // record can be created first, but the costing then reports the gap rather
-  // than treating the commission as zero.
+  // than treating the commission as zero. A renter or a salaried master given
+  // none gets 0%.
   default_rule: defaultRuleInput.optional(),
   /**
    * «Это я»: the owner of a solo studio, catalogued as their own master.
@@ -360,6 +363,12 @@ export async function POST(request: Request) {
           })),
         ),
       );
+    }
+
+    // A chair rented or a salary agreed with no rate given: the rule is 0%,
+    // written here rather than left to a hint — see `domain/cooperation.ts`.
+    if (!parsed.data.default_rule && !paidPerVisit(parsed.data.cooperation_type)) {
+      await zeroDefaultRule(tx, { organizationId: actor.organizationId, userId: actor.userId, requestId: id }, created.id);
     }
 
     if (parsed.data.default_rule) {

@@ -225,6 +225,15 @@ export type CapacityView = Readonly<{
   utilizationBasisPoints: number | null;
 
   fixedCostMinor: number;
+  /** Rent from masters renting a chair, the month's income with no hours of its own. */
+  chairRentMinor: number;
+  /**
+   * The fixed costs the studio's own hours still have to earn once the chairs'
+   * rent has paid its part. What the rate per hour, a service's share and the
+   * break-even point are all computed from: rent arrives whatever the visits
+   * do, so asking the visits to cover it again would set a target too high.
+   */
+  fixedCostToEarnMinor: number;
   fixedCostRateMinorPerHour: number | null;
 
   contributionBasisPoints: number | null;
@@ -249,6 +258,8 @@ export function buildCapacityView(input: {
   overheadMinor: number;
   ownerWageMinor: number | null;
   operatingProfitMinor: number;
+  /** Absent means no chair is rented. `revenueMinor` and the margin are the visits' alone. */
+  chairRentMinor?: number;
 }): CapacityView {
   const practicalMinutes = practicalCapacityMinutes(
     input.scheduledMinutes,
@@ -256,8 +267,15 @@ export function buildCapacityView(input: {
   );
   const fixedCostMinor = input.overheadMinor + input.salariedLabourMinor;
 
+  const chairRentMinor = input.chairRentMinor ?? 0;
+  const fixedCostToEarnMinor = Math.max(0, fixedCostMinor - chairRentMinor);
+
   const contributionBasisPoints = contributionRatioBasisPoints(input);
-  const breakEven = breakEvenRevenueMinor(fixedCostMinor, contributionBasisPoints);
+  // Rent covering every fixed cost is break-even at no visits at all, whether or
+  // not the visits have a margin to state.
+  const breakEvenFor = (target: number) =>
+    target <= 0 ? 0 : breakEvenRevenueMinor(target, contributionBasisPoints);
+  const breakEven = breakEvenFor(fixedCostToEarnMinor);
 
   return {
     scheduledMinutes: input.scheduledMinutes,
@@ -267,14 +285,16 @@ export function buildCapacityView(input: {
     utilizationBasisPoints: capacityUtilizationBasisPoints(input.bookedMinutes, practicalMinutes),
 
     fixedCostMinor,
-    fixedCostRateMinorPerHour: fixedCostRateMinorPerHour(fixedCostMinor, practicalMinutes),
+    chairRentMinor,
+    fixedCostToEarnMinor,
+    fixedCostRateMinorPerHour: fixedCostRateMinorPerHour(fixedCostToEarnMinor, practicalMinutes),
 
     contributionBasisPoints,
     breakEvenRevenueMinor: breakEven,
     breakEvenWithOwnerWageMinor:
       input.ownerWageMinor === null
         ? null
-        : breakEvenRevenueMinor(fixedCostMinor + input.ownerWageMinor, contributionBasisPoints),
+        : breakEvenFor(fixedCostToEarnMinor + input.ownerWageMinor),
     revenueToBreakEvenMinor: breakEven === null ? null : Math.max(0, breakEven - input.revenueMinor),
 
     operatingProfitPerPracticalHourMinor:

@@ -60,6 +60,9 @@ test.describe("a master's card", () => {
         "#commission",
       );
 
+      // The week lives on its own tab, one press from the rate.
+      await page.getByRole("tab", { name: "Schedule and addresses" }).click();
+
       /*
        * And the week, in one press rather than on another screen. The verdict
        * on the whole card is the banner; the address it is true of is the row
@@ -105,6 +108,69 @@ test.describe("a master's card", () => {
       // Stored, not only redrawn: the list says it too.
       await page.goto("/app/specialists");
       await expect(page.getByRole("link", { name: /Cora Clarke/ })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("keeps each question on a tab of its own, and a link opens the right one", async ({
+    baseURL,
+    browser,
+    browserErrors,
+  }) => {
+    void browserErrors;
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    try {
+      const page = await context.newPage();
+      await page.goto(`/app/specialists/${studio.colleagueId}`);
+
+      const tabs = page.getByRole("tab");
+      await expect(tabs).toHaveText(["Pay", "Services", "Schedule and addresses", "Account"]);
+      await expect(page.getByRole("tab", { name: "Pay" })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: "Available services" })).toHaveCount(0);
+
+      // The base of the percentage is behind «More options», closed.
+      await expect(page.getByRole("combobox", { name: "The share is taken" })).toBeHidden();
+
+      await page.getByRole("tab", { name: "Services" }).click();
+      await expect(page).toHaveURL(/#services$/);
+      await expect(page.getByRole("tab", { name: "Services" })).toHaveAttribute("aria-selected", "true");
+
+      await page.goto(`/app/specialists/${studio.colleagueId}#account`);
+      await expect(page.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: "Removing this master" })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("lets a chair and takes its rent, with no rate asked of the renter", async ({
+    baseURL,
+    browser,
+    browserErrors,
+  }) => {
+    void browserErrors;
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    try {
+      const page = await context.newPage();
+      await page.goto(`/app/specialists/${studio.colleagueId}`);
+
+      await page.getByRole("combobox", { name: "Cooperation" }).selectOption("rent");
+      await expect(page.getByText(/a 0% rate is set automatically/)).toBeVisible();
+      await page.locator("form").filter({ has: page.getByRole("combobox", { name: "Cooperation" }) })
+        .getByRole("button", { name: "Save" }).click();
+
+      await expect(page.getByRole("heading", { name: "Chair rent" })).toBeVisible();
+      await page.getByRole("spinbutton", { name: /Amount a month/ }).fill("3000");
+      await page.locator("#rent").getByRole("button", { name: "Save" }).click();
+      await expect(page.locator("#rent")).toContainText("a month");
+      await expect(page.locator("#rent")).not.toContainText("not set");
+
+      // Back to a percentage asks for the rate.
+      await page.getByRole("combobox", { name: "Cooperation" }).selectOption("commission");
+      await expect(page.getByText(/paid per visit again/)).toBeVisible();
     } finally {
       await context.close();
     }

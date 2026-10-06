@@ -60,6 +60,9 @@ const TABLES_IN_DELETE_ORDER = [
   "materials_costing_period",
   "client",
   "labor_cost_rule",
+  // Both point at `specialist` with `restrict`, so they go before it.
+  "chair_rent",
+  "master_payout",
   // Before the rule it belongs to: the FK cascades, but this list is meant to
   // state the order rather than lean on it.
   "commission_rule_service",

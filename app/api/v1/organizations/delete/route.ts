@@ -10,6 +10,7 @@ import {
   importJobs,
   invitations,
   laborCostRules,
+  masterPayouts,
   memberships,
   organizations,
   organizationLogos,
@@ -192,6 +193,13 @@ export async function POST(request: Request) {
       .update(laborCostRules)
       .set({ label: null, updatedBy: actor.userId, updatedAt: new Date() })
       .where(eq(laborCostRules.organizationId, actor.organizationId));
+
+    // A payout keeps its amount and loses the note — «за октябрь, Маше» is
+    // the owner's words about a person.
+    await tx
+      .update(masterPayouts)
+      .set({ note: null, updatedBy: actor.userId, updatedAt: new Date() })
+      .where(eq(masterPayouts.organizationId, actor.organizationId));
 
     await tx
       .update(importJobs)

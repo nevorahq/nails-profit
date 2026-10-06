@@ -5,8 +5,9 @@ import type { AppLocale } from "@/i18n/messages";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { queryFor } from "@/lib/filter-bar";
+import type { BusinessType } from "@/i18n/business-labels";
 
-export type ReportTab = "summary" | "services" | "month";
+export type ReportTab = "summary" | "services" | "month" | "payouts";
 
 /**
  * The tabs of «Отчёт», and what each one carries over from the one being read.
@@ -23,6 +24,11 @@ export type ReportTab = "summary" | "services" | "month";
 export function reportTabs(
   role: MemberRole,
   state: Readonly<{ from?: string; to?: string; specialist?: string; month?: string | null }>,
+  /**
+   * «К выплате» is about masters the studio pays, so somebody working alone —
+   * whose only card is their own — is not offered it. Absent reads as a studio.
+   */
+  businessType: BusinessType = "studio",
 ): readonly { tab: ReportTab; href: string; key: MessageKey }[] {
   const period = { from: state.from, to: state.to, specialist: state.specialist };
 
@@ -36,6 +42,15 @@ export function reportTabs(
             href: queryFor("/app/reports/month", { month: state.month ?? undefined }),
             key: "report.tabMonth" as const,
           },
+          ...(businessType === "studio"
+            ? [
+                {
+                  tab: "payouts" as const,
+                  href: queryFor("/app/reports/payouts", { month: state.month ?? undefined }),
+                  key: "report.tabPayouts" as const,
+                },
+              ]
+            : []),
         ]
       : []),
   ];
@@ -47,6 +62,7 @@ export function ReportTabs({
   role,
   active,
   state,
+  businessType,
 }: {
   locale: AppLocale;
   /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
@@ -54,12 +70,13 @@ export function ReportTabs({
   role: MemberRole;
   active: ReportTab;
   state: Parameters<typeof reportTabs>[1];
+  businessType?: BusinessType;
 }) {
   const t = getTranslator(locale, register);
 
   return (
     <nav className="report-tabs" aria-label={t("report.tabs")}>
-      {reportTabs(role, state).map((item) => (
+      {reportTabs(role, state, businessType).map((item) => (
         <Link
           key={item.tab}
           className="report-tab"

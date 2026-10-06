@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { selectCommissionRule, toCommission } from "@/domain/commission";
+import type { Cooperation } from "@/domain/cooperation";
 import {
   CURRENT_FORMULA_VERSION,
   type Commission,
@@ -111,6 +112,12 @@ export type VisitDraft = Readonly<{
    * must not change when the flag is switched later.
    */
   masterIsPrincipal: boolean;
+  /**
+   * How the master works with the studio, snapshotted for the same reason: a
+   * renter's visits stay out of the studio's revenue (`lib/dashboard.ts`), and
+   * which visits those are must not change when the card does.
+   */
+  masterCooperation: Cooperation;
 }>;
 
 /** The shape the costing engine takes a line's rule in. */
@@ -423,7 +430,7 @@ export async function buildVisitDraft(
   }
 
   const [person] = await tx
-    .select({ isPrincipal: specialists.isPrincipal })
+    .select({ isPrincipal: specialists.isPrincipal, cooperationType: specialists.cooperationType })
     .from(specialists)
     .where(eq(specialists.id, input.specialistId))
     .limit(1);
@@ -482,6 +489,7 @@ export async function buildVisitDraft(
         : null,
     currency: (firstService.currency ?? "MDL") as Currency,
     masterIsPrincipal: person?.isPrincipal ?? false,
+    masterCooperation: person?.cooperationType ?? "commission",
     payment: paymentMethod
       ? {
           methodId: paymentMethod.id,
@@ -610,6 +618,7 @@ export async function recordCompletedVisit(
       commissionBase: draft.commission.base,
       currency: draft.currency,
       masterIsPrincipal: draft.masterIsPrincipal,
+      masterCooperation: draft.masterCooperation,
       paymentMethodId: draft.payment?.methodId ?? null,
       paymentCommissionBasisPointsSnapshot: draft.payment?.basisPoints ?? null,
       paymentFixedFeeMinorSnapshot: draft.payment?.fixedFeeMinor ?? null,

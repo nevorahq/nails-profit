@@ -78,7 +78,8 @@ export function ownerHeadline(pl: PeriodPL, capacity: CapacityView): Headline {
     costsMinor: costedRevenueMinor - pl.operatingProfitMinor,
     /*
      * The same comparison «Месяц подробно» prints as «осталось заработать»:
-     * the month's whole revenue against the target. Null when there is no
+     * the visits' revenue against the target — what the visits still have to
+     * earn once the chairs' rent has paid its part. Null when there is no
      * target — no margin to cover the rent with — and the bar would be a
      * promise that more visits help.
      */
@@ -89,7 +90,7 @@ export function ownerHeadline(pl: PeriodPL, capacity: CapacityView): Headline {
             targetMinor: target,
             toGoMinor: capacity.revenueToBreakEvenMinor ?? 0,
             progressBasisPoints:
-              target === 0 ? 10_000 : Math.min(10_000, Math.max(0, roundRatio(pl.revenueMinor * 10_000, target))),
+              target === 0 ? 10_000 : Math.min(10_000, Math.max(0, roundRatio(pl.visitRevenueMinor * 10_000, target))),
           },
     floor: floorOf(pl.incompleteVisits, pl.incompleteRevenueMinor),
   };

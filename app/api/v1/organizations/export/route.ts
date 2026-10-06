@@ -12,7 +12,9 @@ import {
   financialSnapshots,
   importJobs,
   invitations,
+  chairRents,
   laborCostRules,
+  masterPayouts,
   materialsCostingPeriods,
   memberships,
   organizations,
@@ -42,6 +44,9 @@ import { getPhotoStorage } from "@/lib/photo-storage";
 import { photoUrl } from "@/lib/visit-photos";
 
 /**
+ * 7: the chairs' rent (`chair_rents`) and the payouts to masters
+ * (`master_payouts`). Added, not moved.
+ *
  * 6: photos of work, each with a link that opens it for 24 hours. The bytes
  * are not in the file — a studio's gigabyte does not fit in one response — so
  * the owner downloads them from the links while they last.
@@ -60,7 +65,7 @@ import { photoUrl } from "@/lib/visit-photos";
  * still reads every field it knew, so the bump is a signal that more arrived,
  * not that anything moved.
  */
-export const EXPORT_FORMAT_VERSION = 6;
+export const EXPORT_FORMAT_VERSION = 7;
 
 /** How long the photo links in an export open: a day to download them. */
 const EXPORT_LINK_SECONDS = 24 * 60 * 60;
@@ -164,6 +169,13 @@ export async function GET(request: Request) {
       .select()
       .from(laborCostRules)
       .orderBy(asc(laborCostRules.activeFrom));
+    const chairRentRows = await tx.select().from(chairRents).orderBy(asc(chairRents.activeFrom));
+    // A note on a payout is free text the owner typed, so it can name anybody;
+    // it travels with the rest of the studio's own words.
+    const masterPayoutRows = await tx
+      .select()
+      .from(masterPayouts)
+      .orderBy(asc(masterPayouts.paidOn), asc(masterPayouts.createdAt));
     const paymentMethodRows = await tx
       .select()
       .from(paymentMethods)
@@ -233,6 +245,8 @@ export async function GET(request: Request) {
       expenses: expenseRows,
       labor_cost_rules: laborCostRows,
       owner_draws: ownerDrawRows,
+      chair_rents: chairRentRows,
+      master_payouts: masterPayoutRows,
       payment_methods: paymentMethodRows,
       tax_rules: taxRuleRows,
       materials_costing_periods: materialsPeriodRows,

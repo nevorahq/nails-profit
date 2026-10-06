@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { Hint } from "@/components/hint";
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { localeTag } from "@/i18n/translate";
+import { formatMoneyMinor } from "@/lib/format";
 import type { BusinessType } from "@/i18n/business-labels";
 import { type MessageKey } from "@/i18n/t";
 import { EffectiveDateField, effectiveDateFrom } from "@/components/effective-date-field";
@@ -42,8 +43,35 @@ export type LinkableMember = {
  * back to being a list: who works here, how they are paid, and whether they can
  * sign in.
  */
+type CardTab = "pay" | "services" | "schedule" | "account";
+
+const TAB_LABELS: Readonly<Record<CardTab, MessageKey>> = {
+  pay: "specialists.tabPay",
+  services: "specialists.tabServices",
+  schedule: "specialists.tabSchedule",
+  account: "specialists.tabAccount",
+};
+
+/**
+ * The tab an address points at. `#commission` and `#rent` are the anchors the
+ * pay panels have always had — the list's «не задана» links to the first — so
+ * they open the tab those panels now live on.
+ */
+function tabFromHash(hash: string): CardTab | null {
+  const name = hash.replace(/^#/, "");
+  if (name === "commission" || name === "rent") return "pay";
+  return name in TAB_LABELS ? (name as CardTab) : null;
+}
+
+export type ChairRentView = Readonly<{
+  /** The amount in force today; null when none was ever set. */
+  amount_minor: number | null;
+  scheduled: Readonly<{ amount_minor: number; active_from: string }> | null;
+}>;
+
 export function SpecialistDetail({
   person,
+  rent,
   services,
   linkableMembers,
   currency,
@@ -57,6 +85,12 @@ export function SpecialistDetail({
   timezone,
 }: {
   person: SpecialistRow;
+  /**
+   * What this person pays for their chair. Null for everybody but the owner —
+   * it is read under the same capability as the salaries — and drawn only
+   * while the card says «аренда».
+   */
+  rent: ChairRentView | null;
   services: ServiceOption[];
   /** Accounts with no card of their own; empty for a role that cannot link. */
   linkableMembers: LinkableMember[];
@@ -94,11 +128,38 @@ export function SpecialistDetail({
    * at the other is invisible to every client looking at the second.
    */
   const placesWithoutHours = places.filter((place) => place.weekdays.length === 0);
+  /*
+   * Read from the address after the first render rather than during it: the
+   * server has no hash, and a tab chosen on the server and another on the client
+   * would be a hydration mismatch on every deep link.
+   */
+  const tabs: readonly CardTab[] = showsPay || canManage
+    ? ["pay", "services", "schedule", "account"]
+    : ["pay", "services", "schedule"];
+  const [tab, setTab] = useState<CardTab>("pay");
+  useEffect(() => {
+    // Also when only the hash changes — a link to `#account` from this very
+    // page does not load it again.
+    const follow = () => {
+      const fromHash = tabFromHash(window.location.hash);
+      if (fromHash) setTab(fromHash);
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, []);
+  function openTab(next: CardTab) {
+    setTab(next);
+    setError(null);
+    window.history.replaceState(null, "", `#${next}`);
+  }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [ruleType, setRuleType] = useState("percentage");
+  const [cooperation, setCooperation] = useState(person.cooperation_type);
+  const [backRuleType, setBackRuleType] = useState("percentage");
   const [ruleService, setRuleService] = useState("");
   const [selected, setSelected] = useState<string[]>(
     person.service_assignments.map((assignment) => assignment.service_id),
@@ -187,6 +248,47 @@ export function SpecialistDetail({
     await send(
       `/api/v1/specialists/${person.id}/commission-rules`,
       { ...rule, ...(service ? { service_id: service } : {}), ...effectiveDateFrom(data, today) },
+      form,
+    );
+  }
+
+  /**
+   * How this person works with the studio, and the rule that follows from it.
+   *
+   * Leaving the percentage writes 0% on the server, in the same transaction;
+   * coming back to it needs the rate, because nothing on file says what it
+   * should be — the endpoint refuses the change without one.
+   */
+  async function saveCooperation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const back = cooperation === "commission" && person.cooperation_type !== "commission";
+    const rule = back ? ruleFromForm(data) : null;
+    if (back && !rule) {
+      setError(t("specialists.valueRequired"));
+      return;
+    }
+    await send(
+      `/api/v1/specialists/${person.id}`,
+      { cooperation_type: cooperation, ...(rule ? { default_rule: rule } : {}) },
+      undefined,
+      "PATCH",
+    );
+  }
+
+  async function saveRent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const typed = String(data.get("rent_amount") ?? "").trim();
+    const amount = Number(typed);
+    if (typed === "" || !Number.isFinite(amount) || amount < 0) {
+      setError(t("specialists.rentRequired"));
+      return;
+    }
+    await send(
+      `/api/v1/specialists/${person.id}/chair-rent`,
+      { amount_minor: Math.round(amount * 100), ...effectiveDateFrom(data, today) },
       form,
     );
   }
@@ -325,377 +427,505 @@ export function SpecialistDetail({
           withName={false}
           locale={locale}
         />
-        <dl className="specialist-facts">
-          <div>
-            <dt>{t("specialists.cooperation")}</dt>
-            <dd>
-              {t(`cooperation.${person.cooperation_type}` as MessageKey)}
-              {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
-            </dd>
-          </div>
-          {showsPay && (
-            <div>
-              <dt>{t("specialists.defaultRule")}</dt>
-              <dd>
-                {rule ?? (
-                  /*
-                    The list makes this pill a link to this page; here it goes
-                    to the form itself, which is far enough down that «не
-                    задана» and the field that answers it were never on screen
-                    together.
-                  */
-                  <a className="badge-warning badge-link" href="#commission">
-                    {t("specialists.notSet")}
-                  </a>
-                )}
-                {/*
-                  A change set for a later day. The rate above stays the one
-                  visits close with until then, and saying so here is what
-                  stops the owner from setting it a second time.
-                */}
-                {scheduled && (
-                  <span className="unit-hint">
-                    {t("rules.scheduled", {
-                      date: new Date(scheduled.active_from).toLocaleDateString(localeTag(locale), { timeZone: timezone }),
-                      rule: describeRule(scheduled, currency, t) ?? "—",
-                    })}
-                  </span>
-                )}
-              </dd>
-            </div>
-          )}
-        </dl>
-        {/*
-          The principal mark sits beside the cooperation type because it answers
-          the same question — how this person is paid. A studio has one working
-          owner or none, so the button is offered only while this card is the
-          one marked or nobody is; the endpoint refuses a second either way.
-        */}
-        {canManage && (
-          <button
-            className="inline-action"
-            type="button"
-            disabled={pending}
-            onClick={() => send(`/api/v1/specialists/${person.id}`, { is_principal: !person.is_principal }, undefined, "PATCH")}
-          >
-            {person.is_principal ? t("specialists.principalUnset") : t("specialists.principalSet")}
-          </button>
-        )}
       </section>
 
-      {showsPay && (
-      <section className="panel">
-        <h2>{t("specialists.account")}</h2>
-        {person.user_id ? (
-          <div className="inline-actions">
-            <span>{t("specialists.accountLinked")}</span>
+      {/*
+        One question per tab rather than one long page: how the person is paid,
+        what they do, where and when, and who signs in as them. The forms are
+        the ones the page always had; only where they stand has moved.
+      */}
+      <div className="report-tabs" role="tablist" aria-label={t("specialists.tabs")}>
+        {tabs.map((item) => (
+          <button
+            key={item}
+            type="button"
+            role="tab"
+            className="report-tab"
+            aria-selected={tab === item}
+            onClick={() => openTab(item)}
+          >
+            {t(TAB_LABELS[item])}
+          </button>
+        ))}
+      </div>
+
+      {tab === "pay" && (
+        <>
+          <section className="panel">
+            <dl className="specialist-facts">
+              {/* A fact only for whoever cannot change it: the select below says it to the rest. */}
+              {(!canManage || person.is_principal) && (
+                <div>
+                  <dt>{t("specialists.cooperation")}</dt>
+                  <dd>
+                    {!canManage && t(`cooperation.${person.cooperation_type}` as MessageKey)}
+                    {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
+                  </dd>
+                </div>
+              )}
+              {showsPay && (
+                <div>
+                  <dt>{t("specialists.defaultRule")}</dt>
+                  <dd>
+                    {rule ?? (
+                      /*
+                        The list makes this pill a link to this page; here it goes
+                        to the form itself, which is far enough down that «не
+                        задана» and the field that answers it were never on screen
+                        together.
+                      */
+                      <a className="badge-warning badge-link" href="#commission">
+                        {t("specialists.notSet")}
+                      </a>
+                    )}
+                    {/*
+                      A change set for a later day. The rate above stays the one
+                      visits close with until then, and saying so here is what
+                      stops the owner from setting it a second time.
+                    */}
+                    {scheduled && (
+                      <span className="unit-hint">
+                        {t("rules.scheduled", {
+                          date: new Date(scheduled.active_from).toLocaleDateString(localeTag(locale), { timeZone: timezone }),
+                          rule: describeRule(scheduled, currency, t) ?? "—",
+                        })}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            {/*
+              The principal mark sits beside the cooperation type because it answers
+              the same question — how this person is paid. A studio has one working
+              owner or none, so the button is offered only while this card is the
+              one marked or nobody is; the endpoint refuses a second either way.
+            */}
             {canManage && (
               <button
                 className="inline-action"
                 type="button"
                 disabled={pending}
-                onClick={() => send(`/api/v1/specialists/${person.id}`, { user_id: null }, undefined, "PATCH")}
+                onClick={() => send(`/api/v1/specialists/${person.id}`, { is_principal: !person.is_principal }, undefined, "PATCH")}
               >
-                {t("specialists.unlink")}
+                {person.is_principal ? t("specialists.principalUnset") : t("specialists.principalSet")}
               </button>
             )}
-          </div>
-        ) : (
-          <>
-            <p className="muted">{t("specialists.linkHint")}</p>
-            {!canManage ? (
-              <span className="badge-warning">{t("specialists.notLinked")}</span>
-            ) : linkableMembers.length === 0 ? (
-              <p className="muted">{t("specialists.noMembers")}</p>
-            ) : (
-              <form className="inline-form" onSubmit={linkAccount}>
+            {canManage && (
+              <form className="inline-form" onSubmit={saveCooperation}>
                 <label>
-                  {t("specialists.member")}
-                  <select name="user_id">
-                    {linkableMembers.map((member) => (
-                      <option key={member.user_id} value={member.user_id}>
-                        {member.email} — {t(`roles.${member.role}` as MessageKey)}
+                  {t("specialists.cooperation")}
+                  <select
+                    name="cooperation_type"
+                    value={cooperation}
+                    onChange={(event) => setCooperation(event.target.value as typeof cooperation)}
+                  >
+                    <option value="commission">{t("cooperation.commission")}</option>
+                    <option value="rent">{t("cooperation.rent")}</option>
+                    <option value="staff">{t("cooperation.staff")}</option>
+                  </select>
+                </label>
+                {cooperation === "commission" && person.cooperation_type !== "commission" && (
+                  <>
+                    <p className="muted">{t("specialists.backToPercentHint")}</p>
+                    <label>
+                      {t("specialists.type")}
+                      <select
+                        name="rule_type"
+                        value={backRuleType}
+                        onChange={(event) => setBackRuleType(event.target.value)}
+                      >
+                        <option value="percentage">{t("commissionType.percentage")}</option>
+                        <option value="fixed">{t("commissionType.fixed")}</option>
+                        <option value="hybrid">{t("commissionType.hybrid")}</option>
+                      </select>
+                    </label>
+                    {backRuleType === "hybrid" && (
+                      <label>
+                        {t("specialists.guaranteed", { currency })}
+                        <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
+                      </label>
+                    )}
+                    <label>
+                      {t("specialists.value")}
+                      <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
+                    </label>
+                  </>
+                )}
+                {cooperation !== "commission" && person.cooperation_type === "commission" && (
+                  <p className="muted">{t("specialists.noPayPerVisit")}</p>
+                )}
+                {cooperation !== person.cooperation_type && (
+                  <button className="primary-button" type="submit" disabled={pending}>
+                    {pending ? t("common.saving") : t("common.save")}
+                  </button>
+                )}
+              </form>
+            )}
+          </section>
+          {rent && person.cooperation_type === "rent" && (
+            <section className="panel" id="rent">
+              <h2>{t("specialists.rentTitle")}</h2>
+              <p>
+                {rent.amount_minor === null ? (
+                  <span className="badge-warning">{t("specialists.notSet")}</span>
+                ) : (
+                  t("specialists.rentPerMonth", { amount: formatMoneyMinor(rent.amount_minor, currency, localeTag(locale)) })
+                )}
+                {rent.scheduled && (
+                  <span className="unit-hint">
+                    {t("rules.scheduled", {
+                      date: new Date(rent.scheduled.active_from).toLocaleDateString(localeTag(locale), { timeZone: timezone }),
+                      rule: t("specialists.rentPerMonth", {
+                        amount: formatMoneyMinor(rent.scheduled.amount_minor, currency, localeTag(locale)),
+                      }),
+                    })}
+                  </span>
+                )}
+              </p>
+              <p className="muted">{t("specialists.rentHint")}</p>
+              <form className="inline-form" onSubmit={saveRent}>
+                <label>
+                  {t("specialists.rentAmount", { currency })}
+                  <input name="rent_amount" type="number" step="0.01" min="0" placeholder="3000" required />
+                </label>
+                <EffectiveDateField today={today} locale={locale} />
+                <button className="primary-button" type="submit" disabled={pending}>
+                  {pending ? t("common.saving") : t("common.save")}
+                </button>
+              </form>
+            </section>
+          )}
+          {showsPay && (
+          <section className="panel" id="commission">
+            <h2>{t("specialists.commission")}</h2>
+            {person.service_exceptions.length > 0 && (
+              <ul className="compact-list">
+                {person.service_exceptions.map((exception) => (
+                  <li key={exception.service_id}>
+                    {services.find((service) => service.id === exception.service_id)?.name ??
+                      t("services.service")}
+                    : {describeRule(exception, currency, t)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canManage && (
+              <form className="inline-form" onSubmit={saveRule}>
+                <label>
+                  {t("services.service")}
+                  <select
+                    name="service_id"
+                    value={ruleService}
+                    onChange={(event) => setRuleService(event.target.value)}
+                  >
+                    {/* The default rule, which is «все услуги» rather than a
+                        service left unchosen. */}
+                    <option value="">{t("specialists.defaultRuleOption")}</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name}
                       </option>
                     ))}
                   </select>
                 </label>
+                <label>
+                  {t("specialists.type")}
+                  <select
+                    name="rule_type"
+                    value={ruleType}
+                    onChange={(event) => setRuleType(event.target.value)}
+                  >
+                    <option value="percentage">{t("commissionType.percentage")}</option>
+                    <option value="fixed">{t("commissionType.fixed")}</option>
+                    <option value="hybrid">{t("commissionType.hybrid")}</option>
+                  </select>
+                </label>
+                {ruleType === "hybrid" && (
+                  <label>
+                    {t("specialists.guaranteed", { currency })}
+                    <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
+                  </label>
+                )}
+                <label>
+                  {t("specialists.value")}
+                  <input
+                    name="rule_value"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder={businessType === "solo" ? "0" : "40"}
+                    required
+                  />
+                </label>
+                {/*
+                  The one field on this page a solo studio cannot answer from
+                  what the product has told it.
+                  
+                  Registration writes her a rule at zero now, so this is where she
+                  comes only to change it. What it asks for is not a payment to
+                  anybody: it is the price of the hour, which is what makes two
+                  services comparable, and which the month's report then hands
+                  straight back (`domain/period-pl.ts`). Said here rather than only
+                  in that report, which is a fortnight away — and outside the
+                  label, where a «Подробнее» would toggle the field.
+                */}
+                {businessType === "solo" && person.is_principal && (
+                  <Hint
+                    short={t("specialists.imputedHintShort")}
+                    more={t("specialists.imputedHint")}
+                    moreLabel={t("common.more")}
+                    howLabel={t("common.howCounted")}
+                  />
+                )}
+                {/*
+                  What the percentage is taken from. The same answer for almost
+                  every studio, so it waits behind «Дополнительно» rather than
+                  sitting between the rate and the date; a closed panel still
+                  sends its field, so nothing about the form changes.
+                */}
+                {ruleType !== "fixed" && (
+                  <details className="pl-history">
+                    <summary>{t("specialists.advanced")}</summary>
+                    <label>
+                      {t("specialists.commissionBase")}
+                      <select name="rule_base" defaultValue="after_discount">
+                        <option value="after_discount">{t("commissionBase.after_discount")}</option>
+                        <option value="full_price">{t("commissionBase.full_price")}</option>
+                      </select>
+                    </label>
+                  </details>
+                )}
+                <EffectiveDateField today={today} locale={locale} />
                 <button className="primary-button" type="submit" disabled={pending}>
-                  {pending ? t("common.saving") : t("specialists.link")}
+                  {pending ? t("common.saving") : t("common.save")}
                 </button>
               </form>
             )}
-          </>
-        )}
-      </section>
+          </section>
+          )}
+        </>
       )}
 
-      {/*
-        The question the studio actually asks the day after hiring somebody,
-        and the one this page could not answer: can a client book them yet.
-
-        Read here and changed on «Онлайн-запись» — the two rows that decide it
-        are written there, two selects deep, and duplicating that editor would
-        give a studio two places to set one thing. What was missing was the
-        statement, not another form.
-      */}
-      <section className="panel">
-        <h2>{t("specialists.whereTitle")}</h2>
-        {verdict !== "bookable" && (
-          <p className="warning-banner">
-            {verdict === "no_address" ? t("specialists.whereEmpty") : t("specialists.whereNoHours")}
-          </p>
-        )}
-        {places.length > 0 && (
-          <ul className="compact-list">
-            {places.map((place) => (
-              <li key={place.locationId}>
-                {place.name}
-                {place.weekdays.length > 0 ? (
-                  <span className="unit-hint">
-                    {place.weekdays.map((day) => t(WEEKDAY_KEYS[day as Weekday])).join(" · ")}
-                  </span>
-                ) : (
-                  <span className="badge-warning">{t("specialists.whereNoHours")}</span>
-                )}
-                {!place.published && (
-                  <span className="unit-hint">{t("specialists.whereDraft")}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {canManage && placesWithoutHours.length > 0 && (
-          <>
-            <p className="muted">
-              {t("bookingSetup.setupWorkweek", {
-                from: DEFAULT_WORKWEEK.start,
-                to: DEFAULT_WORKWEEK.end,
-              })}
-            </p>
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={pending}
-              onClick={setDefaultWeek}
-            >
-              {pending ? t("common.saving") : t("bookingSetup.setupWorkweekAction")}
-            </button>
-          </>
-        )}
-        <p className="muted">{t("specialists.whereHint")}</p>
-        <Link className="text-link" href="/app/booking">
-          {t("specialists.openRota")}
-        </Link>
-      </section>
-
-      {showsPay && (
-      <section className="panel" id="commission">
-        <h2>{t("specialists.commission")}</h2>
-        {person.service_exceptions.length > 0 && (
-          <ul className="compact-list">
-            {person.service_exceptions.map((exception) => (
-              <li key={exception.service_id}>
-                {services.find((service) => service.id === exception.service_id)?.name ??
-                  t("services.service")}
-                : {describeRule(exception, currency, t)}
-              </li>
-            ))}
-          </ul>
-        )}
-        {canManage && (
-          <form className="inline-form" onSubmit={saveRule}>
-            <label>
-              {t("services.service")}
-              <select
-                name="service_id"
-                value={ruleService}
-                onChange={(event) => setRuleService(event.target.value)}
-              >
-                {/* The default rule, which is «все услуги» rather than a
-                    service left unchosen. */}
-                <option value="">{t("specialists.defaultRuleOption")}</option>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("specialists.type")}
-              <select
-                name="rule_type"
-                value={ruleType}
-                onChange={(event) => setRuleType(event.target.value)}
-              >
-                <option value="percentage">{t("commissionType.percentage")}</option>
-                <option value="fixed">{t("commissionType.fixed")}</option>
-                <option value="hybrid">{t("commissionType.hybrid")}</option>
-              </select>
-            </label>
-            {ruleType === "hybrid" && (
-              <label>
-                {t("specialists.guaranteed", { currency })}
-                <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
-              </label>
-            )}
-            <label>
-              {t("specialists.value")}
-              <input
-                name="rule_value"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder={businessType === "solo" ? "0" : "40"}
-                required
-              />
-              {person.cooperation_type !== "commission" && (
-                <span className="muted">{t("specialists.zeroRuleHint")}</span>
-              )}
-            </label>
-            {/*
-              The one field on this page a solo studio cannot answer from
-              what the product has told it.
-              
-              Registration writes her a rule at zero now, so this is where she
-              comes only to change it. What it asks for is not a payment to
-              anybody: it is the price of the hour, which is what makes two
-              services comparable, and which the month's report then hands
-              straight back (`domain/period-pl.ts`). Said here rather than only
-              in that report, which is a fortnight away — and outside the
-              label, where a «Подробнее» would toggle the field.
-            */}
-            {businessType === "solo" && person.is_principal && (
-              <Hint
-                short={t("specialists.imputedHintShort")}
-                more={t("specialists.imputedHint")}
-                moreLabel={t("common.more")}
-                howLabel={t("common.howCounted")}
-              />
-            )}
-            {ruleType !== "fixed" && (
-              <label>
-                {t("specialists.commissionBase")}
-                <select name="rule_base" defaultValue="after_discount">
-                  <option value="after_discount">{t("commissionBase.after_discount")}</option>
-                  <option value="full_price">{t("commissionBase.full_price")}</option>
-                </select>
-              </label>
-            )}
-            <EffectiveDateField today={today} locale={locale} />
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("common.save")}
-            </button>
-          </form>
-        )}
-      </section>
-      )}
-
-      <section className="panel">
-        <h2>{t("specialists.offeredServices")}</h2>
-        {!canManage || services.length === 0 ? (
-          person.service_assignments.length === 0 ? (
-            <p className="muted">{t("specialists.allServices")}</p>
-          ) : (
-            <ul className="compact-list">
-              {person.service_assignments.map((assignment) => (
-                <li key={assignment.service_id}>
-                  {services.find((service) => service.id === assignment.service_id)?.name ??
-                    t("services.service")}
-                  {assignment.duration_minutes !== null && (
-                    <span className="unit-hint">
-                      {assignment.duration_minutes} {t("common.minutes")}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )
-        ) : (
-          <form onSubmit={saveServices}>
-            <fieldset className="specialist-service-list">
-              {/* The panel's heading says this already; the legend is here so
-                  the group has a name where the heading is not read as one. */}
-              <legend className="sr-only">{t("specialists.offeredServices")}</legend>
-              {services.map((service) => {
-                const ticked = selected.includes(service.id);
-                return (
-                  <div className="specialist-service-row" key={service.id}>
-                    <label className="checkbox-field specialist-service-name">
-                      <input
-                        type="checkbox"
-                        checked={ticked}
-                        onChange={(event) =>
-                          setSelected(
-                            event.target.checked
-                              ? [...selected, service.id]
-                              : selected.filter((id) => id !== service.id),
-                          )
-                        }
-                      />
-                      <strong>{service.name}</strong>
-                    </label>
-                    <label>
-                      {t("specialists.durationOverride")}
-                      <input
-                        type="number"
-                        min="1"
-                        max="720"
-                        step="1"
-                        disabled={!ticked}
-                        placeholder={service.duration_minutes ? String(service.duration_minutes) : "—"}
-                        value={durationByService[service.id] ?? ""}
-                        onChange={(event) =>
-                          setDurationByService({
-                            ...durationByService,
-                            [service.id]: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                );
-              })}
-            </fieldset>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("specialists.saveServices")}
-            </button>
-          </form>
-        )}
-      </section>
-
-      {canManage && (
+      {tab === "services" && (
         <section className="panel">
-          <h2>{t("specialists.removeTitle")}</h2>
-          <p className="muted">{t("specialists.deleteHint")}</p>
-          {confirmDelete ? (
-            <div className="inline-actions">
-              <button className="secondary-button danger" type="button" disabled={pending} onClick={remove}>
-                {t("specialists.deleteConfirm")}
-              </button>
-              <button
-                className="inline-action"
-                type="button"
-                disabled={pending}
-                onClick={() => setConfirmDelete(false)}
-              >
-                {t("common.cancel")}
-              </button>
-            </div>
+          <h2>{t("specialists.offeredServices")}</h2>
+          {!canManage || services.length === 0 ? (
+            person.service_assignments.length === 0 ? (
+              <p className="muted">{t("specialists.allServices")}</p>
+            ) : (
+              <ul className="compact-list">
+                {person.service_assignments.map((assignment) => (
+                  <li key={assignment.service_id}>
+                    {services.find((service) => service.id === assignment.service_id)?.name ??
+                      t("services.service")}
+                    {assignment.duration_minutes !== null && (
+                      <span className="unit-hint">
+                        {assignment.duration_minutes} {t("common.minutes")}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )
           ) : (
-            <button
-              className="inline-action danger"
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setError(null);
-                setConfirmDelete(true);
-              }}
-            >
-              {t("common.delete")}
-            </button>
+            <form onSubmit={saveServices}>
+              <fieldset className="specialist-service-list">
+                {/* The panel's heading says this already; the legend is here so
+                    the group has a name where the heading is not read as one. */}
+                <legend className="sr-only">{t("specialists.offeredServices")}</legend>
+                {services.map((service) => {
+                  const ticked = selected.includes(service.id);
+                  return (
+                    <div className="specialist-service-row" key={service.id}>
+                      <label className="checkbox-field specialist-service-name">
+                        <input
+                          type="checkbox"
+                          checked={ticked}
+                          onChange={(event) =>
+                            setSelected(
+                              event.target.checked
+                                ? [...selected, service.id]
+                                : selected.filter((id) => id !== service.id),
+                            )
+                          }
+                        />
+                        <strong>{service.name}</strong>
+                      </label>
+                      <label>
+                        {t("specialists.durationOverride")}
+                        <input
+                          type="number"
+                          min="1"
+                          max="720"
+                          step="1"
+                          disabled={!ticked}
+                          placeholder={service.duration_minutes ? String(service.duration_minutes) : "—"}
+                          value={durationByService[service.id] ?? ""}
+                          onChange={(event) =>
+                            setDurationByService({
+                              ...durationByService,
+                              [service.id]: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+              </fieldset>
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("common.saving") : t("specialists.saveServices")}
+              </button>
+            </form>
           )}
         </section>
+      )}
+
+      {tab === "schedule" && (
+        <>
+          {/*
+            The question the studio actually asks the day after hiring somebody,
+            and the one this page could not answer: can a client book them yet.
+
+            Read here and changed on «Онлайн-запись» — the two rows that decide it
+            are written there, two selects deep, and duplicating that editor would
+            give a studio two places to set one thing. What was missing was the
+            statement, not another form.
+          */}
+          <section className="panel">
+            <h2>{t("specialists.whereTitle")}</h2>
+            {verdict !== "bookable" && (
+              <p className="warning-banner">
+                {verdict === "no_address" ? t("specialists.whereEmpty") : t("specialists.whereNoHours")}
+              </p>
+            )}
+            {places.length > 0 && (
+              <ul className="compact-list">
+                {places.map((place) => (
+                  <li key={place.locationId}>
+                    {place.name}
+                    {place.weekdays.length > 0 ? (
+                      <span className="unit-hint">
+                        {place.weekdays.map((day) => t(WEEKDAY_KEYS[day as Weekday])).join(" · ")}
+                      </span>
+                    ) : (
+                      <span className="badge-warning">{t("specialists.whereNoHours")}</span>
+                    )}
+                    {!place.published && (
+                      <span className="unit-hint">{t("specialists.whereDraft")}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canManage && placesWithoutHours.length > 0 && (
+              <>
+                <p className="muted">
+                  {t("bookingSetup.setupWorkweek", {
+                    from: DEFAULT_WORKWEEK.start,
+                    to: DEFAULT_WORKWEEK.end,
+                  })}
+                </p>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={pending}
+                  onClick={setDefaultWeek}
+                >
+                  {pending ? t("common.saving") : t("bookingSetup.setupWorkweekAction")}
+                </button>
+              </>
+            )}
+            <p className="muted">{t("specialists.whereHint")}</p>
+            <Link className="text-link" href="/app/booking">
+              {t("specialists.openRota")}
+            </Link>
+          </section>
+        </>
+      )}
+
+      {tab === "account" && (
+        <>
+          {showsPay && (
+          <section className="panel">
+            <h2>{t("specialists.account")}</h2>
+            {person.user_id ? (
+              <div className="inline-actions">
+                <span>{t("specialists.accountLinked")}</span>
+                {canManage && (
+                  <button
+                    className="inline-action"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => send(`/api/v1/specialists/${person.id}`, { user_id: null }, undefined, "PATCH")}
+                  >
+                    {t("specialists.unlink")}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <p className="muted">{t("specialists.linkHint")}</p>
+                {!canManage ? (
+                  <span className="badge-warning">{t("specialists.notLinked")}</span>
+                ) : linkableMembers.length === 0 ? (
+                  <p className="muted">{t("specialists.noMembers")}</p>
+                ) : (
+                  <form className="inline-form" onSubmit={linkAccount}>
+                    <label>
+                      {t("specialists.member")}
+                      <select name="user_id">
+                        {linkableMembers.map((member) => (
+                          <option key={member.user_id} value={member.user_id}>
+                            {member.email} — {t(`roles.${member.role}` as MessageKey)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="primary-button" type="submit" disabled={pending}>
+                      {pending ? t("common.saving") : t("specialists.link")}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </section>
+          )}
+          {canManage && (
+            <section className="panel">
+              <h2>{t("specialists.removeTitle")}</h2>
+              <p className="muted">{t("specialists.deleteHint")}</p>
+              {confirmDelete ? (
+                <div className="inline-actions">
+                  <button className="secondary-button danger" type="button" disabled={pending} onClick={remove}>
+                    {t("specialists.deleteConfirm")}
+                  </button>
+                  <button
+                    className="inline-action"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="inline-action danger"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setError(null);
+                    setConfirmDelete(true);
+                  }}
+                >
+                  {t("common.delete")}
+                </button>
+              )}
+            </section>
+          )}
+        </>
       )}
     </main>
   );
