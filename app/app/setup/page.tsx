@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { OpeningSetup } from "@/components/opening-setup";
+import { clients } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { isPublicBookingEnabled } from "@/env";
+import { canImport } from "@/lib/import-flow";
 import { loadOpeningSetup } from "@/lib/opening-setup";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -19,9 +21,11 @@ export default async function OpeningSetupPage() {
   const { membership, locale, currency, businessType } = await requireWorkspace();
   if (!can(membership.role, "organization_settings", "write")) redirect("/app");
 
-  const view = await withTenant(membership.organizationId, (tx) =>
-    loadOpeningSetup(tx, { organizationId: membership.organizationId, userId: membership.userId, locale }),
-  );
+  const { view, hasClients } = await withTenant(membership.organizationId, async (tx) => ({
+    view: await loadOpeningSetup(tx, { organizationId: membership.organizationId, userId: membership.userId, locale }),
+    // Archived ones count: a studio that has had clients is not starting out.
+    hasClients: (await tx.select({ id: clients.id }).from(clients).limit(1)).length > 0,
+  }));
 
   return (
     <OpeningSetup
@@ -30,6 +34,7 @@ export default async function OpeningSetupPage() {
       currency={currency}
       businessType={businessType}
       bookingAvailable={isPublicBookingEnabled()}
+      offerClientImport={!hasClients && canImport(membership.role, "client")}
     />
   );
 }

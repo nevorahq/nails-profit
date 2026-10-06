@@ -1,16 +1,32 @@
 import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
 
 import { importJobs, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { decodeCsv, detectDelimiter, parseCsv } from "@/domain/csv";
+import { parseCsv } from "@/domain/csv";
 import { suggestMapping } from "@/domain/import-mapping";
+import { detectPreset } from "@/domain/import-presets";
 import { importTemplates, isImportableEntity } from "@/domain/import-templates";
-import { canImport, MAX_IMPORT_BYTES, previewFor, serializePreview, templateFields } from "@/lib/import-flow";
+import {
+  canImport,
+  MAX_IMPORT_BYTES,
+  previewFor,
+  readUpload,
+  serializePreview,
+  templateFields,
+} from "@/lib/import-flow";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
 import { checkRateLimit, IMPORT_UPLOAD_RULE, rateLimitKey } from "@/lib/rate-limit";
 import { getActiveMembership } from "@/lib/membership";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import type { AppLocale } from "@/i18n/messages";
+
+/**
+ * The contacts ticked in the browser, by their position in the file. Bounded
+ * well above any phone book a studio holds, so the list cannot be made into a
+ * way to send the server work.
+ */
+const selectionSchema = z.array(z.int().min(0)).max(20_000);
 
 /**
  * Upload, the first step of INT-002.
@@ -42,6 +58,7 @@ export async function POST(request: Request) {
   const form = await request.formData().catch(() => null);
   const entity = String(form?.get("entity") ?? "");
   const file = form?.get("file");
+  const selection = parseSelection(form?.get("selected"));
 
   if (!isImportableEntity(entity)) {
     return apiError(422, "VALIDATION_ERROR", "Unknown import entity", id, {
@@ -62,17 +79,29 @@ export async function POST(request: Request) {
     });
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const decoded = decodeCsv(bytes);
-  const delimiter = detectDelimiter(decoded.text);
-  const parsed = parseCsv(decoded.text, delimiter);
+  if (selection === "invalid") {
+    return apiError(422, "VALIDATION_ERROR", "The selection is invalid", id, {
+      fieldErrors: [{ field: "selected", code: "invalid", message: "The selection is invalid" }],
+    });
+  }
+
+  const upload = readUpload(new Uint8Array(await file.arrayBuffer()), entity, selection);
+  if ("error" in upload) {
+    return apiError(422, "VALIDATION_ERROR", "A contacts file can only import clients", id, {
+      fieldErrors: [{ field: "file", code: "invalid", message: "A contacts file can only import clients" }],
+    });
+  }
+  const { delimiter } = upload;
+  const parsed = parseCsv(upload.text, delimiter);
 
   if (parsed.headers.length === 0 || parsed.rows.length === 0) {
     return apiError(422, "EMPTY_FILE", "The file has no data rows", id);
   }
 
-  const mapping = suggestMapping(importTemplates[entity], parsed.headers);
-  const preview = previewFor(entity, decoded.text, delimiter, mapping);
+  // A recognised export maps itself; the owner can still correct any column.
+  const preset = detectPreset(importTemplates[entity], parsed.headers);
+  const mapping = preset?.mapping ?? suggestMapping(importTemplates[entity], parsed.headers);
+  const preview = previewFor(entity, upload.text, delimiter, mapping);
 
   const job = await withTenant(actor.organizationId, async (tx) => {
     const [organization] = await tx
@@ -88,8 +117,8 @@ export async function POST(request: Request) {
         entityType: entity,
         fileName: file.name,
         delimiter,
-        encoding: decoded.encoding,
-        sourceText: decoded.text,
+        encoding: upload.encoding,
+        sourceText: upload.text,
         headers: [...parsed.headers],
         mapping,
         createdBy: actor.userId,
@@ -104,7 +133,7 @@ export async function POST(request: Request) {
       source: "import",
       entityType: "import_job",
       entityId: created.id,
-      metadata: { rows: parsed.rows.length, bytes: file.size },
+      metadata: { rows: parsed.rows.length, bytes: file.size, preset: preset !== null, vcard: upload.kind === "vcard" },
     });
     return { ...created, currency: organization.currency, locale: organization.locale };
   });
@@ -114,11 +143,13 @@ export async function POST(request: Request) {
       id: job.id,
       entity,
       file_name: file.name,
-      encoding: decoded.encoding,
+      source: upload.kind,
+      encoding: upload.encoding,
       delimiter,
       headers: parsed.headers,
       fields: templateFields(entity),
       mapping,
+      preset: preset ? { id: preset.preset.id, source: preset.preset.source } : null,
       preview: serializePreview(entity, preview, {
         currency: job.currency,
         locale: job.locale as AppLocale,
@@ -127,6 +158,20 @@ export async function POST(request: Request) {
     id,
     201,
   );
+}
+
+/** Absent means every contact; anything but a list of positions is refused. */
+function parseSelection(value: FormDataEntryValue | null | undefined): ReadonlySet<number> | null | "invalid" {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return "invalid";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return "invalid";
+  }
+  const result = selectionSchema.safeParse(parsed);
+  return result.success ? new Set(result.data) : "invalid";
 }
 
 /** Past imports, so a result can be reopened after the fact. */

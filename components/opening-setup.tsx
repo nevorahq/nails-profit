@@ -9,6 +9,7 @@ import { parseIntegerValue, parseMoneyMinor } from "@/domain/import-values";
 import type { AppLocale } from "@/i18n/messages";
 import { getErrorMessage } from "@/i18n/messages";
 import { type MessageKey } from "@/i18n/t";
+import { ClientsStart } from "@/components/clients-start";
 import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import type { OpeningSetupView } from "@/lib/opening-setup";
 
@@ -52,6 +53,7 @@ export function OpeningSetup({
   currency,
   businessType,
   bookingAvailable,
+  offerClientImport,
 }: Readonly<{
   view: OpeningSetupView;
   locale: AppLocale;
@@ -59,6 +61,8 @@ export function OpeningSetup({
   businessType: "solo" | "studio";
   /** The deployment's own switch: with public booking off there is no page to open. */
   bookingAvailable: boolean;
+  /** Ask «У вас уже есть клиенты?» after saving: the studio has none yet, and the role may import them. */
+  offerClientImport: boolean;
 }>) {
   const t = useTranslator(locale);
   const register = useRegister();
@@ -85,6 +89,7 @@ export function OpeningSetup({
   const [problems, setProblems] = useState<OpeningProblem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const chosen = rows.filter((row) => row.checked);
   const problemFor = (field: string) => problems.find((problem) => problem.field === field);
@@ -133,8 +138,26 @@ export function OpeningSetup({
       setPending(false);
       return;
     }
+    if (offerClientImport) {
+      setSaved(true);
+      return;
+    }
+    goToApp();
+  }
+
+  function goToApp() {
     router.push("/app");
     router.refresh();
+  }
+
+  if (saved) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card workspace-card opening-card">
+          <ClientsStart locale={locale} onLater={goToApp} heading="h1" />
+        </section>
+      </main>
+    );
   }
 
   // The button the registration tick asked for leads; the other stays one tap away.

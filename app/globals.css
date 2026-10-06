@@ -449,6 +449,11 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .opening-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12rem; margin-top: 14rem; }
 .opening-actions { display: flex; flex-wrap: wrap; gap: 12rem; }
 .opening-actions > * { flex: 1 1 200rem; justify-content: center; text-align: center; }
+/* «У вас уже есть клиенты?»: after the prices, and on an empty client list. */
+.clients-start { display: grid; gap: 12rem; }
+.clients-start h1, .clients-start h2, .clients-start p { margin: 0; }
+.clients-start-actions { display: flex; flex-wrap: wrap; gap: 12rem; margin-top: 6rem; }
+.clients-start-actions > * { flex: 1 1 160rem; justify-content: center; text-align: center; }
 
 /*
  * The language picker, which sits above the card's own heading rather than
@@ -946,6 +951,22 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pl-history summary { cursor: pointer; color: var(--muted); font-size: 13rem; padding: 6rem 0; }
 .pl-history .compact-list { margin: 8rem 0 0; color: var(--muted); font-size: 13rem; }
 .unit-hint { margin-left: 8rem; color: var(--muted); font-size: 13rem; }
+
+/*
+ * «Контакты из телефона». A phone book runs to hundreds of rows, so the list
+ * scrolls inside the panel and «Продолжить» stays within reach below it.
+ */
+.contact-picker-search { display: flex; flex-direction: column; gap: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
+.contact-picker-search input { padding: 11rem 12rem; border-radius: 4rem; border: 1rem solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 16rem; }
+.contact-picker-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12rem; margin: 14rem 0; }
+.contact-picker-list { list-style: none; margin: 0 0 16rem; padding: 0; max-height: 420rem; overflow-y: auto; border: 1rem solid var(--line); border-radius: 4rem; }
+.contact-picker-list li + li { border-top: 1rem solid var(--line); }
+/* The row itself is the shared checkbox row (`label:has(> input)` below); the name and number stack beside the tick. */
+.contact-picker-list label { padding: 10rem 14rem; cursor: pointer; }
+.contact-picker-list input { flex: none; }
+.contact-picker-text { display: flex; flex-direction: column; gap: 2rem; min-width: 0; }
+.contact-picker-name { font-weight: 600; overflow-wrap: anywhere; }
+.contact-picker-phone { color: var(--muted); font-size: 13rem; overflow-wrap: anywhere; }
 
 .warning-banner { background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); border-radius: 4rem; padding: 16rem 20rem; margin: 20rem 0; font-size: 14rem; line-height: 1.6; }
 .warning-banner ul { margin: 8rem 0 0; padding-left: 20rem; }
