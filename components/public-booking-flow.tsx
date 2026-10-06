@@ -1021,7 +1021,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               )}
             </div>
 
-            {chosen.length > 0 && masters.length > 0 && (
+            {ribbon.length > 0 && chosen.length > 0 && masters.length > 0 && (
               <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
                 <h2 id="booking-days-title">{t("publicBooking.chooseDay")}</h2>
                 <div className="public-booking-days-strip">
