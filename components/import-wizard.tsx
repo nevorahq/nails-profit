@@ -3,9 +3,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import type { AppLocale } from "@/i18n/messages";
+import { decodeCsv } from "@/domain/csv";
+import { MAX_IMPORT_BYTES } from "@/domain/import-limits";
+import { parseVCards, type VCardContact } from "@/domain/vcard";
+import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { type MessageKey } from "@/i18n/t";
-import { useTranslator } from "@/components/lexicon-provider";
+import { ContactPicker } from "@/components/contact-picker";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
 /**
@@ -44,6 +48,8 @@ type Job = {
   id: string;
   entity: string;
   file_name: string;
+  /** `vcard` when the file was a phone's contacts, turned into a client list on upload. */
+  source?: "csv" | "vcard";
   encoding: string;
   delimiter: string;
   headers: string[];
@@ -61,10 +67,31 @@ const encodingLabels: Record<string, string> = {
   "windows-1251": "Windows-1251",
 };
 
-export function ImportWizard({ entities, locale }: { entities: string[]; locale: AppLocale }) {
+/** A phone's export, by name or by the type the browser gives it. */
+function isContactsFile(file: File): boolean {
+  return /\.vcf$|\.vcard$/i.test(file.name) || /vcard/i.test(file.type);
+}
+
+export function ImportWizard({
+  entities,
+  locale,
+  initialEntity,
+  fromPhone = false,
+}: {
+  entities: string[];
+  locale: AppLocale;
+  /** From a link such as «Из файла» on the clients page: what the file holds. */
+  initialEntity?: string;
+  /** From «Из телефона»: say up front how to get the contacts out of a phone. */
+  fromPhone?: boolean;
+}) {
   const router = useRouter();
   const t = useTranslator(locale);
-  const [entity, setEntity] = useState(entities[0] ?? "service");
+  const register = useRegister();
+  const [entity, setEntity] = useState(
+    initialEntity && entities.includes(initialEntity) ? initialEntity : (entities[0] ?? "service"),
+  );
+  const [contacts, setContacts] = useState<{ file: File; list: VCardContact[] } | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,22 +132,66 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
     setError(null);
     setResult(null);
 
-    const data = new FormData(event.currentTarget);
-    data.set("entity", entity);
-
-    const response = await fetch("/api/v1/imports", { method: "POST", body: data });
-    const body = await response.json();
-    setPending(false);
-
-    if (!response.ok) {
-      setError(body?.error?.message ?? t("import.readFailed"));
+    const file = new FormData(event.currentTarget).get("file");
+    if (file instanceof File && isContactsFile(file)) {
+      await openContacts(file);
       return;
     }
+
+    const data = new FormData(event.currentTarget);
+    data.set("entity", entity);
+    await send(data);
+  }
+
+  /*
+   * A contacts file is read here first, so the owner picks the clients out of
+   * the phone book before anything leaves the phone. The file itself is then
+   * uploaded with the positions ticked, and the server reads it the same way.
+   */
+  async function openContacts(file: File) {
+    if (!entities.includes("client")) {
+      setError(t("import.contactsClientsOnly"));
+      return;
+    }
+    if (file.size > MAX_IMPORT_BYTES) {
+      setError(getErrorMessage("FILE_TOO_LARGE", t("import.readFailed"), locale, register));
+      return;
+    }
+    const list = parseVCards(decodeCsv(new Uint8Array(await file.arrayBuffer())).text);
+    if (list.length === 0) {
+      setError(t("import.contactsEmpty"));
+      return;
+    }
+    setEntity("client");
+    setContacts({ file, list });
+  }
+
+  async function sendContacts(selected: number[]) {
+    if (!contacts) return;
+    const data = new FormData();
+    data.set("entity", "client");
+    data.set("file", contacts.file);
+    data.set("selected", JSON.stringify(selected));
+    if (await send(data)) setContacts(null);
+  }
+
+  async function send(data: FormData): Promise<boolean> {
+    setPending(true);
+    setError(null);
+    const response = await fetch("/api/v1/imports", { method: "POST", body: data }).catch(() => null);
+    const body = await response?.json().catch(() => null);
+    setPending(false);
+
+    if (!response?.ok) {
+      const code = body?.error?.code;
+      setError(code ? getErrorMessage(code, t("import.readFailed"), locale, register) : t("import.readFailed"));
+      return false;
+    }
     setJob(body.data);
+    return true;
   }
 
   async function remap(fieldKey: string, column: number | null) {
@@ -197,12 +268,32 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
     );
   }
 
+  if (!job && contacts) {
+    return (
+      <>
+        <ContactPicker
+          contacts={contacts.list}
+          locale={locale}
+          pending={pending}
+          onContinue={sendContacts}
+          onCancel={() => {
+            setContacts(null);
+            setError(null);
+          }}
+        />
+        {error && <p className="form-error" role="alert">{error}</p>}
+      </>
+    );
+  }
+
   if (!job) {
     return (
       <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="import-upload" ref={addRef}>
         <div className="compose-inner">
           <section className="panel">
             <h2>{t("import.upload")}</h2>
+            {/* Asked for the phone by name: how to get the file out of it comes first. */}
+            {entity === "client" && fromPhone && <p>{t("import.contactsHow")}</p>}
             <form className="inline-form" onSubmit={upload}>
               <label>
                 {t("import.what")}
@@ -215,14 +306,22 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
                 </select>
               </label>
               <label>
-                {t("import.file")}
-                <input type="file" name="file" accept=".csv,text/csv" required />
+                {entity === "client" ? t("import.fileOrContacts") : t("import.file")}
+                <input
+                  type="file"
+                  name="file"
+                  // A phone's contacts are clients and only clients, so the
+                  // picker offers .vcf only when that is what is being imported.
+                  accept={entity === "client" ? ".csv,text/csv,.vcf,text/vcard,text/x-vcard" : ".csv,text/csv"}
+                  required
+                />
               </label>
               <button className="primary-button" type="submit" disabled={pending}>
                 {pending ? t("import.reading") : t("import.submit")}
               </button>
             </form>
             {error && <p className="form-error" role="alert">{error}</p>}
+            {entity === "client" && !fromPhone && <p className="muted">{t("import.contactsHow")}</p>}
             <p className="muted">
               {t("import.hint")}{" "}
               <a className="text-link" href={`/api/v1/imports/templates/${entity}`}>
@@ -240,52 +339,55 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
 
   return (
     <>
-      <section className="panel">
-        <h2>{t("import.columns")}</h2>
-        <p className="muted">
-          {job.file_name} · {encodingLabels[job.encoding] ?? job.encoding} ·{" "}
-          {t("import.separator", {
-            separator: job.delimiter === "\t" ? t("import.separatorTab") : job.delimiter,
-          })}
-        </p>
-        {job.preset && <p className="field-hint" role="status">{t("import.presetDetected", { source: job.preset.source })}</p>}
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t("import.field")}</th>
-              <th>{t("import.column")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {job.fields.map((field) => (
-              <tr key={field.key}>
-                <td>
-                  {field.label}
-                  {field.required && <span className="badge-warning">{t("import.required")}</span>}
-                  {field.hint && <span className="unit-hint">{field.hint}</span>}
-                </td>
-                <td>
-                  <select
-                    aria-label={`${t("import.column")} — ${field.label}`}
-                    value={job.mapping[field.key] ?? ""}
-                    disabled={pending}
-                    onChange={(event) =>
-                      remap(field.key, event.target.value === "" ? null : Number(event.target.value))
-                    }
-                  >
-                    <option value="">{t("import.doNotImport")}</option>
-                    {job.headers.map((header, index) => (
-                      <option key={`${header}-${index}`} value={index}>
-                        {header || t("import.columnNumber", { number: index + 1 })}
-                      </option>
-                    ))}
-                  </select>
-                </td>
+      {/* A contacts file arrives with its columns already named by us; there is nothing to match. */}
+      {job.source !== "vcard" && (
+        <section className="panel">
+          <h2>{t("import.columns")}</h2>
+          <p className="muted">
+            {job.file_name} · {encodingLabels[job.encoding] ?? job.encoding} ·{" "}
+            {t("import.separator", {
+              separator: job.delimiter === "\t" ? t("import.separatorTab") : job.delimiter,
+            })}
+          </p>
+          {job.preset && <p className="field-hint" role="status">{t("import.presetDetected", { source: job.preset.source })}</p>}
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t("import.field")}</th>
+                <th>{t("import.column")}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {job.fields.map((field) => (
+                <tr key={field.key}>
+                  <td>
+                    {field.label}
+                    {field.required && <span className="badge-warning">{t("import.required")}</span>}
+                    {field.hint && <span className="unit-hint">{field.hint}</span>}
+                  </td>
+                  <td>
+                    <select
+                      aria-label={`${t("import.column")} — ${field.label}`}
+                      value={job.mapping[field.key] ?? ""}
+                      disabled={pending}
+                      onChange={(event) =>
+                        remap(field.key, event.target.value === "" ? null : Number(event.target.value))
+                      }
+                    >
+                      <option value="">{t("import.doNotImport")}</option>
+                      {job.headers.map((header, index) => (
+                        <option key={`${header}-${index}`} value={index}>
+                          {header || t("import.columnNumber", { number: index + 1 })}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {blocked && (
         <div className="warning-banner">

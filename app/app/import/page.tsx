@@ -11,8 +11,14 @@ import { localeTag } from "@/i18n/translate";
 import { canImport } from "@/lib/import-flow";
 import { requireWorkspace } from "@/lib/workspace";
 
-export default async function ImportPage() {
+export default async function ImportPage({
+  searchParams,
+}: {
+  /** Set by «Из телефона» / «Из файла»: what to import, and whether from a phone. */
+  searchParams: Promise<{ entity?: string; from?: string }>;
+}) {
   const workspace = await requireWorkspace();
+  const asked = await searchParams;
   const { membership, locale } = workspace;
   const register = registerOf(workspace);
   const t = getTranslator(locale, register);
@@ -73,7 +79,12 @@ export default async function ImportPage() {
           <ToolIcon name="minus" />
         </a>
       </header>
-      <ImportWizard entities={allowed} locale={locale} />
+      <ImportWizard
+        entities={allowed}
+        locale={locale}
+        initialEntity={asked.entity}
+        fromPhone={asked.from === "phone"}
+      />
 
       {history.length > 0 && (
         <section className="panel">

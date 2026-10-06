@@ -1,4 +1,4 @@
-import { parseCsv, type CsvDelimiter } from "@/domain/csv";
+import { decodeCsv, detectDelimiter, parseCsv, type CsvDelimiter, type CsvEncoding } from "@/domain/csv";
 import {
   buildPreview,
   type ColumnMapping,
@@ -8,6 +8,7 @@ import {
 import { importTemplates, type ImportableEntity } from "@/domain/import-templates";
 import type { Capability, MemberRole } from "@/domain/rbac";
 import { canManageCatalogue } from "@/domain/rbac";
+import { contactsToCsv, looksLikeVCard, parseVCards } from "@/domain/vcard";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 import type { AppLocale } from "@/i18n/messages";
 
@@ -41,12 +42,41 @@ export function capabilityFor(entity: ImportableEntity): Capability {
   return ENTITY_CAPABILITY[entity];
 }
 
+export { MAX_IMPORT_BYTES } from "@/domain/import-limits";
+
+export type UploadSource = Readonly<{
+  kind: "csv" | "vcard";
+  /** CSV text, which is what the job stores and every later step reparses. */
+  text: string;
+  encoding: CsvEncoding;
+  delimiter: CsvDelimiter;
+}>;
+
 /**
- * A file large enough to matter is a file the owner should be splitting. The
- * cap exists so that a mis-selected 200 MB export cannot be read into memory,
- * parsed three times and stored in a row.
+ * The uploaded bytes as the CSV the rest of the flow reads.
+ *
+ * A phone's contacts file is turned into a client CSV here, once, so the job
+ * stores the same kind of text as any other import and the mapping, preview,
+ * confirm and history steps need not know where it came from. `selected` is
+ * the positions the owner ticked in the browser, which read the file with the
+ * same `parseVCards`; null takes every contact.
  */
-export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+export function readUpload(
+  bytes: Uint8Array,
+  entity: ImportableEntity,
+  selected: ReadonlySet<number> | null,
+): UploadSource | { error: "VCARD_NOT_CLIENTS" } {
+  const decoded = decodeCsv(bytes);
+
+  if (!looksLikeVCard(decoded.text)) {
+    return { kind: "csv", text: decoded.text, encoding: decoded.encoding, delimiter: detectDelimiter(decoded.text) };
+  }
+  // A contact card is a person; there is no reading of it as a price list.
+  if (entity !== "client") return { error: "VCARD_NOT_CLIENTS" };
+
+  const contacts = parseVCards(decoded.text).filter((contact) => selected === null || selected.has(contact.index));
+  return { kind: "vcard", text: contactsToCsv(contacts), encoding: decoded.encoding, delimiter: "," };
+}
 
 export function previewFor(
   entity: ImportableEntity,

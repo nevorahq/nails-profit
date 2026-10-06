@@ -947,6 +947,20 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pl-history .compact-list { margin: 8rem 0 0; color: var(--muted); font-size: 13rem; }
 .unit-hint { margin-left: 8rem; color: var(--muted); font-size: 13rem; }
 
+/*
+ * «Контакты из телефона». A phone book runs to hundreds of rows, so the list
+ * scrolls inside the panel and «Продолжить» stays within reach below it.
+ */
+.contact-picker-search { display: flex; flex-direction: column; gap: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
+.contact-picker-search input { padding: 11rem 12rem; border-radius: 4rem; border: 1rem solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 16rem; }
+.contact-picker-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12rem; margin: 14rem 0; }
+.contact-picker-list { list-style: none; margin: 0 0 16rem; padding: 0; max-height: 420rem; overflow-y: auto; border: 1rem solid var(--line); border-radius: 4rem; }
+.contact-picker-list li + li { border-top: 1rem solid var(--line); }
+.contact-picker-list label { display: grid; grid-template-columns: auto 1fr; column-gap: 12rem; align-items: center; padding: 10rem 14rem; cursor: pointer; }
+.contact-picker-list input { grid-row: span 2; width: 20rem; height: 20rem; margin: 0; accent-color: var(--accent); }
+.contact-picker-name { font-weight: 600; overflow-wrap: anywhere; }
+.contact-picker-phone { color: var(--muted); font-size: 13rem; overflow-wrap: anywhere; }
+
 .warning-banner { background: var(--warning-soft); border: 1rem solid var(--warning-border); color: var(--warning); border-radius: 4rem; padding: 16rem 20rem; margin: 20rem 0; font-size: 14rem; line-height: 1.6; }
 .warning-banner ul { margin: 8rem 0 0; padding-left: 20rem; }
 /* The «signed in as» notice on /login, when it is also the way back in. */
