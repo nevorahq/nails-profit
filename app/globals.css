@@ -1430,13 +1430,21 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 /* Ambient loop, intentionally outside the standard motion system — see the note by --ease-standard. */
 .public-booking-loading > span:not(.sr-only) { min-height: 60rem; border-radius: 4rem; background: linear-gradient(100deg, var(--sage-300) 20%, var(--surface-strong) 45%, var(--sage-300) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
 @keyframes booking-skeleton { to { background-position-x: -220%; } }
-.public-booking-nearest, .public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); }
-.public-booking-nearest h2 { margin: 0 0 16rem; font-size: 22rem; }
-.public-booking-nearest > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; }
-.public-booking-nearest button { display: grid; place-items: center; gap: 3rem; min-height: 64rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface); color: var(--ink); cursor: pointer; }
-.public-booking-nearest button:hover { background: var(--sage-300); }
-.public-booking-nearest button span { color: var(--muted); font-size: 12rem; }
-.public-booking-nearest p, .public-booking-empty p { margin-bottom: 0; }
+.public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); }
+.public-booking-empty p { margin-bottom: 0; }
+/* The ribbon of coming days: scrolls sideways on a phone rather than wrapping into rows. */
+/* `min-width: 0` all the way up: a scrolling strip otherwise widens the card instead of scrolling. */
+.public-booking-card form { min-width: 0; }
+.public-booking-days { margin-top: 20rem; min-width: 0; max-width: 100%; }
+.public-booking-days h2 { margin: 0 0 12rem; font-size: 18rem; }
+.public-booking-days-strip { display: flex; gap: 8rem; overflow-x: auto; padding-bottom: 8rem; scroll-snap-type: x proximity; }
+.public-booking-days-strip button { flex: 0 0 72rem; scroll-snap-align: start; display: grid; place-items: center; gap: 2rem; min-height: 76rem; padding: 8rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+.public-booking-days-strip button span { color: var(--muted); font-size: 12rem; text-transform: capitalize; }
+.public-booking-days-strip button:hover:not(:disabled) { background: var(--sage-300); }
+.public-booking-days-strip button.is-selected { background: var(--accent); border-color: var(--accent); color: var(--surface-strong); }
+.public-booking-days-strip button.is-selected span { color: inherit; }
+.public-booking-days-strip button:disabled { border-color: var(--line); background: transparent; cursor: default; opacity: 0.55; }
+.public-booking-days-strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .public-booking-empty strong { font-size: 18rem; }
 .public-booking-success { margin-top: 14vh; text-align: center; }
 .public-booking-success p { color: var(--muted); margin-bottom: 26rem; }
@@ -2037,7 +2045,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
   .public-booking-grid { grid-template-columns: 1fr; }
   .public-booking-slots > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .public-booking-loading { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .public-booking-nearest > div { grid-template-columns: 1fr; }
   .public-booking-quote { align-items: flex-start; }
   .public-booking-quote div { text-align: right; }
   .public-booking-summary div { display: grid; gap: 2rem; }
