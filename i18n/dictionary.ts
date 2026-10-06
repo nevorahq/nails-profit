@@ -551,7 +551,6 @@ const ru = {
   "services.name": "Название услуги",
   "services.durationMinutes": "Длительность, мин",
   "services.priceIn": "Цена, {currency}",
-  "services.none": "Услуг пока нет.",
   "services.incompleteBanner": {
     one: "{count} услугу нельзя посчитать: не хватает данных. Она помечена ниже — расчёт по неполным данным не показывается, чтобы не выдать неверную прибыль за верную.",
     few: "{count} услуги нельзя посчитать: не хватает данных. Они помечены ниже — расчёт по неполным данным не показывается, чтобы не выдать неверную прибыль за верную.",
@@ -588,7 +587,6 @@ const ru = {
   "specialists.name": "Имя",
   "specialists.commissionType": "Тип комиссии",
   "specialists.value": "Значение",
-  "specialists.none": "Мастеров пока нет.",
   "specialists.type": "Тип",
   "specialists.readOnlyNote": "Ваша роль видит только собственный результат и не может менять правила комиссии.",
   "specialists.aggregatesNote":
@@ -988,7 +986,6 @@ const ru = {
   "expenses.amountColumn": "Сумма",
   "expenses.note": "Заметки",
   "expenses.notePlaceholder": "Необязательно",
-  "expenses.none": "Затрат пока нет.",
   "expenses.total": "Итого",
   "expenses.saveFailed": "Не удалось сохранить затраты",
   "expenses.editFailed": "Не удалось изменить запись",
@@ -2251,7 +2248,6 @@ const ro: Record<MessageKey, Message> = {
   "services.name": "Denumirea serviciului",
   "services.durationMinutes": "Durata, min",
   "services.priceIn": "Preț, {currency}",
-  "services.none": "Încă nu există servicii.",
   "services.incompleteBanner": {
     one: "{count} serviciu nu poate fi calculat: lipsesc date. Este marcat mai jos — un calcul pe date incomplete nu se afișează, ca să nu prezinte un profit greșit drept corect.",
     few: "{count} servicii nu pot fi calculate: lipsesc date. Sunt marcate mai jos — un calcul pe date incomplete nu se afișează, ca să nu prezinte un profit greșit drept corect.",
@@ -2285,7 +2281,6 @@ const ro: Record<MessageKey, Message> = {
   "specialists.name": "Nume",
   "specialists.commissionType": "Tipul comisionului",
   "specialists.value": "Valoare",
-  "specialists.none": "Încă nu există maeștri.",
   "specialists.type": "Tip",
   "specialists.readOnlyNote": "Rolul dvs. vede doar rezultatul propriu și nu poate schimba regulile de comision.",
   "specialists.aggregatesNote":
@@ -2685,7 +2680,6 @@ const ro: Record<MessageKey, Message> = {
   "expenses.amountColumn": "Suma",
   "expenses.note": "Note",
   "expenses.notePlaceholder": "Opțional",
-  "expenses.none": "Încă nu există cheltuieli.",
   "expenses.total": "Total",
   "expenses.saveFailed": "Cheltuiala nu a putut fi salvată",
   "expenses.editFailed": "Înregistrarea nu a putut fi modificată",
@@ -3944,7 +3938,6 @@ const en: Record<MessageKey, Message> = {
   "services.name": "Service name",
   "services.durationMinutes": "Duration, min",
   "services.priceIn": "Price, {currency}",
-  "services.none": "No services yet.",
   "services.incompleteBanner": {
     one: "{count} service cannot be costed: data is missing. It is marked below — a calculation on incomplete data is not shown, so a wrong profit is never presented as a right one.",
     other:
@@ -3977,7 +3970,6 @@ const en: Record<MessageKey, Message> = {
   "specialists.name": "Name",
   "specialists.commissionType": "Commission type",
   "specialists.value": "Value",
-  "specialists.none": "No specialists yet.",
   "specialists.type": "Type",
   "specialists.readOnlyNote": "Your role sees only its own result and cannot change commission rules.",
   "specialists.aggregatesNote":
@@ -4369,7 +4361,6 @@ const en: Record<MessageKey, Message> = {
   "expenses.amountColumn": "Amount",
   "expenses.note": "Notes",
   "expenses.notePlaceholder": "Optional",
-  "expenses.none": "No expenses yet.",
   "expenses.total": "Total",
   "expenses.saveFailed": "The expense could not be saved",
   "expenses.editFailed": "The record could not be changed",

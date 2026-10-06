@@ -148,7 +148,7 @@ test.describe("from a client's request to the month's profit", () => {
 
     // Nothing was worked, so nothing was earned: the ledger stays empty.
     await page.goto("/app/visits");
-    await expect(page.locator("main")).toContainText("No visits yet.");
+    await expect(page.locator("main")).toContainText("Close the first visit");
 
     await context.close();
   });
