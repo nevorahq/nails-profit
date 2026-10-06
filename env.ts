@@ -323,6 +323,12 @@ export type PhotoStorageConfig =
   | Readonly<{ kind: "filesystem"; directory: string }>;
 
 export function getPhotoStorageConfig(): PhotoStorageConfig | null {
+  // Named outright, the local directory wins over a bucket the same `.env`
+  // also describes: a test or local server on the `_test` database must never
+  // write its photos into the production bucket.
+  if (process.env.PHOTO_STORAGE?.trim() === "filesystem") {
+    return { kind: "filesystem", directory: process.env.PHOTO_STORAGE_DIR?.trim() || ".photo-storage" };
+  }
   const url = process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (url || key) {
@@ -333,9 +339,6 @@ export function getPhotoStorageConfig(): PhotoStorageConfig | null {
     const bucket = process.env.WORK_PHOTOS_BUCKET?.trim() || "work-photos";
     if (!/^[a-z0-9][a-z0-9._-]{1,62}$/.test(bucket)) throw new Error("WORK_PHOTOS_BUCKET is not a valid bucket name");
     return { kind: "supabase", url: url.replace(/\/$/, ""), serviceRoleKey: key, bucket };
-  }
-  if (process.env.PHOTO_STORAGE?.trim() === "filesystem") {
-    return { kind: "filesystem", directory: process.env.PHOTO_STORAGE_DIR?.trim() || ".photo-storage" };
   }
   return null;
 }

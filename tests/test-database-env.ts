@@ -39,4 +39,13 @@ export function configureTestDatabase() {
 
   process.env.DATABASE_URL = testUrl;
   process.env.MIGRATION_DATABASE_URL = testMigrationUrl;
+
+  /*
+   * And no bucket. The rows of the `_test` database are not the studio's, so
+   * their photos must never reach the production bucket the same `.env` may
+   * describe. Emptied rather than deleted: Next loads `.env` itself and fills
+   * in any variable that is missing, but leaves one that is set — even to "".
+   */
+  process.env.SUPABASE_URL = "";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "";
 }

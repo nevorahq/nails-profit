@@ -172,6 +172,22 @@ describe("getPhotoStorageConfig", () => {
     expect(() => getPhotoStorageConfig()).toThrow(/https origin/);
   });
 
+  it("is the local directory when named, even beside a bucket the same .env describes", () => {
+    // Regression: a test server read the production bucket from `.env` and
+    // tried to upload a test photo into it, past PHOTO_STORAGE=filesystem.
+    set({
+      PHOTO_STORAGE: "filesystem",
+      SUPABASE_URL: "https://abc.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "k",
+    });
+    expect(getPhotoStorageConfig()).toEqual({ kind: "filesystem", directory: ".photo-storage" });
+  });
+
+  it("treats an emptied bucket as none at all", () => {
+    set({ SUPABASE_URL: "", SUPABASE_SERVICE_ROLE_KEY: "" });
+    expect(getPhotoStorageConfig()).toBeNull();
+  });
+
   it("is the local directory only when asked for by name", () => {
     set({ PHOTO_STORAGE: "filesystem", PHOTO_STORAGE_DIR: "/tmp/p" });
     expect(getPhotoStorageConfig()).toEqual({ kind: "filesystem", directory: "/tmp/p" });
