@@ -4,15 +4,20 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { ClientNotes } from "@/components/client-notes";
-import { clients, financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
+import { clients, financialSnapshots, specialists, visitLines, visitPhotos, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
+import { getPhotoStorage } from "@/lib/photo-storage";
+import { mayHandlePhotos, photoUrl } from "@/lib/visit-photos";
 import { requireWorkspace } from "@/lib/workspace";
 import { serviceNamesOf } from "@/lib/service-names";
+
+/** How many of the latest photos the card shows: two visits' worth. */
+const RECENT_PHOTOS = 8;
 
 export default async function ClientCardPage({
   params,
@@ -36,6 +41,8 @@ export default async function ClientCardPage({
       </main>
     );
   }
+
+  const showsPhotos = mayHandlePhotos(membership.role, "read") && getPhotoStorage() !== null;
 
   const data = await withTenant(membership.organizationId, async (tx) => {
     const [client] = await tx
@@ -116,12 +123,32 @@ export default async function ClientCardPage({
       linesByVisit.set(line.visitId, [...(linesByVisit.get(line.visitId) ?? []), line]);
     }
 
-    return { client, visitRows, specialistMap, latestSnapshot, linesByVisit };
+    /*
+     * The latest work, for the master about to do the next: what this client
+     * had last time is the first thing asked. From the visits this reader may
+     * see — a Master their own — and not at all for a role that sees no photos.
+     */
+    const recentPhotos =
+      showsPhotos && visitIds.length > 0
+        ? await tx
+            .select({
+              id: visitPhotos.id,
+              visitId: visitPhotos.visitId,
+              width: visitPhotos.width,
+              height: visitPhotos.height,
+            })
+            .from(visitPhotos)
+            .where(inArray(visitPhotos.visitId, visitIds))
+            .orderBy(desc(visitPhotos.createdAt))
+            .limit(RECENT_PHOTOS)
+        : [];
+
+    return { client, visitRows, specialistMap, latestSnapshot, linesByVisit, recentPhotos };
   });
 
   if (!data) notFound();
 
-  const { client, visitRows, specialistMap, latestSnapshot, linesByVisit } = data;
+  const { client, visitRows, specialistMap, latestSnapshot, linesByVisit, recentPhotos } = data;
 
   /*
    * An Analyst reads client history «без телефонов и email» (section 6.1). The
@@ -181,6 +208,33 @@ export default async function ClientCardPage({
             canWrite={can(membership.role, "clients", "write")}
             locale={locale}
           />
+        </section>
+      )}
+
+      {recentPhotos.length > 0 && (
+        <section className="panel" style={{ marginBottom: "24rem" }}>
+          <h2>{t("clients.recentWork")}</h2>
+          <ul className="visit-photos-grid">
+            {recentPhotos.map((photo, index) => (
+              <li key={photo.id}>
+                <a
+                  href={photoUrl(photo.visitId, photo.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={t("visitPhotos.open", { index: index + 1 })}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a studio's own photo behind a session, not a build-time asset. */}
+                  <img
+                    src={photoUrl(photo.visitId, photo.id)}
+                    alt=""
+                    loading="lazy"
+                    width={photo.width}
+                    height={photo.height}
+                  />
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
