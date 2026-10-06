@@ -38,6 +38,15 @@ where=$(printf '%s' "$LOCAL_DATABASE_URL" | sed -e 's|^.*@||' -e 's|?.*$||')
 DATABASE_URL="$LOCAL_DATABASE_URL"
 export DATABASE_URL
 
+# Photos of work stay on this machine. `.env` may name the production bucket,
+# and a local server's visits are test rows: their photos belong in a directory,
+# never in the studio's Storage. Empty rather than unset, because Next fills in
+# what is missing from `.env` but leaves what is set.
+PHOTO_STORAGE=filesystem
+SUPABASE_URL=""
+SUPABASE_SERVICE_ROLE_KEY=""
+export PHOTO_STORAGE SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY
+
 echo "database: $where  (exported DATABASE_URL; the production URL in .env is ignored)"
 echo "warning:  the test suites TRUNCATE this database — a run wipes whatever you set up here"
 
