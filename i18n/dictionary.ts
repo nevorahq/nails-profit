@@ -1042,6 +1042,12 @@ const ru = {
   "specialists.rentRequired": "Укажите сумму аренды",
   "specialists.rentHint":
     "Визиты арендатора остаются в календаре и в его отчёте, но в выручку студии идёт только эта сумма — с месяца, в котором она задана.",
+  "specialists.tabs": "Разделы карточки мастера",
+  "specialists.tabPay": "Оплата",
+  "specialists.tabServices": "Услуги",
+  "specialists.tabSchedule": "График и адреса",
+  "specialists.tabAccount": "Аккаунт",
+  "specialists.advanced": "Дополнительно",
   "specialists.imputedHint":
     "Это не выплата: столько вы платили бы мастеру за ту же работу. Из этой цифры считается себестоимость визита — без неё услуги не сравнить между собой, — а в отчёте месяца она возвращается в прибыль, потому что из бизнеса не ушла.",
   "specialists.imputedHintShort": "Это не выплата, а цена вашего часа: из неё считается себестоимость визита.",
@@ -2673,6 +2679,12 @@ const ro: Record<MessageKey, Message> = {
   "specialists.rentRequired": "Indicați suma chiriei",
   "specialists.rentHint":
     "Vizitele chiriașului rămân în calendar și în raportul său, dar în încasările studioului intră doar această sumă — din luna în care a fost stabilită.",
+  "specialists.tabs": "Secțiunile fișei maestrului",
+  "specialists.tabPay": "Plată",
+  "specialists.tabServices": "Servicii",
+  "specialists.tabSchedule": "Program și adrese",
+  "specialists.tabAccount": "Cont",
+  "specialists.advanced": "Suplimentar",
   "specialists.imputedHint":
     "Nu este o plată: atât ați plăti unui maestru pentru aceeași muncă. Din această cifră se calculează costul vizitei — fără ea serviciile nu pot fi comparate între ele — iar în raportul lunar ea se întoarce în profit, pentru că nu a plecat din afacere.",
   "specialists.imputedHintShort": "Nu este o plată, ci prețul orei dvs.: din el se calculează costul vizitei.",
@@ -4289,6 +4301,12 @@ const en: Record<MessageKey, Message> = {
   "specialists.rentRequired": "Enter the rent amount",
   "specialists.rentHint":
     "The renter's visits stay in the calendar and in their own report, but only this amount goes into the studio's revenue — from the month it is set in.",
+  "specialists.tabs": "Master card sections",
+  "specialists.tabPay": "Pay",
+  "specialists.tabServices": "Services",
+  "specialists.tabSchedule": "Schedule and addresses",
+  "specialists.tabAccount": "Account",
+  "specialists.advanced": "More options",
   "specialists.imputedHint":
     "Not a payment: it is what you would pay a specialist for the same work. A visit's cost is worked out from this figure — without it there is no comparing one service against another — and the month report adds it back into profit, because it never left the business.",
   "specialists.imputedHintShort": "Not a payment but the price of your hour: a visit's cost is worked out from it.",
