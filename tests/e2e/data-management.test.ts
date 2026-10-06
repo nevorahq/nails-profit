@@ -130,7 +130,7 @@ describe("Owner data export and erasure", () => {
       // The note is the studio's own data about its client, so it leaves with it.
       expect.objectContaining({ id: clientId, email: "private-client@example.test", notes: "Аллергия на гель" }),
     );
-    expect(exported.format_version).toBe(5);
+    expect(exported.format_version).toBe(6);
     expect(exported.visits).toContainEqual(expect.objectContaining({ clientId }));
     expect(exported.financial_snapshots).toHaveLength(1);
     expect(exported.import_jobs[0].sourceText).toContain("Imported Person");

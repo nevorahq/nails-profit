@@ -11,6 +11,7 @@ import { withTenant } from "@/db/tenant";
 import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { mayActOnClient } from "@/lib/client-access";
+import { flushStorageDeletions, queueClientPhotoDeletions } from "@/lib/visit-photos";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { normalizePhone } from "@/domain/phone";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
@@ -291,6 +292,13 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       ).length;
     }
 
+    /*
+     * Photos of their work go entirely. A note can be emptied and a name
+     * replaced; a picture of somebody's hands has nothing to keep once it is
+     * not theirs. The rows now, the objects after the commit.
+     */
+    const photosRemoved = await queueClientPhotoDeletions(tx, actor.organizationId, existing.id);
+
     const [anonymized] = await tx
       .update(clients)
       .set({
@@ -328,6 +336,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
         booked_names_cleared: bookedNamesCleared,
         access_tokens_revoked: tokensRevoked,
         notifications_dropped: notificationsDropped,
+        photos_removed: photosRemoved,
       },
       requestId: requestIdentifier,
     });
@@ -339,6 +348,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   if (!outcome) {
     return apiError(404, "CLIENT_NOT_FOUND", "No client with this ID", requestIdentifier);
   }
+  await flushStorageDeletions(actor.organizationId);
 
   return apiSuccess(
     {

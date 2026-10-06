@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { bookings, financialSnapshots, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { flushStorageDeletions, queueVisitPhotoDeletions } from "@/lib/visit-photos";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { loadBooking } from "@/lib/booking-service";
@@ -113,6 +114,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
       .orderBy(desc(financialSnapshots.snapshotVersion))
       .limit(1);
 
+    // The photos' rows would go with the visit by cascade; their objects in
+    // the bucket would not, so they are queued first.
+    await queueVisitPhotoDeletions(tx, actor.organizationId, [visit.id]);
     await tx.delete(visits).where(eq(visits.id, visit.id));
 
     await recordAuditEvent(tx, {
@@ -151,5 +155,6 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     );
   }
 
+  await flushStorageDeletions(actor.organizationId);
   return apiSuccess({ id: outcome.deleted }, id);
 }
