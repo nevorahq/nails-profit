@@ -4,6 +4,7 @@ import { importJobs, organizations } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { decodeCsv, detectDelimiter, parseCsv } from "@/domain/csv";
 import { suggestMapping } from "@/domain/import-mapping";
+import { detectPreset } from "@/domain/import-presets";
 import { importTemplates, isImportableEntity } from "@/domain/import-templates";
 import { canImport, MAX_IMPORT_BYTES, previewFor, serializePreview, templateFields } from "@/lib/import-flow";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
@@ -71,7 +72,9 @@ export async function POST(request: Request) {
     return apiError(422, "EMPTY_FILE", "The file has no data rows", id);
   }
 
-  const mapping = suggestMapping(importTemplates[entity], parsed.headers);
+  // A recognised export maps itself; the owner can still correct any column.
+  const preset = detectPreset(importTemplates[entity], parsed.headers);
+  const mapping = preset?.mapping ?? suggestMapping(importTemplates[entity], parsed.headers);
   const preview = previewFor(entity, decoded.text, delimiter, mapping);
 
   const job = await withTenant(actor.organizationId, async (tx) => {
@@ -104,7 +107,7 @@ export async function POST(request: Request) {
       source: "import",
       entityType: "import_job",
       entityId: created.id,
-      metadata: { rows: parsed.rows.length, bytes: file.size },
+      metadata: { rows: parsed.rows.length, bytes: file.size, preset: preset !== null },
     });
     return { ...created, currency: organization.currency, locale: organization.locale };
   });
@@ -119,6 +122,7 @@ export async function POST(request: Request) {
       headers: parsed.headers,
       fields: templateFields(entity),
       mapping,
+      preset: preset ? { id: preset.preset.id, source: preset.preset.source } : null,
       preview: serializePreview(entity, preview, {
         currency: job.currency,
         locale: job.locale as AppLocale,

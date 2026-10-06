@@ -49,6 +49,8 @@ type Job = {
   headers: string[];
   fields: ImportField[];
   mapping: Record<string, number | null>;
+  /** Set only by the upload, when the header line was a known export's. */
+  preset?: { id: string; source: string } | null;
   preview: Preview;
 };
 
@@ -246,6 +248,7 @@ export function ImportWizard({ entities, locale }: { entities: string[]; locale:
             separator: job.delimiter === "\t" ? t("import.separatorTab") : job.delimiter,
           })}
         </p>
+        {job.preset && <p className="field-hint" role="status">{t("import.presetDetected", { source: job.preset.source })}</p>}
         <table className="data-table">
           <thead>
             <tr>

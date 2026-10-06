@@ -1372,6 +1372,7 @@ const ru = {
   "import.required": "обязательно",
   "import.separator": "разделитель «{separator}»",
   "import.separatorTab": "таб",
+  "import.presetDetected": "Узнали выгрузку {source} — колонки подставлены. Проверьте их перед импортом.",
   "import.missingRequired":
     "Не выбраны обязательные колонки: {fields}. Пока они не заданы, импортировать нечего.",
   "import.willWrite": "Что будет записано",
@@ -3026,6 +3027,7 @@ const ro: Record<MessageKey, Message> = {
   "import.required": "obligatoriu",
   "import.separator": "separator «{separator}»",
   "import.separatorTab": "tab",
+  "import.presetDetected": "Am recunoscut exportul {source} — coloanele sunt deja potrivite. Verificați-le înainte de import.",
   "import.missingRequired":
     "Coloanele obligatorii nu sunt alese: {fields}. Până nu sunt setate, nu este nimic de importat.",
   "import.willWrite": "Ce se va scrie",
@@ -4661,6 +4663,7 @@ const en: Record<MessageKey, Message> = {
   "import.required": "required",
   "import.separator": "separator “{separator}”",
   "import.separatorTab": "tab",
+  "import.presetDetected": "Recognised a {source} export — the columns are already matched. Check them before importing.",
   "import.missingRequired":
     "Required columns are not selected: {fields}. Until they are, there is nothing to import.",
   "import.willWrite": "What will be written",
