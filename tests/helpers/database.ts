@@ -37,6 +37,7 @@ const TABLES_IN_DELETE_ORDER = [
   "notification_outbox",
   // The devices those messages wake. Points only at `organization` and `user`.
   "push_subscription",
+  "storage_deletion",
   // Before `booking` and `specialist`, both of which it points at.
   "staff_notice",
   // And what each reader has already dealt with, which points at `booking` too.
@@ -48,6 +49,7 @@ const TABLES_IN_DELETE_ORDER = [
   "booking_hold",
   "booking",
   "financial_snapshot",
+  "visit_photo",
   "visit_line",
   "visit",
   // After `visit`, which points at a payment method with ON DELETE SET NULL —
