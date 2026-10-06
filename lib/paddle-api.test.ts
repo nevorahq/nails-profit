@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
+import { fetchPaddlePlan, fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 
 function fakeFetch(impl: (url: string) => Promise<Response>) {
   return vi.fn((input: RequestInfo | URL) => impl(String(input))) as unknown as typeof fetch;
@@ -81,5 +81,66 @@ describe("fetchPaddleSubscriptionManageUrl", () => {
 
     const weird = fakeFetch(async () => jsonResponse({ nope: true }));
     expect(await fetchPaddleSubscriptionManageUrl("sub_1", { fetchImpl: weird })).toBeNull();
+  });
+});
+
+describe("fetchPaddlePlan", () => {
+  const price = {
+    data: {
+      name: "Monthly",
+      unit_price: { amount: "2900", currency_code: "EUR" },
+      billing_cycle: { interval: "month", frequency: 1 },
+      product: { name: "Студия" },
+    },
+  };
+
+  it("is null when PADDLE_API_KEY is unset — no request made", async () => {
+    const fetchImpl = fakeFetch(async () => jsonResponse(price));
+    expect(await fetchPaddlePlan("pri_1", { fetchImpl })).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("reads the product name, the minor-unit amount and the billing interval", async () => {
+    process.env.PADDLE_API_KEY = "k";
+    const fetchImpl = fakeFetch(async () => jsonResponse(price));
+    expect(await fetchPaddlePlan("pri_1", { fetchImpl })).toEqual({
+      name: "Студия",
+      amountMinor: 2900,
+      currency: "EUR",
+      interval: "month",
+    });
+    expect((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(
+      "https://api.paddle.com/prices/pri_1?include=product",
+    );
+  });
+
+  it("falls back to the price's own name, and leaves the interval out for a one-off price", async () => {
+    process.env.PADDLE_API_KEY = "k";
+    const fetchImpl = fakeFetch(async () =>
+      jsonResponse({ data: { name: "Lifetime", unit_price: { amount: "9900", currency_code: "EUR" }, billing_cycle: null } }),
+    );
+    expect(await fetchPaddlePlan("pri_1", { fetchImpl })).toMatchObject({ name: "Lifetime", interval: null });
+  });
+
+  it("drops the interval for a cycle longer than one unit, which the wording cannot say", async () => {
+    process.env.PADDLE_API_KEY = "k";
+    const fetchImpl = fakeFetch(async () =>
+      jsonResponse({
+        data: { unit_price: { amount: "100", currency_code: "EUR" }, billing_cycle: { interval: "month", frequency: 3 } },
+      }),
+    );
+    expect(await fetchPaddlePlan("pri_1", { fetchImpl })).toMatchObject({ interval: null });
+  });
+
+  it("is null on a refusal, a transport failure or an unexpected shape", async () => {
+    process.env.PADDLE_API_KEY = "k";
+    expect(await fetchPaddlePlan("p", { fetchImpl: fakeFetch(async () => jsonResponse({}, 404)) })).toBeNull();
+    expect(await fetchPaddlePlan("p", { fetchImpl: fakeFetch(async () => { throw new Error("down"); }) })).toBeNull();
+    expect(await fetchPaddlePlan("p", { fetchImpl: fakeFetch(async () => jsonResponse({ data: {} })) })).toBeNull();
+    expect(
+      await fetchPaddlePlan("p", {
+        fetchImpl: fakeFetch(async () => jsonResponse({ data: { unit_price: { amount: "n/a", currency_code: "EUR" } } })),
+      }),
+    ).toBeNull();
   });
 });
