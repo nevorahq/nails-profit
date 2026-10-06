@@ -15,7 +15,7 @@ import { mayActOnSpecialist } from "@/lib/booking-access";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 import { getPhotoStorage, photoStoragePath, PhotoStorageError } from "@/lib/photo-storage";
-import { callerKey, checkRateLimit, VISIT_PHOTO_UPLOAD_RULE } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey, VISIT_PHOTO_UPLOAD_RULE } from "@/lib/rate-limit";
 import { mayHandlePhotos, photoUrl } from "@/lib/visit-photos";
 
 /**
@@ -107,7 +107,7 @@ export async function POST(request: Request, context: Context) {
 
   // Before the body is read: refusing a caller who is over the limit should not
   // cost half a megabyte first.
-  const limit = await checkRateLimit(`visit.photo:${callerKey(request, actor.userId)}`, VISIT_PHOTO_UPLOAD_RULE);
+  const limit = await checkRateLimit(rateLimitKey("visit.photo", request, actor.userId), VISIT_PHOTO_UPLOAD_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, {
       bucket: "visit.photo",

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { callerKey, decideRateLimit, type RateLimitRule } from "@/lib/rate-limit";
+import { callerKey, decideRateLimit, rateLimitKey, type RateLimitRule } from "@/lib/rate-limit";
 
 const rule: RateLimitRule = { limit: 3, windowSeconds: 60 };
 
@@ -64,5 +64,20 @@ describe("callerKey", () => {
   test("an absent address still yields one bucket rather than none", () => {
     const request = new Request("http://localhost/api/v1/imports");
     expect(callerKey(request, null)).toBe("ip:unknown");
+  });
+});
+
+describe("rateLimitKey", () => {
+  const request = new Request("https://app.example/api", { headers: { "x-forwarded-for": "203.0.113.7" } });
+
+  test("names the action before the caller, so two actions never share a window", () => {
+    expect(rateLimitKey("import.upload", request, "user-1")).toBe("import.upload:user:user-1");
+    expect(rateLimitKey("invitation.accept", request, "user-1")).not.toBe(
+      rateLimitKey("import.upload", request, "user-1"),
+    );
+  });
+
+  test("falls back to the forwarded address the way callerKey does", () => {
+    expect(rateLimitKey("public.hold", request, null)).toBe("public.hold:ip:203.0.113.7");
   });
 });

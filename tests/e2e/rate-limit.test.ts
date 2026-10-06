@@ -59,6 +59,19 @@ describe("rate limits", () => {
     expect((await other.post("/api/v1/imports", tinyImport())).status).toBe(201);
   });
 
+  test("one action spending its allowance leaves another's untouched", async () => {
+    // Regression: every upload-shaped route counted against `user:<id>` alone,
+    // so one shared window — ten imports in an hour, and accepting an
+    // invitation was refused as though it were the eleventh import.
+    for (let attempt = 0; attempt <= IMPORT_UPLOAD_RULE.limit; attempt += 1) {
+      await owner.post("/api/v1/imports", tinyImport());
+    }
+    expect((await owner.post("/api/v1/imports", tinyImport())).status).toBe(429);
+
+    const accept = await owner.post("/api/v1/invitations/accept", { token: "not-a-real-token" });
+    expect(accept.status).toBe(404);
+  });
+
   test("invitation accept is limited too", async () => {
     for (let attempt = 0; attempt < INVITATION_ACCEPT_RULE.limit; attempt += 1) {
       const guess = await owner.post("/api/v1/invitations/accept", { token: `guess-${attempt}` });

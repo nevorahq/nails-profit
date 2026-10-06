@@ -7,7 +7,7 @@ import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
-import { AVATAR_UPLOAD_RULE, callerKey, checkRateLimit } from "@/lib/rate-limit";
+import { AVATAR_UPLOAD_RULE, checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 /**
  * The studio's own mark: the one endpoint that reads the bytes and the one that
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
   // Before the body is read: refusing a caller who is already over the limit
   // should not cost half a megabyte first.
-  const limit = await checkRateLimit(callerKey(request, actor.userId), AVATAR_UPLOAD_RULE);
+  const limit = await checkRateLimit(rateLimitKey("organization.logo", request, actor.userId), AVATAR_UPLOAD_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, {
       bucket: "organization.logo",

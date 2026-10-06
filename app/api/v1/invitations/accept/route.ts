@@ -13,7 +13,7 @@ import {
 import { auth } from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, rateLimited, requestId, toFieldErrors } from "@/lib/http";
-import { callerKey, checkRateLimit, INVITATION_ACCEPT_RULE } from "@/lib/rate-limit";
+import { checkRateLimit, INVITATION_ACCEPT_RULE, rateLimitKey } from "@/lib/rate-limit";
 import { leaveSoloMode } from "@/lib/solo-mode";
 
 // The token travels in the body, not the path: URLs end up in access logs,
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   // Section 15.3 counts invitation links among the public ones to protect. The
   // token is 256 bits, so this is not about guessing odds — it is about making
   // an attempt cost something.
-  const limit = await checkRateLimit(callerKey(request, session.user.id), INVITATION_ACCEPT_RULE);
+  const limit = await checkRateLimit(rateLimitKey("invitation.accept", request, session.user.id), INVITATION_ACCEPT_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, { bucket: "invitation.accept", userId: session.user.id });
   }

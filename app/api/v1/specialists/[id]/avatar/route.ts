@@ -7,7 +7,7 @@ import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
-import { AVATAR_UPLOAD_RULE, callerKey, checkRateLimit } from "@/lib/rate-limit";
+import { AVATAR_UPLOAD_RULE, checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 /**
  * A master's photo: the one endpoint that reads the bytes and the one that
@@ -126,7 +126,7 @@ export async function POST(request: Request, context: Context) {
 
   // Before the body is read, like the import upload: refusing a caller who is
   // already over the limit should not cost half a megabyte first.
-  const limit = await checkRateLimit(callerKey(request, actor.userId), AVATAR_UPLOAD_RULE);
+  const limit = await checkRateLimit(rateLimitKey("specialist.avatar", request, actor.userId), AVATAR_UPLOAD_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, {
       bucket: "specialist.avatar",
