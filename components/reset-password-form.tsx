@@ -7,6 +7,7 @@ import { FormEvent, useState } from "react";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export function ResetPasswordForm({
   token,
@@ -21,6 +22,7 @@ export function ResetPasswordForm({
   const t = getTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
 
   // The callback redirects here with ?error=INVALID_TOKEN when the link is
   // expired or already used, so there is no point rendering the form at all.
@@ -70,7 +72,8 @@ export function ResetPasswordForm({
       </Link>
       <h1>{t("auth.newPassword")}</h1>
       <p>{t("auth.newPasswordHint")}</p>
-      <form onSubmit={submit}>
+      {/* `post` and a button that waits for React — see `components/login-form.tsx`. */}
+      <form method="post" onSubmit={submit}>
         <label>
           {t("auth.newPassword")}
           <input name="password" type="password" autoComplete="new-password" required minLength={10} />
@@ -86,7 +89,7 @@ export function ResetPasswordForm({
           />
         </label>
         {error && <div className="form-error" role="alert">{error}</div>}
-        <button className="primary-button" type="submit" disabled={pending}>
+        <button className="primary-button" type="submit" disabled={pending || !hydrated}>
           {pending ? t("common.saving") : t("auth.savePassword")}
         </button>
       </form>

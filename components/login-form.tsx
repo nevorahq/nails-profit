@@ -7,6 +7,7 @@ import { FormEvent, useState } from "react";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
+import { useHydrated } from "@/lib/use-hydrated";
 import { authRefusal } from "@/domain/auth-refusal";
 import { invitationTokenFromNext } from "@/domain/invitation-link";
 
@@ -40,6 +41,7 @@ export function LoginForm({
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
   /*
    * Typing a password of ten characters on a phone, blind, is where sign-up
    * was lost: one mistyped letter and the account is made with a password its
@@ -151,7 +153,13 @@ export function LoginForm({
           <strong>{t("auth.continueAsActive")}</strong>
         </Link>
       )}
-      <form onSubmit={submit}>
+      {/*
+        `post`, and the button waits for React. A press before the page is
+        hydrated used to submit this as a native GET, which put the email and
+        the password into the address bar — and from there into the browser's
+        history, the server's access log and the next page's Referer.
+      */}
+      <form method="post" onSubmit={submit}>
         {mode === "signup" &&
           (invitation ? (
             <label>
@@ -296,7 +304,7 @@ export function LoginForm({
             {error}
           </div>
         )}
-        <button className="primary-button" type="submit" disabled={pending}>
+        <button className="primary-button" type="submit" disabled={pending || !hydrated}>
           {pending ? t("auth.wait") : mode === "signup" ? t("auth.signUp") : t("auth.signIn")}
         </button>
       </form>
