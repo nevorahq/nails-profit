@@ -45,7 +45,7 @@ const ru = {
   "payouts.eyebrow": "К выплате мастерам",
   "payouts.noAccess": "Выплаты мастерам видит только владелец.",
   "payouts.hint":
-    "Начислено — комиссия за визиты и оклад без взносов работодателя. Выплату отмечайте здесь, а не расходом «Зарплата»: прибыль она не меняет, работа уже учтена, а в движении денег появится как выплата.",
+    "Начислено — оплата за визиты и оклад без взносов работодателя. Выплату отмечайте здесь, а не расходом «Зарплата»: прибыль она не меняет, работа уже учтена, а в движении денег появится как выплата.",
   "payouts.notTracking":
     "Выплаты ещё не отмечались. После первой отметки остаток будет считаться с месяца перед ней — обычно выплата закрывает прошлый месяц.",
   "payouts.trackingSince": "Выплаты учитываются с {month}: всё раньше считается закрытым.",
@@ -53,7 +53,7 @@ const ru = {
   "payouts.empty": "В этом месяце мастерам ничего не начислено и ничего не выплачено.",
   "payouts.opening": "Долг на начало",
   "payouts.accrued": "Начислено",
-  "payouts.accruedSplit": "визиты {commission} · оклад {wage}",
+  "payouts.accruedSplit": "визиты {visits} · оклад {wage}",
   "payouts.paid": "Выплачено",
   "payouts.closing": "Остаток",
   "payouts.overpaid": "Выплачено больше, чем начислено: разница уйдёт в счёт следующих месяцев.",
@@ -1708,7 +1708,7 @@ const ro: Record<MessageKey, Message> = {
   "payouts.eyebrow": "De plătit maeștrilor",
   "payouts.noAccess": "Plățile către maeștri le vede doar proprietarul.",
   "payouts.hint":
-    "Calculat — comisionul din vizite și salariul fără contribuțiile angajatorului. Marcați plata aici, nu drept cheltuială «Salarii»: profitul nu se schimbă, munca e deja socotită, iar în mișcarea banilor apare ca plată.",
+    "Calculat — plata pentru vizite și salariul fără contribuțiile angajatorului. Marcați plata aici, nu drept cheltuială «Salarii»: profitul nu se schimbă, munca e deja socotită, iar în mișcarea banilor apare ca plată.",
   "payouts.notTracking":
     "Plățile nu au fost încă marcate. După prima marcare, soldul se calculează din luna dinaintea ei — de obicei plata acoperă luna trecută.",
   "payouts.trackingSince": "Plățile se socotesc din {month}: tot ce e mai devreme se consideră achitat.",
@@ -1716,7 +1716,7 @@ const ro: Record<MessageKey, Message> = {
   "payouts.empty": "În această lună maeștrilor nu li s-a calculat și nu li s-a plătit nimic.",
   "payouts.opening": "Datorie la început",
   "payouts.accrued": "Calculat",
-  "payouts.accruedSplit": "vizite {commission} · salariu {wage}",
+  "payouts.accruedSplit": "vizite {visits} · salariu {wage}",
   "payouts.paid": "Plătit",
   "payouts.closing": "Sold",
   "payouts.overpaid": "S-a plătit mai mult decât s-a calculat: diferența se va socoti în lunile următoare.",
@@ -3371,7 +3371,7 @@ const en: Record<MessageKey, Message> = {
   "payouts.eyebrow": "To pay out to masters",
   "payouts.noAccess": "Only the owner sees payouts to masters.",
   "payouts.hint":
-    "Earned is the commission on visits and the salary without the employer's contributions. Mark a payout here rather than as a «Payroll» expense: it does not change the profit — the work is already counted — and it shows in the cash flow as a payout.",
+    "Earned is the pay for visits and the salary without the employer's contributions. Mark a payout here rather than as a «Payroll» expense: it does not change the profit — the work is already counted — and it shows in the cash flow as a payout.",
   "payouts.notTracking":
     "No payouts marked yet. After the first one, the balance runs from the month before it — a payout usually settles the month just ended.",
   "payouts.trackingSince": "Payouts are tracked from {month}: everything earlier counts as settled.",
@@ -3379,7 +3379,7 @@ const en: Record<MessageKey, Message> = {
   "payouts.empty": "Nothing was earned by or paid to masters this month.",
   "payouts.opening": "Owed at the start",
   "payouts.accrued": "Earned",
-  "payouts.accruedSplit": "visits {commission} · salary {wage}",
+  "payouts.accruedSplit": "visits {visits} · salary {wage}",
   "payouts.paid": "Paid",
   "payouts.closing": "Still owed",
   "payouts.overpaid": "More was paid than earned: the difference counts towards the months ahead.",

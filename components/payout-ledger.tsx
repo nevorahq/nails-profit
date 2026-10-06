@@ -131,7 +131,7 @@ export function PayoutLedger({
                   {money(row.accruedMinor)}
                   {row.wageMinor > 0 && row.commissionMinor > 0 && (
                     <span className="unit-hint">
-                      {t("payouts.accruedSplit", { commission: money(row.commissionMinor), wage: money(row.wageMinor) })}
+                      {t("payouts.accruedSplit", { visits: money(row.commissionMinor), wage: money(row.wageMinor) })}
                     </span>
                   )}
                 </dd>
