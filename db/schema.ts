@@ -2625,6 +2625,75 @@ export const pushSubscriptions = pgTable(
 );
 
 /**
+ * A photograph of the work, attached to a closed visit, roadmap phase 8.
+ *
+ * The bytes are not here. Faces of masters and the studio's logo live in
+ * Postgres (`specialistAvatars`) because there are a handful of them; photos of
+ * work grow with every visit, and a year of them is a gigabyte that would ride
+ * along in every backup and export. They live in a private Supabase Storage
+ * bucket instead, under `storagePath`, and are shown through short-lived
+ * signed links — see `lib/photo-storage.ts`.
+ *
+ * `cascade` from the visit, because a photo of a visit that no longer exists is
+ * a photo of nobody's work; the object in the bucket is not covered by a
+ * cascade, which is why every path that deletes these rows also writes their
+ * paths to `storageDeletions` in the same transaction.
+ */
+export const visitPhotos = pgTable(
+  "visit_photo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    visitId: uuid("visit_id")
+      .notNull()
+      .references(() => visits.id, { onDelete: "cascade" }),
+    /** `<organization>/<visit>/<photo>.webp` inside the bucket. */
+    storagePath: text("storage_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    ...auditColumns,
+  },
+  (table) => [
+    index("visit_photo_visit_idx").on(table.visitId),
+    index("visit_photo_org_idx").on(table.organizationId),
+    uniqueIndex("visit_photo_path_idx").on(table.storagePath),
+    check("visit_photo_mime", sql`${table.mimeType} in ('image/webp', 'image/jpeg', 'image/png')`),
+    // The route's own ceiling, said again where it cannot be forgotten.
+    check("visit_photo_size", sql`${table.sizeBytes} between 1 and 524288`),
+    check("visit_photo_dimensions", sql`${table.width} > 0 and ${table.height} > 0`),
+  ],
+);
+
+/**
+ * Objects in the bucket that are owed a deletion.
+ *
+ * A row in Postgres and an object in Storage cannot be removed in one
+ * transaction. So whatever deletes photo rows — a visit removed, a client
+ * erased, a studio deleted — writes their paths here in the same transaction,
+ * and the objects are removed after it commits, again by the maintenance job
+ * for anything that failed. A photo of a client who asked to be forgotten must
+ * not survive a network error; a row here is the promise that it will not.
+ */
+export const storageDeletions = pgTable(
+  "storage_deletion",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    storagePath: text("storage_path").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("storage_deletion_org_idx").on(table.organizationId, table.createdAt)],
+);
+
+/**
  * Resend delivers webhooks at least once and does not guarantee ordering.
  * Keeping only the provider event id/type/time gives us durable deduplication
  * and an audit trail without copying recipient, subject or message body.

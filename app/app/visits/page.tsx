@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
 
 import { ToolIcon } from "@/components/icons";
@@ -6,12 +6,14 @@ import { avatarUrl } from "@/domain/avatar-image";
 import { PeriodFilter } from "@/components/period-filter";
 import { type AdjustLine, VisitAdjustForm } from "@/components/visit-adjust-form";
 import { VisitDeleteButton } from "@/components/visit-delete-button";
+import { VisitPhotos } from "@/components/visit-photos";
 import {
   clients,
   financialSnapshots,
   specialistAvatars,
   specialists,
   visitLines,
+  visitPhotos,
   visits,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -22,6 +24,8 @@ import { getTranslator, type MessageKey } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { formatMoneyMinor } from "@/lib/format";
+import { getPhotoStorage } from "@/lib/photo-storage";
+import { mayHandlePhotos, photoUrl } from "@/lib/visit-photos";
 import { requireWorkspace } from "@/lib/workspace";
 import { serviceNamesOf } from "@/lib/service-names";
 
@@ -55,6 +59,10 @@ export default async function VisitsPage({
    * colleague's visit gets an empty list.
    */
   const onlyVisit = filters.visit && UUID.test(filters.visit) ? filters.visit : null;
+
+  // Off entirely where no bucket is set up: no tile to add to, nothing to show.
+  const showsPhotos = mayHandlePhotos(membership.role, "read") && getPhotoStorage() !== null;
+  const addsPhotos = showsPhotos && mayHandlePhotos(membership.role, "write");
 
   const data = await withTenant(membership.organizationId, async (tx) => {
     // Section 6.1: a Master sees only their own visits, resolved from the
@@ -121,7 +129,26 @@ export default async function VisitsPage({
       }),
     );
 
-    return { detailed, people, canFilterBySpecialist: ownSpecialistId === null };
+    /*
+     * Photos of work, one query for the whole page and only for whoever may
+     * see them — an Analyst reads visits but not pictures of clients' hands,
+     * and the rows are not even fetched for them.
+     */
+    const photoRows =
+      showsPhotos && rows.length > 0
+        ? await tx
+            .select({
+              id: visitPhotos.id,
+              visitId: visitPhotos.visitId,
+              width: visitPhotos.width,
+              height: visitPhotos.height,
+            })
+            .from(visitPhotos)
+            .where(inArray(visitPhotos.visitId, rows.map((visit) => visit.id)))
+            .orderBy(asc(visitPhotos.createdAt))
+        : [];
+
+    return { detailed, people, photoRows, canFilterBySpecialist: ownSpecialistId === null };
   });
 
   const withMargin = data.detailed.filter(
@@ -331,6 +358,21 @@ export default async function VisitsPage({
                       visit, and deleting is the one for a visit that never
                       happened.
                     */}
+                    {showsPhotos && (
+                      <VisitPhotos
+                        visitId={visit.id}
+                        photos={data.photoRows
+                          .filter((photo) => photo.visitId === visit.id)
+                          .map((photo) => ({
+                            id: photo.id,
+                            url: photoUrl(visit.id, photo.id),
+                            width: photo.width,
+                            height: photo.height,
+                          }))}
+                        canWrite={addsPhotos}
+                        locale={locale}
+                      />
+                    )}
                     {canDeleteVisit && (
                       <VisitDeleteButton visitId={visit.id} locale={locale} />
                     )}

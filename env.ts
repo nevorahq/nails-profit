@@ -306,6 +306,40 @@ export function isPushConfigured() {
   return getVapidConfig() !== null;
 }
 
+/**
+ * Where photos of work are kept, or null — in which case they are off and
+ * everything else works as before: the visit card offers no upload and the
+ * routes answer that the feature is not set up.
+ *
+ * - `supabase`: a private Storage bucket, reached over its REST API with the
+ *   service-role key. URL and key together or neither; one without the other is
+ *   a configuration mistake and is said so at startup.
+ * - `filesystem`: a directory on the machine, for local development and the
+ *   browser suite only. Chosen explicitly with `PHOTO_STORAGE=filesystem`,
+ *   never by default, so a deployment cannot fall back to its own disk.
+ */
+export type PhotoStorageConfig =
+  | Readonly<{ kind: "supabase"; url: string; serviceRoleKey: string; bucket: string }>
+  | Readonly<{ kind: "filesystem"; directory: string }>;
+
+export function getPhotoStorageConfig(): PhotoStorageConfig | null {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (url || key) {
+    if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set together");
+    if (!/^https:\/\/[^/]+$/.test(url.replace(/\/$/, ""))) {
+      throw new Error("SUPABASE_URL must be the project's https origin, e.g. https://abc.supabase.co");
+    }
+    const bucket = process.env.WORK_PHOTOS_BUCKET?.trim() || "work-photos";
+    if (!/^[a-z0-9][a-z0-9._-]{1,62}$/.test(bucket)) throw new Error("WORK_PHOTOS_BUCKET is not a valid bucket name");
+    return { kind: "supabase", url: url.replace(/\/$/, ""), serviceRoleKey: key, bucket };
+  }
+  if (process.env.PHOTO_STORAGE?.trim() === "filesystem") {
+    return { kind: "filesystem", directory: process.env.PHOTO_STORAGE_DIR?.trim() || ".photo-storage" };
+  }
+  return null;
+}
+
 /** The token the notification dispatch job authenticates with; unset disables the route. */
 export function getOpsApiToken() {
   const value = process.env.OPS_API_TOKEN?.trim();

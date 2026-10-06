@@ -463,6 +463,13 @@
       "when": 1791238153972,
       "tag": "0065_a_booking_names_the_visit_it_followed",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791270758614,
+      "tag": "0066_a_visit_keeps_photos_of_the_work",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,7 @@ import {
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { flushStorageDeletions, queueStudioPhotoDeletions } from "@/lib/visit-photos";
 import { forgetStudioDevices } from "@/lib/push-subscriptions";
 import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
@@ -131,6 +132,10 @@ export async function POST(request: Request) {
      * other purpose, so it goes rather than being renamed. It is deleted before
      * the cards themselves are anonymized because it belongs to them.
      */
+    // Photos of work, likewise — their rows now, the objects in the bucket
+    // after the commit (`lib/visit-photos.ts`).
+    const erasedPhotos = await queueStudioPhotoDeletions(tx, actor.organizationId);
+
     const erasedAvatars = await tx
       .delete(specialistAvatars)
       .where(eq(specialistAvatars.organizationId, actor.organizationId))
@@ -231,6 +236,7 @@ export async function POST(request: Request) {
         clients_anonymized: anonymizedClients.length,
         specialists_anonymized: anonymizedSpecialists.length,
         avatars_erased: erasedAvatars.length,
+        photos_erased: erasedPhotos,
         logo_erased: erasedLogo.length === 1,
         expenses_anonymized: anonymizedExpenses.length,
         devices_forgotten: devicesForgotten,
@@ -255,6 +261,7 @@ export async function POST(request: Request) {
       clients_anonymized: anonymizedClients.length,
       specialists_anonymized: anonymizedSpecialists.length,
       avatars_erased: erasedAvatars.length,
+      photos_erased: erasedPhotos,
       logo_erased: erasedLogo.length === 1,
       expenses_anonymized: anonymizedExpenses.length,
     };
@@ -266,5 +273,6 @@ export async function POST(request: Request) {
       : apiError(422, "CONFIRMATION_MISMATCH", "The confirmation does not match the organization name", id);
   }
 
+  await flushStorageDeletions(actor.organizationId);
   return apiSuccess(outcome, id);
 }

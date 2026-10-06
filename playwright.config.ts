@@ -94,6 +94,11 @@ export default defineConfig({
           // browser suite has no business sending mail to anyone, so they are
           // written to the log instead.
           NOTIFICATION_PROVIDER: "log",
+          // Photos of work go to a directory instead of a Supabase bucket: the
+          // suite tests the screens, and the bucket's REST calls are covered by
+          // `lib/photo-storage.test.ts`.
+          PHOTO_STORAGE: "filesystem",
+          PHOTO_STORAGE_DIR: ".photo-storage/playwright",
         },
       },
 });

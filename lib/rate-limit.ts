@@ -49,6 +49,11 @@ export const IMPORT_CONFIRM_RULE: RateLimitRule = { limit: 20, windowSeconds: 3_
  */
 export const AVATAR_UPLOAD_RULE: RateLimitRule = { limit: 60, windowSeconds: 3_600 };
 /** An invitation token is 256 bits, so this is about cost, not about guessing odds. */
+/**
+ * Photos of work: four to a visit, a full day of visits photographed in an
+ * hour is about forty; this leaves room for retries and nothing for a loop.
+ */
+export const VISIT_PHOTO_UPLOAD_RULE: RateLimitRule = { limit: 120, windowSeconds: 3_600 };
 export const INVITATION_ACCEPT_RULE: RateLimitRule = { limit: 10, windowSeconds: 3_600 };
 /**
  * Turning push on or off on a device, which the switch also re-sends whenever it

@@ -29,6 +29,7 @@ import {
   taxRules,
   users,
   visitLines,
+  visitPhotos,
   visits,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -37,8 +38,14 @@ import { can } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, requestId } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { getPhotoStorage } from "@/lib/photo-storage";
+import { photoUrl } from "@/lib/visit-photos";
 
 /**
+ * 6: photos of work, each with a link that opens it for 24 hours. The bytes
+ * are not in the file — a studio's gigabyte does not fit in one response — so
+ * the owner downloads them from the links while they last.
+ *
  * 5: a client carries the studio's note about them (`client.notes`). Added,
  * not moved: a consumer written for 4 reads every field it knew.
  *
@@ -53,7 +60,10 @@ import { getActiveMembership } from "@/lib/membership";
  * still reads every field it knew, so the bump is a signal that more arrived,
  * not that anything moved.
  */
-export const EXPORT_FORMAT_VERSION = 5;
+export const EXPORT_FORMAT_VERSION = 6;
+
+/** How long the photo links in an export open: a day to download them. */
+const EXPORT_LINK_SECONDS = 24 * 60 * 60;
 
 /**
  * Owner-requested export of everything the organization owns, spec section 4.3.
@@ -129,6 +139,19 @@ export async function GET(request: Request) {
     const clientRows = await tx.select().from(clients).orderBy(asc(clients.createdAt));
     const visitRows = await tx.select().from(visits).orderBy(asc(visits.createdAt));
     const visitLineRows = await tx.select().from(visitLines).orderBy(asc(visitLines.createdAt));
+    const visitPhotoRows = await tx
+      .select({
+        id: visitPhotos.id,
+        visitId: visitPhotos.visitId,
+        storagePath: visitPhotos.storagePath,
+        mimeType: visitPhotos.mimeType,
+        sizeBytes: visitPhotos.sizeBytes,
+        width: visitPhotos.width,
+        height: visitPhotos.height,
+        createdAt: visitPhotos.createdAt,
+      })
+      .from(visitPhotos)
+      .orderBy(asc(visitPhotos.createdAt));
     const financialSnapshotRows = await tx
       .select()
       .from(financialSnapshots)
@@ -179,6 +202,7 @@ export async function GET(request: Request) {
         services: serviceRows.length,
         clients: clientRows.length,
         visits: visitRows.length,
+        visit_photos: visitPhotoRows.length,
       },
       requestId: id,
     });
@@ -204,6 +228,7 @@ export async function GET(request: Request) {
       clients: clientRows,
       visits: visitRows,
       visit_lines: visitLineRows,
+      visit_photos: visitPhotoRows,
       financial_snapshots: financialSnapshotRows,
       expenses: expenseRows,
       labor_cost_rules: laborCostRows,
@@ -221,9 +246,31 @@ export async function GET(request: Request) {
     };
   });
 
+  /*
+   * Signed after the transaction, which should not wait on Storage. A deployment
+   * without the bucket — or a driver that serves bytes itself — links to the
+   * application's own address instead, which needs the owner's session.
+   */
+  const storage = getPhotoStorage();
+  const signed = storage
+    ? await storage
+        .signedUrls(payload.visit_photos.map((photo) => photo.storagePath), EXPORT_LINK_SECONDS)
+        .catch(() => new Map<string, string>())
+    : new Map<string, string>();
+  const exported = {
+    ...payload,
+    visit_photos: payload.visit_photos.map(({ storagePath, ...photo }) => ({
+      ...photo,
+      url: signed.get(storagePath) ?? photoUrl(photo.visitId, photo.id),
+      url_expires_at: signed.has(storagePath)
+        ? new Date(Date.now() + EXPORT_LINK_SECONDS * 1000).toISOString()
+        : null,
+    })),
+  };
+
   const filename = `nail-profit-export-${actor.organizationId}.json`;
   return NextResponse.json(
-    { data: payload, request_id: id },
+    { data: exported, request_id: id },
     {
       headers: {
         "x-request-id": id,

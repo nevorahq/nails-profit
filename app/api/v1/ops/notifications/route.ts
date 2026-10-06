@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getOpsApiToken } from "@/env";
 import { runBookingMaintenance, sweepBookingMaintenance } from "@/lib/booking-maintenance";
+import { flushStorageDeletions, sweepStorageDeletions } from "@/lib/visit-photos";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { dispatchDueNotifications, sweepDueNotifications } from "@/lib/notification-dispatch";
 import { logEvent } from "@/lib/logger";
@@ -82,6 +83,12 @@ export async function POST(request: Request) {
       })
     : await sweepDueNotifications({ limit: parsed.data.limit });
 
+  // Objects in the photo bucket whose rows are gone, owed a removal since an
+  // erasure or a deleted visit could not reach Storage at the time.
+  const photos = parsed.data.organization_id
+    ? await flushStorageDeletions(parsed.data.organization_id)
+    : await sweepStorageDeletions();
+
   return apiSuccess(
     {
       claimed: summary.claimed,
@@ -91,6 +98,8 @@ export async function POST(request: Request) {
       expired_holds: maintenance.expiredHolds,
       lapsed_requests: maintenance.lapsedRequests,
       reminded_requests: maintenance.remindedRequests,
+      photos_removed: photos.removed,
+      photos_failed: photos.failed,
     },
     id,
   );

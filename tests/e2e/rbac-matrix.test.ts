@@ -1045,6 +1045,36 @@ const cases: readonly Case[] = [
     request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/preview` }),
   },
   {
+    route: "/api/v1/visits/[id]/photos",
+    method: "GET",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings read, but not an Analyst: a photo of a client's hands is withheld with their contacts",
+    request: async (fixture) => ({ path: `/api/v1/visits/${fixture.visitId}/photos` }),
+  },
+  {
+    route: "/api/v1/visits/[id]/photos",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write, not an Analyst; without a bucket set up this is a 503, never a 403",
+    // No body: the role is decided first, and a test database has no bucket,
+    // so a permitted caller is answered 503 before any file is read.
+    request: async (fixture) => ({ path: `/api/v1/visits/${fixture.visitId}/photos`, body: {} }),
+  },
+  {
+    route: "/api/v1/visits/[id]/photos/[photoId]",
+    method: "GET",
+    allowed: ["owner", "manager", "master"],
+    note: "the photo itself, under the same rule as the list",
+    request: async (fixture) => ({ path: `/api/v1/visits/${fixture.visitId}/photos/${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/visits/[id]/photos/[photoId]",
+    method: "DELETE",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write, not an Analyst; a missing photo is a 404",
+    request: async (fixture) => ({ path: `/api/v1/visits/${fixture.visitId}/photos/${crypto.randomUUID()}` }),
+  },
+  {
     route: "/api/v1/bookings/[id]/next-slots",
     method: "GET",
     allowed: ["owner", "manager", "master"],
