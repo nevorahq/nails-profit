@@ -152,4 +152,25 @@ describe("the report's headline figure", () => {
 
     expect((await headline("master", null)).amountMinor).toBe(0);
   });
+
+  it("gives a master renting a chair the takings of their visits, not a 0% commission", async () => {
+    const renter = (await createSpecialist(organizationId, { name: "Аренда", cooperationType: "rent" })).id;
+    await createCommissionRule(organizationId, renter, { basisPoints: 0, activeFrom: CATALOGUE_FROM });
+    await closeVisit(renter, new Date("2026-03-04T10:00:00.000Z"));
+    await closeVisit(renter, new Date("2026-03-05T10:00:00.000Z"));
+
+    const card = await headline("master", renter);
+    expect(card).toEqual({ kind: "takings", amountMinor: 120_000, floor: null });
+
+    // The studio's own card is not changed by them: a renter's visits are out
+    // of the studio's month, whose takings from the chair are the rent.
+    expect((await headline("owner")).kind).toBe("operating");
+    expect((await report()).pl.visitRevenueMinor).toBe(0);
+  });
+
+  it("names a renter's empty month by their card", async () => {
+    const renter = (await createSpecialist(organizationId, { name: "Пустой месяц", cooperationType: "rent" })).id;
+    expect(await headline("master", renter)).toEqual({ kind: "takings", amountMinor: 0, floor: null });
+  });
 });
+

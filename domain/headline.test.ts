@@ -167,6 +167,46 @@ describe("everyone else's card", () => {
     });
   });
 
+  it("is the takings for a master renting a chair, not their 0% commission", () => {
+    const rented = row({ masterCooperation: "rent", commissionMinor: 0, contributionMarginMinor: 50_000 });
+    expect(visitsHeadline("earnings", aggregateVisitMetrics([rented, { ...rented, visitId: "b" }]))).toEqual({
+      kind: "takings",
+      amountMinor: 100_000,
+      floor: null,
+    });
+  });
+
+  it("counts the takings even of a rented visit that could not be costed", () => {
+    const uncosted = row({
+      masterCooperation: "rent",
+      commissionMinor: null,
+      contributionMarginMinor: null,
+      incompleteReasons: ["MISSING_DURATION"],
+    });
+    expect(visitsHeadline("earnings", aggregateVisitMetrics([uncosted]))).toMatchObject({
+      kind: "takings",
+      amountMinor: 50_000,
+      floor: null,
+    });
+  });
+
+  it("adds a month that changed halfway visit by visit, and calls it earnings", () => {
+    const before = row({ masterCooperation: "commission" });
+    const after = row({ masterCooperation: "rent", commissionMinor: 0 });
+    expect(visitsHeadline("earnings", aggregateVisitMetrics([before, after]))).toEqual({
+      kind: "earnings",
+      amountMinor: 20_000 + 50_000,
+      floor: null,
+    });
+  });
+
+  it("names an empty month by the card, since no visit can", () => {
+    const empty = aggregateVisitMetrics([]);
+    expect(visitsHeadline("earnings", empty, { rentsChair: true })).toEqual({ kind: "takings", amountMinor: 0, floor: null });
+    expect(visitsHeadline("earnings", empty, { rentsChair: false }).kind).toBe("earnings");
+    expect(visitsHeadline("earnings", empty).kind).toBe("earnings");
+  });
+
   it("is the margin before rent for a role that cannot see the rent", () => {
     expect(visitsHeadline("contribution", aggregateVisitMetrics([row({}), row({ contributionMarginMinor: -5_000 })]))).toEqual({
       kind: "contribution",
