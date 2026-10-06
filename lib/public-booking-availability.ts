@@ -1,6 +1,6 @@
 import type { TenantTransaction } from "@/db/tenant";
 import { withTenant } from "@/db/tenant";
-import { addLocalDays, localToUtc, type LocalDate } from "@/domain/timezone";
+import { addLocalDays, formatLocalDate, localToUtc, type LocalDate } from "@/domain/timezone";
 import {
   alternativeSlots,
   loadBookingDraftFor,
@@ -101,6 +101,131 @@ async function candidateFor(
   };
 }
 
+/** Whoever may be booked for the whole sitting, or null when nobody can. */
+async function resolvePeople(tx: TenantTransaction, input: PublicAvailabilityInput) {
+  // Whoever does every service of the sitting, not only the first.
+  let people = await publicSpecialistsFor(tx, input.locationId, itemsOf(input)[0].serviceId);
+  for (const item of itemsOf(input).slice(1)) {
+    const able = new Set(
+      (await publicSpecialistsFor(tx, input.locationId, item.serviceId)).map((person) => person.id),
+    );
+    people = people.filter((person) => able.has(person.id));
+  }
+  if (input.specialistId) {
+    people = people.filter((person) => person.id === input.specialistId);
+  }
+  return people.length === 0 ? null : people;
+}
+
+/** The slots of `input.date`, one per start time unless a master was named. */
+async function slotsOnDay(
+  tx: TenantTransaction,
+  input: PublicAvailabilityInput,
+  people: PublicSpecialist[],
+  timezone: string,
+): Promise<PublicSlot[]> {
+  const candidates = (
+    await Promise.all(
+      people.map((person) =>
+        candidateFor(tx, input, person, timezone),
+      ),
+    )
+  ).filter((candidate): candidate is Candidate => candidate !== null);
+
+  const flattened = candidates.flatMap((candidate) =>
+    candidate.slots.map((slot) => ({
+      slot,
+      bookedMinutes: candidate.bookedMinutes,
+      sortOrder: candidate.person.sortOrder,
+    })),
+  );
+  flattened.sort(
+    (left, right) =>
+      left.slot.starts_at.localeCompare(right.slot.starts_at) ||
+      left.bookedMinutes - right.bookedMinutes ||
+      left.sortOrder - right.sortOrder ||
+      left.slot.specialist_id.localeCompare(right.slot.specialist_id),
+  );
+
+  const seen = new Set<string>();
+  return flattened
+    .filter(({ slot }) => {
+      // A named specialist keeps all their slots. “Any” keeps the best person
+      // for each wall-clock start.
+      if (input.specialistId) return true;
+      if (seen.has(slot.starts_at)) return false;
+      seen.add(slot.starts_at);
+      return true;
+    })
+    .map(({ slot }) => slot);
+}
+
+async function catalogueFor(input: PublicAvailabilityInput) {
+  const catalogue = await loadPublicCatalog(input.slug, input.locationId);
+  if (!catalogue) return null;
+
+  for (const item of itemsOf(input)) {
+    const service = catalogue.dto.services.find((entry) => entry.id === item.serviceId);
+    if (!service) return null;
+    const allowedAddOns = new Set(service.add_ons.map((addOn) => addOn.id));
+    if (item.addOnIds.some((id) => !allowedAddOns.has(id))) return null;
+  }
+  return catalogue;
+}
+
+/** The longest ribbon of days one request may ask for. */
+export const MAX_AVAILABILITY_DAYS = 14;
+
+/**
+ * The slots of several consecutive days from one request.
+ *
+ * The public page draws a ribbon of the coming days with the times under it.
+ * Asking for each day separately would spend the page's availability budget
+ * (`PUBLIC_BOOKING_AVAILABILITY_RULE`) on tapping through the ribbon, so the
+ * whole stretch is answered at once, in one transaction, and the page picks
+ * the day it shows from the answer. Days are the location's own, from
+ * `input.date`; a day with no free time is still listed so the ribbon can say so.
+ */
+export async function loadPublicAvailabilityRange(
+  input: PublicAvailabilityInput & Readonly<{ days: number }>,
+): Promise<
+  | Readonly<{
+      organizationId: string;
+      timezone: string;
+      currency: string;
+      days: { date: string; slots: PublicSlot[] }[];
+    }>
+  | null
+> {
+  const catalogue = await catalogueFor(input);
+  if (!catalogue) return null;
+  const count = Math.min(Math.max(Math.trunc(input.days), 1), MAX_AVAILABILITY_DAYS);
+
+  return withTenant(catalogue.organization.id, async (tx) => {
+    const people = await resolvePeople(tx, input);
+    if (!people) return null;
+
+    const context = await loadSlotContext(tx, input.locationId);
+    if (!context || context.publicStatus !== "published") return null;
+
+    const days: { date: string; slots: PublicSlot[] }[] = [];
+    for (let offset = 0; offset < count; offset += 1) {
+      const date = addLocalDays(input.date, offset);
+      days.push({
+        date: formatLocalDate(date),
+        slots: await slotsOnDay(tx, { ...input, date }, people, catalogue.location.timezone),
+      });
+    }
+
+    return {
+      organizationId: catalogue.organization.id,
+      timezone: catalogue.location.timezone,
+      currency: catalogue.organization.currency,
+      days,
+    };
+  });
+}
+
 /**
  * Public slots without exposing the underlying rota.
  *
@@ -120,65 +245,14 @@ export async function loadPublicAvailability(
     }>
   | null
 > {
-  const catalogue = await loadPublicCatalog(input.slug, input.locationId);
+  const catalogue = await catalogueFor(input);
   if (!catalogue) return null;
 
-  const items = itemsOf(input);
-  for (const item of items) {
-    const service = catalogue.dto.services.find((entry) => entry.id === item.serviceId);
-    if (!service) return null;
-    const allowedAddOns = new Set(service.add_ons.map((addOn) => addOn.id));
-    if (item.addOnIds.some((id) => !allowedAddOns.has(id))) return null;
-  }
-
   return withTenant(catalogue.organization.id, async (tx) => {
-    // Whoever does every service of the sitting, not only the first.
-    let people = await publicSpecialistsFor(tx, input.locationId, items[0].serviceId);
-    for (const item of items.slice(1)) {
-      const able = new Set(
-        (await publicSpecialistsFor(tx, input.locationId, item.serviceId)).map((person) => person.id),
-      );
-      people = people.filter((person) => able.has(person.id));
-    }
-    if (input.specialistId) {
-      people = people.filter((person) => person.id === input.specialistId);
-    }
-    if (people.length === 0) return null;
+    const people = await resolvePeople(tx, input);
+    if (!people) return null;
 
-    const candidates = (
-      await Promise.all(
-        people.map((person) =>
-          candidateFor(tx, input, person, catalogue.location.timezone),
-        ),
-      )
-    ).filter((candidate): candidate is Candidate => candidate !== null);
-
-    const flattened = candidates.flatMap((candidate) =>
-      candidate.slots.map((slot) => ({
-        slot,
-        bookedMinutes: candidate.bookedMinutes,
-        sortOrder: candidate.person.sortOrder,
-      })),
-    );
-    flattened.sort(
-      (left, right) =>
-        left.slot.starts_at.localeCompare(right.slot.starts_at) ||
-        left.bookedMinutes - right.bookedMinutes ||
-        left.sortOrder - right.sortOrder ||
-        left.slot.specialist_id.localeCompare(right.slot.specialist_id),
-    );
-
-    const seen = new Set<string>();
-    const slots = flattened
-      .filter(({ slot }) => {
-        // A named specialist keeps all their slots. “Any” keeps the best person
-        // for each wall-clock start.
-        if (input.specialistId) return true;
-        if (seen.has(slot.starts_at)) return false;
-        seen.add(slot.starts_at);
-        return true;
-      })
-      .map(({ slot }) => slot);
+    const slots = await slotsOnDay(tx, input, people, catalogue.location.timezone);
 
     const context = await loadSlotContext(tx, input.locationId);
     if (!context || context.publicStatus !== "published") return null;
