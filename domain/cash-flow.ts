@@ -17,6 +17,11 @@ import type { ResolvedExpense } from "@/domain/expense-periods";
  * visit and the monthly salaries are already the labour that leaves the
  * account, and counting both would pay the studio's masters twice on paper.
  *
+ * Once the studio records what it hands its masters (`master_payout`), the
+ * hired masters' pay stops being assumed and is read from those payouts
+ * instead — see `masterPayouts` below. The payroll rows stay out either way:
+ * a payout is the payment, so a «Зарплата» row beside it would be a second.
+ *
  * That exclusion is exactly why `owner_draw` exists as its own table. Before
  * it, an owner taking money out filed it under `payroll` — where the profit
  * statement ignores it as already-counted labour, and where this statement
@@ -64,6 +69,25 @@ export type CashFlowInput = Readonly<{
    * on the difference rather than leaving the reader to subtract two screens.
    */
   operatingProfitMinor: number;
+  /**
+   * What hired masters were actually handed this month, once the studio keeps
+   * track of it (`domain/payouts.ts`). Absent means it does not, and their pay
+   * is read as leaving the account the month it was earned, as it always was.
+   *
+   * Present, the statement switches to what happened: the hired masters'
+   * commission and wages come out, the payouts go in, and what is still owed
+   * is shown and not subtracted — it has not left. A principal's commission
+   * and the employer's contributions stay as they were; neither is a payout.
+   */
+  masterPayouts?: Readonly<{
+    paidMinor: number;
+    /** Owed to hired masters when the month closed. */
+    owedMinor: number;
+    /** The hired masters' part of `visitLabourMinor`. */
+    commissionMinor: number;
+    /** The wages inside `salariedLabourMinor`, contributions excluded. */
+    wageMinor: number;
+  }>;
 }>;
 
 export type CashFlow = Readonly<{
@@ -79,8 +103,14 @@ export type CashFlow = Readonly<{
   /** Handed on to hired masters. */
   tipsPaidOutMinor: number;
 
+  /** Per-visit labour leaving the account: all of it, or a principal's alone once payouts are tracked. */
   visitLabourMinor: number;
+  /** Salaries leaving the account: whole, or only the contributions once payouts are tracked. */
   salariedLabourMinor: number;
+  /** Handed to hired masters this month; null while payouts are not tracked. */
+  masterPayoutsMinor: number | null;
+  /** Still owed to hired masters at the month's end; shown, never subtracted. */
+  owedToMastersMinor: number | null;
   /**
    * Every ledger row except `payroll`, at what was actually paid.
    */
@@ -124,13 +154,17 @@ export function buildCashFlow(input: CashFlowInput): CashFlow {
   const tipsMinor = input.tipsMinor ?? 0;
   const tipsPaidOutMinor = input.tipsPaidOutMinor ?? 0;
   const chairRentMinor = input.chairRentMinor ?? 0;
+  const payouts = input.masterPayouts;
+  const visitLabourMinor = input.visitLabourMinor - (payouts?.commissionMinor ?? 0);
+  const salariedLabourMinor = input.salariedLabourMinor - (payouts?.wageMinor ?? 0);
   const netCashMinor =
     settledMinor +
     chairRentMinor +
     tipsMinor -
     tipsPaidOutMinor -
-    input.visitLabourMinor -
-    input.salariedLabourMinor -
+    visitLabourMinor -
+    salariedLabourMinor -
+    (payouts?.paidMinor ?? 0) -
     spentFromLedgerMinor -
     input.ownerDrawsMinor;
 
@@ -144,8 +178,10 @@ export function buildCashFlow(input: CashFlowInput): CashFlow {
     tipsMinor,
     tipsPaidOutMinor,
 
-    visitLabourMinor: input.visitLabourMinor,
-    salariedLabourMinor: input.salariedLabourMinor,
+    visitLabourMinor,
+    salariedLabourMinor,
+    masterPayoutsMinor: payouts?.paidMinor ?? null,
+    owedToMastersMinor: payouts?.owedMinor ?? null,
     spentFromLedgerMinor,
     spentByCategory,
     ledgerPayrollMinor,

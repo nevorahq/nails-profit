@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { chairRents, specialists, visits } from "@/db/schema";
+import { chairRents, laborCostRules, masterPayouts, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { loadDashboard } from "@/lib/dashboard";
 import { endChairRent } from "@/lib/cooperation";
+import { loadPayoutReport } from "@/lib/payouts";
 import { loadPeriodPL, monthBounds } from "@/lib/period";
 import { recordCompletedVisit } from "@/lib/visit-service";
 import { adminDb, resetDatabase } from "../helpers/database";
@@ -148,5 +149,71 @@ describe("a rented chair in the month's report", () => {
 
     const { pl } = await report();
     expect(pl.visitRevenueMinor).toBe(600_00);
+  });
+
+  it("takes a payout into the balance and the cash flow, and leaves the profit alone", async () => {
+    await closeVisit(hiredId, "2026-03-03T10:00:00.000Z");
+    await closeVisit(hiredId, "2026-03-04T10:00:00.000Z");
+    await closeVisit(renterId, "2026-03-05T12:00:00.000Z");
+    // A salary on top of the percentage, with 10% contributions the state takes.
+    await adminDb.insert(laborCostRules).values({
+      organizationId,
+      recipient: "specialist",
+      specialistId: hiredId,
+      basis: "fixed_monthly",
+      amountMinor: 1_000_00,
+      payrollTaxBasisPoints: 1_000,
+      activeFrom: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    const before = await report();
+    expect(before.cashFlow.masterPayoutsMinor).toBeNull();
+
+    await adminDb.insert(masterPayouts).values({
+      organizationId,
+      specialistId: hiredId,
+      amountMinor: 300_00,
+      currency: "MDL",
+      paidOn: "2026-03-20",
+    });
+
+    const after = await report();
+    // The profit is the work, and the work did not change.
+    expect(after.pl.operatingProfitMinor).toBe(before.pl.operatingProfitMinor);
+    expect(after.pl.labourCostMinor).toBe(before.pl.labourCostMinor);
+
+    // The cash is what happened: 480 of commission and 1 000 of wage were
+    // assumed gone; 300 actually went, and the 110 of contributions still did.
+    expect(after.cashFlow.masterPayoutsMinor).toBe(300_00);
+    expect(after.cashFlow.visitLabourMinor).toBe(0);
+    expect(after.cashFlow.salariedLabourMinor).toBe(100_00);
+    expect(after.cashFlow.netCashMinor).toBe(before.cashFlow.netCashMinor + 480_00 + 1_000_00 - 300_00);
+    // February's salary is owed too: the balance starts the month before the
+    // first payout, which is the month a payout on the 20th would settle.
+    expect(after.cashFlow.owedToMastersMinor).toBe(2_180_00);
+
+    const payouts = await withTenant(organizationId, (tx) =>
+      loadPayoutReport(tx, { month: MONTH, currency: "MDL" }, "ru"),
+    );
+    expect(payouts!.ledger.startMonth).toBe("2026-02");
+    // The renter is owed nothing and is not on the list.
+    expect(payouts!.ledger.rows).toEqual([
+      {
+        specialistId: hiredId,
+        openingMinor: 1_000_00,
+        commissionMinor: 480_00,
+        wageMinor: 1_000_00,
+        accruedMinor: 1_480_00,
+        paidMinor: 300_00,
+        closingMinor: 2_180_00,
+      },
+    ]);
+    expect(payouts!.entries.map((entry) => entry.amountMinor)).toEqual([300_00]);
+
+    // April carries the 2 180 in, earns another salary, and was paid nothing.
+    const april = await withTenant(organizationId, (tx) =>
+      loadPayoutReport(tx, { month: "2026-04", currency: "MDL" }, "ru"),
+    );
+    expect(april!.ledger.rows[0]).toMatchObject({ openingMinor: 2_180_00, accruedMinor: 1_000_00, closingMinor: 3_180_00 });
   });
 });

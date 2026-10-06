@@ -7,7 +7,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { useTranslator } from "@/components/lexicon-provider";
 import { formatMonth, monthNames, parseMonth, queryFor, yearOptions } from "@/lib/filter-bar";
 
-const PATH = "/app/reports/month";
+const MONTH_REPORT = "/app/reports/month";
 
 /**
  * The month the profit-and-loss report is drawn for, as the calendar's bar.
@@ -27,6 +27,7 @@ export function MonthPicker({
   localeTag,
   month,
   thisMonth,
+  path = MONTH_REPORT,
 }: {
   locale: AppLocale;
   localeTag: string;
@@ -34,6 +35,8 @@ export function MonthPicker({
   month: string;
   /** `YYYY-MM` where the studio is now, read on the server rather than the clock. */
   thisMonth: string;
+  /** The page the choice reloads; «К выплате» reads by month as well. */
+  path?: string;
 }) {
   const t = useTranslator(locale);
   const router = useRouter();
@@ -44,14 +47,14 @@ export function MonthPicker({
 
   const go = (next: Readonly<{ year?: number; month?: number }>) =>
     router.push(
-      queryFor(PATH, {
+      queryFor(path, {
         month: formatMonth(next.year ?? anchor.year, next.month ?? anchor.month),
       }),
     );
 
   return (
     <nav className="calendar-where" aria-label={t("pl.month")}>
-      <Link className="secondary-button" href={queryFor(PATH, { month: thisMonth })}>
+      <Link className="secondary-button" href={queryFor(path, { month: thisMonth })}>
         {t("pl.thisMonth")}
       </Link>
 

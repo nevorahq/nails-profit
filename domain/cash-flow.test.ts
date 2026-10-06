@@ -161,6 +161,33 @@ describe("buildCashFlow with a rented chair", () => {
   });
 });
 
+describe("buildCashFlow once payouts are tracked", () => {
+  it("swaps the hired masters' pay for what was handed over, and keeps the rest", () => {
+    const accrual = buildCashFlow(flow({ salariedLabourMinor: 6_000_00 }));
+    const fact = buildCashFlow(
+      flow({
+        salariedLabourMinor: 6_000_00,
+        masterPayouts: { paidMinor: 25_000_00, owedMinor: 19_000_00, commissionMinor: 38_000_00, wageMinor: 5_000_00 },
+      }),
+    );
+
+    // A principal's 2 000 of the 40 000 stays, as do the 1 000 of contributions.
+    expect(fact.visitLabourMinor).toBe(2_000_00);
+    expect(fact.salariedLabourMinor).toBe(1_000_00);
+    expect(fact.masterPayoutsMinor).toBe(25_000_00);
+    expect(fact.owedToMastersMinor).toBe(19_000_00);
+    expect(fact.netCashMinor).toBe(accrual.netCashMinor + 38_000_00 + 5_000_00 - 25_000_00);
+    // The profit it is set against does not move.
+    expect(fact.operatingProfitMinor).toBe(accrual.operatingProfitMinor);
+  });
+
+  it("reads no payouts as untracked, with nothing owed stated", () => {
+    const result = buildCashFlow(flow());
+    expect(result.masterPayoutsMinor).toBeNull();
+    expect(result.owedToMastersMinor).toBeNull();
+  });
+});
+
 describe("buildCashFlow with tips", () => {
   it("takes tips in and hands a hired master's back out, leaving the cash as it was", () => {
     const without = buildCashFlow(flow());

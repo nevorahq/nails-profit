@@ -445,6 +445,47 @@ const cases: readonly Case[] = [
     request: async () => ({ path: `/api/v1/owner-draws?id=${crypto.randomUUID()}` }),
   },
   {
+    route: "/api/v1/payouts",
+    method: "GET",
+    allowed: ["owner"],
+    note: "What each master was handed is pay, read under the same owner-only capability as a salary",
+    request: async () => ({ path: "/api/v1/payouts" }),
+  },
+  {
+    route: "/api/v1/payouts",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Marking a payout moves the studio's money; the owner's alone",
+    request: async (fixture) => ({
+      path: "/api/v1/payouts",
+      body: { specialist_id: fixture.studio.specialistId, amount_minor: 100_00, currency: "MDL" },
+    }),
+  },
+  {
+    route: "/api/v1/payouts",
+    method: "DELETE",
+    allowed: ["owner"],
+    note: "Same owner-only write as marking one",
+    request: async () => ({ path: `/api/v1/payouts?id=${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/chair-rent",
+    method: "GET",
+    allowed: ["owner"],
+    note: "A chair's rent is the studio's income from one person — owner-only like a salary",
+    request: async (fixture) => ({ path: `/api/v1/specialists/${fixture.studio.specialistId}/chair-rent` }),
+  },
+  {
+    route: "/api/v1/specialists/[id]/chair-rent",
+    method: "POST",
+    allowed: ["owner"],
+    note: "Setting the rent is the same owner-only write",
+    request: async (fixture) => ({
+      path: `/api/v1/specialists/${fixture.studio.specialistId}/chair-rent`,
+      body: { amount_minor: 300_000 },
+    }),
+  },
+  {
     route: "/api/v1/tax-rules",
     method: "GET",
     allowed: ["owner"],

@@ -14,6 +14,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { loadMonthRota } from "@/lib/capacity";
 import { loadDashboard } from "@/lib/dashboard";
 import { loadMaterialsModes } from "@/lib/materials-mode";
+import { loadPayoutReport } from "@/lib/payouts";
 
 /**
  * The month's profit and loss, read from the two places it lives: the financial
@@ -280,6 +281,14 @@ export async function loadPeriodPL(
         lte(ownerDraws.occurredOn, to.toISOString().slice(0, 10)),
       ),
     );
+  /*
+   * What hired masters were actually handed, for a month inside the span the
+   * studio keeps track of — null for every other month, which leaves the cash
+   * flow reading their pay as gone the month it was earned.
+   */
+  const payouts = await loadPayoutReport(tx, { month: options.month, currency: options.currency, whenTracked: true }, locale);
+  const payoutRows = payouts?.ledger.rows ?? [];
+
   const ownerDrawsMinor = draws
     .filter((row) => row.currency === options.currency)
     .reduce((total, row) => total + row.amountMinor, 0);
@@ -314,6 +323,14 @@ export async function loadPeriodPL(
       // A principal's tips stay on the account; a hired master's are handed on.
       tipsPaidOutMinor: dashboard.metrics.tipsMinor - dashboard.metrics.principalTipsMinor,
       operatingProfitMinor: pl.operatingProfitMinor,
+      masterPayouts: payouts
+        ? {
+            paidMinor: payouts.ledger.totals.paidMinor,
+            owedMinor: payouts.ledger.totals.closingMinor,
+            commissionMinor: payoutRows.reduce((total, row) => total + row.commissionMinor, 0),
+            wageMinor: payoutRows.reduce((total, row) => total + row.wageMinor, 0),
+          }
+        : undefined,
     }),
     currency: options.currency,
     excludedRows: rows.length - inCurrency.length,

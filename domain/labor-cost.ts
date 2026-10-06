@@ -91,12 +91,20 @@ export function monthlyLaborCostMinor(
   rule: LaborCostRuleRow,
   context: Readonly<{ revenueMinor: number }>,
 ): number {
-  const wage =
-    rule.basis === "fixed_monthly"
-      ? (rule.amountMinor ?? 0)
-      : roundRatio(context.revenueMinor * (rule.basisPoints ?? 0), 10_000);
+  const wage = monthlyWageMinor(rule, context);
 
   return wage + roundRatio(wage * rule.payrollTaxBasisPoints, 10_000);
+}
+
+/**
+ * The wage alone, without the employer's contributions: what the person is
+ * owed, as opposed to what the month costs. The contributions go to the state,
+ * so «К выплате» counts this and the P&L counts the line above.
+ */
+export function monthlyWageMinor(rule: LaborCostRuleRow, context: Readonly<{ revenueMinor: number }>): number {
+  return rule.basis === "fixed_monthly"
+    ? (rule.amountMinor ?? 0)
+    : roundRatio(context.revenueMinor * (rule.basisPoints ?? 0), 10_000);
 }
 
 /** Everything owed to the salaried, and everything owed to the owner, apart. */

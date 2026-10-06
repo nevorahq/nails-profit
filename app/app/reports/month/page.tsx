@@ -167,6 +167,7 @@ export default async function MonthReportPage({
         register={register}
         locale={locale}
         role={membership.role}
+        businessType={businessType}
         active="month"
         // The current month is the other tabs' default, so it is left unsaid.
         state={month === thisMonth ? { month } : { ...monthRange(month), month }}
@@ -466,15 +467,44 @@ export default async function MonthReportPage({
                     <td>{cost(cash.tipsPaidOutMinor)}</td>
                   </tr>
                 )}
-                <tr>
-                  <td className="pl-label">{t("cash.visitLabour")}</td>
-                  <td>{cost(cash.visitLabourMinor)}</td>
-                </tr>
-                {cash.salariedLabourMinor > 0 && (
-                  <tr>
-                    <td className="pl-label">{t("pl.salaried")}</td>
-                    <td>{cost(cash.salariedLabourMinor)}</td>
-                  </tr>
+                {/*
+                  Once the studio marks what it hands its masters, their pay is
+                  read from those payouts, and what is left of the two lines
+                  above them is what was never a payout: the owner's own
+                  commission and the contributions on salaries.
+                */}
+                {cash.masterPayoutsMinor === null ? (
+                  <>
+                    <tr>
+                      <td className="pl-label">{t("cash.visitLabour")}</td>
+                      <td>{cost(cash.visitLabourMinor)}</td>
+                    </tr>
+                    {cash.salariedLabourMinor > 0 && (
+                      <tr>
+                        <td className="pl-label">{t("pl.salaried")}</td>
+                        <td>{cost(cash.salariedLabourMinor)}</td>
+                      </tr>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <tr>
+                      <td className="pl-label">{t("cash.masterPayouts")}</td>
+                      <td>{cost(cash.masterPayoutsMinor)}</td>
+                    </tr>
+                    {cash.visitLabourMinor > 0 && (
+                      <tr>
+                        <td className="pl-label">{t("cash.principalLabour")}</td>
+                        <td>{cost(cash.visitLabourMinor)}</td>
+                      </tr>
+                    )}
+                    {cash.salariedLabourMinor > 0 && (
+                      <tr>
+                        <td className="pl-label">{t("cash.payrollContributions")}</td>
+                        <td>{cost(cash.salariedLabourMinor)}</td>
+                      </tr>
+                    )}
+                  </>
                 )}
                 <tr className={cash.ownerDrawsMinor > 0 ? undefined : "pl-subtotal"}>
                   <td className="pl-label">{t("cash.spent")}</td>
@@ -525,6 +555,14 @@ export default async function MonthReportPage({
             {cash.ledgerPayrollMinor > 0 && (
               <p className="pl-note">
                 {t("cash.payrollExcluded", { amount: money(cash.ledgerPayrollMinor) })}
+              </p>
+            )}
+            {cash.owedToMastersMinor !== null && cash.owedToMastersMinor !== 0 && (
+              <p className="pl-note">
+                {t("cash.owedToMasters", { amount: money(cash.owedToMastersMinor) })}{" "}
+                <Link className="text-link" href={`/app/reports/payouts?month=${month}`}>
+                  {t("report.tabPayouts")}
+                </Link>
               </p>
             )}
           </section>
