@@ -99,6 +99,8 @@ export function SpecialistDetail({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [ruleType, setRuleType] = useState("percentage");
+  const [cooperation, setCooperation] = useState(person.cooperation_type);
+  const [backRuleType, setBackRuleType] = useState("percentage");
   const [ruleService, setRuleService] = useState("");
   const [selected, setSelected] = useState<string[]>(
     person.service_assignments.map((assignment) => assignment.service_id),
@@ -188,6 +190,30 @@ export function SpecialistDetail({
       `/api/v1/specialists/${person.id}/commission-rules`,
       { ...rule, ...(service ? { service_id: service } : {}), ...effectiveDateFrom(data, today) },
       form,
+    );
+  }
+
+  /**
+   * How this person works with the studio, and the rule that follows from it.
+   *
+   * Leaving the percentage writes 0% on the server, in the same transaction;
+   * coming back to it needs the rate, because nothing on file says what it
+   * should be — the endpoint refuses the change without one.
+   */
+  async function saveCooperation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const back = cooperation === "commission" && person.cooperation_type !== "commission";
+    const rule = back ? ruleFromForm(data) : null;
+    if (back && !rule) {
+      setError(t("specialists.valueRequired"));
+      return;
+    }
+    await send(
+      `/api/v1/specialists/${person.id}`,
+      { cooperation_type: cooperation, ...(rule ? { default_rule: rule } : {}) },
+      undefined,
+      "PATCH",
     );
   }
 
@@ -381,6 +407,57 @@ export function SpecialistDetail({
             {person.is_principal ? t("specialists.principalUnset") : t("specialists.principalSet")}
           </button>
         )}
+        {canManage && (
+          <form className="inline-form" onSubmit={saveCooperation}>
+            <label>
+              {t("specialists.cooperation")}
+              <select
+                name="cooperation_type"
+                value={cooperation}
+                onChange={(event) => setCooperation(event.target.value as typeof cooperation)}
+              >
+                <option value="commission">{t("cooperation.commission")}</option>
+                <option value="rent">{t("cooperation.rent")}</option>
+                <option value="staff">{t("cooperation.staff")}</option>
+              </select>
+            </label>
+            {cooperation === "commission" && person.cooperation_type !== "commission" && (
+              <>
+                <p className="muted">{t("specialists.backToPercentHint")}</p>
+                <label>
+                  {t("specialists.type")}
+                  <select
+                    name="rule_type"
+                    value={backRuleType}
+                    onChange={(event) => setBackRuleType(event.target.value)}
+                  >
+                    <option value="percentage">{t("commissionType.percentage")}</option>
+                    <option value="fixed">{t("commissionType.fixed")}</option>
+                    <option value="hybrid">{t("commissionType.hybrid")}</option>
+                  </select>
+                </label>
+                {backRuleType === "hybrid" && (
+                  <label>
+                    {t("specialists.guaranteed", { currency })}
+                    <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
+                  </label>
+                )}
+                <label>
+                  {t("specialists.value")}
+                  <input name="rule_value" type="number" step="0.01" min="0" placeholder="40" required />
+                </label>
+              </>
+            )}
+            {cooperation !== "commission" && person.cooperation_type === "commission" && (
+              <p className="muted">{t("specialists.noPayPerVisit")}</p>
+            )}
+            {cooperation !== person.cooperation_type && (
+              <button className="primary-button" type="submit" disabled={pending}>
+                {pending ? t("common.saving") : t("common.save")}
+              </button>
+            )}
+          </form>
+        )}
       </section>
 
       {showsPay && (
@@ -549,9 +626,6 @@ export function SpecialistDetail({
                 placeholder={businessType === "solo" ? "0" : "40"}
                 required
               />
-              {person.cooperation_type !== "commission" && (
-                <span className="muted">{t("specialists.zeroRuleHint")}</span>
-              )}
             </label>
             {/*
               The one field on this page a solo studio cannot answer from

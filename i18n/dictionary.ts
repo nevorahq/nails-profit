@@ -1026,8 +1026,9 @@ const ru = {
   "specialists.defaultRule": "Комиссия по умолчанию",
   "specialists.notSet": "не задана",
   "specialists.valueRequired": "Укажите значение комиссии",
-  "specialists.zeroRuleHint":
-    "Для аренды и оклада укажите 0: с визита не удерживается ничего. Правило нужно всё равно — без него визит не закроется.",
+  "specialists.noPayPerVisit": "С визитов мастеру ничего не начисляется — ставка 0 % ставится сама.",
+  "specialists.backToPercentHint":
+    "Мастер снова получает процент с визитов — укажите ставку. Она действует с сегодняшнего дня.",
   "specialists.imputedHint":
     "Это не выплата: столько вы платили бы мастеру за ту же работу. Из этой цифры считается себестоимость визита — без неё услуги не сравнить между собой, — а в отчёте месяца она возвращается в прибыль, потому что из бизнеса не ушла.",
   "specialists.imputedHintShort": "Это не выплата, а цена вашего часа: из неё считается себестоимость визита.",
@@ -2642,8 +2643,10 @@ const ro: Record<MessageKey, Message> = {
   "specialists.defaultRule": "Comision implicit",
   "specialists.notSet": "nedefinit",
   "specialists.valueRequired": "Indicați valoarea comisionului",
-  "specialists.zeroRuleHint":
-    "Pentru chirie și salariu indicați 0: din vizită nu se reține nimic. Regula este oricum necesară — fără ea vizita nu poate fi finalizată.",
+  "specialists.noPayPerVisit":
+    "Maestrului nu i se calculează nimic din vizite — rata de 0 % se setează automat.",
+  "specialists.backToPercentHint":
+    "Maestrul primește din nou procent din vizite — indicați rata. Se aplică de astăzi.",
   "specialists.imputedHint":
     "Nu este o plată: atât ați plăti unui maestru pentru aceeași muncă. Din această cifră se calculează costul vizitei — fără ea serviciile nu pot fi comparate între ele — iar în raportul lunar ea se întoarce în profit, pentru că nu a plecat din afacere.",
   "specialists.imputedHintShort": "Nu este o plată, ci prețul orei dvs.: din el se calculează costul vizitei.",
@@ -4244,8 +4247,9 @@ const en: Record<MessageKey, Message> = {
   "specialists.defaultRule": "Default commission",
   "specialists.notSet": "not set",
   "specialists.valueRequired": "Enter the commission value",
-  "specialists.zeroRuleHint":
-    "For a rented chair or a salary, enter 0: nothing is taken from the visit. The rule is still needed — without one the visit cannot be closed.",
+  "specialists.noPayPerVisit": "Nothing is paid to the master per visit — a 0% rate is set automatically.",
+  "specialists.backToPercentHint":
+    "The master is paid per visit again — enter the rate. It applies from today.",
   "specialists.imputedHint":
     "Not a payment: it is what you would pay a specialist for the same work. A visit's cost is worked out from this figure — without it there is no comparing one service against another — and the month report adds it back into profit, because it never left the business.",
   "specialists.imputedHintShort": "Not a payment but the price of your hour: a visit's cost is worked out from it.",

@@ -18,8 +18,11 @@ import {
   visits,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
+import { paidPerVisit } from "@/domain/cooperation";
+import { commissionBases, commissionTypes } from "@/domain/costing";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { replaceDefaultRule, zeroDefaultRule } from "@/lib/cooperation";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -52,6 +55,32 @@ const patchSpecialistSchema = z.object({
    * the same field and says what it decides.
    */
   sort_order: z.int().min(0).max(1_000).optional(),
+  /**
+   * The rate a master goes back to when they stop renting or stop being on a
+   * salary. Required on exactly that change — their rule has been 0% since
+   * they left the percentage, and guessing the old rate back would pay them by
+   * a number nobody confirmed. Read on no other change.
+   */
+  default_rule: z
+    .object({
+      type: z.enum(commissionTypes),
+      basis_points: z.int().min(0).max(10_000).optional(),
+      fixed_amount_minor: z.int().min(0).optional(),
+      base: z.enum(commissionBases).optional(),
+    })
+    .refine(
+      (value) => {
+        if (value.type === "fixed") {
+          return value.fixed_amount_minor !== undefined && value.basis_points === undefined;
+        }
+        if (value.type === "hybrid") {
+          return value.fixed_amount_minor !== undefined && value.basis_points !== undefined;
+        }
+        return value.basis_points !== undefined && value.fixed_amount_minor === undefined;
+      },
+      { message: "A fixed rule needs an amount, a percentage rule needs a rate, and a hybrid needs both" },
+    )
+    .optional(),
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -119,6 +148,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         if (other) return "principal_exists" as const;
       }
 
+      const cooperation = parsed.data.cooperation_type;
+      const cooperationChanged = cooperation !== undefined && cooperation !== existing.cooperationType;
+      if (cooperationChanged && paidPerVisit(cooperation) && !parsed.data.default_rule) {
+        return "rate_required" as const;
+      }
+
       const [specialist] = await tx
         .update(specialists)
         .set({
@@ -138,6 +173,26 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       // the visits that closed before the question existed. See the function.
       if (parsed.data.is_principal === true && !existing.isPrincipal) {
         await adoptPrincipalHistory(tx, id);
+      }
+
+      /*
+       * The rule follows the cooperation in the same transaction, so there is
+       * no moment at which a renter is still paid 40% or a master back on a
+       * percentage is paid nothing. Visits already closed keep their snapshot.
+       */
+      if (cooperationChanged) {
+        const ruleActor = { organizationId: actor.organizationId, userId: actor.userId, requestId: requestIdentifier };
+        const rule = parsed.data.default_rule;
+        if (paidPerVisit(cooperation) && rule) {
+          await replaceDefaultRule(tx, ruleActor, id, {
+            type: rule.type,
+            basisPoints: rule.basis_points ?? null,
+            fixedAmountMinor: rule.fixed_amount_minor ?? null,
+            base: rule.base ?? "after_discount",
+          });
+        } else {
+          await zeroDefaultRule(tx, ruleActor, id);
+        }
       }
 
       // Who may see which visits changes with this row, so it is audited the
@@ -167,6 +222,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
       return specialist;
     });
+
+    if (updated === "rate_required") {
+      return apiError(
+        422,
+        "RATE_REQUIRED",
+        "Going back to a percentage needs the rate the master is paid",
+        requestIdentifier,
+        { fieldErrors: [{ field: "default_rule", code: "required", message: "A rate is required" }] },
+      );
+    }
 
     if (updated === "principal_exists") {
       return apiError(

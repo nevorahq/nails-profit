@@ -187,7 +187,10 @@ export function SpecialistManager({
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    const rule = ruleFromForm(data);
+    // A renter or a salaried master is paid nothing per visit, and the
+    // endpoint writes their 0% itself — the form asks no rate of them.
+    const perVisit = addCooperation === "commission";
+    const rule = perVisit ? ruleFromForm(data) : null;
     /*
      * No rule, no specialist. The API takes the rule as optional so a row can
      * be created first, but a master reaches this studio through one door and
@@ -195,7 +198,7 @@ export function SpecialistManager({
      * with MISSING_COMMISSION_RULE, and the refusal arrives at the end of a
      * visit rather than here.
      */
-    if (!rule) {
+    if (perVisit && !rule) {
       setError(t("specialists.valueRequired"));
       return;
     }
@@ -466,62 +469,65 @@ export function SpecialistManager({
                     <option value="staff">{t("cooperation.staff")}</option>
                   </select>
                 </label>
-                <label>
-                  {t("specialists.commissionType")}
-                  <select
-                    name="rule_type"
-                    value={addRuleType}
-                    onChange={(event) => setAddRuleType(event.target.value)}
-                  >
-                    <option value="percentage">{t("commissionType.percentage")}</option>
-                    <option value="fixed">{t("commissionType.fixed")}</option>
-                    <option value="hybrid">{t("commissionType.hybrid")}</option>
-                  </select>
-                </label>
-                {addRuleType === "hybrid" && (
-                  <label>
-                    {t("specialists.guaranteed", { currency })}
-                    <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
-                  </label>
-                )}
-                <label>
-                  {t("specialists.value")}
-                  <input
-                    ref={rateRef}
-                    name="rule_value"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder={businessType === "solo" ? "0" : "40"}
-                    required
-                  />
-                  {addCooperation !== "commission" && (
-                    <span className="muted">{t("specialists.zeroRuleHint")}</span>
-                  )}
-                </label>
-                {/*
-                  The same sentence the card carries, for the studios that
-                  predate `POST /organizations` writing the owner's card
-                  itself: they still meet this field here, on the form, with
-                  «Это я» ticked above it. Outside the label, where a
-                  «Подробнее» would toggle the field.
-                */}
-                {businessType === "solo" && !hasOwnCard && (
-                  <Hint
-                    short={t("specialists.imputedHintShort")}
-                    more={t("specialists.imputedHint")}
-                    moreLabel={t("common.more")}
-                    howLabel={t("common.howCounted")}
-                  />
-                )}
-                {addRuleType !== "fixed" && (
-                  <label>
-                    {t("specialists.commissionBase")}
-                    <select name="rule_base" defaultValue="after_discount">
-                      <option value="after_discount">{t("commissionBase.after_discount")}</option>
-                      <option value="full_price">{t("commissionBase.full_price")}</option>
-                    </select>
-                  </label>
+                {addCooperation === "commission" ? (
+                  <>
+                    <label>
+                      {t("specialists.commissionType")}
+                      <select
+                        name="rule_type"
+                        value={addRuleType}
+                        onChange={(event) => setAddRuleType(event.target.value)}
+                      >
+                        <option value="percentage">{t("commissionType.percentage")}</option>
+                        <option value="fixed">{t("commissionType.fixed")}</option>
+                        <option value="hybrid">{t("commissionType.hybrid")}</option>
+                      </select>
+                    </label>
+                    {addRuleType === "hybrid" && (
+                      <label>
+                        {t("specialists.guaranteed", { currency })}
+                        <input name="rule_guaranteed" type="number" step="0.01" min="0" placeholder="100" required />
+                      </label>
+                    )}
+                    <label>
+                      {t("specialists.value")}
+                      <input
+                        ref={rateRef}
+                        name="rule_value"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder={businessType === "solo" ? "0" : "40"}
+                        required
+                      />
+                    </label>
+                    {/*
+                      The same sentence the card carries, for the studios that
+                      predate `POST /organizations` writing the owner's card
+                      itself: they still meet this field here, on the form, with
+                      «Это я» ticked above it. Outside the label, where a
+                      «Подробнее» would toggle the field.
+                    */}
+                    {businessType === "solo" && !hasOwnCard && (
+                      <Hint
+                        short={t("specialists.imputedHintShort")}
+                        more={t("specialists.imputedHint")}
+                        moreLabel={t("common.more")}
+                        howLabel={t("common.howCounted")}
+                      />
+                    )}
+                    {addRuleType !== "fixed" && (
+                      <label>
+                        {t("specialists.commissionBase")}
+                        <select name="rule_base" defaultValue="after_discount">
+                          <option value="after_discount">{t("commissionBase.after_discount")}</option>
+                          <option value="full_price">{t("commissionBase.full_price")}</option>
+                        </select>
+                      </label>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">{t("specialists.noPayPerVisit")}</p>
                 )}
                 <button className="primary-button" type="submit" disabled={pending}>
                   {pending ? t("common.saving") : t("common.add")}
@@ -532,7 +538,7 @@ export function SpecialistManager({
                 them — the answer for almost every studio — so the list starts
                 closed rather than as a wall of checkboxes nobody needs.
               */}
-              {services.length > 0 && addRuleType !== "fixed" && (
+              {services.length > 0 && addCooperation === "commission" && addRuleType !== "fixed" && (
                 <details className="pl-history">
                   <summary>{t("specialists.coveredServices")}</summary>
                   <fieldset className="checkbox-set costing-view">
