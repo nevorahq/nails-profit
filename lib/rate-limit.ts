@@ -221,6 +221,20 @@ export function callerKey(request: Request, userId: string | null) {
 }
 
 /**
+ * The window one action counts in for one caller: `<bucket>:<caller>`.
+ *
+ * The bucket has to be in the key. A window is one row — one count and one
+ * reset — so two actions limited under the same key share both: avatar,
+ * logo, import upload, import confirmation and accepting an invitation all
+ * counted against `user:<id>` alone, and ten photos of the team in an hour
+ * refused the import that came next, on a window whose length was set by
+ * whichever of them arrived first. Each action is its own allowance.
+ */
+export function rateLimitKey(bucket: string, request: Request, userId: string | null) {
+  return `${bucket}:${callerKey(request, userId)}`;
+}
+
+/**
  * The driver's own words, not drizzle's wrapper.
  *
  * Drizzle raises "Failed query: <sql>" and hangs the PostgresError off `cause`,

@@ -10,7 +10,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
 import { logEvent } from "@/lib/logger";
-import { callerKey, checkRateLimit, IMPORT_CONFIRM_RULE } from "@/lib/rate-limit";
+import { checkRateLimit, IMPORT_CONFIRM_RULE, rateLimitKey } from "@/lib/rate-limit";
 import { canImport, previewFor } from "@/lib/import-flow";
 import { applyImport } from "@/lib/import-service";
 import { getActiveMembership } from "@/lib/membership";
@@ -38,7 +38,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   // Confirm writes the catalogue row by row, so it is limited too — a loop here
   // costs the database, not just this process.
-  const limit = await checkRateLimit(callerKey(request, actor.userId), IMPORT_CONFIRM_RULE);
+  const limit = await checkRateLimit(rateLimitKey("import.confirm", request, actor.userId), IMPORT_CONFIRM_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, {
       bucket: "import.confirm",

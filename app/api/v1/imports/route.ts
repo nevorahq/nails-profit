@@ -7,7 +7,7 @@ import { suggestMapping } from "@/domain/import-mapping";
 import { importTemplates, isImportableEntity } from "@/domain/import-templates";
 import { canImport, MAX_IMPORT_BYTES, previewFor, serializePreview, templateFields } from "@/lib/import-flow";
 import { apiError, apiSuccess, rateLimited, requestId } from "@/lib/http";
-import { callerKey, checkRateLimit, IMPORT_UPLOAD_RULE } from "@/lib/rate-limit";
+import { checkRateLimit, IMPORT_UPLOAD_RULE, rateLimitKey } from "@/lib/rate-limit";
 import { getActiveMembership } from "@/lib/membership";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import type { AppLocale } from "@/i18n/messages";
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
   // Before the body is read, not after: the point is to avoid decoding and
   // parsing two megabytes for a caller that is already over the limit.
-  const limit = await checkRateLimit(callerKey(request, actor.userId), IMPORT_UPLOAD_RULE);
+  const limit = await checkRateLimit(rateLimitKey("import.upload", request, actor.userId), IMPORT_UPLOAD_RULE);
   if (!limit.allowed) {
     return rateLimited(id, limit.retryAfterSeconds, {
       bucket: "import.upload",

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { can } from "@/domain/rbac";
 import { apiError, rateLimited } from "@/lib/http";
 import { getActiveMembership, type ActiveMembership } from "@/lib/membership";
-import { callerKey, checkRateLimit, type RateLimitRule } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey, type RateLimitRule } from "@/lib/rate-limit";
 
 /**
  * The preamble the push endpoints share.
@@ -40,7 +40,7 @@ export async function pushCaller(
   }
 
   if (rule) {
-    const limit = await checkRateLimit(`${bucket}:${callerKey(request, actor.userId)}`, rule);
+    const limit = await checkRateLimit(rateLimitKey(bucket, request, actor.userId), rule);
     if (!limit.allowed) {
       return {
         ok: false,
