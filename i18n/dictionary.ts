@@ -48,7 +48,7 @@ const ru = {
     "Начислено — оплата за визиты и оклад без взносов работодателя. Выплату отмечайте здесь, а не расходом «Зарплата»: прибыль она не меняет, работа уже учтена, а в движении денег появится как выплата.",
   "payouts.notTracking":
     "Выплаты ещё не отмечались. После первой отметки остаток будет считаться с месяца перед ней — обычно выплата закрывает прошлый месяц.",
-  "payouts.trackingSince": "Выплаты учитываются с {month}: всё раньше считается закрытым.",
+  "payouts.trackingSince": "Начало учёта выплат — {month}: всё, что раньше, считается закрытым.",
   "payouts.totalOwed": "Всего должны на конец месяца: {amount}.",
   "payouts.empty": "В этом месяце мастерам ничего не начислено и ничего не выплачено.",
   "payouts.opening": "Долг на начало",
@@ -1711,7 +1711,7 @@ const ro: Record<MessageKey, Message> = {
     "Calculat — plata pentru vizite și salariul fără contribuțiile angajatorului. Marcați plata aici, nu drept cheltuială «Salarii»: profitul nu se schimbă, munca e deja socotită, iar în mișcarea banilor apare ca plată.",
   "payouts.notTracking":
     "Plățile nu au fost încă marcate. După prima marcare, soldul se calculează din luna dinaintea ei — de obicei plata acoperă luna trecută.",
-  "payouts.trackingSince": "Plățile se socotesc din {month}: tot ce e mai devreme se consideră achitat.",
+  "payouts.trackingSince": "Începutul evidenței plăților — {month}: tot ce e mai devreme se consideră achitat.",
   "payouts.totalOwed": "Total datorat la sfârșitul lunii: {amount}.",
   "payouts.empty": "În această lună maeștrilor nu li s-a calculat și nu li s-a plătit nimic.",
   "payouts.opening": "Datorie la început",

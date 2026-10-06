@@ -453,13 +453,16 @@ export function SpecialistDetail({
         <>
           <section className="panel">
             <dl className="specialist-facts">
-              <div>
-                <dt>{t("specialists.cooperation")}</dt>
-                <dd>
-                  {t(`cooperation.${person.cooperation_type}` as MessageKey)}
-                  {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
-                </dd>
-              </div>
+              {/* A fact only for whoever cannot change it: the select below says it to the rest. */}
+              {(!canManage || person.is_principal) && (
+                <div>
+                  <dt>{t("specialists.cooperation")}</dt>
+                  <dd>
+                    {!canManage && t(`cooperation.${person.cooperation_type}` as MessageKey)}
+                    {person.is_principal && <span className="badge-accent">{t("specialists.principal")}</span>}
+                  </dd>
+                </div>
+              )}
               {showsPay && (
                 <div>
                   <dt>{t("specialists.defaultRule")}</dt>
