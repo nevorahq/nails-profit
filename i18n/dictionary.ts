@@ -10,7 +10,7 @@ import type { Message } from "@/i18n/translate";
  * keys" from something to be tested into something that cannot compile.
  */
 const ru = {
-  "app.description": "Себестоимость, маржа и прибыль в час для nail-мастеров и студий.",
+  "app.description": "Себестоимость, маржа и прибыль в час для мастеров маникюра и студий.",
   "nav.dashboard": "Отчёт",
   "nav.visits": "Визиты",
   "nav.clients": "Клиенты",
@@ -167,9 +167,9 @@ const ru = {
   "settings.logoRemove": "Убрать логотип",
   "settings.logoNotAnImage": "Не удалось прочитать файл как изображение. Подойдут JPEG, PNG и WebP.",
   "settings.dataTitle": "Данные организации",
-  "settings.dataHint": "Owner может получить переносимую JSON-выгрузку или удалить организацию с анонимизацией PII.",
+  "settings.dataHint": "Владелец может получить переносимую JSON-выгрузку или удалить организацию — персональные данные при этом обезличиваются.",
   "settings.export": "Скачать данные",
-  "settings.ownerOnly": "Экспорт и удаление доступны только Owner.",
+  "settings.ownerOnly": "Экспорт и удаление доступны только владельцу.",
   "settings.deleteTitle": "Удаление организации",
   "settings.deleteHint": "Это отключит всех участников и анонимизирует организацию. Для подтверждения введите «{name}».",
   "settings.confirmName": "Название организации",
@@ -265,7 +265,7 @@ const ru = {
   "join.alreadyMemberTitle": "Аккаунт уже состоит в организации",
   "join.alreadyMemberSame": "Вы уже участник «{org}» — принимать приглашение не нужно.",
   "join.alreadyMemberOther": "Этот аккаунт состоит в «{org}». Один аккаунт может принадлежать только одной организации, поэтому принять приглашение с него нельзя.",
-  "publicBooking.eyebrow": "Online-запись",
+  "publicBooking.eyebrow": "Онлайн-запись",
   "publicBooking.title": "Запишитесь на удобное время",
   "publicBooking.location": "Локация",
   "publicBooking.service": "Услуга",
@@ -491,7 +491,7 @@ const ru = {
   "legal.privacyLink": "уведомлением о конфиденциальности",
   "legal.back": "Вернуться",
   "legal.updated": "Версия от {date}",
-  "legal.pilotReview": "Текст для закрытого пилота. Перед production-запуском требуется юридическое утверждение.",
+  "legal.pilotReview": "Текст для закрытого пилота. Перед запуском в работу требуется юридическое утверждение.",
   "legal.privacyTitle": "Уведомление о конфиденциальности",
   "legal.termsTitle": "Условия использования",
   "cookieConsent.regionLabel": "Согласие на использование cookie",
@@ -823,7 +823,7 @@ const ru = {
   "specialists.isMeHint":
     "Отметит карточку вашей: визиты и уведомления пойдут на ваш аккаунт, а комиссия по этим визитам вернётся в прибыль месяца — из бизнеса она не уходит.",
   "specialists.soloNoPrincipal":
-    "Формат — «Solo-мастер», но ни одна карточка не отмечена владельцем. Пока это так, каждый закрываемый визит считает вашу комиссию деньгами, ушедшими из бизнеса, — и уходит в отчёт месяца с заниженной прибылью. Откройте свою карточку и нажмите «{action}».",
+    "Формат — «Соло-мастер», но ни одна карточка не отмечена владельцем. Пока это так, каждый закрываемый визит считает вашу комиссию деньгами, ушедшими из бизнеса, — и уходит в отчёт месяца с заниженной прибылью. Откройте свою карточку и нажмите «{action}».",
   "specialists.withoutRuleBanner": {
     one: "У {count} мастера нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
     few: "У {count} мастеров нет правила комиссии. Услуги нельзя посчитать: комиссия не считается нулевой, пока правило не задано.",
@@ -978,7 +978,7 @@ const ru = {
   "expenses.category.materials": "Материалы",
   "expenses.category.taxes": "Налоги",
   "expenses.category.subscriptions": "Подписки",
-  "expenses.category.marketing": "Marketing",
+  "expenses.category.marketing": "Маркетинг",
   "expenses.category.consumables": "Расходники",
   "expenses.category.transport": "Транспорт",
   "expenses.category.services": "Услуги",
@@ -1181,7 +1181,7 @@ const ru = {
   "workspace.address": "Адрес",
   "workspace.addressPlaceholder": "Улица, дом, город",
   "workspace.format": "Формат",
-  "workspace.solo": "Solo-мастер",
+  "workspace.solo": "Соло-мастер",
   "workspace.studio": "Студия",
   "workspace.creating": "Создаём…",
   "workspace.continue": "Продолжить",
@@ -1842,9 +1842,9 @@ const ro: Record<MessageKey, Message> = {
   "settings.logoRemove": "Elimină logoul",
   "settings.logoNotAnImage": "Fișierul nu a putut fi citit ca imagine. Se acceptă JPEG, PNG și WebP.",
   "settings.dataTitle": "Datele organizației",
-  "settings.dataHint": "Owner poate descărca un export JSON portabil sau poate șterge organizația cu anonimizarea PII.",
+  "settings.dataHint": "Proprietarul poate descărca un export JSON portabil sau poate șterge organizația cu anonimizarea datelor personale.",
   "settings.export": "Descarcă datele",
-  "settings.ownerOnly": "Exportul și ștergerea sunt disponibile numai pentru Owner.",
+  "settings.ownerOnly": "Exportul și ștergerea sunt disponibile numai pentru proprietar.",
   "settings.deleteTitle": "Ștergerea organizației",
   "settings.deleteHint": "Aceasta va elimina accesul membrilor și va anonimiza organizația. Pentru confirmare introduceți „{name}”.",
   "settings.confirmName": "Numele organizației",
@@ -2699,7 +2699,7 @@ const ro: Record<MessageKey, Message> = {
     "„Costul muncii dvs.” nu pleacă din afacere: în raportul lunar el se întoarce în profit. Aici este scăzut intenționat — altfel serviciile nu pot fi comparate între ele.",
   "services.howCounted": "Cum este calculat",
 
-  "addOns.namePlaceholder": "French",
+  "addOns.namePlaceholder": "Franțuzesc",
 
   "specialists.title": "Maeștri și comisioane",
   "specialists.noAccess": "Rolul dvs. nu are acces la comisioane.",
