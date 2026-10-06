@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+
+import { specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { headlineKindFor, ownerHeadline, visitsHeadline, type Headline } from "@/domain/headline";
 import type { MemberRole } from "@/domain/rbac";
@@ -52,5 +55,17 @@ export async function loadHeadline(
     },
     locale,
   );
-  return visitsHeadline(kind, metrics);
+  // Only asked when the month has no visits to say it: the snapshots answer
+  // for every month that has.
+  const rentsChair =
+    kind === "earnings" && metrics.visits === 0 && options.ownSpecialistId
+      ? (
+          await tx
+            .select({ cooperationType: specialists.cooperationType })
+            .from(specialists)
+            .where(eq(specialists.id, options.ownSpecialistId))
+            .limit(1)
+        )[0]?.cooperationType === "rent"
+      : false;
+  return visitsHeadline(kind, metrics, { rentsChair });
 }

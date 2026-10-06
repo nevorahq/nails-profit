@@ -74,6 +74,19 @@ describe("aggregateVisitMetrics", () => {
     expect(metrics.incompleteRevenueMinor).toBe(60_000);
   });
 
+  it("sets a renter's visits apart, costed or not", () => {
+    const metrics = aggregateVisitMetrics([
+      row({ visitId: "own" }),
+      row({ visitId: "rented", masterCooperation: "rent", commissionMinor: 0 }),
+      row({ visitId: "rented-uncosted", masterCooperation: "rent", contributionMarginMinor: null, commissionMinor: null }),
+      row({ visitId: "before-the-question", masterCooperation: null }),
+    ]);
+
+    expect(metrics.rentedVisits).toBe(2);
+    expect(metrics.rentedRevenueMinor).toBe(2 * row({ visitId: "x" }).revenueMinor);
+    expect(metrics.rentedLabourMinor).toBe(0);
+  });
+
   it("counts why the uncosted visits could not be costed", () => {
     const metrics = aggregateVisitMetrics([
       row({ visitId: "a", contributionMarginMinor: null, incompleteReasons: ["no_revenue"] }),

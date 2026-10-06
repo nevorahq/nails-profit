@@ -49,6 +49,11 @@ export type VisitMetricRow = Readonly<{
    * existed, and read as false — see `db/schema.ts`.
    */
   masterIsPrincipal: boolean | null;
+  /**
+   * How the master worked with the studio when the visit closed. Null for
+   * visits closed before it was recorded; absent where the reader did not ask.
+   */
+  masterCooperation?: string | null;
   specialistId?: string;
   specialistName?: string;
   commissionType?: string;
@@ -143,6 +148,16 @@ export type DashboardMetrics = Readonly<{
   tipsMinor: number;
   /** The part of `tipsMinor` left to a principal, which stays on the account. */
   principalTipsMinor: number;
+  /**
+   * Visits of a master renting a chair, and what their clients paid — costed
+   * or not, since the takings do not wait for a costing. Zero in every studio
+   * read, which leaves them out; a renter's own report is where they count,
+   * because for a renter the takings are what they earned, not a commission.
+   */
+  rentedVisits: number;
+  rentedRevenueMinor: number;
+  /** The part of `labourCostMinor` booked on those visits — normally zero. */
+  rentedLabourMinor: number;
   /** DSH-008: what stops the remaining visits from being costed. */
   incompleteVisits: number;
   incompleteRevenueMinor: number;
@@ -168,6 +183,8 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
   const principalLabourMinor = costed
     .filter((row) => row.masterIsPrincipal === true)
     .reduce((total, row) => total + (row.commissionMinor ?? 0), 0);
+
+  const rented = rows.filter((row) => row.masterCooperation === "rent");
 
   const sumOf = (pick: (row: VisitMetricRow) => number | null) =>
     costed.reduce((total, row) => total + (pick(row) ?? 0), 0);
@@ -209,6 +226,9 @@ export function aggregateVisitMetrics(rows: readonly VisitMetricRow[]): Dashboar
     principalTipsMinor: rows
       .filter((row) => row.masterIsPrincipal === true)
       .reduce((total, row) => total + (row.tipMinor ?? 0), 0),
+    rentedVisits: rented.length,
+    rentedRevenueMinor: rented.reduce((total, row) => total + row.revenueMinor, 0),
+    rentedLabourMinor: rented.filter(isCosted).reduce((total, row) => total + (row.commissionMinor ?? 0), 0),
     incompleteVisits: incomplete.length,
     incompleteRevenueMinor: incomplete.reduce((total, row) => total + row.revenueMinor, 0),
     incompleteReasonCounts,

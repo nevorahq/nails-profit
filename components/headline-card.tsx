@@ -75,6 +75,7 @@ export function HeadlineCard({
       </p>
 
       {headline.kind === "contribution" && <p className="headline-note">{t("headline.contributionHint")}</p>}
+      {headline.kind === "takings" && <p className="headline-note">{t("headline.takingsHint")}</p>}
 
       {headline.kind === "operating" && (
         <p className="headline-note">

@@ -18,14 +18,19 @@ import { can, scopeFor, type MemberRole } from "@/domain/rbac";
  *
  * - whoever may read the ledger gets what is left after it — the operating
  *   profit, the bottom line of «Месяц подробно»;
- * - whoever is limited to their own rows gets what they earned on them;
+ * - whoever is limited to their own rows gets what they earned on them — and a
+ *   master renting a chair, what their clients paid them;
  * - anyone else sees every visit but not the rent, so gets the margin above
  *   the rent, and the card says so.
  */
 
-export type HeadlineKind = "operating" | "earnings" | "contribution";
+export type HeadlineKind = "operating" | "earnings" | "takings" | "contribution";
 
-export function headlineKindFor(role: MemberRole): HeadlineKind {
+/**
+ * The kind a role is owed. «takings» is never a role's: it is what «earnings»
+ * becomes for a master renting a chair, decided from their visits.
+ */
+export function headlineKindFor(role: MemberRole): Exclude<HeadlineKind, "takings"> {
   if (can(role, "expenses", "read")) return "operating";
   if (scopeFor(role, "dashboard") === "own") return "earnings";
   return "contribution";
@@ -60,7 +65,7 @@ export type Headline =
       breakEven: BreakEvenProgress | null;
       floor: HeadlineFloor;
     }>
-  | Readonly<{ kind: "earnings" | "contribution"; amountMinor: number; floor: HeadlineFloor }>;
+  | Readonly<{ kind: "earnings" | "takings" | "contribution"; amountMinor: number; floor: HeadlineFloor }>;
 
 function floorOf(incompleteVisits: number, incompleteRevenueMinor: number): HeadlineFloor {
   return incompleteVisits > 0 ? { visits: incompleteVisits, revenueMinor: incompleteRevenueMinor } : null;
@@ -103,10 +108,36 @@ export function ownerHeadline(pl: PeriodPL, capacity: CapacityView): Headline {
  * visits, or the whole studio for a manager and an analyst. This function
  * reads lines; it does not decide scope.
  */
-export function visitsHeadline(kind: "earnings" | "contribution", metrics: DashboardMetrics): Headline {
+export function visitsHeadline(
+  kind: "earnings" | "contribution",
+  metrics: DashboardMetrics,
+  /** Whether the reader's own card rents a chair today — said only for `earnings`. */
+  options: Readonly<{ rentsChair?: boolean }> = {},
+): Headline {
+  if (kind === "contribution") {
+    return {
+      kind,
+      amountMinor: metrics.contributionMarginMinor,
+      floor: floorOf(metrics.incompleteVisits, metrics.incompleteRevenueMinor),
+    };
+  }
+
+  /*
+   * A master renting a chair is not paid a share of their visits: the clients
+   * pay them, and they pay the studio its rent. So what they earned on a
+   * rented visit is its takings, and their 0% commission would read as a month
+   * of work for nothing. Visit by visit, by the cooperation snapshotted on it,
+   * so a month that changed halfway counts each half as it was.
+   */
+  const amountMinor = metrics.labourCostMinor - metrics.rentedLabourMinor + metrics.rentedRevenueMinor;
+  const allRented = metrics.visits > 0 ? metrics.rentedVisits === metrics.visits : options.rentsChair === true;
+  if (allRented) {
+    // Takings need no costing, so nothing is missing from them.
+    return { kind: "takings", amountMinor, floor: null };
+  }
   return {
-    kind,
-    amountMinor: kind === "earnings" ? metrics.labourCostMinor : metrics.contributionMarginMinor,
+    kind: "earnings",
+    amountMinor,
     floor: floorOf(metrics.incompleteVisits, metrics.incompleteRevenueMinor),
   };
 }
