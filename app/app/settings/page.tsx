@@ -1,7 +1,9 @@
 import { asc, eq, isNull } from "drizzle-orm";
 
 import { BillingSettings, type CheckoutConfig, type SubscriptionStatusRow } from "@/components/billing-settings";
+import { DangerZone } from "@/components/danger-zone";
 import { DataManagement } from "@/components/data-management";
+import { StudioDeletion } from "@/components/studio-deletion";
 import { OrganizationLogo } from "@/components/organization-logo";
 import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
@@ -243,12 +245,7 @@ export default async function SettingsPage({
       */}
       {can(membership.role, "bookings", "read") && <PushDeviceSwitch locale={locale} />}
       {canReadData && (
-        <DataManagement
-          locale={locale}
-          organizationName={organizationName}
-          canExport={can(membership.role, "data_export", "read")}
-          canDelete={can(membership.role, "data_export", "write")}
-        />
+        <DataManagement locale={locale} canExport={can(membership.role, "data_export", "read")} />
       )}
 
       {/*
@@ -263,11 +260,16 @@ export default async function SettingsPage({
         up with no settings screen at all. So the role alone answers the same
         question the endpoint asks of the database.
       */}
-      <AccountDeletion
-        locale={locale}
-        email={membership.userEmail}
-        blockedByStudio={membership.role === "owner"}
-      />
+      <DangerZone locale={locale}>
+        {canReadData && can(membership.role, "data_export", "write") && (
+          <StudioDeletion locale={locale} organizationName={organizationName} />
+        )}
+        <AccountDeletion
+          locale={locale}
+          email={membership.userEmail}
+          blockedByStudio={membership.role === "owner"}
+        />
+      </DangerZone>
     </main>
   );
 }

@@ -38,16 +38,20 @@ test.describe("leaving, from the settings screen", () => {
 
     await page.goto("/app/settings");
 
+    // Folded away at the foot of the page until somebody opens it.
+    await expect(page.locator("#danger-zone")).not.toHaveAttribute("open", "");
+    await page.locator("#danger-zone > summary").click();
+
     await expect(page.getByRole("button", { name: "Delete account" })).toHaveCount(0);
     await expect(
       page.getByText("The account can be deleted once the studio's data is gone"),
     ).toBeVisible();
     // Pointing at the section that comes first, rather than describing it.
-    await expect(page.getByRole("link", { name: "Organization data" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "Delete organization" })).toHaveAttribute(
       "href",
-      "#data-management-title",
+      "#studio-deletion-title",
     );
-    await expect(page.locator("#data-management-title")).toBeVisible();
+    await expect(page.locator("#studio-deletion-title")).toBeVisible();
 
     await context.close();
   });
@@ -59,6 +63,8 @@ test.describe("leaving, from the settings screen", () => {
 
     await page.goto("/app/settings");
 
+    await expect(page.getByRole("button", { name: "Delete account" })).toBeHidden();
+    await page.locator("#danger-zone > summary").click();
     await expect(page.getByRole("button", { name: "Delete account" })).toBeVisible();
     await page.getByRole("button", { name: "Delete account" }).click();
     await expect(page.getByRole("heading", { name: "Delete account" })).toBeVisible();
