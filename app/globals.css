@@ -3653,3 +3653,7 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .notifications-push-hint p { margin: 0; color: var(--ink); font-weight: 650; }
 .notifications-push-hint .push-switch-compact { margin: 0; padding: 0; border-top: 0; }
 .notifications-push-hint .inline-action { justify-self: start; margin-left: 0; padding-left: 0; }
+
+/* An empty list's one sentence and its first step; see `components/section-empty.tsx`. */
+.section-empty { display: grid; justify-items: start; gap: 14rem; padding: 22rem 4rem; }
+.section-empty p { margin: 0; max-width: 560rem; line-height: 1.55; }

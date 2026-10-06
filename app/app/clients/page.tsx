@@ -20,7 +20,7 @@ import { requireWorkspace } from "@/lib/workspace";
 
 export default async function ClientsPage() {
   const workspace = await requireWorkspace();
-  const { membership, locale, currency } = workspace;
+  const { membership, locale, currency, businessType } = workspace;
   const register = registerOf(workspace);
   const t = getTranslator(locale, register);
 
@@ -216,7 +216,6 @@ export default async function ClientsPage() {
         that may import: a master's own list is empty until their first visit,
         and the import would refuse them.
       */}
-      {rows.length === 0 && canImport(membership.role, "client") && <ClientsStartPanel locale={locale} />}
       <ClientReturnPanel
         rows={returnRows}
         bookingPath={returning?.slug ? `/book/${returning.slug}` : null}
@@ -228,7 +227,9 @@ export default async function ClientsPage() {
         canWrite={canWrite}
         currency={currency}
         locale={locale}
+        businessType={businessType}
       />
+      {rows.length === 0 && canImport(membership.role, "client") && <ClientsStartPanel locale={locale} />}
     </main>
   );
 }

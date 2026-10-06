@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { AppLocale } from "@/i18n/messages";
+import { SectionEmpty } from "@/components/section-empty";
+import type { BusinessType } from "@/i18n/business-labels";
 import { useTranslator } from "@/components/lexicon-provider";
 import { localeTag } from "@/i18n/translate";
 import { useAnchoredPanel } from "@/components/use-anchored-panel";
@@ -73,9 +75,11 @@ export function ClientManager({
   clients,
   canWrite,
   locale,
+  businessType,
 }: {
   clients: ClientRow[];
   canWrite: boolean;
+  businessType: BusinessType;
   currency: string;
   locale: AppLocale;
 }) {
@@ -304,6 +308,15 @@ export function ClientManager({
           <span>{t("clients.showArchived", { count: archivedCount })}</span>
         </label>
       )}
+      {clients.length === 0 ? (
+        <SectionEmpty
+          section="clients"
+          businessType={businessType}
+          t={t}
+          action={canWrite ? { href: "#add-client" } : undefined}
+        />
+      ) : (
+      <>
       <table className="data-table clients-table">
         <thead>
           <tr>
@@ -595,6 +608,8 @@ export function ClientManager({
           );
         })}
       </ul>
+      </>
+      )}
 
       {canWrite && (
         <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-client" ref={addRef}>

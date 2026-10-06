@@ -20,6 +20,7 @@ import type { AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
 import { type MessageKey } from "@/i18n/t";
 import { useTranslator } from "@/components/lexicon-provider";
+import { SectionEmpty } from "@/components/section-empty";
 import { formatBasisPoints, formatDuration, formatMoneyMinor } from "@/lib/format";
 import { useAnchoredPanel } from "@/components/use-anchored-panel";
 
@@ -440,8 +441,13 @@ export function ServiceList({
         <tbody>
           {services.length === 0 && (
             <tr>
-              <td colSpan={materialsShown ? 8 : 7} className="muted">
-                {t("services.none")}
+              <td colSpan={materialsShown ? 8 : 7}>
+                <SectionEmpty
+                  section="services"
+                  businessType={businessType}
+                  t={t}
+                  action={canCreate ? { href: "#add-service" } : undefined}
+                />
               </td>
             </tr>
           )}
