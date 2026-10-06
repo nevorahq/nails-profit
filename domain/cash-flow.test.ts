@@ -150,6 +150,17 @@ describe("buildCashFlow", () => {
   });
 });
 
+describe("buildCashFlow with a rented chair", () => {
+  it("takes the rent in beside the visits, outside the acquirer's cut", () => {
+    const without = buildCashFlow(flow());
+    const withRent = buildCashFlow(flow({ chairRentMinor: 3_000_00 }));
+
+    expect(withRent.chairRentMinor).toBe(3_000_00);
+    expect(withRent.settledMinor).toBe(without.settledMinor);
+    expect(withRent.netCashMinor).toBe(without.netCashMinor + 3_000_00);
+  });
+});
+
 describe("buildCashFlow with tips", () => {
   it("takes tips in and hands a hired master's back out, leaving the cash as it was", () => {
     const without = buildCashFlow(flow());

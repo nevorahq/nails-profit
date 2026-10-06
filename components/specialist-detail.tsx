@@ -8,6 +8,7 @@ import { Hint } from "@/components/hint";
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { localeTag } from "@/i18n/translate";
+import { formatMoneyMinor } from "@/lib/format";
 import type { BusinessType } from "@/i18n/business-labels";
 import { type MessageKey } from "@/i18n/t";
 import { EffectiveDateField, effectiveDateFrom } from "@/components/effective-date-field";
@@ -42,8 +43,15 @@ export type LinkableMember = {
  * back to being a list: who works here, how they are paid, and whether they can
  * sign in.
  */
+export type ChairRentView = Readonly<{
+  /** The amount in force today; null when none was ever set. */
+  amount_minor: number | null;
+  scheduled: Readonly<{ amount_minor: number; active_from: string }> | null;
+}>;
+
 export function SpecialistDetail({
   person,
+  rent,
   services,
   linkableMembers,
   currency,
@@ -57,6 +65,12 @@ export function SpecialistDetail({
   timezone,
 }: {
   person: SpecialistRow;
+  /**
+   * What this person pays for their chair. Null for everybody but the owner —
+   * it is read under the same capability as the salaries — and drawn only
+   * while the card says «аренда».
+   */
+  rent: ChairRentView | null;
   services: ServiceOption[];
   /** Accounts with no card of their own; empty for a role that cannot link. */
   linkableMembers: LinkableMember[];
@@ -214,6 +228,23 @@ export function SpecialistDetail({
       { cooperation_type: cooperation, ...(rule ? { default_rule: rule } : {}) },
       undefined,
       "PATCH",
+    );
+  }
+
+  async function saveRent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const typed = String(data.get("rent_amount") ?? "").trim();
+    const amount = Number(typed);
+    if (typed === "" || !Number.isFinite(amount) || amount < 0) {
+      setError(t("specialists.rentRequired"));
+      return;
+    }
+    await send(
+      `/api/v1/specialists/${person.id}/chair-rent`,
+      { amount_minor: Math.round(amount * 100), ...effectiveDateFrom(data, today) },
+      form,
     );
   }
 
@@ -564,6 +595,40 @@ export function SpecialistDetail({
           {t("specialists.openRota")}
         </Link>
       </section>
+
+      {rent && person.cooperation_type === "rent" && (
+        <section className="panel" id="rent">
+          <h2>{t("specialists.rentTitle")}</h2>
+          <p>
+            {rent.amount_minor === null ? (
+              <span className="badge-warning">{t("specialists.notSet")}</span>
+            ) : (
+              t("specialists.rentPerMonth", { amount: formatMoneyMinor(rent.amount_minor, currency, localeTag(locale)) })
+            )}
+            {rent.scheduled && (
+              <span className="unit-hint">
+                {t("rules.scheduled", {
+                  date: new Date(rent.scheduled.active_from).toLocaleDateString(localeTag(locale), { timeZone: timezone }),
+                  rule: t("specialists.rentPerMonth", {
+                    amount: formatMoneyMinor(rent.scheduled.amount_minor, currency, localeTag(locale)),
+                  }),
+                })}
+              </span>
+            )}
+          </p>
+          <p className="muted">{t("specialists.rentHint")}</p>
+          <form className="inline-form" onSubmit={saveRent}>
+            <label>
+              {t("specialists.rentAmount", { currency })}
+              <input name="rent_amount" type="number" step="0.01" min="0" placeholder="3000" required />
+            </label>
+            <EffectiveDateField today={today} locale={locale} />
+            <button className="primary-button" type="submit" disabled={pending}>
+              {pending ? t("common.saving") : t("common.save")}
+            </button>
+          </form>
+        </section>
+      )}
 
       {showsPay && (
       <section className="panel" id="commission">

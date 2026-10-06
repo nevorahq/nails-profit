@@ -228,6 +228,23 @@ export default async function MonthReportPage({
             <h2>{t("pl.title")}</h2>
             <table className="data-table pl-table">
               <tbody>
+                {/*
+                  Split only when a chair was rented: for every other studio
+                  the visits are the revenue, and two rows saying the same
+                  number would be one too many.
+                */}
+                {pl.chairRentMinor > 0 && (
+                  <>
+                    <tr>
+                      <td className="pl-label">{t("pl.visitRevenue")}</td>
+                      <td>{money(pl.visitRevenueMinor)}</td>
+                    </tr>
+                    <tr>
+                      <td className="pl-label">{t("pl.chairRent")}</td>
+                      <td>{money(pl.chairRentMinor)}</td>
+                    </tr>
+                  </>
+                )}
                 <tr>
                   <td>{t("pl.revenue")}</td>
                   <td>{money(pl.revenueMinor)}</td>
@@ -429,6 +446,12 @@ export default async function MonthReportPage({
                     <td>{money(cash.settledMinor)}</td>
                   </tr>
                 )}
+                {cash.chairRentMinor > 0 && (
+                  <tr>
+                    <td className="pl-label">{t("pl.chairRent")}</td>
+                    <td>{money(cash.chairRentMinor)}</td>
+                  </tr>
+                )}
                 {/* Money in that the profit never sees: left on top, and mostly
                     handed straight on. Shown only where there was any. */}
                 {cash.tipsMinor > 0 && (
@@ -593,6 +616,18 @@ export default async function MonthReportPage({
                   <td>{t("capacity.fixedCosts")}</td>
                   <td>{money(capacity.fixedCostMinor)}</td>
                 </tr>
+                {capacity.chairRentMinor > 0 && (
+                  <>
+                    <tr>
+                      <td className="pl-label">{t("capacity.coveredByRent")}</td>
+                      <td>{cost(Math.min(capacity.chairRentMinor, capacity.fixedCostMinor))}</td>
+                    </tr>
+                    <tr className="pl-subtotal">
+                      <td>{t("capacity.leftForVisits")}</td>
+                      <td>{money(capacity.fixedCostToEarnMinor)}</td>
+                    </tr>
+                  </>
+                )}
                 {detailedAnalytics && capacity.fixedCostRateMinorPerHour !== null && (
                   <tr className="pl-ratio">
                     <td colSpan={2}>
@@ -677,6 +712,23 @@ export default async function MonthReportPage({
                       <td>{master.rules.map(commissionRule).join(" · ")}</td>
                       <td>{money(master.compensationMinor)}</td>
                       {tipped && <td>{money(master.tipsMinor)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {report.chairRents.length > 0 && (
+            <section className="panel">
+              <h2>{t("pl.chairRentTitle")}</h2>
+              <p className="pl-note">{t("pl.chairRentHint")}</p>
+              <table className="data-table pl-table">
+                <tbody>
+                  {report.chairRents.map((rent) => (
+                    <tr key={rent.specialistId}>
+                      <td>{rent.name}</td>
+                      <td>{money(rent.amountMinor)}</td>
                     </tr>
                   ))}
                 </tbody>

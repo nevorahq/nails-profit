@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, ne, or } from "drizzle-orm";
 
 import { availabilityExceptions, locations, scheduleRules, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
@@ -19,6 +19,12 @@ import type { Weekday } from "@/domain/timezone";
  * Archived specialists are left out. Someone who no longer works here offers no
  * hours; counting their old rota would inflate capacity and report the studio
  * as idle for a chair that does not exist.
+ *
+ * So are masters renting a chair, for the matching reason: their visits are not
+ * in the studio's booked hours (`studioVisitsOnly`), and their rota beside an
+ * empty numerator would report the studio as idle in a chair it let. Read from
+ * the card as it is today rather than per month — the rota itself is not
+ * versioned by cooperation, so this is the one place the past can move.
  */
 export async function loadMonthRota(
   tx: TenantTransaction,
@@ -51,6 +57,7 @@ export async function loadMonthRota(
     .where(
       and(
         isNull(specialists.archivedAt),
+        ne(specialists.cooperationType, "rent"),
         // A rule that ended before this month, or starts after it, cannot put an
         // hour in it. The rest is decided by `ruleAppliesOn`, day by day.
         or(isNull(scheduleRules.effectiveTo), gte(scheduleRules.effectiveTo, from.toISOString().slice(0, 10))),
@@ -70,6 +77,7 @@ export async function loadMonthRota(
     .where(
       and(
         isNull(specialists.archivedAt),
+        ne(specialists.cooperationType, "rent"),
         lt(availabilityExceptions.startsAt, to),
         gte(availabilityExceptions.endsAt, from),
       ),

@@ -30,6 +30,11 @@ export type CashFlowInput = Readonly<{
   month: string;
   /** What clients paid, net of refunds — the visits' own revenue. */
   revenueMinor: number;
+  /**
+   * Rent owed by masters renting a chair, counted as received in the month it
+   * is owed — the same assumption the visits' revenue makes. Absent means none.
+   */
+  chairRentMinor?: number;
   /** Withheld by the acquirer before the money ever reaches the account. */
   paymentCommissionMinor: number;
   /** Commission booked on this month's visits, including a principal's own. */
@@ -68,6 +73,7 @@ export type CashFlow = Readonly<{
   paymentCommissionMinor: number;
   /** What actually landed: takings less the acquirer's cut. */
   settledMinor: number;
+  chairRentMinor: number;
   /** Left on top by clients; the acquirer's cut on it is already above. */
   tipsMinor: number;
   /** Handed on to hired masters. */
@@ -117,8 +123,10 @@ export function buildCashFlow(input: CashFlowInput): CashFlow {
   const settledMinor = input.revenueMinor - input.paymentCommissionMinor;
   const tipsMinor = input.tipsMinor ?? 0;
   const tipsPaidOutMinor = input.tipsPaidOutMinor ?? 0;
+  const chairRentMinor = input.chairRentMinor ?? 0;
   const netCashMinor =
     settledMinor +
+    chairRentMinor +
     tipsMinor -
     tipsPaidOutMinor -
     input.visitLabourMinor -
@@ -132,6 +140,7 @@ export function buildCashFlow(input: CashFlowInput): CashFlow {
     revenueMinor: input.revenueMinor,
     paymentCommissionMinor: input.paymentCommissionMinor,
     settledMinor,
+    chairRentMinor,
     tipsMinor,
     tipsPaidOutMinor,
 

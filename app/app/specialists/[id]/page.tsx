@@ -1,10 +1,10 @@
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { SpecialistDetail } from "@/components/specialist-detail";
 import { db } from "@/db";
-import { memberships, services, users } from "@/db/schema";
+import { chairRents, memberships, services, users } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
@@ -48,6 +48,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
   const canManage = canManageCatalogue(membership.role, "commissions");
   // The same question the list asks, answered the same way — see its comment.
   const showsPay = seesIndividualPay(membership.role);
+  const seesRent = can(membership.role, "expenses", "read");
 
   const loaded = await withTenant(membership.organizationId, async (tx) => {
     const [person] = await loadSpecialistCards(tx, {
@@ -65,8 +66,38 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
 
     const bookability = await loadBookabilityFacts(tx);
 
+    /*
+     * The rent this person pays, current and scheduled — only for the owner,
+     * through the capability that guards the ledger and the salaries: it is
+     * the studio's income from one named person.
+     */
+    const now = new Date();
+    const rents = seesRent
+      ? await tx
+          .select({ amountMinor: chairRents.amountMinor, activeFrom: chairRents.activeFrom })
+          .from(chairRents)
+          .where(
+            and(
+              eq(chairRents.specialistId, person.id),
+              or(isNull(chairRents.activeTo), gt(chairRents.activeTo, now)),
+            ),
+          )
+          .orderBy(asc(chairRents.activeFrom))
+      : [];
+
+    const inForce = rents.filter((rent) => rent.activeFrom.getTime() <= now.getTime()).at(-1) ?? null;
+    const scheduled = rents.find((rent) => rent.activeFrom.getTime() > now.getTime()) ?? null;
+
     return {
       person,
+      rent: seesRent
+        ? {
+            amount_minor: inForce?.amountMinor ?? null,
+            scheduled: scheduled
+              ? { amount_minor: scheduled.amountMinor, active_from: scheduled.activeFrom.toISOString() }
+              : null,
+          }
+        : null,
       places: bookability.places.get(person.id) ?? [],
       publishedLocationIds: bookability.publishedLocationIds,
       catalogue: serviceRows.map((service) => ({
@@ -113,6 +144,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
   return (
     <SpecialistDetail
       person={loaded.person}
+      rent={loaded.rent}
       services={loaded.catalogue}
       linkableMembers={linkableMembers}
       currency={currency}

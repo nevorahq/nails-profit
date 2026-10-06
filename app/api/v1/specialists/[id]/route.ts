@@ -22,7 +22,7 @@ import { paidPerVisit } from "@/domain/cooperation";
 import { commissionBases, commissionTypes } from "@/domain/costing";
 import { canManageCatalogue } from "@/domain/rbac";
 import { recordAuditEvent } from "@/lib/audit";
-import { replaceDefaultRule, zeroDefaultRule } from "@/lib/cooperation";
+import { endChairRent, replaceDefaultRule, zeroDefaultRule } from "@/lib/cooperation";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
@@ -193,6 +193,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         } else {
           await zeroDefaultRule(tx, ruleActor, id);
         }
+        if (existing.cooperationType === "rent") await endChairRent(tx, ruleActor, id);
       }
 
       // Who may see which visits changes with this row, so it is audited the

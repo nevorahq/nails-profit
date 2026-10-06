@@ -580,6 +580,8 @@ const ru = {
   "pl.month": "Месяц",
   "pl.thisMonth": "Этот месяц",
   "pl.revenue": "Выручка",
+  "pl.visitRevenue": "Выручка от визитов",
+  "pl.chairRent": "Доход от аренды кресел",
   "pl.masterBreakdown": "По мастерам",
   "pl.tips": "Чаевые",
   "pl.visits": "Визиты",
@@ -668,6 +670,9 @@ const ru = {
   "pl.marginFloor":
     "{count} визитов пока без посчитанной маржи (на {revenue}), поэтому прибыль показана по нижней границе — она не меньше указанной.",
   "pl.overheadTitle": "Постоянные расходы по категориям",
+  "pl.chairRentTitle": "Аренда кресел",
+  "pl.chairRentHint":
+    "Визиты арендаторов не входят в выручку студии — вместо них здесь аренда за месяц. В своём отчёте мастер видит свои визиты как обычно.",
   "pl.cashOnlyTitle": "Не входит в прибыль",
   "pl.cashOnlyHint":
     "Эти деньги ушли со счёта, но в прибыль месяца не вычитаются: их стоимость уже учтена в визитах. Иначе один и тот же расход был бы посчитан дважды.",
@@ -721,6 +726,8 @@ const ru = {
     "Расписание не заполнено, поэтому загрузку и стоимость часа посчитать не из чего. Точка безубыточности ниже считается и без расписания.",
   "capacity.openSchedule": "Заполнить расписание",
   "capacity.fixedCosts": "Постоянные расходы за месяц",
+  "capacity.coveredByRent": "Покрывает аренда кресел",
+  "capacity.leftForVisits": "Осталось покрыть визитами",
   "capacity.ratePerHour": "На час мощности",
   "capacity.rateHint":
     "Столько должен приносить каждый проданный час, только чтобы закрыть аренду и оклады. Оплата труда владельца сюда не входит: она уже учтена комиссией в каждом визите.",
@@ -1029,6 +1036,12 @@ const ru = {
   "specialists.noPayPerVisit": "С визитов мастеру ничего не начисляется — ставка 0 % ставится сама.",
   "specialists.backToPercentHint":
     "Мастер снова получает процент с визитов — укажите ставку. Она действует с сегодняшнего дня.",
+  "specialists.rentTitle": "Аренда кресла",
+  "specialists.rentPerMonth": "{amount} в месяц",
+  "specialists.rentAmount": "Сумма в месяц, {currency}",
+  "specialists.rentRequired": "Укажите сумму аренды",
+  "specialists.rentHint":
+    "Визиты арендатора остаются в календаре и в его отчёте, но в выручку студии идёт только эта сумма — с месяца, в котором она задана.",
   "specialists.imputedHint":
     "Это не выплата: столько вы платили бы мастеру за ту же работу. Из этой цифры считается себестоимость визита — без неё услуги не сравнить между собой, — а в отчёте месяца она возвращается в прибыль, потому что из бизнеса не ушла.",
   "specialists.imputedHintShort": "Это не выплата, а цена вашего часа: из неё считается себестоимость визита.",
@@ -2197,6 +2210,8 @@ const ro: Record<MessageKey, Message> = {
   "pl.month": "Luna",
   "pl.thisMonth": "Luna aceasta",
   "pl.revenue": "Încasări",
+  "pl.visitRevenue": "Încasări din vizite",
+  "pl.chairRent": "Venit din chiria locurilor",
   "pl.masterBreakdown": "Pe maeștri",
   "pl.tips": "Bacșiș",
   "pl.visits": "Vizite",
@@ -2285,6 +2300,9 @@ const ro: Record<MessageKey, Message> = {
   "pl.marginFloor":
     "{count} vizite încă fără marjă calculată (de {revenue}), deci profitul este arătat la limita de jos — nu este mai mic decât atât.",
   "pl.overheadTitle": "Cheltuieli fixe pe categorii",
+  "pl.chairRentTitle": "Chiria locurilor",
+  "pl.chairRentHint":
+    "Vizitele chiriașilor nu intră în încasările studioului — în locul lor aici este chiria lunară. În raportul său maestrul își vede vizitele ca de obicei.",
   "pl.cashOnlyTitle": "Nu intră în profit",
   "pl.cashOnlyHint":
     "Acești bani au ieșit din cont, dar nu se scad din profitul lunii: costul lor este deja luat în calcul în vizite. Altfel aceeași cheltuială ar fi numărată de două ori.",
@@ -2338,6 +2356,8 @@ const ro: Record<MessageKey, Message> = {
     "Programul nu este completat, așa că gradul de ocupare și costul orei nu au din ce fi calculate. Pragul de rentabilitate de mai jos se calculează și fără program.",
   "capacity.openSchedule": "Completează programul",
   "capacity.fixedCosts": "Cheltuieli fixe pe lună",
+  "capacity.coveredByRent": "Acoperit de chiria locurilor",
+  "capacity.leftForVisits": "Rămâne de acoperit din vizite",
   "capacity.ratePerHour": "Pe oră de capacitate",
   "capacity.rateHint":
     "Atât trebuie să aducă fiecare oră vândută doar ca să acopere chiria și salariile. Plata muncii proprietarului nu intră aici: ea este deja inclusă prin comisionul din fiecare vizită.",
@@ -2647,6 +2667,12 @@ const ro: Record<MessageKey, Message> = {
     "Maestrului nu i se calculează nimic din vizite — rata de 0 % se setează automat.",
   "specialists.backToPercentHint":
     "Maestrul primește din nou procent din vizite — indicați rata. Se aplică de astăzi.",
+  "specialists.rentTitle": "Chiria locului",
+  "specialists.rentPerMonth": "{amount} pe lună",
+  "specialists.rentAmount": "Suma pe lună, {currency}",
+  "specialists.rentRequired": "Indicați suma chiriei",
+  "specialists.rentHint":
+    "Vizitele chiriașului rămân în calendar și în raportul său, dar în încasările studioului intră doar această sumă — din luna în care a fost stabilită.",
   "specialists.imputedHint":
     "Nu este o plată: atât ați plăti unui maestru pentru aceeași muncă. Din această cifră se calculează costul vizitei — fără ea serviciile nu pot fi comparate între ele — iar în raportul lunar ea se întoarce în profit, pentru că nu a plecat din afacere.",
   "specialists.imputedHintShort": "Nu este o plată, ci prețul orei dvs.: din el se calculează costul vizitei.",
@@ -3809,6 +3835,8 @@ const en: Record<MessageKey, Message> = {
   "pl.month": "Month",
   "pl.thisMonth": "This month",
   "pl.revenue": "Revenue",
+  "pl.visitRevenue": "Revenue from visits",
+  "pl.chairRent": "Chair rent income",
   "pl.masterBreakdown": "By specialist",
   "pl.tips": "Tips",
   "pl.visits": "Visits",
@@ -3896,6 +3924,9 @@ const en: Record<MessageKey, Message> = {
   "pl.marginFloor":
     "{count} visits have no margin computed yet (on {revenue}), so the profit shown is a floor — it is not lower than this.",
   "pl.overheadTitle": "Fixed costs by category",
+  "pl.chairRentTitle": "Chair rent",
+  "pl.chairRentHint":
+    "Renters' visits are not in the studio's revenue — the month's rent stands in their place. Masters still see their own visits in their own report.",
   "pl.cashOnlyTitle": "Not part of the profit",
   "pl.cashOnlyHint":
     "This money left the account but is not subtracted from the month's profit: its cost is already counted in the visits. Otherwise the same expense would be counted twice.",
@@ -3948,6 +3979,8 @@ const en: Record<MessageKey, Message> = {
     "There is no rota yet, so utilization and the cost of an hour have nothing to be computed from. The break-even figure below does not need one.",
   "capacity.openSchedule": "Set up the rota",
   "capacity.fixedCosts": "Fixed costs for the month",
+  "capacity.coveredByRent": "Covered by chair rent",
+  "capacity.leftForVisits": "Left for visits to cover",
   "capacity.ratePerHour": "Per hour of capacity",
   "capacity.rateHint":
     "What every sold hour has to bring in just to cover rent and salaries. The owner's own pay is not in it: the commission on each visit already accounts for that.",
@@ -4250,6 +4283,12 @@ const en: Record<MessageKey, Message> = {
   "specialists.noPayPerVisit": "Nothing is paid to the master per visit — a 0% rate is set automatically.",
   "specialists.backToPercentHint":
     "The master is paid per visit again — enter the rate. It applies from today.",
+  "specialists.rentTitle": "Chair rent",
+  "specialists.rentPerMonth": "{amount} a month",
+  "specialists.rentAmount": "Amount a month, {currency}",
+  "specialists.rentRequired": "Enter the rent amount",
+  "specialists.rentHint":
+    "The renter's visits stay in the calendar and in their own report, but only this amount goes into the studio's revenue — from the month it is set in.",
   "specialists.imputedHint":
     "Not a payment: it is what you would pay a specialist for the same work. A visit's cost is worked out from this figure — without it there is no comparing one service against another — and the month report adds it back into profit, because it never left the business.",
   "specialists.imputedHintShort": "Not a payment but the price of your hour: a visit's cost is worked out from it.",

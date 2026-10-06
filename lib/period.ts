@@ -1,9 +1,10 @@
 import { and, eq, gte, isNull, lte } from "drizzle-orm";
 
-import { expenses, laborCostRules, organizations, ownerDraws } from "@/db/schema";
+import { chairRents, expenses, laborCostRules, organizations, ownerDraws, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { buildCapacityView, type CapacityView } from "@/domain/capacity";
 import { buildCashFlow, type CashFlow } from "@/domain/cash-flow";
+import { chairRentTotalMinor, selectChairRents } from "@/domain/chair-rent";
 import { isMaterialCategory } from "@/domain/expense-classes";
 import { expensesForMonth, type PeriodExpenseRow } from "@/domain/expense-periods";
 import { selectLaborRules } from "@/domain/labor-cost";
@@ -47,6 +48,12 @@ export type PeriodReport = Readonly<{
   /** Echoed back so the report can name the reserve it just subtracted. */
   withdrawalReserveMinor: number;
   masterBreakdown: readonly MasterPeriodBreakdown[];
+  /**
+   * The chairs rented this month and what each is owed, beside the masters
+   * above rather than among them: a renter's visits are not the studio's, so
+   * the breakdown — the studio's visits by master — has nothing to say of them.
+   */
+  chairRents: readonly Readonly<{ specialistId: string; name: string; amountMinor: number }>[];
   /**
    * How the month counted its materials, and — counted per service — the two
    * figures that should roughly agree: what the visits took off their margins
@@ -173,6 +180,24 @@ export async function loadPeriodPL(
     .from(laborCostRules);
 
   /*
+   * The rents, versioned like the labour rules and read the same way — the
+   * row that charges March may have been written a year before it.
+   */
+  const rentRows = await tx
+    .select({
+      id: chairRents.id,
+      specialistId: chairRents.specialistId,
+      amountMinor: chairRents.amountMinor,
+      activeFrom: chairRents.activeFrom,
+      activeTo: chairRents.activeTo,
+      name: specialists.name,
+    })
+    .from(chairRents)
+    .innerJoin(specialists, eq(specialists.id, chairRents.specialistId));
+  const monthRents = selectChairRents(rentRows, options.month);
+  const chairRentMinor = chairRentTotalMinor(monthRents);
+
+  /*
    * Filtered by id, unlike everything else read here.
    *
    * `organization` is the one table whose policy is `true` — it has no
@@ -237,6 +262,7 @@ export async function loadPeriodPL(
     expenses: monthExpenses,
     laborRules: selectLaborRules(laborRows, options.month),
     withdrawalReserveMinor: organization?.withdrawalReserveMinor ?? 0,
+    chairRentMinor,
   });
 
   const rota = await loadMonthRota(tx, options.month);
@@ -264,8 +290,11 @@ export async function loadPeriodPL(
       scheduledMinutes: rota.scheduledMinutes,
       practicalCapacityBasisPoints: organization?.practicalCapacityBasisPoints ?? 7500,
       bookedMinutes: dashboard.metrics.bookedDurationMinutes,
-      revenueMinor: pl.revenueMinor,
-      contributionMarginMinor: pl.contributionMarginMinor,
+      // The visits' own, with the rent beside them: rent has no hours, so it
+      // lowers what the visits must earn rather than joining their ratio.
+      revenueMinor: pl.visitRevenueMinor,
+      contributionMarginMinor: pl.contributionMarginMinor - pl.chairRentMinor,
+      chairRentMinor: pl.chairRentMinor,
       principalLabourMinor: pl.principalLabourMinor,
       salariedLabourMinor: pl.salariedLabourMinor,
       overheadMinor: pl.overheadMinor,
@@ -274,7 +303,8 @@ export async function loadPeriodPL(
     }),
     cashFlow: buildCashFlow({
       month: options.month,
-      revenueMinor: pl.revenueMinor,
+      revenueMinor: pl.visitRevenueMinor,
+      chairRentMinor: pl.chairRentMinor,
       paymentCommissionMinor: pl.paymentCommissionMinor,
       visitLabourMinor: pl.labourCostMinor,
       salariedLabourMinor: pl.salariedLabourMinor,
@@ -289,6 +319,13 @@ export async function loadPeriodPL(
     excludedRows: rows.length - inCurrency.length,
     withdrawalReserveMinor: organization?.withdrawalReserveMinor ?? 0,
     masterBreakdown: buildMasterBreakdown(dashboard.rows),
+    chairRents: monthRents
+      .map((rent) => ({
+        specialistId: rent.specialistId,
+        name: rentRows.find((row) => row.id === rent.id)?.name ?? "—",
+        amountMinor: rent.amountMinor,
+      }))
+      .sort((left, right) => right.amountMinor - left.amountMinor),
     materials: {
       mode: materialsMode,
       perServiceMinor: dashboard.metrics.materialsMinor,

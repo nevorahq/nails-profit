@@ -60,7 +60,7 @@ function labor(overrides: Partial<LaborCostRuleRow> & { id: string }): LaborCost
 function pl(
   rows: VisitMetricRow[],
   ledger: PeriodExpenseRow[],
-  options: { labor?: LaborCostRuleRow[]; reserveMinor?: number; month?: string } = {},
+  options: { labor?: LaborCostRuleRow[]; reserveMinor?: number; month?: string; chairRentMinor?: number } = {},
 ) {
   const month = options.month ?? "2026-03";
   return buildPeriodPL({
@@ -69,6 +69,7 @@ function pl(
     expenses: expensesForMonth(ledger, month),
     laborRules: selectLaborRules(options.labor ?? [], month),
     withdrawalReserveMinor: options.reserveMinor,
+    chairRentMinor: options.chairRentMinor,
   });
 }
 
@@ -401,5 +402,37 @@ describe("buildPeriodPL", () => {
     // 360 − 100 = 260 over 1200 taken in, not over the 600 that could be costed.
     expect(report.operatingProfitMinor).toBe(260_00);
     expect(report.operatingMarginBasisPoints).toBe(2_167);
+  });
+});
+
+describe("buildPeriodPL with a rented chair", () => {
+  it("adds the rent to the revenue and to the margin whole, and says which is which", () => {
+    const report = pl([visit({ visitId: "1" }), visit({ visitId: "2" })], [expense({ id: "rent" })], {
+      chairRentMinor: 300_00,
+    });
+
+    expect(report.visitRevenueMinor).toBe(1_200_00);
+    expect(report.chairRentMinor).toBe(300_00);
+    expect(report.revenueMinor).toBe(1_500_00);
+    // Rent has no materials, no commission and no acquirer's cut against it.
+    expect(report.contributionMarginMinor).toBe(720_00 + 300_00);
+    expect(report.operatingProfitMinor).toBe(720_00 + 300_00 - 800_00);
+    expect(report.operatingMarginBasisPoints).toBe(1_467);
+  });
+
+  it("keeps a share-of-revenue wage on the visits, not on the rent", () => {
+    const report = pl([visit({ visitId: "1" })], [], {
+      chairRentMinor: 400_00,
+      labor: [labor({ id: "share", basis: "percent_revenue", amountMinor: null, basisPoints: 1_000 })],
+    });
+
+    expect(report.salariedLabourMinor).toBe(60_00);
+  });
+
+  it("reads absent rent as none, so a month without renters is unchanged", () => {
+    const report = pl([visit({ visitId: "1" })], []);
+
+    expect(report.chairRentMinor).toBe(0);
+    expect(report.revenueMinor).toBe(report.visitRevenueMinor);
   });
 });

@@ -870,6 +870,77 @@ export const laborCostRules = pgTable(
   ],
 );
 
+/**
+ * What a master renting a chair pays the studio each month.
+ *
+ * The other side of keeping a renter's visits out of the studio's revenue: the
+ * studio's income from that chair is the rent, and it has to be somewhere the
+ * month can read it. A monthly amount rather than a row in a ledger of
+ * receipts — the product records what is owed, as it does for a salary, and
+ * taking the money is not something it does.
+ *
+ * Versioned by `activeFrom` like `labor_cost_rule`, and read the same way by
+ * month (`domain/chair-rent.ts`): raising the rent in June leaves January at
+ * January's. In the currency of the organization, as a salary is.
+ */
+export const chairRents = pgTable(
+  "chair_rent",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    activeFrom: timestamp("active_from", { withTimezone: true }).notNull().defaultNow(),
+    activeTo: timestamp("active_to", { withTimezone: true }),
+    ...auditColumns,
+  },
+  (table) => [
+    index("chair_rent_lookup_idx").on(table.organizationId, table.specialistId, table.activeFrom),
+    check("chair_rent_amount_non_negative", sql`${table.amountMinor} >= 0`),
+  ],
+);
+
+/**
+ * Money handed to a master: what settles what their visits and their salary
+ * earned them.
+ *
+ * Not an expense. The work it pays for is already a cost in the month it was
+ * done — the commission on each visit, the salary on the month — so a payout
+ * changes where the money is, never the profit. That is the same reasoning
+ * that keeps the ledger's «Зарплата» rows out of both statements, and why this
+ * is a table of its own rather than a fourth meaning for that category: a
+ * payout says whom it was for, and the balance on «К выплате» is read by it.
+ */
+export const masterPayouts = pgTable(
+  "master_payout",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    specialistId: uuid("specialist_id")
+      .notNull()
+      .references(() => specialists.id, { onDelete: "restrict" }),
+    amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+    currency: currency("currency").notNull(),
+    /** The day the money was handed over, like `owner_draw.occurred_on`. */
+    paidOn: date("paid_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
+    note: text("note"),
+    ...auditColumns,
+  },
+  (table) => [
+    index("master_payout_org_idx").on(table.organizationId, table.paidOn),
+    index("master_payout_specialist_idx").on(table.specialistId, table.paidOn),
+    // Nothing paid is not a payout, and money coming back from a master is a
+    // different event that would need its own row.
+    check("master_payout_amount_positive", sql`${table.amountMinor} > 0`),
+  ],
+);
+
 export const paymentMethodKind = pgEnum("payment_method_kind", ["cash", "card", "transfer", "other"]);
 
 /**
@@ -1130,6 +1201,18 @@ export const visits = pgTable(
      * as false rather than the database doing it, so the gap stays visible.
      */
     masterIsPrincipal: boolean("master_is_principal"),
+    /**
+     * How the master worked with the studio when the visit closed — snapshotted
+     * like the principal mark above, and for the same reason: a renter's visits
+     * are theirs, not the studio's, and moving someone from rent to a
+     * percentage in June must not pour January's chair into January's revenue.
+     *
+     * Null on every visit closed before the question was asked. Read as the
+     * studio's own, which is what those visits have always been reported as;
+     * whether to answer it for the past is the owner's decision, not a
+     * migration's.
+     */
+    masterCooperation: cooperationType("master_cooperation"),
     /**
      * How it was paid, and what the acquirer took, copied at closing time.
      *

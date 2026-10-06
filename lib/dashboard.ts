@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, ne, or, type SQL } from "drizzle-orm";
 
 import { financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
@@ -13,6 +13,25 @@ export type DashboardFilters = Readonly<{
   to?: Date;
   specialistId?: string | null;
 }>;
+
+/**
+ * Which visits are the studio's own business.
+ *
+ * A master renting a chair keeps what their clients pay; the studio's income
+ * from them is the rent (`chair_rent`), and counting their visits as well would
+ * report a revenue, a margin and a ranking of services the studio never had.
+ * So a read of the whole studio leaves them out, by the cooperation snapshotted
+ * on the visit — never by the card as it is today, so moving someone from rent
+ * to a percentage does not pour last year's chair into last year's revenue.
+ *
+ * A read narrowed to one master keeps them: that is the renter's own report,
+ * and their visits are exactly what it is about. A visit closed before the
+ * snapshot existed holds null and stays the studio's, as it always was.
+ */
+export function studioVisitsOnly(filters: DashboardFilters): SQL | undefined {
+  if (filters.specialistId) return undefined;
+  return or(isNull(visits.masterCooperation), ne(visits.masterCooperation, "rent"));
+}
 
 /**
  * Studio Ledger figures, read from financial snapshots.
@@ -32,6 +51,7 @@ export async function loadDashboard(
     filters.from ? gte(visits.completedAt, filters.from) : undefined,
     filters.to ? lte(visits.completedAt, filters.to) : undefined,
     filters.specialistId ? eq(visits.specialistId, filters.specialistId) : undefined,
+    studioVisitsOnly(filters),
   ].filter(Boolean);
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;

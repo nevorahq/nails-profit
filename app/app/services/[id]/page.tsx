@@ -121,7 +121,7 @@ export default async function ServicePage({
       locale,
     );
     const allocated = allocatedFixedCostMinor(
-      report.capacity.fixedCostMinor,
+      report.capacity.fixedCostToEarnMinor,
       report.capacity.practicalMinutes,
       costing.costing.durationMinutes,
     );

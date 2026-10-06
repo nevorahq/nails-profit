@@ -1,12 +1,12 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { commissionRules, financialSnapshots } from "@/db/schema";
+import { chairRents, commissionRules, financialSnapshots } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 
 import { dataOf, errorCodeOf } from "../helpers/api";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
-import { CANONICAL, createCanonicalStudio, type Studio } from "../helpers/studio";
+import { CANONICAL, createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
 
 /**
  * A chair rented or a salary agreed, and the 0% that follows from it.
@@ -167,5 +167,64 @@ describe("changing how an existing master works", () => {
     });
     const rules = await openDefaultRules(id);
     expect(rules.map((rule) => rule.basisPoints)).toEqual([0]);
+  });
+});
+
+describe("the rent a chair is let for", () => {
+  test("is the owner's to set and read, and nobody else's", async () => {
+    const { id } = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/specialists", { name: "Арендует", cooperation_type: "rent" }),
+    );
+
+    for (const role of ["manager", "master", "analyst"] as const) {
+      const member = await inviteMember(studio.owner, `rent-${role}@studio.example`, role);
+      expect((await member.post(`/api/v1/specialists/${id}/chair-rent`, { amount_minor: 1 })).status).toBe(403);
+      expect((await member.get(`/api/v1/specialists/${id}/chair-rent`)).status).toBe(403);
+    }
+
+    const created = await studio.owner.post(`/api/v1/specialists/${id}/chair-rent`, { amount_minor: 300_000 });
+    expect(created.status).toBe(201);
+    const listed = dataOf<{ amount_minor: number; active_to: string | null }[]>(
+      await studio.owner.get(`/api/v1/specialists/${id}/chair-rent`),
+    );
+    expect(listed).toEqual([expect.objectContaining({ amount_minor: 300_000, active_to: null })]);
+  });
+
+  test("is refused for a master who is not renting", async () => {
+    const refused = await studio.owner.post(`/api/v1/specialists/${studio.specialistId}/chair-rent`, {
+      amount_minor: 300_000,
+    });
+    expect(refused.status).toBe(422);
+    expect(errorCodeOf(refused)).toBe("NOT_A_RENTER");
+  });
+
+  test("a new amount closes the old one, and leaving the chair ends the rent", async () => {
+    const { id } = dataOf<{ id: string }>(
+      await studio.owner.post("/api/v1/specialists", { name: "Уйдёт с аренды", cooperation_type: "rent" }),
+    );
+    await studio.owner.post(`/api/v1/specialists/${id}/chair-rent`, { amount_minor: 300_000 });
+    const tomorrow = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    expect(
+      (await studio.owner.post(`/api/v1/specialists/${id}/chair-rent`, { amount_minor: 350_000, effective_date: tomorrow }))
+        .status,
+    ).toBe(201);
+
+    expect(
+      (
+        await studio.owner.patch(`/api/v1/specialists/${id}`, {
+          cooperation_type: "commission",
+          default_rule: { type: "percentage", basis_points: 4_000 },
+        })
+      ).status,
+    ).toBe(200);
+
+    const rows = await withTenant(studio.organizationId, (tx) =>
+      tx.select().from(chairRents).where(eq(chairRents.specialistId, id)),
+    );
+    expect(rows).toHaveLength(2);
+    // Nothing is left open, and the scheduled raise never starts.
+    expect(rows.every((row) => row.activeTo !== null)).toBe(true);
+    const raise = rows.find((row) => row.amountMinor === 350_000)!;
+    expect(raise.activeTo!.getTime()).toBe(raise.activeFrom.getTime());
   });
 });
