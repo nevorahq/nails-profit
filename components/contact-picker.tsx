@@ -94,12 +94,14 @@ export function ContactPicker({
                   checked={selected.has(contact.index)}
                   onChange={(event) => toggle(contact.index, event.target.checked)}
                 />
-                <span className="contact-picker-name">{contact.name}</span>
-                <span className="contact-picker-phone">
-                  {contact.phone ??
-                    (contact.unreadablePhone
-                      ? t("import.contactsUnreadable", { phone: contact.unreadablePhone })
-                      : t("import.contactsNoPhone"))}
+                <span className="contact-picker-text">
+                  <span className="contact-picker-name">{contact.name}</span>
+                  <span className="contact-picker-phone">
+                    {contact.phone ??
+                      (contact.unreadablePhone
+                        ? t("import.contactsUnreadable", { phone: contact.unreadablePhone })
+                        : t("import.contactsNoPhone"))}
+                  </span>
                 </span>
               </label>
             </li>
