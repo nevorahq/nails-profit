@@ -136,17 +136,6 @@ const ru = {
   "clientReturn.messageNoLink": "Здравствуйте, {name}! Это {studio}. Подходит время следующего визита — напишите, когда вам удобно, подберём время.",
   "clients.specialist": "Мастер",
 
-  "landing.eyebrow": "Profit layer для вашей системы записи",
-  "landing.hero": "Реальная себестоимость. Понятная маржа. Прибыль в час.",
-  "landing.tagline":
-    "Понимайте прибыль каждой услуги. Fresha, DIKIDI, YCLIENTS и Stilio остаются там, где они уже работают.",
-  "landing.start": "Начать расчёт",
-  "landing.login": "Войти",
-  "landing.exampleLabel": "Пример расчёта",
-  "landing.servicePrice": "Цена услуги",
-  "landing.youKeep": "Останется вам",
-  "landing.perHour": "Прибыль в час",
-
   "common.cancel": "Отмена",
   "common.return": "Вернуться",
   "common.save": "Сохранить",
@@ -1799,17 +1788,6 @@ const ro: Record<MessageKey, Message> = {
   "clientReturn.messageNoLink": "Bună ziua, {name}! Aici {studio}. Se apropie timpul următoarei vizite — scrieți-ne când vă este comod și găsim o oră.",
   "clients.specialist": "Maestru",
 
-  "landing.eyebrow": "Profit layer pentru sistemul dvs. de programări",
-  "landing.hero": "Cost real. Marjă clară. Profit pe oră.",
-  "landing.tagline":
-    "Înțelegeți profitul fiecărui serviciu. Fresha, DIKIDI, YCLIENTS și Stilio rămân acolo unde lucrează deja.",
-  "landing.start": "Începe calculul",
-  "landing.login": "Autentificare",
-  "landing.exampleLabel": "Exemplu de calcul",
-  "landing.servicePrice": "Prețul serviciului",
-  "landing.youKeep": "Vă rămâne",
-  "landing.perHour": "Profit pe oră",
-
   "common.cancel": "Anulare",
   "common.return": "Înapoi",
   "common.save": "Salvează",
@@ -3461,17 +3439,6 @@ const en: Record<MessageKey, Message> = {
   "clientReturn.message": "Hello, {name}! This is {studio}. It's nearly time for your next visit — choose a time that suits you: {link}",
   "clientReturn.messageNoLink": "Hello, {name}! This is {studio}. It's nearly time for your next visit — write when it suits you and we'll find a time.",
   "clients.specialist": "Specialist",
-
-  "landing.eyebrow": "A profit layer for your booking system",
-  "landing.hero": "Real cost. \nClear margin. \nProfit per hour.",
-  "landing.tagline":
-    "Understand the profit of every service. Fresha, DIKIDI, YCLIENTS and Stilio stay where they already work.",
-  "landing.start": "Start costing",
-  "landing.login": "Sign in",
-  "landing.exampleLabel": "Example calculation",
-  "landing.servicePrice": "Service price",
-  "landing.youKeep": "You keep",
-  "landing.perHour": "Profit per hour",
 
   "common.cancel": "Cancel",
   "common.return": "Go back",

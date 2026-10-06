@@ -32,6 +32,40 @@ test.describe("landing experience", () => {
     await expect(visit.getByText("558 MDL", { exact: true })).toBeVisible();
   });
 
+  test("fits a 375 px phone without scrolling sideways", async ({ page, browserErrors }) => {
+    void browserErrors;
+    // Narrower than either project's device: the smallest phone the pilot's
+    // owners carry, and the width at which a fixed-size block first spills.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/");
+
+    await expect(page.getByText("Bookings and profit in one place")).toBeVisible();
+    // Scrolled to the bottom so every revealed section has laid out; a block
+    // that spills only after its entrance animation would otherwise pass.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const overflow = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      body: document.body.scrollWidth - document.body.clientWidth,
+    }));
+    expect(overflow).toEqual({ document: 0, body: 0 });
+
+    // `.marketing-page` clips with `overflow: hidden`, so a spilling block
+    // shows no scrollbar — it is cut off instead. Every element that carries
+    // text of its own has to sit inside the screen.
+    const cutOff = await page.evaluate(() =>
+      [...document.querySelectorAll("main *")]
+        .filter((element) =>
+          [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()),
+        )
+        .filter((element) => {
+          const box = element.getBoundingClientRect();
+          return box.width > 0 && (box.left < -1 || box.right > window.innerWidth + 1);
+        })
+        .map((element) => element.textContent?.trim().slice(0, 40)),
+    );
+    expect(cutOff).toEqual([]);
+  });
+
   test("primary navigation opens sign-up without a full reload failure", async ({
     page,
     browserErrors,
