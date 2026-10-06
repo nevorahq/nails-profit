@@ -1,3 +1,4 @@
+import { SectionEmpty } from "@/components/section-empty";
 import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
 
@@ -239,7 +240,14 @@ export default async function VisitsPage({
         </div>
       )}
 
-      {groups.length === 0 && <p className="muted">{t("visits.none")}</p>}
+      {groups.length === 0 && (
+        <SectionEmpty
+          section="visits"
+          businessType={businessType}
+          t={t}
+          action={canAddVisit ? { href: "/app/visits/new" } : undefined}
+        />
+      )}
 
       <div className="visit-groups">
         {groups.map((group) => (

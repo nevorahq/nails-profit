@@ -14,6 +14,7 @@ import type { ExpenseRow } from "@/lib/expenses";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { useTranslator } from "@/components/lexicon-provider";
+import { SectionEmpty } from "@/components/section-empty";
 import {
   SetupGuideDialog,
   useSetupGuide,
@@ -129,7 +130,7 @@ export function ExpenseLedger({
           />
         </div>
       </div>
-      <ExpenseTable expenses={expenses} locale={locale} materialsPeriods={materialsPeriods} currentMonth={currentMonth} />
+      <ExpenseTable expenses={expenses} locale={locale} businessType={businessType} materialsPeriods={materialsPeriods} currentMonth={currentMonth} />
     </>
   );
 }
@@ -387,11 +388,13 @@ type EditState = {
 function ExpenseTable({
   expenses,
   locale,
+  businessType,
   materialsPeriods,
   currentMonth,
 }: {
   expenses: ExpenseRow[];
   locale: AppLocale;
+  businessType: BusinessType;
   materialsPeriods: readonly MaterialsModePeriod[];
   currentMonth: string | null;
 }) {
@@ -538,8 +541,8 @@ function ExpenseTable({
         <tbody>
           {expenses.length === 0 && (
             <tr>
-              <td colSpan={6} className="muted">
-                {t("expenses.none")}
+              <td colSpan={6}>
+                <SectionEmpty section="expenses" businessType={businessType} t={t} action={{ href: "#add-expense" }} />
               </td>
             </tr>
           )}

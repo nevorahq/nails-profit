@@ -524,3 +524,11 @@ export async function bookAppointment(
     { "idempotency-key": `pw-${Math.random().toString(36).slice(2)}-${Date.now()}` },
   );
 }
+
+/**
+ * Picks a day on the public page's ribbon. The day is part of the answer the
+ * page fetched once, so this is a click and no further request.
+ */
+export async function chooseRibbonDay(page: Page, date: Date) {
+  await page.locator(`.public-booking-days-strip button[data-date="${isoDate(date)}"]`).click();
+}

@@ -4,10 +4,10 @@ import { expect, test } from "../fixtures";
 import {
   daysFromToday,
   disposeStudio,
-  isoDate,
   seedStudio,
   useClientAddress,
   type Studio,
+  chooseRibbonDay,
 } from "../helpers/studio";
 
 /**
@@ -68,8 +68,7 @@ for (const width of [null, 375] as const) {
       await page.screenshot({ path: testInfo.outputPath("public-two-services.png"), fullPage: true });
 
       await page.getByLabel("Specialist").selectOption({ label: studio.specialistName });
-      await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
-      await page.getByRole("button", { name: "Show available times" }).click();
+      await chooseRibbonDay(page, daysFromToday(2));
       const times = page.locator(".public-booking-slots button");
       await expect(times.first()).toBeVisible();
       await times.first().click();
@@ -108,11 +107,11 @@ for (const width of [null, 375] as const) {
       await page.getByRole("button", { name: "+ Another service" }).click();
       await page.getByRole("combobox", { name: /^Service 2/ }).selectOption({ label: "Pedicure" });
       await expect(page.locator(".public-booking-card").getByRole("alert")).toContainText("No single specialist does all of these");
-      await expect(page.getByRole("button", { name: "Show available times" })).toBeDisabled();
+      await expect(page.locator(".public-booking-days-strip")).toHaveCount(0);
 
       // Back to one service, and the page books as before.
       await page.getByRole("button", { name: "Remove service 2" }).click();
-      await expect(page.getByRole("button", { name: "Show available times" })).toBeEnabled();
+      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
     });
   });
 }

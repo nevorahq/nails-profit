@@ -7,6 +7,7 @@ import {
   signedInContext,
   useClientAddress,
   type Studio,
+  chooseRibbonDay,
 } from "../helpers/studio";
 
 /**
@@ -33,6 +34,44 @@ test.describe("the public booking page", () => {
     if (studio) await disposeStudio(studio);
   });
 
+  test("the ribbon offers the days and their times with one availability request", async ({
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    const asked: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/availability")) asked.push(request.url());
+    });
+
+    await page.goto(`/book/${studio.slug}`);
+    const strip = page.locator(".public-booking-days-strip");
+    await expect(strip).toBeVisible();
+    // No date field and no search button: the days are the control.
+    await expect(page.getByLabel("Date")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Show available times" })).toHaveCount(0);
+    await expect(strip.locator("button")).toHaveCount(14);
+
+    // The first day with times is already chosen, and its times are under it.
+    await expect(strip.locator("button.is-selected")).toHaveCount(1);
+    const times = page.locator(".public-booking-slots button");
+    await expect(times.first()).toBeVisible();
+
+    // Taking another day is a click on what was already fetched.
+    const otherDay = await strip.locator("button:not([disabled]):not(.is-selected)").first().getAttribute("data-date");
+    if (otherDay) {
+      const free = strip.locator(`button[data-date="${otherDay}"]`);
+      await free.click();
+      await expect(free).toHaveAttribute("aria-pressed", "true");
+      await expect(times.first()).toBeVisible();
+    }
+    expect(asked).toHaveLength(1);
+
+    // A day with nothing free is labelled so, for a reader that skips the digit.
+    const empty = strip.locator("button[disabled]").first();
+    if ((await empty.count()) > 0) await expect(empty).toHaveAttribute("aria-label", /no times/);
+  });
+
   test("a stranger books a time and the studio gets a request", async ({
     baseURL,
     browser,
@@ -51,8 +90,7 @@ test.describe("the public booking page", () => {
     // this test is about whose bell the request lands in, and the studio has two
     // specialists free at the same hour.
     await page.getByLabel("Specialist").selectOption({ label: studio.specialistName });
-    await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
-    await page.getByRole("button", { name: "Show available times" }).click();
+    await chooseRibbonDay(page, daysFromToday(2));
 
     const times = page.locator(".public-booking-slots button");
     await expect(times.first()).toBeVisible();
@@ -141,8 +179,7 @@ test.describe("the public booking page", () => {
     await expect(page.locator(".public-booking-yours")).toHaveCount(0);
     await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
 
-    await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
-    await page.getByRole("button", { name: "Show available times" }).click();
+    await chooseRibbonDay(page, daysFromToday(2));
     await page.locator(".public-booking-slots button").first().click();
     await page.getByLabel("Name").fill("Rita Return");
     await page.locator("#booking-phone").fill("+373 69 555 222");
@@ -223,8 +260,7 @@ test.describe("the public booking page", () => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);
 
-    await page.getByLabel("Date").fill(isoDate(daysFromToday(3)));
-    await page.getByRole("button", { name: "Show available times" }).click();
+    await chooseRibbonDay(page, daysFromToday(3));
     await page.locator(".public-booking-slots button").first().click();
 
     await page.getByLabel("Name").fill("Nadia Note");
@@ -284,8 +320,7 @@ test.describe("the public booking page", () => {
   test("takes a booking from a client who uses no messengers", async ({ page, browserErrors }) => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);
-    await page.getByLabel("Date").fill(isoDate(daysFromToday(4)));
-    await page.getByRole("button", { name: "Show available times" }).click();
+    await chooseRibbonDay(page, daysFromToday(4));
     await page.locator(".public-booking-slots button").first().click();
 
     await page.getByLabel("Name").fill("Nora None");
@@ -299,19 +334,23 @@ test.describe("the public booking page", () => {
     await expect(page.getByRole("heading", { name: "Appointment created" })).toBeVisible();
   });
 
-  test("a day with nothing free says so instead of failing", async ({ page, browserErrors }) => {
+  test("a fortnight with nothing free says so instead of failing", async ({ page, browserErrors }) => {
     void browserErrors;
+    // The seeded studio always has times, so the empty answer is staged: what
+    // matters here is how the page treats a ribbon in which no day is free.
+    await page.route("**/availability?**", async (route) => {
+      const days = Array.from({ length: 14 }, (_, index) => ({
+        date: isoDate(daysFromToday(index)),
+        slots: [],
+      }));
+      await route.fulfill({ json: { data: { timezone: "UTC", currency: "MDL", days } } });
+    });
     await page.goto(`/book/${studio.slug}`);
 
-    // Sunday of a week that the rota covers is fine; a date before the rota
-    // starts is not bookable at all, which is the case this asserts.
-    await page.getByLabel("Date").fill(isoDate(daysFromToday(-2)));
-    await page.getByRole("button", { name: "Show available times" }).click();
-
+    await expect(page.locator(".public-booking-days-strip button")).toHaveCount(14);
+    await expect(page.locator(".public-booking-days-strip button:not([disabled])")).toHaveCount(0);
     await expect(page.locator(".public-booking-slots button")).toHaveCount(0);
-    await expect(page.locator("main")).toContainText(
-      /There are no free times on this date|Choose a time that works/,
-    );
+    await expect(page.locator(".public-booking-empty")).toContainText("in the next two weeks");
   });
 
   test("an unknown studio is a 404, not a crash", async ({ page }) => {
@@ -347,8 +386,7 @@ test.describe("a refused booking", () => {
   }) => {
     const walk = async (dayOffset: number, contact: { name: string; phone: string; email: string }) => {
       await page.goto(`/book/${studio.slug}`);
-      await page.getByLabel("Date").fill(isoDate(daysFromToday(dayOffset)));
-      await page.getByRole("button", { name: "Show available times" }).click();
+      await chooseRibbonDay(page, daysFromToday(dayOffset));
       const times = page.locator(".public-booking-slots button");
       await expect(times.first()).toBeVisible();
       await times.first().click();

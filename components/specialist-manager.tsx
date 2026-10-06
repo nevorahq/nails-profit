@@ -8,6 +8,7 @@ import type { BusinessType } from "@/i18n/business-labels";
 import { soloNeedsPrincipal } from "@/domain/principal";
 import { type MessageKey } from "@/i18n/t";
 import { Hint } from "@/components/hint";
+import { SectionEmpty } from "@/components/section-empty";
 import { useTranslator } from "@/components/lexicon-provider";
 import { NameCombobox } from "@/components/name-combobox";
 import { SpecialistPhoto } from "@/components/specialist-photo";
@@ -582,8 +583,13 @@ export function SpecialistManager({
         <tbody>
           {specialists.length === 0 && (
             <tr>
-              <td colSpan={showsPay ? 4 : 2} className="muted">
-                {t("specialists.none")}
+              <td colSpan={showsPay ? 4 : 2}>
+                <SectionEmpty
+                  section="specialists"
+                  businessType={businessType}
+                  t={t}
+                  action={canManage ? { href: "#add-specialist" } : undefined}
+                />
               </td>
             </tr>
           )}

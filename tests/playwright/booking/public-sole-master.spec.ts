@@ -2,10 +2,10 @@ import { expect, test } from "../fixtures";
 import {
   daysFromToday,
   disposeStudio,
-  isoDate,
   seedStudio,
   useClientAddress,
   type Studio,
+  chooseRibbonDay,
 } from "../helpers/studio";
 
 /**
@@ -46,8 +46,7 @@ for (const width of [null, 375] as const) {
       expect(overflow).toBeLessThanOrEqual(0);
       await page.screenshot({ path: testInfo.outputPath("public-sole-master.png"), fullPage: true });
 
-      await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
-      await page.getByRole("button", { name: "Show available times" }).click();
+      await chooseRibbonDay(page, daysFromToday(2));
       const times = page.locator(".public-booking-slots button");
       await expect(times.first()).toBeVisible();
       // One name, said once: not under every time.
@@ -64,12 +63,11 @@ for (const width of [null, 375] as const) {
       await studio.owner.patch(`/api/v1/specialists/${studio.specialistId}`, { name: studioName });
 
       await page.reload();
-      await expect(page.getByRole("button", { name: "Show available times" })).toBeEnabled();
+      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
       await expect(page.locator(".public-booking-master")).toHaveCount(0);
       await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
 
-      await page.getByLabel("Date").fill(isoDate(daysFromToday(2)));
-      await page.getByRole("button", { name: "Show available times" }).click();
+      await chooseRibbonDay(page, daysFromToday(2));
       await page.locator(".public-booking-slots button").first().click();
       await expect(page.locator(".public-booking-summary")).toContainText("Date and time");
     });

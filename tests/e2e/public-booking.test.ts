@@ -135,6 +135,33 @@ describe("public online booking", () => {
     ]);
   });
 
+  test("one request answers a ribbon of days, listing the empty ones too", async () => {
+    const from = wednesdayAhead(1);
+    const url = (days: number) =>
+      `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${from}&days=${days}`;
+    const ribbon = dataOf<{ days: { date: string; slots: Slot[] }[] }>(await anonymous.get(url(14)));
+
+    expect(ribbon.days).toHaveLength(14);
+    expect(ribbon.days[0].date).toBe(from);
+    // Rota: Wednesdays only, so day 0 and day 7 have times and the rest none.
+    const withTimes = ribbon.days.flatMap((day, index) => (day.slots.length > 0 ? [index] : []));
+    expect(withTimes).toEqual([0, 7]);
+    // Each day carries its own slots, the same as asking for that day alone.
+    const single = dataOf<{ slots: Slot[] }>(
+      await anonymous.get(
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${from}`,
+      ),
+    );
+    expect(ribbon.days[0].slots).toEqual(single.slots);
+  });
+
+  test("a ribbon longer than the cap is refused", async () => {
+    const response = await anonymous.get(
+      `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(1)}&days=15`,
+    );
+    expect(response.status).toBe(422);
+  });
+
   test("a client finds a slot, holds it and creates an idempotent booking", async () => {
     const availability = dataOf<{ slots: Slot[] }>(
       await anonymous.get(

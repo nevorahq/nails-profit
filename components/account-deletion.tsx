@@ -104,7 +104,7 @@ export function AccountDeletion({
     return (
       <p className="account-deletion-trigger muted">
         {t("settings.accountBlocked")}{" "}
-        <a href="#data-management-title">{t("settings.dataTitle")}</a>
+        <a href="#studio-deletion-title">{t("settings.deleteTitle")}</a>
       </p>
     );
   }

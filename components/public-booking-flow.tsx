@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { dateInZone, firstDayWithTimes, RIBBON_DAYS } from "@/lib/public-booking-ribbon";
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { Currency } from "@/domain/money";
@@ -88,7 +89,7 @@ function formatVisit(startsAt: string, timezone: string, tag: string) {
   }
 }
 
-type NearestDate = { date: string; slot_count: number };
+type RibbonEntry = { date: string; slots: Slot[] };
 type PendingAction = "catalog" | "availability" | "hold" | "verification" | "booking" | null;
 
 type Profile = {
@@ -109,18 +110,6 @@ type Contact = {
   channels: ContactChannel[];
   legalAccepted: boolean;
 };
-
-function dateInZone(timezone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${value("year")}-${value("month")}-${value("day")}`;
-}
 
 /**
  * The proof of work section 7.9 asks a suspected bot for.
@@ -201,7 +190,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [specialistId, setSpecialistId] = useState("any");
   const [date, setDate] = useState(() => dateInZone(location.timezone));
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [nearestDates, setNearestDates] = useState<NearestDate[]>([]);
+  /** The coming days and the times of each, from the one request the ribbon costs. */
+  const [ribbon, setRibbon] = useState<RibbonEntry[]>([]);
+  /** Bumped when what was offered turned out stale, so the ribbon is asked for again. */
+  const [ribbonRefresh, setRibbonRefresh] = useState(0);
   const [searched, setSearched] = useState(false);
   const [held, setHeld] = useState<{ token: string; expiresAt: string; slot: Slot } | null>(null);
   /**
@@ -306,7 +298,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         setLines(next[0] ? [{ serviceId: next[0].id, addOnIds: [] }] : []);
         setSpecialistId("any");
         setSlots([]);
-        setNearestDates([]);
+        setRibbon([]);
         setSearched(false);
         setHeld(null);
       })
@@ -459,7 +451,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     setLines(next);
     setSpecialistId("any");
     setSlots([]);
-    setNearestDates([]);
+    setRibbon([]);
     setSearched(false);
   }
 
@@ -491,51 +483,71 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     return solution ? send({ "x-booking-challenge": `${challenge.nonce}:${solution}` }) : first;
   }
 
-  async function loadTimes(nextDate: string) {
-    if (!service) return;
-    setPendingAction("availability");
-    clearError();
-    setHeld(null);
-    setSearched(false);
-    setSlots([]);
-    setNearestDates([]);
-    const query = new URLSearchParams({
-      location_id: locationId,
-      service_id: service.id,
-      add_on_ids: chosen[0].addOnIds.join(","),
-      // Every service of the sitting, so the times offered fit all of it.
-      services: chosen.map((entry) => [entry.service.id, ...entry.addOnIds].join(":")).join("|"),
-      specialist_id: specialistId,
-      date: nextDate,
-    });
-    try {
-      const response = await fetch(
-        `/api/v1/public/booking/${profile.slug}/availability?${query.toString()}`,
-        { headers: sessionHeader },
-      );
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        showApiError(response, body);
-        return;
+  /**
+   * The ribbon: the next fortnight and its times, asked for once. A change to
+   * what is being booked asks again after a pause, so ticking three add-ons in
+   * a row is one request and not three — this page's availability budget is
+   * small on purpose (`PUBLIC_BOOKING_AVAILABILITY_RULE`). Picking a day is
+   * then free, because every day's times came with the answer.
+   */
+  const sittingKey = JSON.stringify([locationId, specialistId, sittingPayload, ribbonRefresh]);
+  const catalogLoaded = services.length > 0;
+  useEffect(() => {
+    if (!catalogLoaded || chosen.length === 0 || masters.length === 0) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setPendingAction("availability");
+      setError(null);
+      setRequestId(null);
+      setSearched(false);
+      setSlots([]);
+      const query = new URLSearchParams({
+        location_id: locationId,
+        service_id: chosen[0].service.id,
+        add_on_ids: chosen[0].addOnIds.join(","),
+        // Every service of the sitting, so the times offered fit all of it.
+        services: chosen.map((entry) => [entry.service.id, ...entry.addOnIds].join(":")).join("|"),
+        specialist_id: specialistId,
+        date: dateInZone(location.timezone),
+        days: String(RIBBON_DAYS),
+      });
+      try {
+        const response = await fetch(
+          `/api/v1/public/booking/${profile.slug}/availability?${query.toString()}`,
+          { headers: sessionHeader },
+        );
+        const body = await response.json().catch(() => null);
+        if (!active) return;
+        if (!response.ok) {
+          // Inlined, as the catalogue effect does: `showApiError` is declared below.
+          const parsed = readApiError(body, response.status);
+          setError(t(publicBookingErrorKey(parsed), { minutes: retryAfterMinutes(parsed) }));
+          setRequestId(parsed.requestId);
+          return;
+        }
+        const days = body.data.days as RibbonEntry[];
+        const first = firstDayWithTimes(days);
+        setRibbon(days);
+        setDate(first ?? days[0]?.date ?? dateInZone(location.timezone));
+        setSlots(days.find((day) => day.date === first)?.slots ?? []);
+        setSearched(true);
+      } catch {
+        if (active) setError(t("publicBooking.offline"));
+      } finally {
+        if (active) setPendingAction(null);
       }
-      setSlots(body.data.slots);
-      setNearestDates(body.data.nearest_dates ?? []);
-      setSearched(true);
-    } catch {
-      setError(t("publicBooking.offline"));
-    } finally {
-      setPendingAction(null);
-    }
-  }
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+    // `sittingKey` stands for everything the answer depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sittingKey, catalogLoaded]);
 
-  async function findTimes(event: FormEvent) {
-    event.preventDefault();
-    await loadTimes(date);
-  }
-
-  async function chooseNearestDate(nextDate: string) {
-    setDate(nextDate);
-    await loadTimes(nextDate);
+  function chooseDay(entry: RibbonEntry) {
+    setDate(entry.date);
+    setSlots(entry.slots);
   }
 
   async function chooseSlot(slot: Slot) {
@@ -551,7 +563,11 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        showApiError(response, body);
+        const refused = showApiError(response, body);
+        // Somebody else took the time: show what is free now, not the old list.
+        if (refused.code === "SLOT_UNAVAILABLE" || refused.code === "SLOT_OR_CONTACT_CONFLICT") {
+          setRibbonRefresh((count) => count + 1);
+        }
         return;
       }
       setHeld({ token: body.data.hold_token, expiresAt: body.data.expires_at, slot: body.data.slot });
@@ -592,7 +608,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     );
     // The hold is gone whichever step noticed it, and the search form is the
     // only screen that can get another one.
-    if (parsed.code === "HOLD_EXPIRED") setHeld(null);
+    if (parsed.code === "HOLD_EXPIRED") {
+      setHeld(null);
+      setRibbonRefresh((count) => count + 1);
+    }
 
     return parsed;
   }
@@ -869,12 +888,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
       <section className="public-booking-card" aria-busy={pending}>
         {!held ? (
-          <form onSubmit={findTimes} noValidate>
+          <form onSubmit={(event) => event.preventDefault()} noValidate>
             {profile.locations.length > 1 && (
               <div className="public-booking-grid">
                 <label>
                   {t("publicBooking.location")}
-                  <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); clearError(); setSlots([]); setNearestDates([]); setLocationId(event.target.value); }}>
+                  <select value={locationId} disabled={pending} onChange={(event) => { setPendingAction("catalog"); clearError(); setSlots([]); setRibbon([]); setLocationId(event.target.value); }}>
                     {profile.locations.map((entry) => (
                       <option key={entry.id} value={entry.id}>{entry.name}</option>
                     ))}
@@ -992,7 +1011,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               {namesSpecialist && (
                 <label>
                   {t("publicBooking.specialist")}
-                  <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }}>
+                  <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
                     <option value="any">{t("publicBooking.anySpecialist")}</option>
                     {masters.map((person) => (
                       <option key={person.id} value={person.id}>{person.name}</option>
@@ -1000,11 +1019,39 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                   </select>
                 </label>
               )}
-              <label>
-                {t("publicBooking.date")}
-                <input type="date" value={date} min={dateInZone(location.timezone)} disabled={pending} onChange={(event) => { setDate(event.target.value); setSlots([]); setNearestDates([]); setSearched(false); }} required />
-              </label>
             </div>
+
+            {ribbon.length > 0 && chosen.length > 0 && masters.length > 0 && (
+              <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
+                <h2 id="booking-days-title">{t("publicBooking.chooseDay")}</h2>
+                <div className="public-booking-days-strip">
+                  {ribbon.map((entry) => {
+                    const free = entry.slots.length > 0;
+                    const stamp = new Date(`${entry.date}T12:00:00Z`);
+                    const tag = localeTag(profile.locale);
+                    const weekday = new Intl.DateTimeFormat(tag, { timeZone: "UTC", weekday: "short" }).format(stamp);
+                    const day = new Intl.DateTimeFormat(tag, { timeZone: "UTC", day: "numeric", month: "short" }).format(stamp);
+                    const state = free ? t("publicBooking.slotCount", { count: entry.slots.length }) : t("publicBooking.dayNone");
+                    return (
+                      <button
+                        key={entry.date}
+                        data-date={entry.date}
+                        type="button"
+                        className={entry.date === date ? "is-selected" : undefined}
+                        aria-pressed={entry.date === date}
+                        aria-label={t("publicBooking.dayLabel", { date: `${weekday}, ${day}`, state })}
+                        disabled={!free || pendingAction === "hold"}
+                        onClick={() => chooseDay(entry)}
+                      >
+                        <span>{weekday}</span>
+                        <strong>{day}</strong>
+                        <span className="public-booking-day-state" aria-hidden="true">{free ? entry.slots.length : "—"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="public-booking-quote">
               <strong>{money(quote.price)}</strong>
@@ -1013,11 +1060,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
               </div>
             </div>
-            <button className="primary-button" type="submit" disabled={pending || !service || masters.length === 0}>
-              {pendingAction === "availability" || pendingAction === "catalog"
-                ? t("publicBooking.loadingAvailability")
-                : t("publicBooking.findTime")}
-            </button>
           </form>
         ) : stage === "code" ? (
           <form onSubmit={confirmCode} noValidate>
@@ -1217,24 +1259,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             </div>
           </div>
         )}
-        {!pending && !held && searched && service && slots.length === 0 && date && nearestDates.length > 0 && (
-          <section className="public-booking-nearest" aria-labelledby="nearest-dates-title">
-            <h2 id="nearest-dates-title">{t("publicBooking.nearestDates")}</h2>
-            <div>
-              {nearestDates.map((entry) => (
-                <button key={entry.date} type="button" onClick={() => chooseNearestDate(entry.date)}>
-                  <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${entry.date}T12:00:00Z`))}</strong>
-                  <span>{t("publicBooking.slotCount", { count: entry.slot_count })}</span>
-                </button>
-              ))}
-            </div>
-            <p className="muted">{t("publicBooking.noSlots")}</p>
-          </section>
-        )}
-        {!pending && !held && searched && service && slots.length === 0 && date && nearestDates.length === 0 && (
+        {!pending && !held && searched && service && slots.length === 0 && firstDayWithTimes(ribbon) === null && (
           <div className="public-booking-empty" role="status">
             <strong>{t("publicBooking.noSlotsTitle")}</strong>
-            <p className="muted">{t("publicBooking.noSlots")}</p>
+            <p className="muted">{t("publicBooking.noSlotsRibbon")}</p>
           </div>
         )}
         {error && (

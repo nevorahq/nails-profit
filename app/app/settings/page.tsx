@@ -1,7 +1,9 @@
 import { asc, eq, isNull } from "drizzle-orm";
 
 import { BillingSettings, type CheckoutConfig, type SubscriptionStatusRow } from "@/components/billing-settings";
+import { DangerZone } from "@/components/danger-zone";
 import { DataManagement } from "@/components/data-management";
+import { StudioDeletion } from "@/components/studio-deletion";
 import { OrganizationLogo } from "@/components/organization-logo";
 import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
@@ -15,7 +17,7 @@ import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReac
 import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mode";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
-import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
+import { fetchPaddlePlan, fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 import { registerOf } from "@/i18n/lexicon";
@@ -111,6 +113,8 @@ export default async function SettingsPage({
     paddle: getPaddleCheckoutConfig(),
     lemonSqueezyUrl: getLemonSqueezyCheckoutUrl(),
   };
+  // Only worth a round trip to Paddle while there is a button to put it on.
+  const plan = !subscription && checkout.paddle ? await fetchPaddlePlan(checkout.paddle.priceId) : null;
 
   const memberRows = canReadTeam
     ? await db
@@ -186,6 +190,7 @@ export default async function SettingsPage({
       )}
       {canReadOrg && (
         <BillingSettings
+          plan={plan}
           register={register}
           subscription={subscription}
           checkout={checkout}
@@ -240,12 +245,7 @@ export default async function SettingsPage({
       */}
       {can(membership.role, "bookings", "read") && <PushDeviceSwitch locale={locale} />}
       {canReadData && (
-        <DataManagement
-          locale={locale}
-          organizationName={organizationName}
-          canExport={can(membership.role, "data_export", "read")}
-          canDelete={can(membership.role, "data_export", "write")}
-        />
+        <DataManagement locale={locale} canExport={can(membership.role, "data_export", "read")} />
       )}
 
       {/*
@@ -260,11 +260,16 @@ export default async function SettingsPage({
         up with no settings screen at all. So the role alone answers the same
         question the endpoint asks of the database.
       */}
-      <AccountDeletion
-        locale={locale}
-        email={membership.userEmail}
-        blockedByStudio={membership.role === "owner"}
-      />
+      <DangerZone locale={locale}>
+        {canReadData && can(membership.role, "data_export", "write") && (
+          <StudioDeletion locale={locale} organizationName={organizationName} />
+        )}
+        <AccountDeletion
+          locale={locale}
+          email={membership.userEmail}
+          blockedByStudio={membership.role === "owner"}
+        />
+      </DangerZone>
     </main>
   );
 }

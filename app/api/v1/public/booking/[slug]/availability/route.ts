@@ -3,7 +3,11 @@ import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { parseLocalDate } from "@/domain/timezone";
 import { apiError, apiSuccess, toFieldErrors, timedRoute } from "@/lib/http";
-import { loadPublicAvailability } from "@/lib/public-booking-availability";
+import {
+  loadPublicAvailability,
+  loadPublicAvailabilityRange,
+  MAX_AVAILABILITY_DAYS,
+} from "@/lib/public-booking-availability";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { publicNotFound, publicRequest, publicSessionKey } from "@/lib/public-booking-http";
 import { PUBLIC_BOOKING_AVAILABILITY_RULE } from "@/lib/rate-limit";
@@ -14,6 +18,11 @@ const querySchema = z.object({
   add_on_ids: z.string().default(""),
   specialist_id: z.union([z.uuid(), z.literal("any")]).default("any"),
   date: z.string(),
+  /**
+   * Answer for this many days from `date` in one go — the ribbon of the public
+   * page. Absent, only `date` is answered, as the manage page still asks.
+   */
+  days: z.coerce.number().int().min(1).max(MAX_AVAILABILITY_DAYS).optional(),
   /**
    * Every service of an appointment being moved, as `service:addOn:addOn|service`.
    *
@@ -62,7 +71,7 @@ async function handleGet(
   }
 
   const { slug } = await params;
-  const result = await loadPublicAvailability({
+  const base = {
     slug,
     locationId: parsed.data.location_id,
     serviceId: parsed.data.service_id,
@@ -71,7 +80,10 @@ async function handleGet(
     date,
     items: parseServices(parsed.data.services),
     now: new Date(),
-  });
+  };
+  const result = parsed.data.days
+    ? await loadPublicAvailabilityRange({ ...base, days: parsed.data.days })
+    : await loadPublicAvailability(base);
   if (!result) return publicNotFound(id);
 
   const sessionKey = publicSessionKey(request);
@@ -102,8 +114,9 @@ async function handleGet(
     {
       timezone: result.timezone,
       currency: result.currency,
-      slots: result.slots,
-      nearest_dates: result.nearestDates,
+      ...("days" in result
+        ? { days: result.days }
+        : { slots: result.slots, nearest_dates: result.nearestDates }),
     },
     id,
   );
