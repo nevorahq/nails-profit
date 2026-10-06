@@ -449,6 +449,11 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .opening-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12rem; margin-top: 14rem; }
 .opening-actions { display: flex; flex-wrap: wrap; gap: 12rem; }
 .opening-actions > * { flex: 1 1 200rem; justify-content: center; text-align: center; }
+/* «У вас уже есть клиенты?»: after the prices, and on an empty client list. */
+.clients-start { display: grid; gap: 12rem; }
+.clients-start h1, .clients-start h2, .clients-start p { margin: 0; }
+.clients-start-actions { display: flex; flex-wrap: wrap; gap: 12rem; margin-top: 6rem; }
+.clients-start-actions > * { flex: 1 1 160rem; justify-content: center; text-align: center; }
 
 /*
  * The language picker, which sits above the card's own heading rather than

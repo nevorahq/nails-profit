@@ -199,6 +199,28 @@ test.describe("authentication UI", () => {
     );
     expect(overflow).toBeLessThanOrEqual(0);
     await page.getByRole("button", { name: "Save and open booking" }).click();
+    await skipClientImport(page);
+  }
+
+  /**
+   * «У вас уже есть клиенты?», asked once the prices are saved: a new studio
+   * has none. Offered both ways in, and answered «Later», which goes on.
+   */
+  async function skipClientImport(page: Page) {
+    await expect(page.getByRole("heading", { name: "Do you already have clients?" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "From my phone" })).toHaveAttribute(
+      "href",
+      "/app/import?entity=client&from=phone#import-upload",
+    );
+    await expect(page.getByRole("link", { name: "From a file" })).toHaveAttribute(
+      "href",
+      "/app/import?entity=client#import-upload",
+    );
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    await page.getByRole("button", { name: "Later" }).click();
     await expect(page).toHaveURL(/\/app$/);
   }
 
@@ -331,6 +353,7 @@ test.describe("authentication UI", () => {
     await expect(page.getByRole("heading", { name: "Your prices and hours" })).toBeVisible();
     await expect(page.getByText("Days and hours")).toHaveCount(0);
     await page.getByRole("button", { name: "Save and open booking" }).click();
+    await skipClientImport(page);
 
     /*
      * So the single step left is the one thing the product must not guess:

@@ -2,6 +2,7 @@ import { asc, eq, isNotNull, sql } from "drizzle-orm";
 
 import { ClientManager, type ClientRow } from "@/components/client-manager";
 import { ClientReturnPanel, type ReturnPanelRow } from "@/components/client-return-panel";
+import { ClientsStartPanel } from "@/components/clients-start";
 import { ToolIcon } from "@/components/icons";
 import { clients, specialists, visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -12,6 +13,7 @@ import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { scopedClientSpecialistId } from "@/lib/client-access";
+import { canImport } from "@/lib/import-flow";
 import { loadReturnList, publishedBookingSlug } from "@/lib/client-return";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
@@ -209,6 +211,12 @@ export default async function ClientsPage() {
           </a>
         )}
       </header>
+      {/*
+        Only on a list that is empty for the whole studio, and only for a role
+        that may import: a master's own list is empty until their first visit,
+        and the import would refuse them.
+      */}
+      {rows.length === 0 && canImport(membership.role, "client") && <ClientsStartPanel locale={locale} />}
       <ClientReturnPanel
         rows={returnRows}
         bookingPath={returning?.slug ? `/book/${returning.slug}` : null}
