@@ -88,6 +88,7 @@ export default async function SettingsPage({
               current_period_end: organizationSubscriptions.currentPeriodEnd,
               manage_url: organizationSubscriptions.manageUrl,
               provider_subscription_id: organizationSubscriptions.providerSubscriptionId,
+              provider_customer_id: organizationSubscriptions.providerCustomerId,
             })
             .from(organizationSubscriptions)
             .limit(1),
@@ -100,6 +101,7 @@ export default async function SettingsPage({
         provider: subscriptionRow.provider,
         status: subscriptionRow.status,
         current_period_end: subscriptionRow.current_period_end,
+        provider_customer_id: subscriptionRow.provider_customer_id,
         // Paddle's webhooks omit `management_urls`, so a stored link is the
         // exception; read it from the API when we have none.
         manage_url:

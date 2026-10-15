@@ -227,9 +227,27 @@ subscription is never locked out. It was never set in production.
 - **The API host follows the environment**: `getPaddleApiConfig` switches it on
   `NEXT_PUBLIC_PADDLE_ENVIRONMENT`, and the price ids are picked per environment
   in `lib/paddle-catalog.ts`.
-- `pwCustomer: { id: 'ctm_…' }` in `Paddle.Initialize()` for Retain, once the
-  signed-in customer has a Paddle customer id.
+- ✅ `pwCustomer: { id: 'ctm_…' }` for Retain (2026-10-15): `PaddleRetain` loads
+  Paddle.js on the settings page for a studio with a Paddle subscription and
+  passes `organization_subscription.provider_customer_id`. Retain only sees
+  that page; mounting it app-wide is a later step.
 - Server-side Paddle API client for upgrade/downgrade/cancel (extends `lib/paddle-api.ts`).
 - Dashboard (live): payment methods, default payment link, submit
   `nailsprofit.nevorahq.com` for domain approval (step 5 above), bank/payout
   details.
+
+## Live readiness audit (2026-10-15)
+
+- Catalog: sandbox and live match one-to-one (18 active prices, `FOUNDER30`);
+  nothing to create. August prices already archived.
+- Destination `ntfset_01m1fafssd8t7rev6nw731cpgb` exists and is active; its
+  secret is already in Netlify production. Not touched.
+- Netlify production has the live token, `NEXT_PUBLIC_PADDLE_ENVIRONMENT=live`,
+  the live API key, the webhook secret and `PADDLE_WEBHOOK_IP_ALLOWLIST=true`
+  (the list itself is fetched from `https://api.paddle.com/ips` at runtime).
+- Checkout domains: only `bussines.nevorahq.com` is approved (typo);
+  `nailsprofit.nevorahq.com` is not on the list — submit it in the dashboard.
+- Public pages on `nailsprofit.nevorahq.com`: `/terms` and `/privacy` return 200
+  but are the closed-pilot agreement with no legal entity name or contact;
+  there is no refund/cancellation page, no contact details, and prices appear
+  only as the landing's `#pricing` section (they match the live catalog).

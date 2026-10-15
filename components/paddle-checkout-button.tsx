@@ -7,7 +7,7 @@ declare global {
   interface Window {
     Paddle?: {
       Environment?: { set: (environment: "sandbox" | "production") => void };
-      Initialize: (options: { token: string }) => void;
+      Initialize: (options: { token: string; pwCustomer?: { id: string } }) => void;
       Checkout: {
         open: (options: {
           items: { priceId: string; quantity: number }[];
@@ -17,6 +17,16 @@ declare global {
       };
     };
   }
+}
+
+/**
+ * What `Paddle.Initialize()` is given. `pwCustomer` is Paddle Retain's hook: the
+ * signed-in customer's *Paddle* customer id (`ctm_…`), never our organization
+ * id or an email. It is left out when the studio has no Paddle customer yet —
+ * before its first checkout there is no id to give.
+ */
+export function paddleInitializeOptions(clientToken: string, paddleCustomerId: string | null = null) {
+  return paddleCustomerId ? { token: clientToken, pwCustomer: { id: paddleCustomerId } } : { token: clientToken };
 }
 
 /**
@@ -34,6 +44,7 @@ export function PaddleCheckoutButton({
   environment,
   organizationId,
   discountCode = null,
+  paddleCustomerId = null,
   label,
 }: {
   clientToken: string;
@@ -42,6 +53,8 @@ export function PaddleCheckoutButton({
   organizationId: string;
   /** Prefilled in the checkout's discount field; the studio can still clear it. */
   discountCode?: string | null;
+  /** The studio's Paddle customer id when it has one, for Retain. */
+  paddleCustomerId?: string | null;
   label: string;
 }) {
   const [ready, setReady] = useState(false);
@@ -52,7 +65,7 @@ export function PaddleCheckoutButton({
         src="https://cdn.paddle.com/paddle/v2/paddle.js"
         onLoad={() => {
           if (environment === "sandbox") window.Paddle?.Environment?.set("sandbox");
-          window.Paddle?.Initialize({ token: clientToken });
+          window.Paddle?.Initialize(paddleInitializeOptions(clientToken, paddleCustomerId));
           setReady(true);
         }}
       />
@@ -71,5 +84,30 @@ export function PaddleCheckoutButton({
         {label}
       </button>
     </>
+  );
+}
+
+/**
+ * Loads Paddle.js for a studio that already has a Paddle customer, so Retain
+ * (payment recovery, cancellation flows) knows who is looking at the page. No
+ * checkout button — the studio is past that.
+ */
+export function PaddleRetain({
+  clientToken,
+  environment,
+  paddleCustomerId,
+}: {
+  clientToken: string;
+  environment: "sandbox" | "live";
+  paddleCustomerId: string;
+}) {
+  return (
+    <Script
+      src="https://cdn.paddle.com/paddle/v2/paddle.js"
+      onLoad={() => {
+        if (environment === "sandbox") window.Paddle?.Environment?.set("sandbox");
+        window.Paddle?.Initialize(paddleInitializeOptions(clientToken, paddleCustomerId));
+      }}
+    />
   );
 }
