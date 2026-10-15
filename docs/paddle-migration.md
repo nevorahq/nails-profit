@@ -186,13 +186,40 @@ subscriptions**). Replicated additively via the `paddle-live` MCP:
 
 Nothing deleted, archived or recreated.
 
+## Going live with the October grid
+
+In this order — each step is safe on its own, and the limits come last, once a
+studio can pay its way past them.
+
+1. **Live catalog** (not done: the Paddle live account was not written to from
+   the coding session). Create the 9 plan prices, the 9 add-on prices and the
+   `FOUNDER30` discount exactly as in sandbox (same names, amounts,
+   `custom_data`, no trial; the discount restricted to the 18 new prices), then
+   fill `live` in `lib/paddle-catalog.ts` and the live column above. The August
+   live prices stay **active** for now: production still runs the old build,
+   whose button opens `pri_01m1faf7x95662ycy6pmfze4nb` through
+   `NEXT_PUBLIC_PADDLE_PRICE_ID`.
+2. **Merge and publish** the three branches (reprice → limits → pilots), then
+   publish the deploy by hand — production publishing is manual.
+3. **Netlify, production context:** unset `NEXT_PUBLIC_PADDLE_PRICE_ID` (the
+   build no longer reads it); set `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE=FOUNDER30`;
+   set `PILOT_FREE_UNTIL` to the last free day for pilots, three months from
+   the day billing goes live.
+4. **Archive the 9 August live prices** — only now, once nothing opens them.
+5. **Turn the limits on:** `PLAN_LIMITS_ENFORCEMENT=true`. Studios older than
+   14 days without a subscription or an open pilot move to Start the moment it
+   is set; they lose nothing they have, only what Start does not include.
+6. Watch `FOUNDER30`'s `times_used`; unset `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE`
+   at 100.
+
+`SUBSCRIPTION_ACCESS_ENFORCEMENT` is gone: with a free Start a studio without a
+subscription is never locked out. It was never set in production.
+
 ## Still to do for live
 
 - **Netlify env vars** — see the mapping table above. Nothing lands until they're set.
-- **Live October catalog** — create the 9 plan prices, 9 add-on prices and the
-  `FOUNDER30` discount in live (same shape as sandbox), archive the 9 August
-  live prices, and fill `live` in `lib/paddle-catalog.ts`. Until then the
-  settings page draws no checkout when `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is live.
+- **Live October catalog** — step 1 above. Until it exists the settings page
+  draws no checkout when `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is live.
 - **The API host follows the environment**: `getPaddleApiConfig` switches it on
   `NEXT_PUBLIC_PADDLE_ENVIRONMENT`, and the price ids are picked per environment
   in `lib/paddle-catalog.ts`.

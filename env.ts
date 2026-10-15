@@ -218,16 +218,21 @@ export function getPostHogConfig() {
 }
 
 /**
- * Independent of `PILOT_ACCESS_ENFORCEMENT`: a pilot studio's access is
- * decided by its own `pilot_enrollment` row, and turning subscription
- * billing on for everyone else must not silently start requiring it from
- * pilots too.
+ * The last day pilot studios keep «Студия» free, as `YYYY-MM-DD` (inclusive,
+ * UTC). Set it when billing goes live — three months on is what the pilots
+ * are told — and from the next day a pilot studio is on «Старт» unless it
+ * subscribes. Unset keeps pilots on «Студия» with no end, as before billing.
+ * Returned as the first instant that is no longer free.
  */
-export function isSubscriptionAccessEnforced() {
-  const value = process.env.SUBSCRIPTION_ACCESS_ENFORCEMENT;
-  if (value === undefined || value === "false") return false;
-  if (value === "true") return true;
-  throw new Error("SUBSCRIPTION_ACCESS_ENFORCEMENT must be true or false");
+export function getPilotFreeUntil(): Date | null {
+  const value = process.env.PILOT_FREE_UNTIL?.trim();
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+    throw new Error("PILOT_FREE_UNTIL must be a date as YYYY-MM-DD");
+  }
+  const end = new Date(`${value}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return end;
 }
 
 /**

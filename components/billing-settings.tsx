@@ -35,6 +35,18 @@ export function currentPlanLabel(plan: ResolvedPlan, locale: AppLocale, register
       date: plan.trialEndsAt.toLocaleDateString(localeTag(locale), { day: "numeric", month: "long" }),
     });
   }
+  if (plan.source === "pilot" && plan.trialEndsAt) {
+    // The end is the first instant that is no longer free; the reader is told
+    // the last day that still is.
+    return t("billing.current.pilotUntil", {
+      tier,
+      date: new Date(plan.trialEndsAt.getTime() - 1).toLocaleDateString(localeTag(locale), {
+        day: "numeric",
+        month: "long",
+        timeZone: "UTC",
+      }),
+    });
+  }
   if (plan.source === "pilot") return t("billing.current.pilot", { tier });
   return t("billing.current.paid", { tier });
 }

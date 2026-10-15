@@ -103,6 +103,9 @@ describe("currentPlanLabel", () => {
     expect(
       currentPlanLabel({ tier: "studio", source: "trial", trialEndsAt: new Date("2026-10-29T12:00:00Z") }, "ru"),
     ).toBe("пробный период «Студия» до 29 октября");
+    expect(
+      currentPlanLabel({ tier: "studio", source: "pilot", trialEndsAt: new Date("2027-02-01T00:00:00Z") }, "ru"),
+    ).toBe("«Студия» — пилотная программа, бесплатно по 31 января");
   });
 
   it("is drawn above the checkout when the page passes a plan", () => {

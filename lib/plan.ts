@@ -12,7 +12,7 @@ import {
   type PlanTier,
   type ResolvedPlan,
 } from "@/domain/plans";
-import { isPlanLimitsEnforced } from "@/env";
+import { getPilotFreeUntil, isPlanLimitsEnforced } from "@/env";
 import { apiError } from "@/lib/http";
 import { planForPaddlePrice } from "@/lib/paddle-catalog";
 
@@ -53,6 +53,7 @@ export async function loadOrganizationPlan(
         }
       : null,
     pilotActive: pilot?.status === "active",
+    pilotFreeUntil: getPilotFreeUntil(),
     // A row RLS hides is not a studio this request may act for; the caller
     // would not have got this far. Now keeps the resolver total regardless.
     organizationCreatedAt: organization?.createdAt ?? now,

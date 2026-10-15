@@ -76,7 +76,6 @@ export default defineConfig({
           NEXT_PUBLIC_APP_URL: localBaseUrl,
           NEXT_DIST_DIR: ".next-playwright",
           PILOT_ACCESS_ENFORCEMENT: "false",
-          SUBSCRIPTION_ACCESS_ENFORCEMENT: "false",
           // Every scenario registers its own owner and master through the real
           // sign-up endpoint, which production limits to five an hour. The
           // server only honours this while it is pointed at a `_test` database

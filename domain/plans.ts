@@ -143,7 +143,10 @@ export type ResolvedPlan = Readonly<{
   tier: PlanTier;
   /** Why the studio is on that tier — what the settings page says about it. */
   source: PlanSource;
-  /** When the sign-up trial ends; set only while `source` is `trial`. */
+  /**
+   * When the free «Студия» ends: the sign-up trial's last moment while
+   * `source` is `trial`, the pilots' while it is `pilot` and a date is set.
+   */
   trialEndsAt: Date | null;
 }>;
 
@@ -155,13 +158,17 @@ export type ResolvedPlan = Readonly<{
  *      price charges for. A price the catalog does not know (an archived
  *      August price, a Lemon Squeezy variant) counts as «Бизнес»: a studio
  *      that pays is never cut down because of a lookup;
- *   2. an active pilot enrollment — «Студия», what the pilot was promised;
+ *   2. an active pilot enrollment — «Студия», what the pilot was promised,
+ *      until `pilotFreeUntil` when one is set: from then on a pilot studio
+ *      pays like everyone else (the founder price is there for it);
  *   3. the first 14 days after the studio was created — «Студия» on trial;
  *   4. otherwise «Старт», free and without end.
  */
 export function resolvePlan(input: {
   subscription: { status: "trialing" | "active" | "past_due" | "paused" | "canceled"; tier: PaidPlanTier | null } | null;
   pilotActive: boolean;
+  /** The end of the pilots' free «Студия»; `null` keeps it open-ended. */
+  pilotFreeUntil?: Date | null;
   organizationCreatedAt: Date;
   now: Date;
 }): ResolvedPlan {
@@ -172,7 +179,9 @@ export function resolvePlan(input: {
   ) {
     return { tier: subscription.tier ?? "business", source: "subscription", trialEndsAt: null };
   }
-  if (input.pilotActive) return { tier: "studio", source: "pilot", trialEndsAt: null };
+  if (input.pilotActive && (!input.pilotFreeUntil || input.now < input.pilotFreeUntil)) {
+    return { tier: "studio", source: "pilot", trialEndsAt: input.pilotFreeUntil ?? null };
+  }
 
   const trialEndsAt = new Date(input.organizationCreatedAt.getTime() + signupTrial.days * 86_400_000);
   if (input.now < trialEndsAt) return { tier: signupTrial.tier, source: "trial", trialEndsAt };

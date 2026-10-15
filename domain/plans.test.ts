@@ -112,6 +112,20 @@ describe("resolvePlan", () => {
     });
   });
 
+  it("ends the pilots' free Studio on the date set, after which a pilot is on Start", () => {
+    const pilotFreeUntil = new Date("2027-02-01T00:00:00Z");
+    const pilot = { ...base, pilotActive: true, pilotFreeUntil };
+    expect(resolvePlan({ ...pilot, now: new Date("2027-01-31T23:59:59Z") })).toEqual({
+      tier: "studio",
+      source: "pilot",
+      trialEndsAt: pilotFreeUntil,
+    });
+    expect(resolvePlan({ ...pilot, now: pilotFreeUntil })).toMatchObject({ tier: "start", source: "free" });
+    expect(
+      resolvePlan({ ...pilot, subscription: { status: "active", tier: "studio" }, now: pilotFreeUntil }),
+    ).toMatchObject({ tier: "studio", source: "subscription" });
+  });
+
   it("follows a live subscription's tier, including while a payment is retried", () => {
     for (const status of ["trialing", "active", "past_due"] as const) {
       expect(
