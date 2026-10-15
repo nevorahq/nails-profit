@@ -84,6 +84,7 @@ type Copy = {
   footer: string;
   privacy: string;
   terms: string;
+  refund: string;
 };
 
 /**
@@ -216,6 +217,7 @@ const content: Record<AppLocale, Copy> = {
     footer: "Nail Profit OS · запись и прибыль nail-бизнеса",
     privacy: "Конфиденциальность",
     terms: "Условия",
+    refund: "Возврат",
   },
   ro: {
     navHow: "Cum funcționează",
@@ -324,6 +326,7 @@ const content: Record<AppLocale, Copy> = {
     footer: "Nail Profit OS · programări și profit pentru nail business",
     privacy: "Confidențialitate",
     terms: "Termeni",
+    refund: "Rambursare",
   },
   en: {
     navHow: "How it works",
@@ -432,6 +435,7 @@ const content: Record<AppLocale, Copy> = {
     footer: "Nail Profit OS · bookings and profit for nail businesses",
     privacy: "Privacy",
     terms: "Terms",
+    refund: "Refunds",
   },
 };
 
@@ -439,7 +443,7 @@ function Money({ value }: { value: number }) {
   return <>{new Intl.NumberFormat("ru-RU").format(value)} MDL</>;
 }
 
-export function LandingExperience({ locale }: { locale: AppLocale }) {
+export function LandingExperience({ locale, supportEmail = null }: { locale: AppLocale; supportEmail?: string | null }) {
   const copy = content[locale];
   const [mode, setMode] = useState<"solo" | "studio">("studio");
   const [price, setPrice] = useState(600);
@@ -647,7 +651,12 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
 
       <footer className="marketing-footer">
         <span>{copy.footer}</span>
-        <div><Link href="/privacy">{copy.privacy}</Link><Link href="/terms">{copy.terms}</Link></div>
+        <div>
+          <Link href="/privacy">{copy.privacy}</Link>
+          <Link href="/terms">{copy.terms}</Link>
+          <Link href="/refund">{copy.refund}</Link>
+          {supportEmail ? <a href={`mailto:${supportEmail}`}>{supportEmail}</a> : null}
+        </div>
       </footer>
     </main>
   );

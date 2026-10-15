@@ -1,4 +1,5 @@
 import { LegalDocument } from "@/components/legal-document";
+import { getLegalEntityName, getSupportEmail } from "@/env";
 import { getTranslator } from "@/i18n/t";
 import { TERMS_VERSION } from "@/lib/legal";
 import { termsContent } from "@/lib/legal-content";
@@ -14,6 +15,7 @@ export default async function TermsPage() {
       title={t("legal.termsTitle")}
       version={TERMS_VERSION}
       document={termsContent[locale]}
+      operator={{ name: getLegalEntityName(), email: getSupportEmail() }}
     />
   );
 }

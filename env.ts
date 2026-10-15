@@ -289,6 +289,17 @@ export function getSupportEmail() {
 }
 
 /**
+ * Who the public legal pages name as the service operator: the registered
+ * name from the Paddle application, kept in the environment rather than in the
+ * source so a change of entity is not a deploy of code. `null` (unset) leaves
+ * the line off the pages — they then show the support address alone.
+ */
+export function getLegalEntityName() {
+  const value = process.env.LEGAL_ENTITY_NAME?.trim();
+  return value ? value : null;
+}
+
+/**
  * The application's identity at the browsers' push services (VAPID), or null —
  * in which case push is off and everything else works exactly as before:
  * nothing is queued for a phone, and the switch says the channel is not set up.
