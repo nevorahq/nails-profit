@@ -265,7 +265,7 @@ describe("tariff limits", () => {
         provider: "paddle",
         providerCustomerId: "ctm_plan_limits_test",
         providerSubscriptionId: "sub_plan_limits_test",
-        providerPriceId: paddlePlanPrices("sandbox")!.solo[12],
+        providerPriceId: paddlePlanPrices("sandbox").solo[12],
         status: "active",
       });
       expect(await planNow()).toEqual({ tier: "solo", source: "subscription", trialEndsAt: null });
@@ -291,7 +291,7 @@ describe("tariff limits", () => {
         provider: "paddle",
         providerCustomerId: "ctm_plan_limits_test",
         providerSubscriptionId: "sub_plan_limits_canceled",
-        providerPriceId: paddlePlanPrices("sandbox")!.business[1],
+        providerPriceId: paddlePlanPrices("sandbox").business[1],
         status: "canceled",
       });
       expect(await planNow()).toMatchObject({ tier: "start", source: "free" });

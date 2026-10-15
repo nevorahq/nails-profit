@@ -56,9 +56,8 @@ export function currentPlanLabel(plan: ResolvedPlan, locale: AppLocale, register
  * it. Paddle and Lemon Squeezy are both wired (see the payments research
  * artifact), but a studio has no use for two ways to do one thing: Paddle is
  * the main one, with a choice of tier and period over its catalog, and Lemon
- * Squeezy's link is only drawn when Paddle is not set up. An environment with
- * no catalog in `lib/paddle-catalog.ts` draws neither, so no button opens a
- * checkout for a price that does not exist.
+ * Squeezy's link is only drawn when Paddle is not set up. Which price each
+ * choice opens comes from `lib/paddle-catalog.ts`, per environment.
  */
 export function BillingSettings({
   subscription,
@@ -78,7 +77,6 @@ export function BillingSettings({
   register?: Register;
 }) {
   const t = getTranslator(locale, register);
-  const paddlePrices = checkout.paddle ? paddlePlanPrices(checkout.paddle.environment) : null;
 
   return (
     <section className="panel" id="subscription">
@@ -105,17 +103,17 @@ export function BillingSettings({
       ) : (
         <div>
           <p className="muted">{t("billing.none")}</p>
-          {checkout.paddle && paddlePrices ? (
+          {checkout.paddle ? (
             <PlanCheckout
               clientToken={checkout.paddle.clientToken}
               environment={checkout.paddle.environment}
-              prices={paddlePrices}
+              prices={paddlePlanPrices(checkout.paddle.environment)}
               organizationId={organizationId}
               discountCode={checkout.paddle.discountCode}
               locale={locale}
               register={register}
             />
-          ) : !checkout.paddle && checkout.lemonSqueezyUrl ? (
+          ) : checkout.lemonSqueezyUrl ? (
             <div className="button-row">
               <a className="primary-button" href={lemonSqueezyCheckoutHref(checkout.lemonSqueezyUrl, organizationId)}>
                 {t("billing.start")}

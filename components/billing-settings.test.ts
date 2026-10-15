@@ -59,18 +59,15 @@ describe("BillingSettings", () => {
     expect(without).not.toContain("FOUNDER30");
   });
 
-  it("draws no checkout where Paddle has no catalog of this grid yet", () => {
+  it("opens the live catalog's prices on a live deployment", () => {
     const html = renderToStaticMarkup(
       createElement(BillingSettings, {
         ...base,
-        checkout: {
-          paddle: { ...sandbox, environment: "live" },
-          lemonSqueezyUrl: "https://shop.lemonsqueezy.com/checkout/buy/x",
-        },
+        checkout: { paddle: { ...sandbox, environment: "live" }, lemonSqueezyUrl: null },
       }),
     );
-    expect(html).not.toContain("<button");
-    expect(html).not.toContain("lemonsqueezy");
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).toContain("Subscribe · Studio, €19 a month");
   });
 
   it("falls back to Lemon Squeezy's link when Paddle is not set up", () => {
