@@ -1,3 +1,4 @@
+import { PaddleRetain } from "@/components/paddle-checkout-button";
 import { PlanCheckout } from "@/components/plan-checkout";
 import type { ResolvedPlan } from "@/domain/plans";
 import type { AppLocale } from "@/i18n/messages";
@@ -11,6 +12,8 @@ export type SubscriptionStatusRow = {
   status: "trialing" | "active" | "past_due" | "paused" | "canceled";
   current_period_end: Date | null;
   manage_url: string | null;
+  /** The provider's customer id (`ctm_…` for Paddle); Retain needs it. */
+  provider_customer_id?: string | null;
 };
 
 export type CheckoutConfig = {
@@ -84,6 +87,13 @@ export function BillingSettings({
       {plan ? <p>{t("billing.current", { plan: currentPlanLabel(plan, locale, register) })}</p> : null}
       {subscription ? (
         <div>
+          {subscription.provider === "paddle" && subscription.provider_customer_id && checkout.paddle ? (
+            <PaddleRetain
+              clientToken={checkout.paddle.clientToken}
+              environment={checkout.paddle.environment}
+              paddleCustomerId={subscription.provider_customer_id}
+            />
+          ) : null}
           <p>
             {t("billing.status")}: {t(`billing.status.${subscription.status}`)}
           </p>
