@@ -14,6 +14,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { planFeatureRefusal } from "@/lib/plan";
 import { db } from "@/db";
 
 const createInvitationSchema = z.object({
@@ -78,6 +79,8 @@ export async function POST(request: Request) {
   if (!can(actor.role, "user_management", "write")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage users", id);
   }
+  const planRefused = await planFeatureRefusal(actor.organizationId, "team", id);
+  if (planRefused) return planRefused;
 
   const body = await request.json().catch(() => null);
   const parsed = createInvitationSchema.safeParse(body);

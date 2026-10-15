@@ -231,6 +231,21 @@ export function isSubscriptionAccessEnforced() {
 }
 
 /**
+ * Whether the tariff limits in `domain/plans.ts` are applied — «Старт» held to
+ * one specialist, this month's report and email, the paid features behind
+ * their tiers. Off by default: until the live Paddle catalog exists a studio
+ * past its trial would lose features it has no way to pay for. With it off,
+ * every studio works as if on «Бизнес», and the settings page still says which
+ * tier it would be on.
+ */
+export function isPlanLimitsEnforced() {
+  const value = process.env.PLAN_LIMITS_ENFORCEMENT;
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error("PLAN_LIMITS_ENFORCEMENT must be true or false");
+}
+
+/**
  * Whether `POST /api/v1/webhooks/paddle` rejects callers that are not in
  * Paddle's published IP allowlist (https://api.paddle.com/ips). Off by default:
  * the signature check is the hard gate, and this second one only makes sense

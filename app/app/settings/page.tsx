@@ -18,6 +18,7 @@ import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mo
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
+import { loadOrganizationPlan } from "@/lib/plan";
 import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 import { registerOf } from "@/i18n/lexicon";
@@ -109,6 +110,10 @@ export default async function SettingsPage({
       }
     : null;
 
+  const plan = canReadOrg
+    ? await withTenant(membership.organizationId, (tx) => loadOrganizationPlan(tx, membership.organizationId))
+    : null;
+
   const checkout: CheckoutConfig = {
     paddle: getPaddleCheckoutConfig(),
     lemonSqueezyUrl: getLemonSqueezyCheckoutUrl(),
@@ -190,6 +195,7 @@ export default async function SettingsPage({
         <BillingSettings
           register={register}
           subscription={subscription}
+          plan={plan}
           checkout={checkout}
           organizationId={membership.organizationId}
           locale={locale}

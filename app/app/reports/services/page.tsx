@@ -15,6 +15,8 @@ import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { isCalendarDay } from "@/lib/expenses";
 import { formatMoneyMinor } from "@/lib/format";
 import { requireWorkspace } from "@/lib/workspace";
+import { PlanNotice } from "@/components/plan-notice";
+import { organizationAllows } from "@/lib/plan";
 
 /** Bars past this many fold into «Прочее», so the chart stays readable. */
 const TOP_SERVICES_SHOWN = 4;
@@ -46,10 +48,11 @@ export default async function ServicesReportPage({
 
   const filters = await searchParams;
   const today = todayIn(new Date(), timezone);
+  const fullReports = await organizationAllows(membership.organizationId, "full_reports");
   const period = resolveReportPeriod(
     {
-      from: isCalendarDay(filters.from) ? filters.from : undefined,
-      to: isCalendarDay(filters.to) ? filters.to : undefined,
+      from: fullReports && isCalendarDay(filters.from) ? filters.from : undefined,
+      to: fullReports && isCalendarDay(filters.to) ? filters.to : undefined,
     },
     today,
   );
@@ -117,15 +120,19 @@ export default async function ServicesReportPage({
         state={{ from: filters.from, to: filters.to, specialist: filters.specialist, month: period.month }}
       />
 
-      <PeriodFilter
-        locale={locale}
-        from={period.from}
-        to={period.to}
-        specialistId={canFilterBySpecialist ? filters.specialist : undefined}
-        people={people}
-        showSpecialist={canFilterBySpecialist && people.length > 1}
-        presets={{ ranges: presetRanges(today), active: period.preset }}
-      />
+      {fullReports ? (
+        <PeriodFilter
+          locale={locale}
+          from={period.from}
+          to={period.to}
+          specialistId={canFilterBySpecialist ? filters.specialist : undefined}
+          people={people}
+          showSpecialist={canFilterBySpecialist && people.length > 1}
+          presets={{ ranges: presetRanges(today), active: period.preset }}
+        />
+      ) : (
+        <PlanNotice feature="full_reports" locale={locale} register={register} />
+      )}
 
       {/* The studio's share per service — not a master's to read. */}
       {!isMaster && bars.length > 0 && (

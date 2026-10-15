@@ -25,6 +25,7 @@ import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 import { recordCompletedServiceCostEvents } from "@/lib/pilot-events";
 import { leaveSoloMode } from "@/lib/solo-mode";
+import { specialistRoomRefusal } from "@/lib/plan";
 
 /**
  * Specialists and their commission rules, spec RES-001, RES-004 and RES-005.
@@ -246,6 +247,8 @@ export async function POST(request: Request) {
   if (!canManageCatalogue(actor.role, "commissions")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage specialists", id);
   }
+  const noRoom = await specialistRoomRefusal(actor.organizationId, id);
+  if (noRoom) return noRoom;
 
   const body = await request.json().catch(() => null);
   const parsed = createSpecialistSchema.safeParse(body);

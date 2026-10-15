@@ -1,4 +1,5 @@
 import { PlanCheckout } from "@/components/plan-checkout";
+import type { ResolvedPlan } from "@/domain/plans";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { writtenRegister, type Register } from "@/i18n/lexicon";
@@ -23,6 +24,21 @@ function lemonSqueezyCheckoutHref(baseUrl: string, organizationId: string) {
   return url.toString();
 }
 
+/** «Сейчас: пробный период «Студия» до 29 октября» — which tier, and why. */
+export function currentPlanLabel(plan: ResolvedPlan, locale: AppLocale, register: Register = writtenRegister) {
+  const t = getTranslator(locale, register);
+  if (plan.tier === "start") return t("billing.current.free");
+  const tier = t(`billing.tier.${plan.tier}`);
+  if (plan.source === "trial" && plan.trialEndsAt) {
+    return t("billing.current.trial", {
+      tier,
+      date: plan.trialEndsAt.toLocaleDateString(localeTag(locale), { day: "numeric", month: "long" }),
+    });
+  }
+  if (plan.source === "pilot") return t("billing.current.pilot", { tier });
+  return t("billing.current.paid", { tier });
+}
+
 /**
  * Starting a subscription is one checkout, whichever provider answers behind
  * it. Paddle and Lemon Squeezy are both wired (see the payments research
@@ -35,12 +51,15 @@ function lemonSqueezyCheckoutHref(baseUrl: string, organizationId: string) {
 export function BillingSettings({
   subscription,
   checkout,
+  plan = null,
   organizationId,
   locale,
   register = writtenRegister,
 }: {
   subscription: SubscriptionStatusRow | null;
   checkout: CheckoutConfig;
+  /** The tier the studio is on now; the line is left out when absent. */
+  plan?: ResolvedPlan | null;
   organizationId: string;
   locale: AppLocale;
   /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
@@ -50,8 +69,9 @@ export function BillingSettings({
   const paddlePrices = checkout.paddle ? paddlePlanPrices(checkout.paddle.environment) : null;
 
   return (
-    <section className="panel">
+    <section className="panel" id="subscription">
       <h2>{t("billing.title")}</h2>
+      {plan ? <p>{t("billing.current", { plan: currentPlanLabel(plan, locale, register) })}</p> : null}
       {subscription ? (
         <div>
           <p>

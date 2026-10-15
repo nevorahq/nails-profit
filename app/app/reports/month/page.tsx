@@ -20,6 +20,8 @@ import { isMonth, loadPeriodPL, monthBounds } from "@/lib/period";
 import { firstUnansweredHref, loadMoneyAnswers } from "@/lib/money-answers";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
 import { requireWorkspace } from "@/lib/workspace";
+import { PlanNotice } from "@/components/plan-notice";
+import { organizationAllows } from "@/lib/plan";
 
 /**
  * The month, line by line.
@@ -55,7 +57,8 @@ export default async function MonthReportPage({
   // follows, so a hand-edited query string cannot decide what is queried.
   // The month the studio is in by its own clock, the same one `/app` opens on.
   const thisMonth = currentMonthIn(new Date(), timezone);
-  const month = isMonth(filters.month) ? filters.month : thisMonth;
+  const fullReports = await organizationAllows(membership.organizationId, "full_reports");
+  const month = fullReports && isMonth(filters.month) ? filters.month : thisMonth;
 
   /*
    * The report, and the one fact that decides whether it can be believed.
@@ -176,12 +179,16 @@ export default async function MonthReportPage({
         {t("pl.eyebrow")} · {monthLabel}
       </span>
 
-      <MonthPicker
-        locale={locale}
-        localeTag={localeCode}
-        month={month}
-        thisMonth={thisMonth}
-      />
+      {fullReports ? (
+        <MonthPicker
+          locale={locale}
+          localeTag={localeCode}
+          month={month}
+          thisMonth={thisMonth}
+        />
+      ) : (
+        <PlanNotice feature="full_reports" locale={locale} register={register} />
+      )}
 
       {soloWithoutPrincipal && (
         <div className="warning-banner">

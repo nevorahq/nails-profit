@@ -18,6 +18,7 @@ import {
   type StaffNotificationTemplate,
 } from "@/lib/notification-message";
 import { can, scopeFor } from "@/domain/rbac";
+import { planAllowsFeature } from "@/lib/plan";
 import { isPushTemplate } from "@/lib/push-message";
 import { devicesOf, isPushOn } from "@/lib/push-subscriptions";
 import { recordStaffNotice, type StaffNoticeKind } from "@/lib/staff-notices";
@@ -714,6 +715,15 @@ export async function notifyBooking(
     smsReplacesEmail(input.template, input.causedBy ?? booking.cancelledBy)
   ) {
     channels.push("sms");
+  }
+
+  /*
+   * «Старт» speaks to clients by email only: every SMS is a message the studio
+   * pays for through us, so it starts with «Соло». A client the studio has no
+   * address for hears nothing on «Старт», which is the tier's stated limit.
+   */
+  if (channels.includes("sms") && !(await planAllowsFeature(tx, input.organizationId, "sms"))) {
+    channels.splice(channels.indexOf("sms"), 1);
   }
 
   for (const channel of channels) {
