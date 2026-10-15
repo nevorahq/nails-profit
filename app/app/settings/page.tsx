@@ -17,7 +17,7 @@ import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReac
 import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mode";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
-import { fetchPaddlePlan, fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
+import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
 import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 import { registerOf } from "@/i18n/lexicon";
@@ -113,8 +113,6 @@ export default async function SettingsPage({
     paddle: getPaddleCheckoutConfig(),
     lemonSqueezyUrl: getLemonSqueezyCheckoutUrl(),
   };
-  // Only worth a round trip to Paddle while there is a button to put it on.
-  const plan = !subscription && checkout.paddle ? await fetchPaddlePlan(checkout.paddle.priceId) : null;
 
   const memberRows = canReadTeam
     ? await db
@@ -190,7 +188,6 @@ export default async function SettingsPage({
       )}
       {canReadOrg && (
         <BillingSettings
-          plan={plan}
           register={register}
           subscription={subscription}
           checkout={checkout}

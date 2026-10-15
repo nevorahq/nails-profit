@@ -1,8 +1,11 @@
 # Paddle billing — sandbox build & live migration
 
 Living record of the Paddle catalog and the sandbox → live ID mapping. Built
-from scratch (no prior sandbox integration existed). Approved tariffs: see the
-Aug 2026 pricing decision (Solo/Studio/Business × 1/3/6-month prepay, EUR).
+from scratch (no prior sandbox integration existed). Approved tariffs: the
+Oct 2026 grid in `domain/plans.ts` — free Start, then Solo/Studio/Business at
+€9/€19/€39 a month, one price for every country, with 6 months charged as 5 and
+12 as 9. The Aug 2026 grid (€17/29/59 × 1/3/6) is archived in sandbox and still
+active in live.
 
 ## Product
 
@@ -18,24 +21,67 @@ prices.
 
 ## Prices
 
-All: `billing_cycle` interval `month`; 7-day cardless trial
-(`trial_period` day/7, `requires_payment_method: false`); `quantity` 1–1;
-`custom_data` `{ tier, period_months }`; base currency EUR.
+### October grid (current)
 
-| Tier | Period | Amount | `custom_data` | Sandbox price id | Live price id |
-| --- | --- | --- | --- | --- | --- |
-| Solo | monthly | €17.00 | `{solo,1}` | `pri_01m1f59x9xj6dqjr83k9ch37gq` | `pri_01m1faf7x95662ycy6pmfze4nb` |
-| Solo | 3 months | €46.00 | `{solo,3}` | `pri_01m1f59xg46469jgmv289rwqft` | `pri_01m1faf820hm4zk1jb76y3xz93` |
-| Solo | 6 months | €89.00 | `{solo,6}` | `pri_01m1f59y18ycjndxcrde31c6e6` | `pri_01m1faf86ht61b9995rr95rxrv` |
-| Studio | monthly | €29.00 | `{studio,1}` | `pri_01m1f59y75gq0krywss3thsmhf` | `pri_01m1faf8be4d3gs18jd34915py` |
-| Studio | 3 months | €76.00 | `{studio,3}` | `pri_01m1f59yqgwr91k3ymyxv1w9e6` | `pri_01m1faf8g5q4ge7rett0txe4qd` |
-| Studio | 6 months | €149.00 | `{studio,6}` | `pri_01m1f59ywp1wf819g2xf8jkpq8` | `pri_01m1faf8ngeca09hkd9t0td6ag` |
-| Business | monthly | €59.00 | `{business,1}` | `pri_01m1f59z1td2capxr7v040a3p1` | `pri_01m1faf8t3z2ad77p3dt04t035` |
-| Business | 3 months | €156.00 | `{business,3}` | `pri_01m1f59z77rrqcfxyjrsg36pgz` | `pri_01m1faf8ysvezt8c267d7pa6bf` |
-| Business | 6 months | €299.00 | `{business,6}` | `pri_01m1f59zcasg1fz3f7s713tbtj` | `pri_01m1faf93frp5ezdehs9ap2zd5` |
+All: `billing_cycle` interval `month`, frequency = period; **no Paddle trial**
+(the 14-day Studio trial runs in the app, before checkout); base currency EUR;
+`tax_mode` `location` — the amount includes VAT where Paddle charges it (B2C in
+Moldova: €9 is €7.50 + €1.50 VAT). The app maps price ids in
+`lib/paddle-catalog.ts`; the amounts must match `domain/plans.ts`.
 
-Not built yet: per-seat add-on prices (+€7/master Studio; +€5/master +€15/address
-Business), launch discount codes.
+Plan prices — `quantity` 1–1, `custom_data` `{ tier, period_months }`:
+
+| Tier | Period | Amount | Sandbox price id | Live price id |
+| --- | --- | --- | --- | --- |
+| Solo | monthly | €9.00 | `pri_01m4zfy4kmaqvb7yeehndg6dg5` | — |
+| Solo | 6 months | €45.00 | `pri_01m4zfy4ssqw1e5cxjhq0txbnh` | — |
+| Solo | 12 months | €81.00 | `pri_01m4zfy4z47ept293pzaza7v72` | — |
+| Studio | monthly | €19.00 | `pri_01m4zfy545j0c13nwewzq7apc6` | — |
+| Studio | 6 months | €95.00 | `pri_01m4zfy599jm1neh74ysqhc8mf` | — |
+| Studio | 12 months | €171.00 | `pri_01m4zfy5eacyjd4jndvqy3t3xk` | — |
+| Business | monthly | €39.00 | `pri_01m4zfy5kebm2fdmt1bnqzcjan` | — |
+| Business | 6 months | €195.00 | `pri_01m4zfy5rrqxats5ypg6n8n0r2` | — |
+| Business | 12 months | €351.00 | `pri_01m4zfy5y2zxfe90gdreqc5r55` | — |
+
+Add-on prices — `quantity` 1–100, `custom_data` `{ addon, tier, period_months }`.
+Created, not yet used by the app (seat counting comes with plan limits):
+
+| Add-on | monthly | 6 months | 12 months |
+| --- | --- | --- | --- |
+| Studio: specialist beyond 3 (€4) | `pri_01m4zfy6326ahd15s96zjae46r` | `pri_01m4zfy684q3aa53y4zz7757ty` | `pri_01m4zfy6dcwmb215hzmx2rjkgp` |
+| Business: specialist beyond 8 (€3) | `pri_01m4zfy6jfm6z5y7pvn1k9dh9x` | `pri_01m4zfy721z49rtg2z0bzj6ca6` | `pri_01m4zfy774mbdkpnrz7kx3zb2g` |
+| Business: location beyond 3 (€10) | `pri_01m4zfy7bzyar3508vxbt25hfm` | `pri_01m4zfy7vh1bp6mktcn50wjc1y` | `pri_01m4zfy80gaysd8xxfjaq8xmv6` |
+
+### Founder discount
+
+| | Sandbox | Live |
+| --- | --- | --- |
+| id | `dsc_01m4zfy9jq1adcmdxw0q6vn2wt` | — |
+| code | `FOUNDER30` | — |
+| terms | −30%, `recur: true`, `maximum_recurring_intervals: null` (forever), `usage_limit: 100`, restricted to the 18 October prices | |
+
+Checked with `pricingPreview` (MD address): Business 12 months €351 → €245.70;
+Solo monthly €9 → €6.30. Paddle counts redemptions at completed checkouts, so
+two checkouts open at the hundredth seat can both pass; unset
+`NEXT_PUBLIC_PADDLE_DISCOUNT_CODE` once `times_used` reaches 100.
+
+### August grid (archived in sandbox, active in live)
+
+Same structure with a 7-day cardless Paddle trial. Sandbox ids archived
+2026-10-15; live ids below are to be archived when the live October catalog is
+created.
+
+| Tier | Period | Amount | Sandbox (archived) | Live |
+| --- | --- | --- | --- | --- |
+| Solo | monthly | €17.00 | `pri_01m1f59x9xj6dqjr83k9ch37gq` | `pri_01m1faf7x95662ycy6pmfze4nb` |
+| Solo | 3 months | €46.00 | `pri_01m1f59xg46469jgmv289rwqft` | `pri_01m1faf820hm4zk1jb76y3xz93` |
+| Solo | 6 months | €89.00 | `pri_01m1f59y18ycjndxcrde31c6e6` | `pri_01m1faf86ht61b9995rr95rxrv` |
+| Studio | monthly | €29.00 | `pri_01m1f59y75gq0krywss3thsmhf` | `pri_01m1faf8be4d3gs18jd34915py` |
+| Studio | 3 months | €76.00 | `pri_01m1f59yqgwr91k3ymyxv1w9e6` | `pri_01m1faf8g5q4ge7rett0txe4qd` |
+| Studio | 6 months | €149.00 | `pri_01m1f59ywp1wf819g2xf8jkpq8` | `pri_01m1faf8ngeca09hkd9t0td6ag` |
+| Business | monthly | €59.00 | `pri_01m1f59z1td2capxr7v040a3p1` | `pri_01m1faf8t3z2ad77p3dt04t035` |
+| Business | 3 months | €156.00 | `pri_01m1f59z77rrqcfxyjrsg36pgz` | `pri_01m1faf8ysvezt8c267d7pa6bf` |
+| Business | 6 months | €299.00 | `pri_01m1f59zcasg1fz3f7s713tbtj` | `pri_01m1faf93frp5ezdehs9ap2zd5` |
 
 ## Client-side token (Paddle.js checkout init)
 
@@ -68,7 +114,7 @@ live subscription events until verification and domain approval pass anyway.
 | --- | --- | --- |
 | `NEXT_PUBLIC_PADDLE_ENVIRONMENT` | `sandbox` | `live` (or unset) |
 | `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | `test_23216d3863dd1a93f6829435c2d` | `live_e796ae904096bb9100b29107445` |
-| `NEXT_PUBLIC_PADDLE_PRICE_ID` | `pri_01m1f59x9xj6dqjr83k9ch37gq` (Solo monthly) | `pri_01m1faf7x95662ycy6pmfze4nb` (Solo monthly) — until the tier picker lands |
+| `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE` | `FOUNDER30` | `FOUNDER30` once the live discount exists; unset at 100 redemptions |
 | `PADDLE_WEBHOOK_SECRET` | sandbox `endpoint_secret_key` | live `endpoint_secret_key` (from destination `ntfset_01m1fafssd8t7rev6nw731cpgb`) |
 | `PADDLE_API_KEY` | `pdl_sdbx_…` | `pdl_live_…` (the MCP key; needs `subscription.read` for the manage-link fetch) |
 | `PADDLE_WEBHOOK_IP_ALLOWLIST` | `false` (tunnel isn't a Paddle IP) | `true` |
@@ -143,12 +189,15 @@ Nothing deleted, archived or recreated.
 ## Still to do for live
 
 - **Netlify env vars** — see the mapping table above. Nothing lands until they're set.
-- **Code points at live automatically** once `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is
-  unset/`live`: no hardcoded `pri_` ids or `sandbox-api.paddle.com` in the tree —
-  `getPaddleApiConfig` already switches the API host on that one var.
+- **Live October catalog** — create the 9 plan prices, 9 add-on prices and the
+  `FOUNDER30` discount in live (same shape as sandbox), archive the 9 August
+  live prices, and fill `live` in `lib/paddle-catalog.ts`. Until then the
+  settings page draws no checkout when `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is live.
+- **The API host follows the environment**: `getPaddleApiConfig` switches it on
+  `NEXT_PUBLIC_PADDLE_ENVIRONMENT`, and the price ids are picked per environment
+  in `lib/paddle-catalog.ts`.
 - **Deploy** — the webhook route (`app/api/v1/webhooks/paddle`) isn't on
   `nailsprofit.nevorahq.com` yet.
-- Tier/period picker → checkout with the right price id (today: one hard-wired price).
 - `pwCustomer: { id: 'ctm_…' }` in `Paddle.Initialize()` for Retain, once the
   signed-in customer has a Paddle customer id.
 - Server-side Paddle API client for upgrade/downgrade/cancel (extends `lib/paddle-api.ts`).

@@ -4,6 +4,17 @@ import Link from "next/link";
 import Image from "next/image";
 import { useMemo, useState } from "react";
 
+import {
+  addOnMonthlyPriceMinor,
+  billingPeriods,
+  effectiveMonthlyPriceMinor,
+  founderOffer,
+  periodPriceMinor,
+  periodSavingPercent,
+  planTiers,
+  signupTrial,
+  type BillingPeriod,
+} from "@/domain/plans";
 import type { AppLocale } from "@/i18n/messages";
 
 type PricingPlanCopy = {
@@ -63,9 +74,13 @@ type Copy = {
   pricingSaveLabel: string;
   pricingCta: string;
   pricingTrial: string;
+  pricingStartTerms: string;
+  pricingStartCta: string;
+  pricingStartNote: string;
   pricingFeaturedBadge: string;
+  /** `{studioSpecialist}`, `{businessSpecialist}`, `{businessLocation}`, `{seats}`, `{percent}`, `{code}` and `{days}` are filled from `domain/plans.ts`. */
   pricingNote: string;
-  pricingTiers: readonly [PricingPlanCopy, PricingPlanCopy, PricingPlanCopy];
+  pricingTiers: readonly [PricingPlanCopy, PricingPlanCopy, PricingPlanCopy, PricingPlanCopy];
   footer: string;
   privacy: string;
   terms: string;
@@ -73,24 +88,16 @@ type Copy = {
 
 /**
  * The subscription the studio pays for the tool, distinct from the MDL visit
- * economics above it: one price per studio, billed in EUR through Paddle, on
- * the approved Solo/Studio/Business line with 1/3/6-month prepay. Amounts are
- * locale-independent — only the labels below are translated.
+ * economics above it: one price for every country, billed in EUR through
+ * Paddle, on the October grid — a free «Старт» and Solo/Studio/Business with
+ * 1/6/12-month prepay. Every amount comes from `domain/plans.ts`; only the
+ * labels below are translated.
  */
-type PricingPeriod = 1 | 3 | 6;
-const pricingPeriods: readonly [PricingPeriod, PricingPeriod, PricingPeriod] = [1, 3, 6];
+const featuredTier = "studio";
 
-type PricingTier = {
-  readonly id: "solo" | "studio" | "business";
-  readonly totals: Readonly<Record<PricingPeriod, number>>;
-  readonly featured?: boolean;
-};
-
-const pricingTiers: readonly [PricingTier, PricingTier, PricingTier] = [
-  { id: "solo", totals: { 1: 17, 3: 46, 6: 89 } },
-  { id: "studio", totals: { 1: 29, 3: 76, 6: 149 }, featured: true },
-  { id: "business", totals: { 1: 59, 3: 156, 6: 299 } },
-];
+function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in values ? String(values[name]) : match));
+}
 
 /** Euro, symbol first, whole numbers bare and part-euros to the cent. */
 function formatEuro(amount: number, locale: AppLocale): string {
@@ -147,29 +154,42 @@ const content: Record<AppLocale, Copy> = {
     finalTitle: "Узнайте, сколько на самом деле приносит каждая услуга.",
     finalBody: "Соберите первый расчёт и получите основу для понятных решений о цене и команде.",
     pricingEyebrow: "Тарифы",
-    pricingTitle: "Один тариф на студию. Без процента с выручки.",
+    pricingTitle: "Начните бесплатно. Без процента с выручки.",
     pricingBody:
-      "Оплата за инструмент, а не за каждую транзакцию. Себестоимость и маржа — на всех тарифах; выше только команда, адреса и маркетинг.",
+      "Запись, календарь и прибыль по каждому визиту — бесплатно для одного мастера. Платные тарифы открывают полные отчёты, расходы, команду и адреса.",
     pricingPeriodGroupLabel: "Период оплаты",
-    pricingPeriodLabels: ["Помесячно", "3 месяца", "6 месяцев"],
+    pricingPeriodLabels: ["Помесячно", "6 месяцев", "12 месяцев"],
     pricingPerMonth: "в месяц",
     pricingBilledMonthly: "Оплата каждый месяц",
     pricingFor: "за",
     pricingSaveLabel: "экономия",
     pricingCta: "Попробовать бесплатно",
-    pricingTrial: "7 дней бесплатно, карта не нужна",
+    pricingTrial: "{days} дней «Студии» бесплатно, карта не нужна",
+    pricingStartTerms: "Бесплатно, без срока",
+    pricingStartCta: "Начать бесплатно",
+    pricingStartNote: "Без карты. Перейти на платный тариф можно в любой момент",
     pricingFeaturedBadge: "Популярный",
     pricingNote:
-      "Цены в евро, оплата через Paddle. В «Студии» — +€7 в месяц за каждого мастера сверх трёх; в «Бизнесе» — +€5 за мастера и +€15 за дополнительный адрес.",
+      "Цены в евро, одни для всех стран, оплата через Paddle. 6 месяцев стоят как 5, 12 — как 9. В «Студии» — +{studioSpecialist} в месяц за каждого мастера сверх трёх; в «Бизнесе» — +{businessSpecialist} за мастера и +{businessLocation} за дополнительный адрес. Первым {seats} студиям — −{percent}% на всё время подписки по коду {code}.",
     pricingTiers: [
+      {
+        name: "Старт",
+        audience: "Один мастер, чтобы начать",
+        features: [
+          "Онлайн-запись, календарь и клиенты",
+          "Прибыль по каждому визиту",
+          "Отчёт за последние 30 дней",
+          "Напоминания клиентам по email",
+        ],
+      },
       {
         name: "Соло",
         audience: "Один мастер, один адрес",
         features: [
+          "Всё из «Старта»",
+          "Отчёты за любой период: маржа и прибыль в час",
           "Материалы — по закупкам или суммой на услугу",
-          "Отчёты: маржа и прибыль в час",
-          "Учёт расходов студии",
-          "История клиентов и визитов",
+          "Учёт расходов и импорт клиентов",
         ],
       },
       {
@@ -177,9 +197,9 @@ const content: Record<AppLocale, Copy> = {
         audience: "Небольшая команда на одном адресе",
         features: [
           "Всё из «Соло»",
-          "До 3 мастеров, дальше — за доплату",
+          "3 мастера, дальше +{studioSpecialist} в месяц за каждого",
           "Роли и управление командой",
-          "Правила комиссий по каждому мастеру",
+          "Комиссии и аренда кресла по каждому мастеру",
         ],
       },
       {
@@ -187,9 +207,9 @@ const content: Record<AppLocale, Copy> = {
         audience: "Несколько адресов и большая команда",
         features: [
           "Всё из «Студии»",
-          "До 8 мастеров и 3 адреса",
-          "Маркетинговые кампании",
-          "Экспорт данных",
+          "До 8 мастеров и 3 адресов",
+          "Отдельная онлайн-запись на каждый адрес",
+          "Помощь с переездом из другой системы",
         ],
       },
     ],
@@ -242,29 +262,42 @@ const content: Record<AppLocale, Copy> = {
     finalTitle: "Aflați ce aduce cu adevărat fiecare serviciu.",
     finalBody: "Faceți primul calcul și luați decizii mai clare despre preț și echipă.",
     pricingEyebrow: "Prețuri",
-    pricingTitle: "Un abonament pe salon. Fără comision din încasări.",
+    pricingTitle: "Începeți gratuit. Fără comision din încasări.",
     pricingBody:
-      "Plătiți pentru instrument, nu pentru fiecare tranzacție. Costul și marja sunt pe toate planurile; diferă doar echipa, adresele și marketingul.",
+      "Programări, calendar și profitul fiecărei vizite — gratuit pentru un specialist. Planurile plătite deschid rapoartele complete, cheltuielile, echipa și adresele.",
     pricingPeriodGroupLabel: "Perioada de plată",
-    pricingPeriodLabels: ["Lunar", "3 luni", "6 luni"],
+    pricingPeriodLabels: ["Lunar", "6 luni", "12 luni"],
     pricingPerMonth: "pe lună",
     pricingBilledMonthly: "Plată în fiecare lună",
     pricingFor: "pentru",
     pricingSaveLabel: "economie",
     pricingCta: "Încearcă gratuit",
-    pricingTrial: "7 zile gratuit, fără card",
+    pricingTrial: "{days} zile de «Studio» gratuit, fără card",
+    pricingStartTerms: "Gratuit, fără termen",
+    pricingStartCta: "Începe gratuit",
+    pricingStartNote: "Fără card. Treceți la un plan plătit oricând",
     pricingFeaturedBadge: "Popular",
     pricingNote:
-      "Prețuri în euro, plată prin Paddle. La «Studio» — +€7 pe lună pentru fiecare specialist peste trei; la «Business» — +€5 pe specialist și +€15 pe adresă suplimentară.",
+      "Prețuri în euro, aceleași pentru toate țările, plată prin Paddle. 6 luni costă cât 5, 12 — cât 9. La «Studio» — +{studioSpecialist} pe lună pentru fiecare specialist peste trei; la «Business» — +{businessSpecialist} pe specialist și +{businessLocation} pe adresă suplimentară. Primele {seats} saloane primesc −{percent}% pe toată durata abonamentului cu codul {code}.",
     pricingTiers: [
+      {
+        name: "Start",
+        audience: "Un specialist, pentru început",
+        features: [
+          "Programări online, calendar și clienți",
+          "Profitul fiecărei vizite",
+          "Raport pentru ultimele 30 de zile",
+          "Mementouri pentru clienți pe email",
+        ],
+      },
       {
         name: "Solo",
         audience: "Un specialist, o adresă",
         features: [
+          "Tot din «Start»",
+          "Rapoarte pentru orice perioadă: marjă și profit pe oră",
           "Materialele — din achiziții sau ca sumă pe serviciu",
-          "Rapoarte: marjă și profit pe oră",
-          "Evidența cheltuielilor salonului",
-          "Istoricul clienților și al vizitelor",
+          "Evidența cheltuielilor și importul clienților",
         ],
       },
       {
@@ -272,9 +305,9 @@ const content: Record<AppLocale, Copy> = {
         audience: "Echipă mică la o singură adresă",
         features: [
           "Tot din «Solo»",
-          "Până la 3 specialiști, apoi contra cost",
+          "3 specialiști, apoi +{studioSpecialist} pe lună pentru fiecare",
           "Roluri și gestionarea echipei",
-          "Reguli de comision pentru fiecare specialist",
+          "Comisioane și chirie de scaun pentru fiecare specialist",
         ],
       },
       {
@@ -283,8 +316,8 @@ const content: Record<AppLocale, Copy> = {
         features: [
           "Tot din «Studio»",
           "Până la 8 specialiști și 3 adrese",
-          "Campanii de marketing",
-          "Export de date",
+          "Programări online separate pentru fiecare adresă",
+          "Ajutor la mutarea din alt sistem",
         ],
       },
     ],
@@ -337,29 +370,42 @@ const content: Record<AppLocale, Copy> = {
     finalTitle: "Find out what every service really brings in.",
     finalBody: "Build your first calculation and make clearer decisions about price and your team.",
     pricingEyebrow: "Pricing",
-    pricingTitle: "One subscription per studio. No cut of your revenue.",
+    pricingTitle: "Start free. No cut of your revenue.",
     pricingBody:
-      "Pay for the tool, not for every transaction. Costing and margin are on every plan — only team, locations, and marketing change.",
+      "Bookings, calendar and the profit of every visit — free for one specialist. Paid plans open full reports, expenses, the team and extra locations.",
     pricingPeriodGroupLabel: "Billing period",
-    pricingPeriodLabels: ["Monthly", "3 months", "6 months"],
+    pricingPeriodLabels: ["Monthly", "6 months", "12 months"],
     pricingPerMonth: "per month",
     pricingBilledMonthly: "Billed every month",
     pricingFor: "for",
     pricingSaveLabel: "saved",
     pricingCta: "Start free trial",
-    pricingTrial: "7 days free, no card",
+    pricingTrial: "{days} days of Studio free, no card",
+    pricingStartTerms: "Free, no time limit",
+    pricingStartCta: "Start free",
+    pricingStartNote: "No card. Move to a paid plan any time",
     pricingFeaturedBadge: "Most popular",
     pricingNote:
-      "Prices in euro, billed through Paddle. Studio adds €7/month per specialist beyond three; Business adds €5 per specialist and €15 per extra location.",
+      "Prices in euro, the same in every country, billed through Paddle. Six months cost five, twelve cost nine. Studio adds {studioSpecialist}/month per specialist beyond three; Business adds {businessSpecialist} per specialist and {businessLocation} per extra location. The first {seats} studios keep −{percent}% for as long as they subscribe, with code {code}.",
     pricingTiers: [
+      {
+        name: "Start",
+        audience: "One specialist, getting started",
+        features: [
+          "Online booking, calendar and clients",
+          "Profit of every visit",
+          "Report for the last 30 days",
+          "Client reminders by email",
+        ],
+      },
       {
         name: "Solo",
         audience: "One specialist, one location",
         features: [
+          "Everything in Start",
+          "Reports for any period: margin and profit per hour",
           "Materials from purchases or as an amount per service",
-          "Reports: margin and profit per hour",
-          "Studio expense ledger",
-          "Client and visit history",
+          "Expense ledger and client import",
         ],
       },
       {
@@ -367,9 +413,9 @@ const content: Record<AppLocale, Copy> = {
         audience: "A small team at a single location",
         features: [
           "Everything in Solo",
-          "Up to 3 specialists, more for a fee",
+          "3 specialists, then +{studioSpecialist}/month each",
           "Roles and team management",
-          "Commission rules per specialist",
+          "Commissions and chair rent per specialist",
         ],
       },
       {
@@ -378,8 +424,8 @@ const content: Record<AppLocale, Copy> = {
         features: [
           "Everything in Studio",
           "Up to 8 specialists and 3 locations",
-          "Marketing campaigns",
-          "Data export",
+          "Separate online booking for each location",
+          "Help moving from another system",
         ],
       },
     ],
@@ -399,7 +445,7 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
   const [price, setPrice] = useState(600);
   const [taxes, setTaxes] = useState(42);
   const [commission, setCommission] = useState(240);
-  const [pricingPeriod, setPricingPeriod] = useState<PricingPeriod>(1);
+  const [pricingPeriod, setPricingPeriod] = useState<BillingPeriod>(1);
 
   const demo = mode === "studio" ? { price: 600, taxes: 42, commission: 240 } : { price: 600, taxes: 42, commission: 0 };
   const takeHome = useMemo(() => Math.max(0, price - taxes - commission), [price, taxes, commission]);
@@ -515,7 +561,7 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
           <h2>{copy.pricingTitle}</h2>
           <p>{copy.pricingBody}</p>
           <div className="pricing-period" role="group" aria-label={copy.pricingPeriodGroupLabel}>
-            {pricingPeriods.map((months, index) => (
+            {billingPeriods.map((months, index) => (
               <button
                 key={months}
                 type="button"
@@ -530,14 +576,16 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
         </div>
 
         <div className="pricing-grid">
-          {pricingTiers.map((tier, index) => {
+          {planTiers.map((tier, index) => {
             const plan = copy.pricingTiers[index];
-            const total = tier.totals[pricingPeriod];
-            const perMonth = total / pricingPeriod;
-            const saved = Math.round((1 - total / (tier.totals[1] * pricingPeriod)) * 100);
+            const free = tier === "start";
+            const total = periodPriceMinor(tier, pricingPeriod) / 100;
+            const perMonth = effectiveMonthlyPriceMinor(tier, pricingPeriod) / 100;
+            const saved = periodSavingPercent(pricingPeriod);
+            const featured = tier === featuredTier;
             return (
-              <article key={tier.id} className={`pricing-card${tier.featured ? " featured" : ""}`}>
-                {tier.featured && <span className="pricing-badge">{copy.pricingFeaturedBadge}</span>}
+              <article key={tier} className={`pricing-card${featured ? " featured" : ""}`}>
+                {featured && <span className="pricing-badge">{copy.pricingFeaturedBadge}</span>}
                 <div className="pricing-tier">
                   <h3>{plan.name}</h3>
                   <p>{plan.audience}</p>
@@ -547,12 +595,14 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
                   <span>{copy.pricingPerMonth}</span>
                 </div>
                 <p key={pricingPeriod} className="pricing-terms">
-                  {pricingPeriod === 1 ? (
+                  {free ? (
+                    copy.pricingStartTerms
+                  ) : pricingPeriod === 1 ? (
                     copy.pricingBilledMonthly
                   ) : (
                     <>
                       {formatEuro(total, locale)} {copy.pricingFor}{" "}
-                      {copy.pricingPeriodLabels[pricingPeriod === 3 ? 1 : 2]}
+                      {copy.pricingPeriodLabels[billingPeriods.indexOf(pricingPeriod)]}
                       {saved > 0 && (
                         <b className="pricing-save" aria-label={`${saved}% ${copy.pricingSaveLabel}`}>
                           −{saved}%
@@ -563,19 +613,29 @@ export function LandingExperience({ locale }: { locale: AppLocale }) {
                 </p>
                 <ul className="pricing-features">
                   {plan.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
+                    <li key={feature}>{fill(feature, { studioSpecialist: formatEuro(addOnMonthlyPriceMinor.studio.specialist / 100, locale) })}</li>
                   ))}
                 </ul>
                 <Link className="marketing-cta pricing-cta" href="/login?mode=signup">
-                  {copy.pricingCta}<span aria-hidden="true">↗</span>
+                  {free ? copy.pricingStartCta : copy.pricingCta}<span aria-hidden="true">↗</span>
                 </Link>
-                <small>{copy.pricingTrial}</small>
+                <small>{fill(free ? copy.pricingStartNote : copy.pricingTrial, { days: signupTrial.days })}</small>
               </article>
             );
           })}
         </div>
 
-        <p className="pricing-note">{copy.pricingNote}</p>
+        <p className="pricing-note">
+          {fill(copy.pricingNote, {
+            studioSpecialist: formatEuro(addOnMonthlyPriceMinor.studio.specialist / 100, locale),
+            businessSpecialist: formatEuro(addOnMonthlyPriceMinor.business.specialist / 100, locale),
+            businessLocation: formatEuro(addOnMonthlyPriceMinor.business.location / 100, locale),
+            seats: founderOffer.seats,
+            percent: founderOffer.percentOff,
+            code: founderOffer.code,
+            days: signupTrial.days,
+          })}
+        </p>
       </section>
 
       <section className="marketing-final section-wrap marketing-reveal">

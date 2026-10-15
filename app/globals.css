@@ -357,8 +357,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 /*
  * Pricing: the studio's own subscription, not the MDL visit economics above it.
- * One price per studio on the Solo/Studio/Business line, billed in euro, with a
- * 1/3/6-month prepay switch that only changes what the cards read. «Студия» is
+ * The free Start and the Solo/Studio/Business line, billed in euro, with a
+ * 1/6/12-month prepay switch that only changes what the cards read. «Студия» is
  * the featured plan and carries the section's one dark panel, the same
  * treatment the calculator card uses.
  */
@@ -370,7 +370,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pricing-period button { min-height: 38rem; padding: 0 18rem; border: 0; border-radius: 4rem; background: transparent; color: var(--marketing-muted); font-size: 12rem; font-weight: 700; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
 .pricing-period button:hover { color: var(--marketing-ink); }
 .pricing-period button.active { background: var(--marketing-surface); color: var(--marketing-ink); box-shadow: 0 2rem 8rem var(--neu-dark-soft); }
-.pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24rem; align-items: start; }
+.pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20rem; align-items: start; }
 /*
  * The cards enter staggered. This is on `translate` (its own property), not
  * `transform`, so the resting lift on the featured card and the lift on hover —
@@ -380,6 +380,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pricing-card { position: relative; display: flex; flex-direction: column; gap: 16rem; padding: 32rem 28rem; border: 1rem solid var(--marketing-line); border-radius: 4rem; background: var(--marketing-surface); animation: pricing-card-in var(--duration-slow) var(--ease-standard) both; transition: transform var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard), border-color var(--duration-base) var(--ease-standard); }
 .pricing-card:nth-child(2) { animation-delay: 80ms; }
 .pricing-card:nth-child(3) { animation-delay: 160ms; }
+.pricing-card:nth-child(4) { animation-delay: 240ms; }
 @keyframes pricing-card-in { from { opacity: 0; translate: 0 20rem; } }
 /* A hover is an input, so it belongs to the standard motion system. The plain
  * cards lift; the featured one is already raised and only deepens its shadow,
@@ -416,8 +417,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 /* These overrides follow the base rules above rather than joining the shared
  * marketing media blocks higher up the file: same specificity, so source order
  * decides, and a later base rule would otherwise win over an earlier @media. */
-@media (max-width: 900px) {
-  .pricing-grid { grid-template-columns: 1fr; max-width: 680rem; margin: 0 auto; }
+@media (max-width: 1180px) {
+  .pricing-grid { grid-template-columns: repeat(2, 1fr); max-width: 760rem; margin: 0 auto; }
   .pricing-card.featured { transform: none; }
 }
 @media (max-width: 680px) {
@@ -426,7 +427,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .pricing-head h2 { font-size: 37rem; }
   .pricing-period { display: flex; width: 100%; }
   .pricing-period button { flex: 1; padding: 0 8rem; }
-  .pricing-grid { gap: 18rem; }
+  .pricing-grid { grid-template-columns: 1fr; gap: 18rem; }
   .pricing-card { padding: 26rem 22rem; }
   .pricing-price strong { font-size: 38rem; }
 }

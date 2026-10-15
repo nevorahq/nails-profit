@@ -84,27 +84,40 @@ test.describe("landing experience", () => {
     await page.goto("/");
 
     const cards = page.locator(".pricing-card");
-    await expect(cards).toHaveCount(3);
-    // The middle plan is the featured one and stays that way across periods.
-    await expect(cards.nth(1)).toHaveClass(/featured/);
+    await expect(cards).toHaveCount(4);
+    // Studio is the featured plan and stays that way across periods.
+    await expect(cards.nth(2)).toHaveClass(/featured/);
 
-    // Default is month-to-month: the sticker price is the monthly amount.
-    await expect(cards.nth(0).locator(".pricing-price strong")).toHaveText("€17");
-    await expect(cards.nth(1).locator(".pricing-price strong")).toHaveText("€29");
-    await expect(cards.nth(2).locator(".pricing-price strong")).toHaveText("€59");
-    await expect(cards.nth(1).locator(".pricing-terms")).toHaveText("Billed every month");
+    // Default is month-to-month: the sticker price is the monthly amount, and
+    // Start is free whatever the period.
+    await expect(cards.nth(0).locator(".pricing-price strong")).toHaveText("€0");
+    await expect(cards.nth(0).locator(".pricing-terms")).toHaveText("Free, no time limit");
+    await expect(cards.nth(1).locator(".pricing-price strong")).toHaveText("€9");
+    await expect(cards.nth(2).locator(".pricing-price strong")).toHaveText("€19");
+    await expect(cards.nth(3).locator(".pricing-price strong")).toHaveText("€39");
+    await expect(cards.nth(2).locator(".pricing-terms")).toHaveText("Billed every month");
     await expect(page.locator(".pricing-save")).toHaveCount(0);
 
-    // Six-month prepay drops the headline to the effective monthly rate and
-    // names the amount actually charged.
+    // Six months cost five: the headline drops to the effective monthly rate
+    // and the terms name the amount actually charged.
     await page.getByRole("button", { name: "6 months" }).click();
-    await expect(cards.nth(0).locator(".pricing-price strong")).toHaveText("€14.83");
-    await expect(cards.nth(1).locator(".pricing-price strong")).toHaveText("€24.83");
-    await expect(cards.nth(1).locator(".pricing-terms")).toContainText("€149 for 6 months");
-    await expect(cards.nth(1).locator(".pricing-save")).toContainText("14%");
+    await expect(cards.nth(1).locator(".pricing-price strong")).toHaveText("€7.50");
+    await expect(cards.nth(2).locator(".pricing-price strong")).toHaveText("€15.83");
+    await expect(cards.nth(2).locator(".pricing-terms")).toContainText("€95 for 6 months");
+    await expect(cards.nth(2).locator(".pricing-save")).toContainText("17%");
+    await expect(cards.nth(0).locator(".pricing-price strong")).toHaveText("€0");
 
+    // Twelve cost nine.
+    await page.getByRole("button", { name: "12 months" }).click();
+    await expect(cards.nth(3).locator(".pricing-price strong")).toHaveText("€29.25");
+    await expect(cards.nth(3).locator(".pricing-terms")).toContainText("€351 for 12 months");
+    await expect(cards.nth(3).locator(".pricing-save")).toContainText("25%");
+
+    await expect(cards.nth(0).getByRole("link", { name: /Start free/ })).toHaveAttribute("href", "/login?mode=signup");
     await expect(
-      cards.nth(1).getByRole("link", { name: /Start free trial/ }),
+      cards.nth(2).getByRole("link", { name: /Start free trial/ }),
     ).toHaveAttribute("href", "/login?mode=signup");
+    await expect(cards.nth(2)).toContainText("14 days of Studio free, no card");
+    await expect(page.locator(".pricing-note")).toContainText("code FOUNDER30");
   });
 });

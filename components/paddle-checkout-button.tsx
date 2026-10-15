@@ -12,6 +12,7 @@ declare global {
         open: (options: {
           items: { priceId: string; quantity: number }[];
           customData?: Record<string, string>;
+          discountCode?: string;
         }) => void;
       };
     };
@@ -32,12 +33,15 @@ export function PaddleCheckoutButton({
   priceId,
   environment,
   organizationId,
+  discountCode = null,
   label,
 }: {
   clientToken: string;
   priceId: string;
   environment: "sandbox" | "live";
   organizationId: string;
+  /** Prefilled in the checkout's discount field; the studio can still clear it. */
+  discountCode?: string | null;
   label: string;
 }) {
   const [ready, setReady] = useState(false);
@@ -60,6 +64,7 @@ export function PaddleCheckoutButton({
           window.Paddle?.Checkout.open({
             items: [{ priceId, quantity: 1 }],
             customData: { organization_id: organizationId },
+            ...(discountCode ? { discountCode } : {}),
           })
         }
       >
