@@ -158,6 +158,14 @@ export async function organizationAllows(organizationId: string, feature: PlanFe
   return withTenant(organizationId, (tx) => planAllowsFeature(tx, organizationId, feature));
 }
 
+/** For a page: whether one more master or address fits the studio's tier. */
+export async function organizationHasRoom(organizationId: string, what: "specialist" | "location"): Promise<boolean> {
+  if (!isPlanLimitsEnforced()) return true;
+  return withTenant(organizationId, (tx) =>
+    what === "specialist" ? hasRoomForSpecialist(tx, organizationId) : hasRoomForLocation(tx, organizationId),
+  );
+}
+
 export async function planFeatureRefusal(organizationId: string, feature: PlanFeature, id: string) {
   return (await organizationAllows(organizationId, feature)) ? null : planRefusal(id, feature);
 }

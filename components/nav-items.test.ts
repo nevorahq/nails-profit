@@ -211,3 +211,13 @@ describe("active section", () => {
     }
   });
 });
+
+describe("quickActionsFor and the tariff", () => {
+  it("offers no expense form to a studio whose tariff adds none", () => {
+    const keys = (expensesOff: boolean) =>
+      quickActionsFor("owner", { bookingOff: false, expensesOff }).map((action) => action.key);
+    expect(keys(false)).toContain("quick.expense");
+    expect(keys(true)).not.toContain("quick.expense");
+    expect(keys(true)).toContain("quick.visit");
+  });
+});

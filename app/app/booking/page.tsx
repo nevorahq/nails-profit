@@ -19,6 +19,7 @@ import { alternativeSlots, loadSlotContext } from "@/lib/availability-service";
 import { loadMonthGuide } from "@/lib/onboarding";
 import { monthOf } from "@/lib/period";
 import { requireWorkspace } from "@/lib/workspace";
+import { organizationHasRoom } from "@/lib/plan";
 import type { MemberRole } from "@/domain/rbac";
 
 /**
@@ -226,6 +227,11 @@ export default async function BookingSetupPage() {
     };
   });
 
+  // Only the people who may open an address are told the tariff has no room for one.
+  const locationRoom = can(membership.role, "organization_settings", "write")
+    ? await organizationHasRoom(membership.organizationId, "location")
+    : true;
+
   return (
     <main className="app-shell">
       <BookingSetup
@@ -246,6 +252,7 @@ export default async function BookingSetupPage() {
         ownSpecialistId={ownSpecialistId}
         locale={locale}
       businessType={businessType}
+        locationLimited={!locationRoom}
       />
     </main>
   );

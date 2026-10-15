@@ -77,7 +77,7 @@ export default async function PayoutsPage({ searchParams }: { searchParams: Prom
           path="/app/reports/payouts"
         />
       ) : (
-        <PlanNotice feature="full_reports" locale={locale} register={register} />
+        <PlanNotice limit="full_reports" locale={locale} register={register} />
       )}
 
       {ledger.tracking ? (

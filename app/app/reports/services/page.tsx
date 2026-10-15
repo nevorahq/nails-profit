@@ -131,7 +131,7 @@ export default async function ServicesReportPage({
           presets={{ ranges: presetRanges(today), active: period.preset }}
         />
       ) : (
-        <PlanNotice feature="full_reports" locale={locale} register={register} />
+        <PlanNotice limit="full_reports" locale={locale} register={register} />
       )}
 
       {/* The studio's share per service — not a master's to read. */}

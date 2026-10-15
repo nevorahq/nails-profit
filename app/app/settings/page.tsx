@@ -18,7 +18,7 @@ import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mo
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadUpcomingByUser } from "@/lib/team-workload";
 import { fetchPaddleSubscriptionManageUrl } from "@/lib/paddle-api";
-import { loadOrganizationPlan } from "@/lib/plan";
+import { loadOrganizationPlan, organizationAllows } from "@/lib/plan";
 import { AccountDeletion } from "@/components/account-deletion";
 import { requireWorkspace } from "@/lib/workspace";
 import { registerOf } from "@/i18n/lexicon";
@@ -110,6 +110,7 @@ export default async function SettingsPage({
       }
     : null;
 
+  const teamAllowed = canReadTeam ? await organizationAllows(membership.organizationId, "team") : true;
   const plan = canReadOrg
     ? await withTenant(membership.organizationId, (tx) => loadOrganizationPlan(tx, membership.organizationId))
     : null;
@@ -223,6 +224,7 @@ export default async function SettingsPage({
            * server; this only keeps the control from being offered.
            */
           canPreview={membership.role === "owner" && membership.preview === null}
+          inviteLimited={!teamAllowed}
           /*
            * Read on the server because the answer belongs to the deployment,
            * not the browser: `window.location.origin` would call a tunnel or a

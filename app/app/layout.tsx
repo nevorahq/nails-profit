@@ -12,6 +12,7 @@ import { registerOf } from "@/i18n/lexicon";
 import { getActiveMembership } from "@/lib/membership";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { readPreviewCookie } from "@/lib/preview-request";
+import { organizationAllows } from "@/lib/plan";
 
 /**
  * The shell for every signed-in screen.
@@ -90,6 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }
         stalePreview={stalePreview}
         bookingOff={organization?.bookingAccess === "off"}
+        expensesOff={!(await organizationAllows(caller.membership.organizationId, "expenses"))}
       >
         {children}
       </AppShell>

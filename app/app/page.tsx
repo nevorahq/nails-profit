@@ -594,7 +594,7 @@ export default async function AppPage({
           showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
         />
       ) : (
-        <PlanNotice feature="full_reports" locale={locale} register={register} />
+        <PlanNotice limit="full_reports" locale={locale} register={register} />
       )}
 
       {/*

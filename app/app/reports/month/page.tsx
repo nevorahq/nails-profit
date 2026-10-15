@@ -187,7 +187,7 @@ export default async function MonthReportPage({
           thisMonth={thisMonth}
         />
       ) : (
-        <PlanNotice feature="full_reports" locale={locale} register={register} />
+        <PlanNotice limit="full_reports" locale={locale} register={register} />
       )}
 
       {soloWithoutPrincipal && (
