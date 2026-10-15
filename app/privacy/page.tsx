@@ -1,4 +1,5 @@
 import { LegalDocument } from "@/components/legal-document";
+import { getLegalEntityName, getSupportEmail } from "@/env";
 import { getTranslator } from "@/i18n/t";
 import { PRIVACY_VERSION } from "@/lib/legal";
 import { privacyContent } from "@/lib/legal-content";
@@ -14,6 +15,7 @@ export default async function PrivacyPage() {
       title={t("legal.privacyTitle")}
       version={PRIVACY_VERSION}
       document={privacyContent[locale]}
+      operator={{ name: getLegalEntityName(), email: getSupportEmail() }}
     />
   );
 }

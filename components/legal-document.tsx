@@ -9,11 +9,14 @@ export function LegalDocument({
   title,
   version,
   document,
+  operator,
 }: {
   locale: AppLocale;
   title: string;
   version: string;
   document: LegalDocumentContent;
+  /** Who is selling and where to write; either may be missing. */
+  operator: { name: string | null; email: string | null };
 }) {
   const t = getTranslator(locale);
 
@@ -27,7 +30,6 @@ export function LegalDocument({
           <span className="eyebrow">Nail Profit OS</span>
           <h1>{title}</h1>
           <p className="muted">{t("legal.updated", { date: version })}</p>
-          <p className="warning-banner">{t("legal.pilotReview")}</p>
           <p>{document.intro}</p>
         </header>
         {document.sections.map((section) => (
@@ -45,6 +47,22 @@ export function LegalDocument({
             )}
           </section>
         ))}
+        {operator.name || operator.email ? (
+          <section>
+            <h2>{t("legal.operator")}</h2>
+            {operator.name ? <p>{operator.name}</p> : null}
+            {operator.email ? (
+              <p>
+                {t("legal.contact")}: <a href={`mailto:${operator.email}`}>{operator.email}</a>
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+        <nav className="legal-links" aria-label={t("legal.operator")}>
+          <Link href="/terms">{t("legal.termsTitle")}</Link>
+          <Link href="/privacy">{t("legal.privacyTitle")}</Link>
+          <Link href="/refund">{t("legal.refundTitle")}</Link>
+        </nav>
       </article>
     </main>
   );
