@@ -20,7 +20,7 @@ import { getTranslator } from "@/i18n/t";
 import { localeTag } from "@/i18n/translate";
 import type { paddlePlanPrices } from "@/lib/paddle-catalog";
 
-type PlanPrices = NonNullable<ReturnType<typeof paddlePlanPrices>>;
+type PlanPrices = ReturnType<typeof paddlePlanPrices>;
 
 export function formatEuroMinor(amountMinor: number, locale: AppLocale) {
   return new Intl.NumberFormat(localeTag(locale), {

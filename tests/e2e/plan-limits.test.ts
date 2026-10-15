@@ -19,6 +19,12 @@ import { createCanonicalStudio, type Studio } from "../helpers/studio";
  * Nothing it made during the trial is taken away — a second master stays on
  * file, and simply takes no new appointments.
  */
+/** Puts an environment variable back as it was — unset stays unset, not "undefined". */
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
 describe("tariff limits", () => {
   let studio: Studio;
   let secondId: string;
@@ -69,8 +75,8 @@ describe("tariff limits", () => {
   });
 
   afterAll(async () => {
-    process.env.PLAN_LIMITS_ENFORCEMENT = previous.enforcement;
-    process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT = previous.environment;
+    restoreEnv("PLAN_LIMITS_ENFORCEMENT", previous.enforcement);
+    restoreEnv("NEXT_PUBLIC_PADDLE_ENVIRONMENT", previous.environment);
     await closeTestConnections();
   });
 
@@ -232,13 +238,34 @@ describe("tariff limits", () => {
       expect(invitation.status).toBeLessThan(300);
     });
 
+    test("a pilot studio past its free Studio is on Start like everyone else", async () => {
+      await adminDb.insert(pilotEnrollments).values({
+        organizationId: studio.organizationId,
+        wave: "design_partner",
+        status: "active",
+        operatorRef: "plan-limits-test",
+      });
+      const before = process.env.PILOT_FREE_UNTIL;
+      process.env.PILOT_FREE_UNTIL = "2026-01-31";
+      try {
+        expect(await planNow()).toMatchObject({ tier: "start", source: "free" });
+        const invitation = await studio.owner.post("/api/v1/invitations", {
+          email: "late-pilot-colleague@studio.example",
+          role: "manager",
+        });
+        expect(invitation.status).toBe(402);
+      } finally {
+        restoreEnv("PILOT_FREE_UNTIL", before);
+      }
+    });
+
     test("a Solo subscription opens expenses but not the team", async () => {
       await adminDb.insert(organizationSubscriptions).values({
         organizationId: studio.organizationId,
         provider: "paddle",
         providerCustomerId: "ctm_plan_limits_test",
         providerSubscriptionId: "sub_plan_limits_test",
-        providerPriceId: paddlePlanPrices("sandbox")!.solo[12],
+        providerPriceId: paddlePlanPrices("sandbox").solo[12],
         status: "active",
       });
       expect(await planNow()).toEqual({ tier: "solo", source: "subscription", trialEndsAt: null });
@@ -264,7 +291,7 @@ describe("tariff limits", () => {
         provider: "paddle",
         providerCustomerId: "ctm_plan_limits_test",
         providerSubscriptionId: "sub_plan_limits_canceled",
-        providerPriceId: paddlePlanPrices("sandbox")!.business[1],
+        providerPriceId: paddlePlanPrices("sandbox").business[1],
         status: "canceled",
       });
       expect(await planNow()).toMatchObject({ tier: "start", source: "free" });

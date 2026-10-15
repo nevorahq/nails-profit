@@ -4,8 +4,8 @@ Living record of the Paddle catalog and the sandbox → live ID mapping. Built
 from scratch (no prior sandbox integration existed). Approved tariffs: the
 Oct 2026 grid in `domain/plans.ts` — free Start, then Solo/Studio/Business at
 €9/€19/€39 a month, one price for every country, with 6 months charged as 5 and
-12 as 9. The Aug 2026 grid (€17/29/59 × 1/3/6) is archived in sandbox and still
-active in live.
+12 as 9. Both environments have it. The Aug 2026 grid (€17/29/59 × 1/3/6) is
+archived in sandbox and still active in live until the new build is published.
 
 ## Product
 
@@ -33,35 +33,38 @@ Plan prices — `quantity` 1–1, `custom_data` `{ tier, period_months }`:
 
 | Tier | Period | Amount | Sandbox price id | Live price id |
 | --- | --- | --- | --- | --- |
-| Solo | monthly | €9.00 | `pri_01m4zfy4kmaqvb7yeehndg6dg5` | — |
-| Solo | 6 months | €45.00 | `pri_01m4zfy4ssqw1e5cxjhq0txbnh` | — |
-| Solo | 12 months | €81.00 | `pri_01m4zfy4z47ept293pzaza7v72` | — |
-| Studio | monthly | €19.00 | `pri_01m4zfy545j0c13nwewzq7apc6` | — |
-| Studio | 6 months | €95.00 | `pri_01m4zfy599jm1neh74ysqhc8mf` | — |
-| Studio | 12 months | €171.00 | `pri_01m4zfy5eacyjd4jndvqy3t3xk` | — |
-| Business | monthly | €39.00 | `pri_01m4zfy5kebm2fdmt1bnqzcjan` | — |
-| Business | 6 months | €195.00 | `pri_01m4zfy5rrqxats5ypg6n8n0r2` | — |
-| Business | 12 months | €351.00 | `pri_01m4zfy5y2zxfe90gdreqc5r55` | — |
+| Solo | monthly | €9.00 | `pri_01m4zfy4kmaqvb7yeehndg6dg5` | `pri_01m4zt661j5enyv3483bm76yfr` |
+| Solo | 6 months | €45.00 | `pri_01m4zfy4ssqw1e5cxjhq0txbnh` | `pri_01m4zt6672aecd2pbdv7xssgms` |
+| Solo | 12 months | €81.00 | `pri_01m4zfy4z47ept293pzaza7v72` | `pri_01m4zt66c30cgggs29gcf3c1m7` |
+| Studio | monthly | €19.00 | `pri_01m4zfy545j0c13nwewzq7apc6` | `pri_01m4zt66h1btny5bxrqzre9ydc` |
+| Studio | 6 months | €95.00 | `pri_01m4zfy599jm1neh74ysqhc8mf` | `pri_01m4zt66p2gkny9k7zp0q1r0pr` |
+| Studio | 12 months | €171.00 | `pri_01m4zfy5eacyjd4jndvqy3t3xk` | `pri_01m4zt66v5kcczg72bj6kcgqxh` |
+| Business | monthly | €39.00 | `pri_01m4zfy5kebm2fdmt1bnqzcjan` | `pri_01m4zt6705t57dhw9b6nfvvp7e` |
+| Business | 6 months | €195.00 | `pri_01m4zfy5rrqxats5ypg6n8n0r2` | `pri_01m4zt675c905bj05de80tz9sr` |
+| Business | 12 months | €351.00 | `pri_01m4zfy5y2zxfe90gdreqc5r55` | `pri_01m4zt67and6cbxyn5zp15n5x0` |
 
 Add-on prices — `quantity` 1–100, `custom_data` `{ addon, tier, period_months }`.
 Created, not yet used by the app (seat counting comes with plan limits):
 
-| Add-on | monthly | 6 months | 12 months |
-| --- | --- | --- | --- |
-| Studio: specialist beyond 3 (€4) | `pri_01m4zfy6326ahd15s96zjae46r` | `pri_01m4zfy684q3aa53y4zz7757ty` | `pri_01m4zfy6dcwmb215hzmx2rjkgp` |
-| Business: specialist beyond 8 (€3) | `pri_01m4zfy6jfm6z5y7pvn1k9dh9x` | `pri_01m4zfy721z49rtg2z0bzj6ca6` | `pri_01m4zfy774mbdkpnrz7kx3zb2g` |
-| Business: location beyond 3 (€10) | `pri_01m4zfy7bzyar3508vxbt25hfm` | `pri_01m4zfy7vh1bp6mktcn50wjc1y` | `pri_01m4zfy80gaysd8xxfjaq8xmv6` |
+| Add-on | Env | monthly | 6 months | 12 months |
+| --- | --- | --- | --- | --- |
+| Studio: specialist beyond 3 (€4) | sandbox | `pri_01m4zfy6326ahd15s96zjae46r` | `pri_01m4zfy684q3aa53y4zz7757ty` | `pri_01m4zfy6dcwmb215hzmx2rjkgp` |
+| | live | `pri_01m4zt67fx2p56v95kmr80cm6y` | `pri_01m4zt67nfhnbt5wk0h8v8hbhv` | `pri_01m4zt67tnnz7esp1yg7zxqbqx` |
+| Business: specialist beyond 8 (€3) | sandbox | `pri_01m4zfy6jfm6z5y7pvn1k9dh9x` | `pri_01m4zfy721z49rtg2z0bzj6ca6` | `pri_01m4zfy774mbdkpnrz7kx3zb2g` |
+| | live | `pri_01m4zt67zv61tfvj4846xyxbyc` | `pri_01m4zt685289htbdy8vj85b9hn` | `pri_01m4zt68mz63rmwfrmrj0f1zab` |
+| Business: location beyond 3 (€10) | sandbox | `pri_01m4zfy7bzyar3508vxbt25hfm` | `pri_01m4zfy7vh1bp6mktcn50wjc1y` | `pri_01m4zfy80gaysd8xxfjaq8xmv6` |
+| | live | `pri_01m4zt68t5ew9w4dqjvgzsk551` | `pri_01m4zt68z0sy7wm8mb2c98pssm` | `pri_01m4zt6944va6reshw4chc0ve9` |
 
 ### Founder discount
 
 | | Sandbox | Live |
 | --- | --- | --- |
-| id | `dsc_01m4zfy9jq1adcmdxw0q6vn2wt` | — |
-| code | `FOUNDER30` | — |
-| terms | −30%, `recur: true`, `maximum_recurring_intervals: null` (forever), `usage_limit: 100`, restricted to the 18 October prices | |
+| id | `dsc_01m4zfy9jq1adcmdxw0q6vn2wt` | `dsc_01m4zt6992qsgw2c6t9ehpc74b` |
+| code | `FOUNDER30` | `FOUNDER30` |
+| terms | −30%, `recur: true`, `maximum_recurring_intervals: null` (forever), `usage_limit: 100`, restricted to the 18 October prices | same, restricted to the 18 live October prices |
 
-Checked with `pricingPreview` (MD address): Business 12 months €351 → €245.70;
-Solo monthly €9 → €6.30. Paddle counts redemptions at completed checkouts, so
+Checked with `pricingPreview` (MD address) in both environments: Business 12
+months €351 → €245.70; Solo monthly €9 → €6.30. Paddle counts redemptions at completed checkouts, so
 two checkouts open at the hundredth seat can both pass; unset
 `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE` once `times_used` reaches 100.
 
@@ -186,13 +189,35 @@ subscriptions**). Replicated additively via the `paddle-live` MCP:
 
 Nothing deleted, archived or recreated.
 
+## Going live with the October grid
+
+In this order — each step is safe on its own, and the limits come last, once a
+studio can pay its way past them.
+
+1. **Live catalog** — done 2026-10-15: the 9 plan prices, the 9 add-on prices
+   and `FOUNDER30`, ids in the tables above and in `lib/paddle-catalog.ts`.
+   The August live prices stay **active** for now: production still runs the
+   old build, whose button opens `pri_01m1faf7x95662ycy6pmfze4nb` through
+   `NEXT_PUBLIC_PADDLE_PRICE_ID`.
+2. **Merge and publish** the three branches (reprice → limits → pilots), then
+   publish the deploy by hand — production publishing is manual.
+3. **Netlify, production context:** unset `NEXT_PUBLIC_PADDLE_PRICE_ID` (the
+   build no longer reads it); set `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE=FOUNDER30`;
+   set `PILOT_FREE_UNTIL` to the last free day for pilots, three months from
+   the day billing goes live.
+4. **Archive the 9 August live prices** — only now, once nothing opens them.
+5. **Turn the limits on:** `PLAN_LIMITS_ENFORCEMENT=true`. Studios older than
+   14 days without a subscription or an open pilot move to Start the moment it
+   is set; they lose nothing they have, only what Start does not include.
+6. Watch `FOUNDER30`'s `times_used`; unset `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE`
+   at 100.
+
+`SUBSCRIPTION_ACCESS_ENFORCEMENT` is gone: with a free Start a studio without a
+subscription is never locked out. It was never set in production.
+
 ## Still to do for live
 
 - **Netlify env vars** — see the mapping table above. Nothing lands until they're set.
-- **Live October catalog** — create the 9 plan prices, 9 add-on prices and the
-  `FOUNDER30` discount in live (same shape as sandbox), archive the 9 August
-  live prices, and fill `live` in `lib/paddle-catalog.ts`. Until then the
-  settings page draws no checkout when `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is live.
 - **The API host follows the environment**: `getPaddleApiConfig` switches it on
   `NEXT_PUBLIC_PADDLE_ENVIRONMENT`, and the price ids are picked per environment
   in `lib/paddle-catalog.ts`.

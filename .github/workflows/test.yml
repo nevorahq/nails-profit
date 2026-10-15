@@ -67,7 +67,6 @@ jobs:
       NOTIFICATIONS_ENABLED: "true"
       NOTIFICATION_PROVIDER: log
       SMS_PROVIDER: log
-      SUBSCRIPTION_ACCESS_ENFORCEMENT: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
