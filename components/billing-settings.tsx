@@ -1,9 +1,9 @@
-import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
+import { PlanCheckout } from "@/components/plan-checkout";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { writtenRegister, type Register } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
-import type { PaddlePlan } from "@/lib/paddle-api";
+import { paddlePlanPrices } from "@/lib/paddle-catalog";
 
 export type SubscriptionStatusRow = {
   provider: "paddle" | "lemon_squeezy";
@@ -13,7 +13,7 @@ export type SubscriptionStatusRow = {
 };
 
 export type CheckoutConfig = {
-  paddle: { clientToken: string; priceId: string; environment: "sandbox" | "live" } | null;
+  paddle: { clientToken: string; environment: "sandbox" | "live"; discountCode: string | null } | null;
   lemonSqueezyUrl: string | null;
 };
 
@@ -24,48 +24,30 @@ function lemonSqueezyCheckoutHref(baseUrl: string, organizationId: string) {
 }
 
 /**
- * The one button's text: «Оформить подписку», and the tariff with its price
- * when the provider told us one — «Оформить подписку · Студия, €29 в месяц».
- * Without a plan it is the bare action, never a price made up.
- */
-export function startLabel(plan: PaddlePlan | null, locale: AppLocale, register: Register = writtenRegister) {
-  const t = getTranslator(locale, register);
-  if (!plan) return t("billing.start");
-
-  const price = new Intl.NumberFormat(localeTag(locale), {
-    style: "currency",
-    currency: plan.currency,
-    minimumFractionDigits: plan.amountMinor % 100 === 0 ? 0 : 2,
-  }).format(plan.amountMinor / 100);
-  const priced = plan.interval ? t(`billing.price.${plan.interval}`, { price }) : price;
-  return t("billing.startPlan", { plan: plan.name ? `${plan.name}, ${priced}` : priced });
-}
-
-/**
- * Starting a subscription is one button, whichever provider answers behind it.
- * Paddle and Lemon Squeezy are both wired (see the payments research
+ * Starting a subscription is one checkout, whichever provider answers behind
+ * it. Paddle and Lemon Squeezy are both wired (see the payments research
  * artifact), but a studio has no use for two ways to do one thing: Paddle is
- * the main one, and Lemon Squeezy's link is only drawn when Paddle is not set
- * up, so no button opens a checkout for a product that does not exist yet.
+ * the main one, with a choice of tier and period over its catalog, and Lemon
+ * Squeezy's link is only drawn when Paddle is not set up. An environment with
+ * no catalog in `lib/paddle-catalog.ts` draws neither, so no button opens a
+ * checkout for a price that does not exist.
  */
 export function BillingSettings({
   subscription,
   checkout,
-  plan = null,
   organizationId,
   locale,
   register = writtenRegister,
 }: {
   subscription: SubscriptionStatusRow | null;
   checkout: CheckoutConfig;
-  /** What Paddle says the checkout's price is, when it said. */
-  plan?: PaddlePlan | null;
   organizationId: string;
   locale: AppLocale;
   /** Who is reading — see `i18n/lexicon.ts`. The dictionary as written when absent. */
   register?: Register;
 }) {
   const t = getTranslator(locale, register);
+  const paddlePrices = checkout.paddle ? paddlePlanPrices(checkout.paddle.environment) : null;
 
   return (
     <section className="panel">
@@ -91,17 +73,17 @@ export function BillingSettings({
       ) : (
         <div>
           <p className="muted">{t("billing.none")}</p>
-          {checkout.paddle ? (
-            <div className="button-row">
-              <PaddleCheckoutButton
-                clientToken={checkout.paddle.clientToken}
-                priceId={checkout.paddle.priceId}
-                environment={checkout.paddle.environment}
-                organizationId={organizationId}
-                label={startLabel(plan, locale, register)}
-              />
-            </div>
-          ) : checkout.lemonSqueezyUrl ? (
+          {checkout.paddle && paddlePrices ? (
+            <PlanCheckout
+              clientToken={checkout.paddle.clientToken}
+              environment={checkout.paddle.environment}
+              prices={paddlePrices}
+              organizationId={organizationId}
+              discountCode={checkout.paddle.discountCode}
+              locale={locale}
+              register={register}
+            />
+          ) : !checkout.paddle && checkout.lemonSqueezyUrl ? (
             <div className="button-row">
               <a className="primary-button" href={lemonSqueezyCheckoutHref(checkout.lemonSqueezyUrl, organizationId)}>
                 {t("billing.start")}

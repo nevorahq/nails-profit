@@ -153,8 +153,9 @@ export function getLemonSqueezyWebhookSecret() {
  * The "start subscription" button's own configuration — public by nature,
  * same as a Stripe publishable key: Paddle's own docs call this a
  * client-side token, safe to ship in the browser bundle, unlike
- * `PADDLE_WEBHOOK_SECRET` above. `null` (either value unset) hides the button
- * rather than rendering one that opens a checkout for nothing real.
+ * `PADDLE_WEBHOOK_SECRET` above. `null` (token unset) hides the checkout
+ * rather than rendering one that opens for nothing real. Which price each
+ * tier opens is not configuration: see `lib/paddle-catalog.ts`.
  *
  * `environment` is `sandbox` only when `NEXT_PUBLIC_PADDLE_ENVIRONMENT` is
  * exactly `sandbox`; anything else (including unset) is `live`, which is
@@ -164,11 +165,13 @@ export function getLemonSqueezyWebhookSecret() {
  */
 export function getPaddleCheckoutConfig() {
   const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN?.trim();
-  const priceId = process.env.NEXT_PUBLIC_PADDLE_PRICE_ID?.trim();
-  if (!clientToken || !priceId) return null;
+  if (!clientToken) return null;
   const environment: "sandbox" | "live" =
     process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT?.trim() === "sandbox" ? "sandbox" : "live";
-  return { clientToken, priceId, environment };
+  // The founder code to prefill at checkout while the offer is open; unset it
+  // once Paddle reports the hundredth redemption, and checkout opens clean.
+  const discountCode = process.env.NEXT_PUBLIC_PADDLE_DISCOUNT_CODE?.trim() || null;
+  return { clientToken, environment, discountCode };
 }
 
 /** Same reasoning as `getPaddleCheckoutConfig`, for Lemon Squeezy's plain hosted-checkout link. */
