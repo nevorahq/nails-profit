@@ -4,8 +4,8 @@ Living record of the Paddle catalog and the sandbox → live ID mapping. Built
 from scratch (no prior sandbox integration existed). Approved tariffs: the
 Oct 2026 grid in `domain/plans.ts` — free Start, then Solo/Studio/Business at
 €9/€19/€39 a month, one price for every country, with 6 months charged as 5 and
-12 as 9. Both environments have it. The Aug 2026 grid (€17/29/59 × 1/3/6) is
-archived in sandbox and still active in live until the new build is published.
+12 as 9. Both environments have it, and production runs it since 2026-10-15
+(`7711329`). The Aug 2026 grid (€17/29/59 × 1/3/6) is archived in both.
 
 ## Product
 
@@ -68,11 +68,12 @@ months €351 → €245.70; Solo monthly €9 → €6.30. Paddle counts redemp
 two checkouts open at the hundredth seat can both pass; unset
 `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE` once `times_used` reaches 100.
 
-### August grid (archived in sandbox, active in live)
+### August grid (archived)
 
-Same structure with a 7-day cardless Paddle trial. Sandbox ids archived
-2026-10-15; live ids below are to be archived when the live October catalog is
-created.
+Same structure with a 7-day cardless Paddle trial. Archived 2026-10-15 in both
+environments — sandbox when the October sandbox catalog was built, live once
+the build that no longer opens them was published. No subscription was ever
+on them.
 
 | Tier | Period | Amount | Sandbox (archived) | Live |
 | --- | --- | --- | --- | --- |
@@ -108,8 +109,9 @@ Public value — safe in the browser bundle (ships to every checkout page).
 
 Live destination is **create-once**: recreating rotates `endpoint_secret_key`
 and breaks delivery verification. Reuse an existing one; never delete. The
-route at that URL is not deployed yet — Paddle will 404 and retry; there are no
-live subscription events until verification and domain approval pass anyway.
+route is live on production (checked 2026-10-15: `GET` → 405, an unsigned
+`POST` from outside Paddle's addresses → 403 from the IP allowlist); no live
+subscription events arrive until domain approval passes.
 
 ## Env var mapping
 
@@ -117,7 +119,7 @@ live subscription events until verification and domain approval pass anyway.
 | --- | --- | --- |
 | `NEXT_PUBLIC_PADDLE_ENVIRONMENT` | `sandbox` | `live` (or unset) |
 | `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` | `test_23216d3863dd1a93f6829435c2d` | `live_e796ae904096bb9100b29107445` |
-| `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE` | `FOUNDER30` | `FOUNDER30` once the live discount exists; unset at 100 redemptions |
+| `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE` | `FOUNDER30` | `FOUNDER30` (not yet set — step 4 of "Going live"); unset at 100 redemptions |
 | `PADDLE_WEBHOOK_SECRET` | sandbox `endpoint_secret_key` | live `endpoint_secret_key` (from destination `ntfset_01m1fafssd8t7rev6nw731cpgb`) |
 | `PADDLE_API_KEY` | `pdl_sdbx_…` | `pdl_live_…` (the MCP key; needs `subscription.read` for the manage-link fetch) |
 | `PADDLE_WEBHOOK_IP_ALLOWLIST` | `false` (tunnel isn't a Paddle IP) | `true` |
@@ -194,22 +196,26 @@ Nothing deleted, archived or recreated.
 In this order — each step is safe on its own, and the limits come last, once a
 studio can pay its way past them.
 
-1. **Live catalog** — done 2026-10-15: the 9 plan prices, the 9 add-on prices
-   and `FOUNDER30`, ids in the tables above and in `lib/paddle-catalog.ts`.
-   The August live prices stay **active** for now: production still runs the
-   old build, whose button opens `pri_01m1faf7x95662ycy6pmfze4nb` through
-   `NEXT_PUBLIC_PADDLE_PRICE_ID`.
-2. **Merge and publish** the three branches (reprice → limits → pilots), then
-   publish the deploy by hand — production publishing is manual.
-3. **Netlify, production context:** unset `NEXT_PUBLIC_PADDLE_PRICE_ID` (the
-   build no longer reads it); set `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE=FOUNDER30`;
-   set `PILOT_FREE_UNTIL` to the last free day for pilots, three months from
-   the day billing goes live.
-4. **Archive the 9 August live prices** — only now, once nothing opens them.
-5. **Turn the limits on:** `PLAN_LIMITS_ENFORCEMENT=true`. Studios older than
-   14 days without a subscription or an open pilot move to Start the moment it
-   is set; they lose nothing they have, only what Start does not include.
-6. Watch `FOUNDER30`'s `times_used`; unset `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE`
+1. ✅ **Live catalog** — 2026-10-15: the 9 plan prices, the 9 add-on prices and
+   `FOUNDER30`, ids in the tables above and in `lib/paddle-catalog.ts`.
+2. ✅ **Merge and publish** — PRs #87–#89 merged and `7711329` published by
+   hand on 2026-10-15 (no migrations; the auto-publish lock stays on).
+3. ✅ **Archive the 9 August live prices** — 2026-10-15, after the publish.
+4. ⏳ **Netlify, production context** — then rebuild and publish once, since
+   Netlify hands variables to the build:
+   - set `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE=FOUNDER30` — until then checkout
+     opens without the code and a studio has to type it;
+   - unset `NEXT_PUBLIC_PADDLE_PRICE_ID` — nothing reads it any more;
+   - `PILOT_FREE_UNTIL` — the pilots' last free day as `YYYY-MM-DD`, three
+     months after checkout really works (step 5), not before. A malformed value
+     throws and takes the settings page down with it.
+5. ⏳ **Checkout domain approval** in the Paddle dashboard — without it the live
+   checkout does not open on `nailsprofit.nevorahq.com`.
+6. ⏳ **Turn the limits on:** `PLAN_LIMITS_ENFORCEMENT=true`, only after step 5.
+   Studios older than 14 days without a subscription or an open pilot move to
+   Start the moment it is set; they lose nothing they have, only what Start
+   does not include.
+7. Watch `FOUNDER30`'s `times_used`; unset `NEXT_PUBLIC_PADDLE_DISCOUNT_CODE`
    at 100.
 
 `SUBSCRIPTION_ACCESS_ENFORCEMENT` is gone: with a free Start a studio without a
@@ -217,14 +223,13 @@ subscription is never locked out. It was never set in production.
 
 ## Still to do for live
 
-- **Netlify env vars** — see the mapping table above. Nothing lands until they're set.
+- **Netlify env vars** — step 4 above.
 - **The API host follows the environment**: `getPaddleApiConfig` switches it on
   `NEXT_PUBLIC_PADDLE_ENVIRONMENT`, and the price ids are picked per environment
   in `lib/paddle-catalog.ts`.
-- **Deploy** — the webhook route (`app/api/v1/webhooks/paddle`) isn't on
-  `nailsprofit.nevorahq.com` yet.
 - `pwCustomer: { id: 'ctm_…' }` in `Paddle.Initialize()` for Retain, once the
   signed-in customer has a Paddle customer id.
 - Server-side Paddle API client for upgrade/downgrade/cancel (extends `lib/paddle-api.ts`).
 - Dashboard (live): payment methods, default payment link, submit
-  `nailsprofit.nevorahq.com` for domain approval, bank/payout details.
+  `nailsprofit.nevorahq.com` for domain approval (step 5 above), bank/payout
+  details.
