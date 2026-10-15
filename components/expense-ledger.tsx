@@ -13,7 +13,8 @@ import { materialsModeFor, type MaterialsModePeriod } from "@/domain/materials-m
 import type { ExpenseRow } from "@/lib/expenses";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
-import { useTranslator } from "@/components/lexicon-provider";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
+import { PlanNotice } from "@/components/plan-notice";
 import { SectionEmpty } from "@/components/section-empty";
 import {
   SetupGuideDialog,
@@ -41,6 +42,7 @@ export function ExpenseLedger({
   monthGuide = null,
   materialsPeriods = [],
   currentMonth = null,
+  addLimited = false,
 }: {
   expenses: ExpenseRow[];
   locale: AppLocale;
@@ -63,8 +65,11 @@ export function ExpenseLedger({
   materialsPeriods?: readonly MaterialsModePeriod[];
   /** `YYYY-MM` a recurring row is judged in — it is paid every month. */
   currentMonth?: string | null;
+  /** The studio's tariff adds no expenses: the form gives way to a notice. */
+  addLimited?: boolean;
 }) {
   const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
+  const register = useRegister();
   /*
    * The panel: nothing on the page until the header opens it — the anchors
    * `app/app/expenses/page.tsx` renders are the *only* control (`.header-action`
@@ -115,22 +120,26 @@ export function ExpenseLedger({
         strings="monthGuide"
         doneHref="/app/reports/month"
       />
-      <div className={`compose-wrap${open ? "" : " is-closed"}`} id="add-expense" ref={panel}>
-        <div className="compose-inner">
-          <ExpenseForm
-            locale={locale}
-            currency={currency}
-            detailedAnalytics={detailedAnalytics}
-            onAdded={() => {
-              setOpen(false);
-              // Asked of the server, not assumed: an expense in another
-              // currency, or one the month does not contain, finishes no step.
-              void guide.check();
-            }}
-          />
+      {addLimited ? (
+        <PlanNotice limit="expenses" locale={locale} register={register} />
+      ) : (
+        <div className={`compose-wrap${open ? "" : " is-closed"}`} id="add-expense" ref={panel}>
+          <div className="compose-inner">
+            <ExpenseForm
+              locale={locale}
+              currency={currency}
+              detailedAnalytics={detailedAnalytics}
+              onAdded={() => {
+                setOpen(false);
+                // Asked of the server, not assumed: an expense in another
+                // currency, or one the month does not contain, finishes no step.
+                void guide.check();
+              }}
+            />
+          </div>
         </div>
-      </div>
-      <ExpenseTable expenses={expenses} locale={locale} businessType={businessType} materialsPeriods={materialsPeriods} currentMonth={currentMonth} />
+      )}
+      <ExpenseTable expenses={expenses} locale={locale} businessType={businessType} materialsPeriods={materialsPeriods} currentMonth={currentMonth} addLimited={addLimited} />
     </>
   );
 }
@@ -391,12 +400,15 @@ function ExpenseTable({
   businessType,
   materialsPeriods,
   currentMonth,
+  addLimited,
 }: {
   expenses: ExpenseRow[];
   locale: AppLocale;
   businessType: BusinessType;
   materialsPeriods: readonly MaterialsModePeriod[];
   currentMonth: string | null;
+  /** No form to open, so the empty table offers none. */
+  addLimited: boolean;
 }) {
   const router = useRouter();
   const t = useTranslator(locale);
@@ -542,7 +554,7 @@ function ExpenseTable({
           {expenses.length === 0 && (
             <tr>
               <td colSpan={6}>
-                <SectionEmpty section="expenses" businessType={businessType} t={t} action={{ href: "#add-expense" }} />
+                <SectionEmpty section="expenses" businessType={businessType} t={t} action={addLimited ? undefined : { href: "#add-expense" }} />
               </td>
             </tr>
           )}

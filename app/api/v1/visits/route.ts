@@ -9,6 +9,7 @@ import { fingerprintOf } from "@/lib/idempotency";
 import { getActiveMembership } from "@/lib/membership";
 import { refineServiceSelection, serviceItemsOf, serviceSelection } from "@/lib/service-items";
 import { recordCompletedVisit, VISIT_FAILURES } from "@/lib/visit-service";
+import { workingSpecialistRefusal } from "@/lib/plan";
 
 /**
  * Manually recorded completed visits, roadmap phase 3.
@@ -168,6 +169,9 @@ export async function POST(request: Request) {
       fieldErrors: toFieldErrors(parsed.error.issues),
     });
   }
+
+  const overCap = await workingSpecialistRefusal(actor.organizationId, parsed.data.specialist_id, id);
+  if (overCap) return overCap;
 
   const completedAt = parsed.data.completed_at ? new Date(parsed.data.completed_at) : new Date();
   const completionKey = request.headers.get("idempotency-key")?.trim() || undefined;

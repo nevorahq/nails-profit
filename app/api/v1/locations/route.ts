@@ -11,6 +11,7 @@ import { bookingModuleRefusal } from "@/lib/booking-http";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { locationRoomRefusal } from "@/lib/plan";
 
 /**
  * Locations, roadmap section 7.4.
@@ -102,6 +103,8 @@ export async function POST(request: Request) {
   }
   const disabled = await bookingModuleRefusal(actor.organizationId, id, "write");
   if (disabled) return disabled;
+  const noRoom = await locationRoomRefusal(actor.organizationId, id);
+  if (noRoom) return noRoom;
 
   const body = await request.json().catch(() => null);
   const parsed = createLocationSchema.safeParse(body);

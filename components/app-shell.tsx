@@ -44,6 +44,7 @@ export function AppShell({
   preview = null,
   stalePreview = false,
   bookingOff = false,
+  expensesOff = false,
 }: {
   children: React.ReactNode;
   locale: AppLocale;
@@ -71,11 +72,13 @@ export function AppShell({
   stalePreview?: boolean;
   /** The booking module is switched off, so there is no form to book from. */
   bookingOff?: boolean;
+  /** The studio's tariff adds no expenses, so there is no form to add one from. */
+  expensesOff?: boolean;
 }) {
   const t = getTranslator(locale, register);
   const items = navFor(role, businessType);
   const bottom = bottomNavFor(role, businessType);
-  const quickActions = quickActionsFor(role, { bookingOff }).map((action) => ({
+  const quickActions = quickActionsFor(role, { bookingOff, expensesOff }).map((action) => ({
     href: action.href,
     label: t(action.key),
   }));

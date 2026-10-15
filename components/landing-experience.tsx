@@ -178,7 +178,7 @@ const content: Record<AppLocale, Copy> = {
         features: [
           "Онлайн-запись, календарь и клиенты",
           "Прибыль по каждому визиту",
-          "Отчёт за последние 30 дней",
+          "Отчёт за текущий месяц",
           "Напоминания клиентам по email",
         ],
       },
@@ -286,7 +286,7 @@ const content: Record<AppLocale, Copy> = {
         features: [
           "Programări online, calendar și clienți",
           "Profitul fiecărei vizite",
-          "Raport pentru ultimele 30 de zile",
+          "Raport pentru luna curentă",
           "Mementouri pentru clienți pe email",
         ],
       },
@@ -394,7 +394,7 @@ const content: Record<AppLocale, Copy> = {
         features: [
           "Online booking, calendar and clients",
           "Profit of every visit",
-          "Report for the last 30 days",
+          "Report for the current month",
           "Client reminders by email",
         ],
       },

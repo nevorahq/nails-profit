@@ -22,6 +22,7 @@ import { monthBounds, monthOf } from "@/lib/period";
 import { laborCostRules, organizations, ownerDraws, paymentMethods, specialists, taxRules } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { requireWorkspace } from "@/lib/workspace";
+import { organizationAllows } from "@/lib/plan";
 
 /**
  * «Деньги»: what the business paid for, what the owner took out, and the three
@@ -220,6 +221,9 @@ export default async function ExpensesPage({
       })
     : null;
 
+  // «Старт» keeps the ledger readable and editable but adds nothing new.
+  const canAdd = await organizationAllows(membership.organizationId, "expenses");
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -231,20 +235,24 @@ export default async function ExpensesPage({
           click handling that opens (and, for either anchor, closes) it lives
           there, since this is a Server Component and cannot hold it.
         */}
-        <a className="primary-button calendar-create" href="#add-expense">
-          <ToolIcon name="plus" />
-          {t("expenses.addTitle")}
-        </a>
-        <a
-          className="header-action"
-          href="#add-expense"
-          aria-label={t("expenses.addTitle")}
-          data-label-closed={t("expenses.addTitle")}
-          data-label-open={t("expenses.hideAddTitle")}
-        >
-          <ToolIcon name="plus" />
-          <ToolIcon name="minus" />
-        </a>
+        {canAdd && (
+          <>
+            <a className="primary-button calendar-create" href="#add-expense">
+              <ToolIcon name="plus" />
+              {t("expenses.addTitle")}
+            </a>
+            <a
+              className="header-action"
+              href="#add-expense"
+              aria-label={t("expenses.addTitle")}
+              data-label-closed={t("expenses.addTitle")}
+              data-label-open={t("expenses.hideAddTitle")}
+            >
+              <ToolIcon name="plus" />
+              <ToolIcon name="minus" />
+            </a>
+          </>
+        )}
       </header>
 
       {/*
@@ -297,6 +305,7 @@ export default async function ExpensesPage({
         monthGuide={monthGuide}
         materialsPeriods={materials.periods}
         currentMonth={monthIn(new Date(), materials.timezone)}
+        addLimited={!canAdd}
       />
       <OwnerDrawLedger draws={draws} currency={currency} locale={locale} canEdit={canEdit} />
 

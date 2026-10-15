@@ -42,6 +42,8 @@ import { loadStartScreen } from "@/lib/first-numbers";
 import { firstUnansweredHref, loadMoneyAnswers } from "@/lib/money-answers";
 import { loadMonthSetup, loadOnboarding } from "@/lib/onboarding";
 import { loadUnclosedBookings } from "@/lib/unclosed-bookings";
+import { PlanNotice } from "@/components/plan-notice";
+import { organizationAllows } from "@/lib/plan";
 
 /**
  * A period card for the reports page's top row. The formula still exists —
@@ -281,10 +283,12 @@ export default async function AppPage({
    * `domain/report-period.ts` for why only the choice of month is local.
    */
   const today = todayIn(new Date(), membership.organization.timezone);
+  // «Старт» reads this month only: any other period is the first thing «Соло» opens.
+  const fullReports = await organizationAllows(membership.organization.id, "full_reports");
   const period = resolveReportPeriod(
     {
-      from: isCalendarDay(filters.from) ? filters.from : undefined,
-      to: isCalendarDay(filters.to) ? filters.to : undefined,
+      from: fullReports && isCalendarDay(filters.from) ? filters.from : undefined,
+      to: fullReports && isCalendarDay(filters.to) ? filters.to : undefined,
     },
     today,
   );
@@ -574,20 +578,24 @@ export default async function AppPage({
         {t("dashboard.eyebrow")} · {periodLabel}
       </span>
 
-      <PeriodFilter
-        locale={locale}
-        from={from}
-        to={to}
-        specialistId={requestedSpecialist}
-        people={data.people}
-        presets={{ ranges: presetRanges(today), active: period.preset }}
-        /*
-          A picker over one person narrows nothing. The capability is still what
-          decides whether the report *may* be narrowed — a master may not — and
-          the count decides whether there is anything to narrow to.
-        */
-        showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
-      />
+      {fullReports ? (
+        <PeriodFilter
+          locale={locale}
+          from={from}
+          to={to}
+          specialistId={requestedSpecialist}
+          people={data.people}
+          presets={{ ranges: presetRanges(today), active: period.preset }}
+          /*
+            A picker over one person narrows nothing. The capability is still what
+            decides whether the report *may* be narrowed — a master may not — and
+            the count decides whether there is anything to narrow to.
+          */
+          showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
+        />
+      ) : (
+        <PlanNotice limit="full_reports" locale={locale} register={register} />
+      )}
 
       {/*
         Diagnosis now, not onboarding. A studio still on its way to the first

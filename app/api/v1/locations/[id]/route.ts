@@ -20,6 +20,7 @@ import { bookingModuleRefusal } from "@/lib/booking-http";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { hasRoomForLocation, planLocationRefusal } from "@/lib/plan";
 
 /**
  * Editing a location.
@@ -88,6 +89,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const updated = await withTenant(actor.organizationId, async (tx) => {
       const [existing] = await tx.select().from(locations).where(eq(locations.id, id)).limit(1);
       if (!existing) return null;
+      // Bringing an archived address back is opening one more, as far as the
+      // tariff is concerned.
+      if (
+        parsed.data.status === "active" &&
+        existing.status !== "active" &&
+        !(await hasRoomForLocation(tx, actor.organizationId))
+      ) {
+        return "plan_limit" as const;
+      }
 
       const [location] = await tx
         .update(locations)
@@ -122,6 +132,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!updated) {
       return apiError(404, "LOCATION_NOT_FOUND", "No location with this ID", requestIdentifier);
     }
+    if (updated === "plan_limit") return planLocationRefusal(requestIdentifier);
 
     return apiSuccess(
       {

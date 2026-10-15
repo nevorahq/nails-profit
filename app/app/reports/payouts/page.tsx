@@ -12,6 +12,8 @@ import { formatMoneyMinor } from "@/lib/format";
 import { loadPayoutReport } from "@/lib/payouts";
 import { isMonth } from "@/lib/period";
 import { requireWorkspace } from "@/lib/workspace";
+import { PlanNotice } from "@/components/plan-notice";
+import { organizationAllows } from "@/lib/plan";
 
 /**
  * «К выплате»: what the studio owes each master, and the press that records
@@ -37,7 +39,8 @@ export default async function PayoutsPage({ searchParams }: { searchParams: Prom
 
   const filters = await searchParams;
   const thisMonth = currentMonthIn(new Date(), timezone);
-  const month = isMonth(filters.month) ? filters.month : thisMonth;
+  const fullReports = await organizationAllows(membership.organizationId, "full_reports");
+  const month = fullReports && isMonth(filters.month) ? filters.month : thisMonth;
   const localeCode = localeTag(locale);
   const money = (amount: number) => formatMoneyMinor(amount, currency, localeCode);
   const monthName = (value: string) =>
@@ -65,13 +68,17 @@ export default async function PayoutsPage({ searchParams }: { searchParams: Prom
         {t("payouts.eyebrow")} · {monthName(month)}
       </span>
 
-      <MonthPicker
-        locale={locale}
-        localeTag={localeCode}
-        month={month}
-        thisMonth={thisMonth}
-        path="/app/reports/payouts"
-      />
+      {fullReports ? (
+        <MonthPicker
+          locale={locale}
+          localeTag={localeCode}
+          month={month}
+          thisMonth={thisMonth}
+          path="/app/reports/payouts"
+        />
+      ) : (
+        <PlanNotice limit="full_reports" locale={locale} register={register} />
+      )}
 
       {ledger.tracking ? (
         <p className="pl-note">

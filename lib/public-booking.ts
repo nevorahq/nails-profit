@@ -15,9 +15,10 @@ import {
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { withTenant } from "@/db/tenant";
-import { getPublicNotificationChannel, isPublicBookingEnabled } from "@/env";
+import { getPublicNotificationChannel, isPlanLimitsEnforced, isPublicBookingEnabled } from "@/env";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
+import { workingSpecialistIds } from "@/lib/plan";
 
 export type PublicOrganization = Readonly<{
   id: string;
@@ -118,7 +119,7 @@ export async function publicSpecialistsFor(
   locationId: string,
   serviceId: string,
 ): Promise<PublicSpecialist[]> {
-  const people = await tx
+  let people = await tx
     .select({ id: specialists.id, name: specialists.name, sortOrder: specialists.sortOrder })
     .from(specialists)
     .innerJoin(specialistLocations, eq(specialistLocations.specialistId, specialists.id))
@@ -129,6 +130,21 @@ export async function publicSpecialistsFor(
       ),
     )
     .orderBy(asc(specialists.sortOrder), asc(specialists.id));
+
+  /*
+   * A studio on a one-person tier with more people on file than that takes
+   * appointments for its first one only — see `workingSpecialistIds`. The
+   * rest stay out of the catalogue rather than being offered and refused.
+   */
+  if (isPlanLimitsEnforced()) {
+    const [place] = await tx
+      .select({ organizationId: locations.organizationId })
+      .from(locations)
+      .where(eq(locations.id, locationId))
+      .limit(1);
+    const working = place ? await workingSpecialistIds(tx, place.organizationId) : null;
+    if (working) people = people.filter((person) => working.has(person.id));
+  }
 
   if (people.length === 0) return [];
 

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BillingSettings } from "@/components/billing-settings";
+import { BillingSettings, currentPlanLabel } from "@/components/billing-settings";
 import { checkoutLabel } from "@/components/plan-checkout";
 
 describe("checkoutLabel", () => {
@@ -90,5 +90,32 @@ describe("BillingSettings", () => {
     );
     expect(html).not.toContain("<button");
     expect(html).not.toContain("<a ");
+  });
+});
+
+describe("currentPlanLabel", () => {
+  it("says which tier and why", () => {
+    expect(currentPlanLabel({ tier: "start", source: "free", trialEndsAt: null }, "ru")).toBe("«Старт», бесплатно");
+    expect(currentPlanLabel({ tier: "solo", source: "subscription", trialEndsAt: null }, "en")).toBe("Solo");
+    expect(currentPlanLabel({ tier: "studio", source: "pilot", trialEndsAt: null }, "ru")).toBe(
+      "«Студия» — пилотная программа",
+    );
+    expect(
+      currentPlanLabel({ tier: "studio", source: "trial", trialEndsAt: new Date("2026-10-29T12:00:00Z") }, "ru"),
+    ).toBe("пробный период «Студия» до 29 октября");
+  });
+
+  it("is drawn above the checkout when the page passes a plan", () => {
+    const html = renderToStaticMarkup(
+      createElement(BillingSettings, {
+        subscription: null,
+        organizationId: "org",
+        locale: "en",
+        plan: { tier: "start", source: "free", trialEndsAt: null },
+        checkout: { paddle: null, lemonSqueezyUrl: null },
+      }),
+    );
+    expect(html).toContain("Now: Start, free");
+    expect(html).toContain('id="subscription"');
   });
 });

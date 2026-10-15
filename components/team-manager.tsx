@@ -10,6 +10,7 @@ import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { INVITABLE_ROLES, ROLE_HINTS } from "@/i18n/role-labels";
 import { type MessageKey } from "@/i18n/t";
 import { useRegister, useTranslator } from "@/components/lexicon-provider";
+import { PlanNotice } from "@/components/plan-notice";
 
 export type TeamMember = {
   /** The membership, not the account — removing one never touches the other. */
@@ -66,6 +67,7 @@ export function TeamManager({
   canSendEmail = true,
   currentUserId,
   currentRole,
+  inviteLimited = false,
 }: {
   members: TeamMember[];
   canManage: boolean;
@@ -85,6 +87,8 @@ export function TeamManager({
   /** The signed-in member, so their own row offers no removal. */
   currentUserId: string;
   currentRole: MemberRole;
+  /** The studio's tariff does not include a team: the invitation form gives way to a notice. */
+  inviteLimited?: boolean;
 }) {
   const t = useTranslator(locale);
   const register = useRegister();
@@ -589,59 +593,63 @@ export function TeamManager({
 
           <h2 style={{ marginTop: "28rem" }}>{t("team.inviteTitle")}</h2>
 
-          <form className="inline-form" ref={formRef} onSubmit={generate}>
-            <label>
-              {t("team.inviteEmail")}
-              <input
-                name="email"
-                type="email"
-                required
-                placeholder="colleague@example.com"
-                readOnly={step === "link-ready"}
-              />
-            </label>
-            <label>
-              {t("team.inviteRole")}
-              {/*
-                No description under the select. The four of them live in one
-                folded block above the members table instead: repeated here
-                they made the invitation form — four fields and a button — read
-                as a page of advice, and the owner asking «кого позвать» is not
-                the owner asking «что он увидит».
-              */}
-              <select name="role" defaultValue="master" disabled={step === "link-ready"}>
-                <option value="master">{t("roles.master")}</option>
-                <option value="manager">{t("roles.manager")}</option>
-                <option value="analyst">{t("roles.analyst")}</option>
-              </select>
-            </label>
+          {inviteLimited ? (
+            <PlanNotice limit="team" locale={locale} register={register} />
+          ) : (
+            <form className="inline-form" ref={formRef} onSubmit={generate}>
+              <label>
+                {t("team.inviteEmail")}
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="colleague@example.com"
+                  readOnly={step === "link-ready"}
+                />
+              </label>
+              <label>
+                {t("team.inviteRole")}
+                {/*
+                  No description under the select. The four of them live in one
+                  folded block above the members table instead: repeated here
+                  they made the invitation form — four fields and a button — read
+                  as a page of advice, and the owner asking «кого позвать» is not
+                  the owner asking «что он увидит».
+                */}
+                <select name="role" defaultValue="master" disabled={step === "link-ready"}>
+                  <option value="master">{t("roles.master")}</option>
+                  <option value="manager">{t("roles.manager")}</option>
+                  <option value="analyst">{t("roles.analyst")}</option>
+                </select>
+              </label>
 
-            {step !== "link-ready" ? (
-              <button className="primary-button" type="submit" disabled={pending}>
-                {pending ? t("common.saving") : t("team.generateLink")}
-              </button>
-            ) : (
-              <div style={{ display: "flex", gap: "8rem" }}>
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={send}
-                  disabled={pending || !canSendEmail}
-                  title={canSendEmail ? undefined : t("team.sendUnavailable")}
-                >
-                  {pending ? t("common.saving") : t("team.inviteButton")}
+              {step !== "link-ready" ? (
+                <button className="primary-button" type="submit" disabled={pending}>
+                  {pending ? t("common.saving") : t("team.generateLink")}
                 </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={reset}
-                  disabled={pending}
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-          </form>
+              ) : (
+                <div style={{ display: "flex", gap: "8rem" }}>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={send}
+                    disabled={pending || !canSendEmail}
+                    title={canSendEmail ? undefined : t("team.sendUnavailable")}
+                  >
+                    {pending ? t("common.saving") : t("team.inviteButton")}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={reset}
+                    disabled={pending}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </form>
+          )}
 
           {step === "link-ready" && inviteLink && (
             <div style={{ marginTop: "16rem" }}>

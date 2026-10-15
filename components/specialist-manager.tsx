@@ -9,7 +9,8 @@ import { soloNeedsPrincipal } from "@/domain/principal";
 import { type MessageKey } from "@/i18n/t";
 import { Hint } from "@/components/hint";
 import { SectionEmpty } from "@/components/section-empty";
-import { useTranslator } from "@/components/lexicon-provider";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
+import { PlanNotice } from "@/components/plan-notice";
 import { NameCombobox } from "@/components/name-combobox";
 import { SpecialistPhoto } from "@/components/specialist-photo";
 import { describeRule, ruleFromForm } from "@/lib/commission-rule";
@@ -49,6 +50,7 @@ export function SpecialistManager({
   hasOwnCard = false,
   viewerId = null,
   setupGuide = null,
+  addLimited = false,
 }: {
   specialists: SpecialistRow[];
   services: ServiceOption[];
@@ -87,9 +89,12 @@ export function SpecialistManager({
    * studio has closed a visit and the guided run is over.
    */
   setupGuide?: SetupGuideBaseline;
+  /** The studio's tariff has no room for another master: the add form gives way to a notice. */
+  addLimited?: boolean;
 }) {
   const router = useRouter();
   const t = useTranslator(locale);
+  const register = useRegister();
   const guide = useSetupGuide(setupGuide);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -332,7 +337,7 @@ export function SpecialistManager({
     <>
       <SetupGuideDialog guide={guide} locale={locale} businessType={businessType} />
 
-      {canManage && waitingForCard.length > 0 && (
+      {canManage && !addLimited && waitingForCard.length > 0 && (
         <section className="panel">
           <h2>{t("specialists.waitingTitle")}</h2>
           <p className="muted">{t("specialists.waitingHint")}</p>
@@ -383,7 +388,9 @@ export function SpecialistManager({
         </div>
       )}
 
-      {canManage && (
+      {addLimited && <PlanNotice limit="specialists" locale={locale} register={register} />}
+
+      {canManage && !addLimited && (
         <div className={`compose-wrap${addOpen ? "" : " is-closed"}`} id="add-specialist" ref={addRef}>
           <div className="compose-inner">
             <section className="panel">

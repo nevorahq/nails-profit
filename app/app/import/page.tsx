@@ -10,6 +10,8 @@ import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { canImport } from "@/lib/import-flow";
 import { requireWorkspace } from "@/lib/workspace";
+import { organizationAllows } from "@/lib/plan";
+import { PlanNotice } from "@/components/plan-notice";
 
 export default async function ImportPage({
   searchParams,
@@ -53,6 +55,8 @@ export default async function ImportPage({
       .limit(10),
   );
 
+  const importAllowed = await organizationAllows(membership.organizationId, "import");
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -64,27 +68,35 @@ export default async function ImportPage({
           the click handling that opens (and, for either anchor, closes) it
           lives there, since this is a Server Component and cannot hold it.
         */}
-        <a className="primary-button calendar-create" href="#import-upload">
-          <ToolIcon name="plus" />
-          {t("import.upload")}
-        </a>
-        <a
-          className="header-action"
-          href="#import-upload"
-          aria-label={t("import.upload")}
-          data-label-closed={t("import.upload")}
-          data-label-open={t("import.hideUploadTitle")}
-        >
-          <ToolIcon name="plus" />
-          <ToolIcon name="minus" />
-        </a>
+        {importAllowed && (
+          <>
+            <a className="primary-button calendar-create" href="#import-upload">
+              <ToolIcon name="plus" />
+              {t("import.upload")}
+            </a>
+            <a
+              className="header-action"
+              href="#import-upload"
+              aria-label={t("import.upload")}
+              data-label-closed={t("import.upload")}
+              data-label-open={t("import.hideUploadTitle")}
+            >
+              <ToolIcon name="plus" />
+              <ToolIcon name="minus" />
+            </a>
+          </>
+        )}
       </header>
-      <ImportWizard
-        entities={allowed}
-        locale={locale}
-        initialEntity={asked.entity}
-        fromPhone={asked.from === "phone"}
-      />
+      {importAllowed ? (
+        <ImportWizard
+          entities={allowed}
+          locale={locale}
+          initialEntity={asked.entity}
+          fromPhone={asked.from === "phone"}
+        />
+      ) : (
+        <PlanNotice limit="import" locale={locale} register={register} />
+      )}
 
       {history.length > 0 && (
         <section className="panel">

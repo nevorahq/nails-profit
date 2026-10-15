@@ -197,7 +197,7 @@ export type QuickAction = Readonly<{ href: string; key: MessageKey }>;
  */
 export function quickActionsFor(
   role: MemberRole | undefined,
-  options: Readonly<{ bookingOff: boolean }>,
+  options: Readonly<{ bookingOff: boolean; expensesOff?: boolean }>,
 ): readonly QuickAction[] {
   if (role !== "owner") return [];
   return [
@@ -205,7 +205,10 @@ export function quickActionsFor(
       ? [{ href: "/app/calendar#new-booking", key: "quick.booking" as const }]
       : []),
     ...(can(role, "bookings", "write") ? [{ href: "/app/visits/new", key: "quick.visit" as const }] : []),
-    ...(can(role, "expenses", "write") ? [{ href: "/app/expenses#add-expense", key: "quick.expense" as const }] : []),
+    // `expensesOff`: the studio's tariff adds no expenses, so «+» offers no form.
+    ...(can(role, "expenses", "write") && !options.expensesOff
+      ? [{ href: "/app/expenses#add-expense", key: "quick.expense" as const }]
+      : []),
   ];
 }
 

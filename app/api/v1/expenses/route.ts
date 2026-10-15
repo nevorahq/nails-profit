@@ -9,6 +9,7 @@ import { isCalendarDay, loadExpenses } from "@/lib/expenses";
 import { recordAuditEvent } from "@/lib/audit";
 import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
+import { planFeatureRefusal } from "@/lib/plan";
 
 /**
  * Recorded purchases: rent, a lamp, an ad, a box of gel — see the
@@ -101,6 +102,8 @@ export async function POST(request: Request) {
   if (!canManageCatalogue(actor.role, "expenses")) {
     return apiError(403, "FORBIDDEN", "This role cannot manage expenses", id);
   }
+  const planRefused = await planFeatureRefusal(actor.organizationId, "expenses", id);
+  if (planRefused) return planRefused;
 
   const body = await request.json().catch(() => null);
   const parsed = createExpenseSchema.safeParse(body);

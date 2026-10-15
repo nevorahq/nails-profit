@@ -16,7 +16,8 @@ import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
 import { type MessageKey, type Translate } from "@/i18n/t";
-import { useTranslator } from "@/components/lexicon-provider";
+import { useRegister, useTranslator } from "@/components/lexicon-provider";
+import { PlanNotice } from "@/components/plan-notice";
 import { PublicAddressEditor } from "@/components/public-address-editor";
 import { localeTag } from "@/i18n/translate";
 import { formatLongDate } from "@/lib/format";
@@ -152,6 +153,7 @@ export function BookingSetup({
   ownSpecialistId,
   locale,
   businessType,
+  locationLimited = false,
 }: {
   /**
    * Where «Расчёт месяца» stood when this page was drawn, or null when there is
@@ -197,9 +199,12 @@ export function BookingSetup({
   role?: MemberRole;
   ownSpecialistId?: string | null;
   locale: AppLocale;
+  /** The studio's tariff has room for no other address: the add form gives way to a notice. */
+  locationLimited?: boolean;
 }) {
   const router = useRouter();
   const t = useTranslator(locale);
+  const register = useRegister();
   const guide = useSetupGuide(monthGuide, "/api/v1/onboarding/month");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -1026,7 +1031,8 @@ export function BookingSetup({
           );
         })}
 
-        {canPublish && (
+        {canPublish && locationLimited && <PlanNotice limit="locations" locale={locale} register={register} />}
+        {canPublish && !locationLimited && (
           <>
           <h3>{t("bookingSetup.addLocation")}</h3>
           <form onSubmit={createLocation} className="inline-form">

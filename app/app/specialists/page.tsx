@@ -10,6 +10,7 @@ import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { loadSetupGuide } from "@/lib/onboarding";
+import { organizationHasRoom } from "@/lib/plan";
 import { loadSpecialistCards } from "@/lib/specialist-cards";
 import { requireWorkspace } from "@/lib/workspace";
 
@@ -99,6 +100,10 @@ export default async function SpecialistsPage() {
     ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
     : null;
 
+  // A one-person tier with its one master on file has no room for another:
+  // the add controls are not offered, and the manager says why.
+  const room = canManage ? await organizationHasRoom(membership.organizationId, "specialist") : true;
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -111,13 +116,13 @@ export default async function SpecialistsPage() {
           for either anchor, closes) it lives there, since this is a Server
           Component and cannot hold it.
         */}
-        {canManage && (
+        {canManage && room && (
           <a className="primary-button calendar-create" href="#add-specialist">
             <ToolIcon name="plus" />
             {t("specialists.add")}
           </a>
         )}
-        {canManage && (
+        {canManage && room && (
           <a
             className="header-action"
             href="#add-specialist"
@@ -142,6 +147,7 @@ export default async function SpecialistsPage() {
         hasOwnCard={people.some((person) => person.user_id === membership.userId)}
         viewerId={membership.userId}
         setupGuide={setupGuide}
+        addLimited={canManage && !room}
       />
     </main>
   );

@@ -28,6 +28,7 @@ import { logEvent } from "@/lib/logger";
 import { getActiveMembership } from "@/lib/membership";
 import { refineServiceSelection, serviceItemsOf, serviceSelection } from "@/lib/service-items";
 import { recordPilotProductEvent } from "@/lib/pilot-events";
+import { workingSpecialistRefusal } from "@/lib/plan";
 
 /**
  * Bookings taken by staff, roadmap sections 7.2 and 7.6.
@@ -173,6 +174,9 @@ async function handlePost(request: Request) {
       fieldErrors: toFieldErrors(parsed.error.issues),
     });
   }
+
+  const overCap = await workingSpecialistRefusal(actor.organizationId, parsed.data.specialist_id, id);
+  if (overCap) return overCap;
 
   const now = new Date();
   const startsAt = new Date(parsed.data.starts_at);
