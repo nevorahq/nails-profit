@@ -14,6 +14,7 @@ import {
   sweepExpiredHolds,
 } from "@/lib/booking-service";
 import { logEvent } from "@/lib/logger";
+import { forEachConcurrently, SWEEP_CONCURRENCY } from "@/lib/tenant-sweep";
 
 /**
  * The repair job of sections 7.4 and 7.5, run by the deployment itself.
@@ -120,7 +121,7 @@ export async function sweepBookingMaintenance(input?: { now?: Date }): Promise<M
     .from(organizations)
     .where(isNull(organizations.deletedAt));
 
-  for (const tenant of tenants) {
+  await forEachConcurrently(tenants, SWEEP_CONCURRENCY, async (tenant) => {
     try {
       const summary = await runBookingMaintenance({ organizationId: tenant.id, now });
       expiredHolds += summary.expiredHolds;
@@ -134,7 +135,7 @@ export async function sweepBookingMaintenance(input?: { now?: Date }): Promise<M
         { reason: error instanceof Error ? error.name : "unknown" },
       );
     }
-  }
+  });
 
   logEvent("info", "booking.maintenance_completed", {}, {
     expired_holds: expiredHolds,

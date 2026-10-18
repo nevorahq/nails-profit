@@ -10,7 +10,7 @@ import {
   scheduleBookingReminder,
 } from "@/lib/booking-notifications";
 import { createBooking } from "@/lib/booking-service";
-import { dispatchDueNotifications } from "@/lib/notification-dispatch";
+import { dispatchDueNotifications, sweepDueNotifications } from "@/lib/notification-dispatch";
 import {
   setNotificationProvider,
   LOGGED_MESSAGE_ID_PREFIX,
@@ -19,6 +19,7 @@ import {
 } from "@/lib/notification-provider";
 import { handleVerifiedResendWebhook } from "@/lib/resend-webhook";
 import { pollSmsMdDeliveryStatuses, POLL_WINDOW_HOURS } from "@/lib/smsmd-delivery-status";
+import { SWEEP_CONCURRENCY } from "@/lib/tenant-sweep";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
   createClient,
@@ -1036,5 +1037,55 @@ describe("notification outbox", () => {
     // place to find out that an id was ours all along.
     expect(requested).toEqual([]);
     expect(summary).toEqual({ checked: 0, updated: 0, unconfirmed: 0 });
+  });
+
+  /*
+   * The cron's sweep drains several studios at once (`lib/tenant-sweep.ts`).
+   * Each message must still be claimed, rendered and finalized inside its own
+   * studio's transaction: a studio's client hears from that studio, once, and
+   * nobody waits behind a studio further up the list.
+   */
+  test("the sweep drains every studio when there are more than it takes at once", async () => {
+    const sent = fakeProvider([]);
+    const expected = new Map<string, string>();
+
+    for (let index = 0; index < SWEEP_CONCURRENCY * 2 + 1; index += 1) {
+      const owner = await createUser();
+      const studio = (await createOrganization({ ownerId: owner.id, name: `Studio ${index}` })).id;
+      const location = (await createLocation(studio)).id;
+      const specialist = (await createSpecialist(studio)).id;
+      const email = `client-${index}@example.com`;
+      const client = await createClient(studio, { normalizedPhone: null, email });
+      await withTenant(studio, async (tx) => {
+        const created = await createBooking(tx, {
+          organizationId: studio,
+          locationId: location,
+          specialistId: specialist,
+          clientId: client.id,
+          interval: SLOT,
+          source: "public_booking",
+          confirmationMode: "instant",
+          lines: LINES,
+          actorUserId: null,
+          now,
+        });
+        if (!created.ok) throw new Error("fixture booking was refused");
+        await notifyBooking(tx, {
+          organizationId: studio,
+          bookingId: created.bookingId,
+          template: "booking.cancelled",
+        });
+      });
+      expected.set(email, `Studio ${index}`);
+    }
+
+    const summary = await sweepDueNotifications({ now: new Date() });
+
+    expect(summary.sent).toBe(expected.size);
+    expect(summary.claimed).toBe(expected.size);
+    expect(sent.map((message) => message.destination).sort()).toEqual([...expected.keys()].sort());
+    for (const message of sent) {
+      expect(message.fromName).toBe(expected.get(message.destination));
+    }
   });
 });
