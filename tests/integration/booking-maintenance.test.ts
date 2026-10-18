@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 
 import {
@@ -16,6 +16,7 @@ import {
 import { withTenant } from "@/db/tenant";
 import { runBookingMaintenance, sweepBookingMaintenance } from "@/lib/booking-maintenance";
 import { createBooking, holdSlot } from "@/lib/booking-service";
+import { SWEEP_CONCURRENCY } from "@/lib/tenant-sweep";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import {
   createClient,
@@ -565,5 +566,49 @@ describe("booking maintenance on the deployed cron", () => {
     expect(mine.status).toBe("cancelled");
     const [theirs] = await adminDb.select().from(bookings).where(eq(bookings.id, otherBooking));
     expect(theirs.status).toBe("pending_confirmation");
+  });
+
+  /*
+   * The sweep works on several studios at once (`lib/tenant-sweep.ts`), each in
+   * its own transaction with its own `app.current_organization_id`. More
+   * studios than it takes at a time, so some wait their turn, and each one's
+   * request must end up cancelled by its own studio's transaction — never left
+   * behind, never touched twice.
+   */
+  test("the sweep reaches every studio when there are more than it takes at once", async () => {
+    const lapsed = [await request(-10)];
+    for (let index = 0; index < SWEEP_CONCURRENCY * 2; index += 1) {
+      const owner = await createUser();
+      const studio = (await createOrganization({ ownerId: owner.id })).id;
+      const location = (await createLocation(studio)).id;
+      const specialist = (await createSpecialist(studio)).id;
+      lapsed.push(
+        await withTenant(studio, async (tx) => {
+          const start = new Date(Date.now() + 24 * 60 * 60_000);
+          const created = await createBooking(tx, {
+            organizationId: studio,
+            locationId: location,
+            specialistId: specialist,
+            clientId: null,
+            interval: { start, end: new Date(start.getTime() + 90 * 60_000) },
+            source: "public_booking",
+            confirmationMode: "manual",
+            confirmationTtlMinutes: 120,
+            lines: LINES,
+            actorUserId: null,
+            now: new Date(Date.now() - 130 * 60_000),
+          });
+          if (!created.ok) throw new Error("fixture booking was refused");
+          return created.bookingId;
+        }),
+      );
+    }
+
+    const summary = await sweepBookingMaintenance();
+    expect(summary.lapsedRequests).toBe(lapsed.length);
+
+    const rows = await adminDb.select().from(bookings).where(inArray(bookings.id, lapsed));
+    expect(rows).toHaveLength(lapsed.length);
+    expect(rows.every((row) => row.status === "cancelled")).toBe(true);
   });
 });

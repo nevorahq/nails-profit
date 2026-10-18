@@ -5,6 +5,7 @@ import { organizations, storageDeletions, visitPhotos, visits } from "@/db/schem
 import { withTenant, type TenantTransaction } from "@/db/tenant";
 import { can, hasConstraint, type MemberRole } from "@/domain/rbac";
 import { logEvent } from "@/lib/logger";
+import { forEachConcurrently, SWEEP_CONCURRENCY } from "@/lib/tenant-sweep";
 import { getPhotoStorage, PhotoStorageError, type PhotoStorage } from "@/lib/photo-storage";
 
 /** Where the application serves one photo; the route checks access and signs. */
@@ -136,10 +137,10 @@ export async function sweepStorageDeletions(): Promise<{ removed: number; failed
   const tenants = await db.select({ id: organizations.id }).from(organizations);
   let removed = 0;
   let failed = 0;
-  for (const tenant of tenants) {
+  await forEachConcurrently(tenants, SWEEP_CONCURRENCY, async (tenant) => {
     const outcome = await flushStorageDeletions(tenant.id, storage);
     removed += outcome.removed;
     failed += outcome.failed;
-  }
+  });
   return { removed, failed };
 }

@@ -35,6 +35,7 @@ import {
 import { notificationProvider, type OutgoingMessage } from "@/lib/notification-provider";
 import { isPushTemplate, renderPush } from "@/lib/push-message";
 import { pollSmsMdDeliveryStatuses } from "@/lib/smsmd-delivery-status";
+import { forEachConcurrently, SWEEP_CONCURRENCY } from "@/lib/tenant-sweep";
 
 /**
  * The scheduler half of the outbox, roadmap section 7.7.
@@ -136,7 +137,7 @@ export async function sweepDueNotifications(input?: {
 
   const tenants = await db.select({ id: organizations.id }).from(organizations);
 
-  for (const tenant of tenants) {
+  await forEachConcurrently(tenants, SWEEP_CONCURRENCY, async (tenant) => {
     await requeueStalled(tenant.id, now);
     const summary = await dispatchDueNotifications({
       organizationId: tenant.id,
@@ -162,7 +163,7 @@ export async function sweepDueNotifications(input?: {
         { reason: error instanceof Error ? error.name : "unknown" },
       );
     }
-  }
+  });
 
   return total;
 }
