@@ -264,21 +264,20 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * A studio of one publishes a page that offered a choice between «Любой
    * доступный» and the only name on it, printed that name under every slot,
    * and headed the confirmed time with it — three ways of telling somebody
-   * what they already knew from the studio's own name at the top. Where there
-   * is more than one pair of hands the choice is real and all three stay.
+   * what they already knew from the studio's own name at the top. There the
+   * master is taken as given and the page goes from the service to the days.
    *
-   * One master who is not the studio's name — an owner who works under their
-   * own, beside a studio called something else — is still news to the client:
-   * there is nothing to choose, but who will be doing the nails is said once
-   * above the date and again beside the time held.
+   * Anywhere else the client picks the master, even when only one does the
+   * sitting: the page asks the same two questions in the same order whoever
+   * works there, and who will be doing the nails is said again beside the
+   * time held.
    */
-  const namesSpecialist = masters.length > 1;
-  const soleMaster =
-    masters.length === 1 && !sameName(masters[0].name, profile.name) ? masters[0] : null;
-  const showsMaster = namesSpecialist || soleMaster !== null;
-  /** Whose times to show: the one picked, or the only one there is. */
-  const masterId =
-    masters.length === 1 ? masters[0].id : masters.some((person) => person.id === specialistId) ? specialistId : "";
+  const solo = masters.length === 1 && sameName(masters[0].name, profile.name);
+  const showsMaster = masters.length > 0 && !solo;
+  /** Whose times to show: the one picked, or the studio of one's own. */
+  const masterId = solo
+    ? masters[0].id
+    : masters.some((person) => person.id === specialistId) ? specialistId : "";
 
   useEffect(() => {
     let active = true;
@@ -299,8 +298,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
         const next = body.data.services as Service[];
         setServices(next);
-        // Nothing is chosen for the client, unless there is nothing to choose between.
-        setLines(next.length === 1 ? [{ serviceId: next[0].id, addOnIds: [] }] : []);
+        // Nothing is chosen for the client, even with one service on the list.
+        setLines([]);
         setSpecialistId("");
         setSlots([]);
         setRibbon([]);
@@ -451,10 +450,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     { price: 0, duration: 0 },
   );
 
-  /** A change to what is being booked: the times found were for something else. */
+  /**
+   * A change to what is being booked: the times found were for something else.
+   * The master picked stays picked while they do all of it (`masterId`).
+   */
   function changeLines(next: { serviceId: string; addOnIds: string[] }[]) {
     setLines(next);
-    setSpecialistId("");
     setSlots([]);
     setRibbon([]);
     setSearched(false);
@@ -1028,16 +1029,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             {/* Who and when, after what: the people offered are the ones who do
                 every service chosen above. */}
             <div className="public-booking-grid">
-              {soleMaster && (
-                <div className="public-booking-master">
-                  <span>{t("publicBooking.specialist")}</span>
-                  <strong>{soleMaster.name}</strong>
-                </div>
-              )}
-              {namesSpecialist && (
+              {showsMaster && (
                 <label>
                   {t("publicBooking.specialist")}
-                  <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
+                  <select value={masterId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
                     <option value="" disabled>{t("publicBooking.chooseSpecialist")}</option>
                     {masters.map((person) => (
                       <option key={person.id} value={person.id}>{person.name}</option>
@@ -1046,6 +1041,17 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 </label>
               )}
             </div>
+
+            {/* What it costs and how long, once both questions are answered. */}
+            {chosen.length > 0 && masterId && (
+              <div className="public-booking-quote">
+                <strong>{money(quote.price)}</strong>
+                <div>
+                  <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
+                  <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
+                </div>
+              </div>
+            )}
 
             {ribbon.length > 0 && chosen.length > 0 && masters.length > 0 && (
               <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
@@ -1078,15 +1084,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
 
-            {chosen.length > 0 && (
-              <div className="public-booking-quote">
-                <strong>{money(quote.price)}</strong>
-                <div>
-                  <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
-                  <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
-                </div>
-              </div>
-            )}
           </form>
         ) : stage === "code" ? (
           <form onSubmit={confirmCode} noValidate>

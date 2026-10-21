@@ -9,6 +9,7 @@ import {
   type Studio,
   chooseMaster,
   chooseRibbonDay,
+  chooseService,
 } from "../helpers/studio";
 
 /**
@@ -46,17 +47,36 @@ test.describe("the public booking page", () => {
     });
 
     await page.goto(`/book/${studio.slug}`);
-    // Two masters and nobody picked: the price is there, the days and times are not.
+    const service = page.getByRole("combobox", { name: "Service" });
+    const quote = page.locator(".public-booking-quote");
+    const strip = page.locator(".public-booking-days-strip");
+    const timesHeading = page.getByRole("heading", { name: "Choose a time", exact: true });
+
+    // Nothing is picked for the client, even with one service on the list.
+    await expect(service).toHaveValue("");
+    await expect(service).toContainText("Choose a service");
+    await expect(page.getByLabel("Specialist")).toHaveCount(0);
+    await expect(quote).toHaveCount(0);
+
+    // A service, and still no master: no price, days or times yet.
+    await chooseService(page, studio.serviceId);
     await expect(page.getByLabel("Specialist")).toHaveValue("");
     await expect(page.getByLabel("Specialist")).toContainText("Choose a specialist");
     await expect(page.getByLabel("Specialist")).not.toContainText("Any available");
-    await expect(page.locator(".public-booking-quote")).toContainText("MDL 600.00");
-    const strip = page.locator(".public-booking-days-strip");
+    await expect(quote).toHaveCount(0);
     await expect(strip).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Choose a time", exact: true })).toHaveCount(0);
+    await expect(timesHeading).toHaveCount(0);
 
+    // Both answered: the price, and under it the days.
     await chooseMaster(page, studio.specialistName);
+    await expect(quote).toContainText("MDL 600.00");
     await expect(strip).toBeVisible();
+    const quoteAboveDays = await page.evaluate(() => {
+      const price = document.querySelector(".public-booking-quote")!.getBoundingClientRect();
+      const days = document.querySelector(".public-booking-days")!.getBoundingClientRect();
+      return price.bottom <= days.top;
+    });
+    expect(quoteAboveDays).toBe(true);
     // No date field and no search button: the days are the control.
     await expect(page.getByLabel("Date")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Show available times" })).toHaveCount(0);
@@ -111,11 +131,12 @@ test.describe("the public booking page", () => {
 
     await expect(page.getByRole("heading", { name: "Choose a time that works" })).toBeVisible();
     await expect(page.getByLabel("Service")).toContainText("Manicure with coating");
-    await expect(page.getByText("MDL 600.00")).toBeVisible();
 
     // The second half of this test is about whose bell the request lands in,
     // and the studio has two specialists free at the same hour.
+    await chooseService(page, studio.serviceId);
     await chooseMaster(page, studio.specialistName);
+    await expect(page.getByText("MDL 600.00")).toBeVisible();
     await chooseRibbonDay(page, daysFromToday(2));
 
     const times = page.locator(".public-booking-slots button");
@@ -205,6 +226,7 @@ test.describe("the public booking page", () => {
     await expect(page.locator(".public-booking-yours")).toHaveCount(0);
     await expect(page.locator(".public-booking-header .role-badge")).toHaveText("Online booking");
 
+    await chooseService(page, studio.serviceId);
     await chooseMaster(page, studio.specialistName);
     await chooseRibbonDay(page, daysFromToday(2));
     await page.locator(".public-booking-slots button").first().click();
@@ -287,6 +309,7 @@ test.describe("the public booking page", () => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);
 
+    await chooseService(page, studio.serviceId);
     await chooseMaster(page, studio.specialistName);
     await chooseRibbonDay(page, daysFromToday(3));
     await page.locator(".public-booking-slots button").first().click();
@@ -348,6 +371,7 @@ test.describe("the public booking page", () => {
   test("takes a booking from a client who uses no messengers", async ({ page, browserErrors }) => {
     void browserErrors;
     await page.goto(`/book/${studio.slug}`);
+    await chooseService(page, studio.serviceId);
     await chooseMaster(page, studio.specialistName);
     await chooseRibbonDay(page, daysFromToday(4));
     await page.locator(".public-booking-slots button").first().click();
@@ -376,6 +400,7 @@ test.describe("the public booking page", () => {
     });
     await page.goto(`/book/${studio.slug}`);
 
+    await chooseService(page, studio.serviceId);
     await chooseMaster(page, studio.specialistName);
     await expect(page.locator(".public-booking-days-strip button")).toHaveCount(14);
     await expect(page.locator(".public-booking-days-strip button:not([disabled])")).toHaveCount(0);
@@ -416,6 +441,7 @@ test.describe("a refused booking", () => {
   }) => {
     const walk = async (dayOffset: number, contact: { name: string; phone: string; email: string }) => {
       await page.goto(`/book/${studio.slug}`);
+      await chooseService(page, studio.serviceId);
       await chooseMaster(page, studio.specialistName);
       await chooseRibbonDay(page, daysFromToday(dayOffset));
       const times = page.locator(".public-booking-slots button");
