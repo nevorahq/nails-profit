@@ -319,6 +319,41 @@ describe("public online booking", () => {
   });
 
   /**
+   * The file behind «Add to calendar». It is the one place the manage link is
+   * written into something the client keeps, so the test reads it back out —
+   * and it is only for a visit still ahead: once cancelled, there is no event.
+   */
+  test("the manage link gives the visit as a calendar file while it stands", async () => {
+    const availability = dataOf<{ slots: Slot[] }>(
+      await anonymous.get(
+        `/api/v1/public/booking/green-nails/availability?location_id=${locationId}&service_id=${studio.serviceId}&specialist_id=any&date=${wednesdayAhead(10)}`,
+      ),
+    );
+    const slot = availability.slots[0];
+    const created = await createBookingAt(slot);
+
+    const file = await anonymous.get<string>(`/api/v1/public/bookings/${created.manage_token}/calendar`);
+    expect(file.status).toBe(200);
+    expect(file.headers.get("content-type")).toBe("text/calendar; charset=utf-8");
+    expect(file.headers.get("content-disposition")).toContain("visit.ics");
+    const lines = file.body.replace(/\r\n /g, "").split("\r\n");
+    const utc = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    expect(lines).toContain(`UID:booking-${created.id}@nail-profit-os`);
+    expect(lines).toContain(`DTSTART:${utc(slot.starts_at)}`);
+    expect(lines).toContain(`DTEND:${utc(slot.ends_at)}`);
+    expect(lines).toContain("LOCATION:Центр\\, str. Ismail 33");
+    expect(lines.find((line) => line.startsWith("SUMMARY:"))).toContain("Green Nails");
+    expect(lines.find((line) => line.startsWith("DESCRIPTION:Мастер"))).toContain(
+      `/booking/${encodeURIComponent(created.manage_token)}`,
+    );
+
+    const current = dataOf<{ version: number }>(await anonymous.get(`/api/v1/public/bookings/${created.manage_token}`));
+    await anonymous.post(`/api/v1/public/bookings/${created.manage_token}/cancel`, { version: current.version });
+    expect((await anonymous.get(`/api/v1/public/bookings/${created.manage_token}/calendar`)).status).toBe(404);
+    expect((await anonymous.get("/api/v1/public/bookings/invalid-token/calendar")).status).toBe(404);
+  });
+
+  /**
    * The studio that never turned verification on, which is most of them:
    * `verification_mode` is `off` by default and set per location.
    *

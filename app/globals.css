@@ -1504,6 +1504,8 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .booking-manage-action { border: 1rem solid var(--line); border-radius: 4rem; padding: 16rem; }
 .booking-manage-action summary { min-height: 44rem; display: flex; align-items: center; color: var(--accent); font-size: 16rem; font-weight: 750; cursor: pointer; }
 .booking-manage-action .inline-form { margin: 12rem 0 0; }
+.booking-calendar .button-row { justify-content: flex-start; margin-top: 12rem; }
+.booking-calendar .secondary-button { flex: 1 1 200rem; justify-content: center; text-align: center; }
 .booking-manage-action .public-booking-slots { margin-top: 18rem; padding-top: 18rem; }
 .booking-cancel-area { padding-top: 4rem; text-align: center; }
 .booking-cancel-area .inline-action { margin: 0; color: var(--danger); }

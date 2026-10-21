@@ -14,6 +14,7 @@ import {
   readApiError,
   retryAfterMinutes,
 } from "@/lib/public-booking-ux";
+import { googleCalendarUrl, visitEvent } from "@/lib/visit-calendar";
 
 type Status = "pending_confirmation" | "confirmed" | "cancelled" | "completed" | "no_show";
 type CancelledBy = "client" | "staff" | "system" | null;
@@ -366,6 +367,30 @@ export function PublicBookingManage({ token, initial }: { token: string; initial
               </span>
             )}
           </p>
+        )}
+
+        {/*
+          Into the client's own calendar, while there is a visit to go to. The
+          file carries the way back to this page and an alarm; Google's link
+          carries neither, since it is Google's to keep (see `googleCalendarUrl`).
+        */}
+        {active && (
+          <details className="booking-manage-action booking-calendar">
+            <summary>{t("publicBooking.addToCalendar")}</summary>
+            <div className="button-row">
+              <a className="secondary-button" href={`/api/v1/public/bookings/${encodeURIComponent(token)}/calendar`}>
+                {t("publicBooking.calendarFile")}
+              </a>
+              <a
+                className="secondary-button"
+                href={googleCalendarUrl(visitEvent(booking, t, null))}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("publicBooking.calendarGoogle")}
+              </a>
+            </div>
+          </details>
         )}
 
         {active && booking.service_id && (
