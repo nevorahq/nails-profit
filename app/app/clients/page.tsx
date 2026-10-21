@@ -35,7 +35,12 @@ export default async function ClientsPage() {
   const canWrite = can(membership.role, "clients", "write");
   const hidePii = scopeFor(membership.role, "clients") === "all" && !canWrite;
 
-  const rows: ClientRow[] = await withTenant(membership.organizationId, async (tx) => {
+  /*
+   * The list and the «пора позвать» panel are read together: neither needs the
+   * other's answer, and they used to be asked one after the other against a
+   * database in another region.
+   */
+  const rowsRead: Promise<ClientRow[]> = withTenant(membership.organizationId, async (tx) => {
     // Section 6.1: Master sees only their own clients.
     let ownSpecialistId: string | null = null;
     if (scopeFor(membership.role, "clients") === "own") {
@@ -137,8 +142,8 @@ export default async function ClientsPage() {
    * The message is written in the client's own language when the card has
    * one, the studio's otherwise.
    */
-  const returning = canWrite
-    ? await withTenant(membership.organizationId, async (tx) => {
+  const returningRead = canWrite
+    ? withTenant(membership.organizationId, async (tx) => {
         const [list, slug] = await Promise.all([
           scopedClientSpecialistId(tx, membership).then((viewerSpecialistId) =>
             loadReturnList(tx, { timezone: workspace.timezone, now: new Date(), viewerSpecialistId }),
@@ -151,6 +156,8 @@ export default async function ClientsPage() {
         return { list, slug };
       })
     : null;
+
+  const [rows, returning] = await Promise.all([rowsRead, returningRead]);
 
   const returnRows: ReturnPanelRow[] = (returning?.list ?? []).map((row) => {
     const clientLocale = (supportedLocales as readonly string[]).includes(row.locale ?? "")

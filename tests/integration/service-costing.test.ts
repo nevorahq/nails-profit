@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { services } from "@/db/schema";
+import { measureStatements } from "@/db/query-meter";
 import { withTenant } from "@/db/tenant";
-import { loadServiceCosting } from "@/lib/service-costing";
+import { loadServiceCosting, loadServiceCostings } from "@/lib/service-costing";
 import { resetDatabase } from "../helpers/database";
 import {
   createAddOn,
@@ -249,5 +250,75 @@ describe("costing a service together with its add-ons", () => {
     expect(result.status).toBe("complete");
     if (result.status !== "complete") throw new Error("expected complete");
     expect(result.costing.priceMinor).toBe(60_000);
+  });
+});
+
+describe("the costing of a list of services", () => {
+  let organizationId: string;
+  let specialistId: string;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    const user = await createUser();
+    organizationId = (await createOrganization({ ownerId: user.id })).id;
+    specialistId = (await createSpecialist(organizationId)).id;
+    await createCommissionRule(organizationId, specialistId, { basisPoints: 4_000 });
+  });
+
+  async function listCostings() {
+    return measureStatements(() =>
+      withTenant(organizationId, async (tx) => {
+        const catalogue = await tx.select().from(services).orderBy(services.createdAt);
+        return { catalogue, costings: await loadServiceCostings(tx, catalogue, { specialistId }) };
+      }),
+    );
+  }
+
+  it("is costed as each service is alone, including a rule meant for one service only", async () => {
+    const plain = await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
+    const special = await createService(organizationId, { priceMinor: 100_000, durationMinutes: 60 });
+    const unpriced = await createService(organizationId, { priceMinor: null, durationMinutes: 30 });
+    // 50% on `special` only: it must not leak onto `plain`, which keeps the 40% all-services rule.
+    await createCommissionRule(organizationId, specialistId, { basisPoints: 5_000, serviceId: special.id });
+
+    const { result } = await listCostings();
+    const alone = await withTenant(organizationId, (tx) =>
+      Promise.all(result.catalogue.map((service) => loadServiceCosting(tx, service, { specialistId }))),
+    );
+
+    expect(result.costings).toEqual(alone);
+    const commissionOf = (id: string) => {
+      const found = result.costings[result.catalogue.findIndex((service) => service.id === id)];
+      return found.status === "complete" ? found.costing.commissionMinor : null;
+    };
+    expect(commissionOf(plain.id)).toBe(24_000);
+    expect(commissionOf(special.id)).toBe(50_000);
+    expect(commissionOf(unpriced.id)).toBeNull();
+  });
+
+  it("reads the commission rules once, however many services there are", async () => {
+    await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
+    const few = await listCostings();
+    for (let index = 0; index < 5; index += 1) {
+      await createService(organizationId, { priceMinor: 40_000 + index, durationMinutes: 45 });
+    }
+
+    const many = await listCostings();
+
+    expect(many.result.catalogue).toHaveLength(6);
+    expect(many.statements.length).toBe(few.statements.length);
+  });
+
+  it("costs no service without a specialist, and says why", async () => {
+    await createService(organizationId, { priceMinor: 60_000, durationMinutes: 90 });
+
+    const { result } = await measureStatements(() =>
+      withTenant(organizationId, async (tx) => {
+        const catalogue = await tx.select().from(services);
+        return loadServiceCostings(tx, catalogue, { specialistId: null });
+      }),
+    );
+
+    expect(result[0]).toMatchObject({ status: "incomplete", reasons: ["missing_commission_rule"] });
   });
 });

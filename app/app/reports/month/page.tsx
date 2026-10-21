@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Hint } from "@/components/hint";
 import { MonthPicker } from "@/components/month-picker";
 import { specialists } from "@/db/schema";
-import { withTenant } from "@/db/tenant";
+import { readTogether } from "@/db/tenant";
 import { basicPL } from "@/domain/basic-pl";
 import { soloNeedsPrincipal } from "@/domain/principal";
 import { can } from "@/domain/rbac";
@@ -74,15 +74,17 @@ export default async function MonthReportPage({
    * `principalLabourMinor` is zero both for a studio that has no principal and
    * for one whose principal worked no visits this month.
    */
-  const { report, soloWithoutPrincipal, unclosed, beforeTaxesHref } = await withTenant(
-    membership.organizationId,
-    async (tx) => {
-      const report = await loadPeriodPL(
-        tx,
-        { month, currency, organizationId: membership.organizationId },
-        locale,
-      );
-
+  /*
+   * Two reads, started together. The statement is one transaction because its
+   * lines have to add up to one another; the marks and notes around it —
+   * whether the studio has a principal, the unclosed appointments, whether taxes
+   * have been answered — are other questions, and they used to wait behind it
+   * against a database in another region.
+   */
+  const { statement, around } = await readTogether(membership.organizationId, {
+    statement: (tx) =>
+      loadPeriodPL(tx, { month, currency, organizationId: membership.organizationId }, locale),
+    around: async (tx) => {
       const people = await tx
         .select({ isPrincipal: specialists.isPrincipal })
         .from(specialists)
@@ -108,7 +110,6 @@ export default async function MonthReportPage({
       const beforeTaxesHref = firstUnansweredHref(await loadMoneyAnswers(tx, membership.organizationId));
 
       return {
-        report,
         unclosed,
         beforeTaxesHref,
         soloWithoutPrincipal: soloNeedsPrincipal(
@@ -117,7 +118,9 @@ export default async function MonthReportPage({
         ),
       };
     },
-  );
+  });
+  const report = statement;
+  const { soloWithoutPrincipal, unclosed, beforeTaxesHref } = around;
   const pl = report.pl;
   /*
    * The plain view nets a principal's commission into the costs instead of

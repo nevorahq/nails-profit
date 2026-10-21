@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { addOns, commissionRules, services } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
@@ -38,6 +38,41 @@ export type ServiceCosting = Readonly<
     }
 >;
 
+export type CommissionRuleRow = Awaited<ReturnType<typeof loadCommissionRulesOf>>[number];
+
+/** Every commission rule a specialist has, for any service or for all of them. */
+export async function loadCommissionRulesOf(tx: TenantTransaction, specialistId: string) {
+  return tx
+    .select({
+      id: commissionRules.id,
+      serviceId: commissionRules.serviceId,
+      type: commissionRules.type,
+      basisPoints: commissionRules.basisPoints,
+      fixedAmountMinor: commissionRules.fixedAmountMinor,
+      activeFrom: commissionRules.activeFrom,
+      activeTo: commissionRules.activeTo,
+    })
+    .from(commissionRules)
+    .where(eq(commissionRules.specialistId, specialistId));
+}
+
+/**
+ * The costing of each service in a list, in a fixed number of statements.
+ *
+ * Costing one service reads the specialist's commission rules, and a list used
+ * to do that once per service — four services, four identical reads, each a
+ * round trip to a database in another region. The rules are the same for all of
+ * them, so they are read once and handed to each.
+ */
+export async function loadServiceCostings(
+  tx: TenantTransaction,
+  catalogue: readonly (typeof services.$inferSelect)[],
+  options: Omit<Parameters<typeof loadServiceCosting>[2] & object, "rules" | "addOnIds"> = {},
+): Promise<ServiceCosting[]> {
+  const rules = options.specialistId ? await loadCommissionRulesOf(tx, options.specialistId) : [];
+  return Promise.all(catalogue.map((service) => loadServiceCosting(tx, service, { ...options, rules })));
+}
+
 export async function loadServiceCosting(
   tx: TenantTransaction,
   service: typeof services.$inferSelect,
@@ -51,6 +86,12 @@ export async function loadServiceCosting(
      * business, and a caller that has not asked costs exactly as before.
      */
     materialsMode?: MaterialsCostingMode;
+    /**
+     * The specialist's commission rules, when the caller already holds them —
+     * what `loadCommissionRulesOf` returns. Without them each call asks the
+     * database, and a list of services asks once per service.
+     */
+    rules?: readonly CommissionRuleRow[];
   } = {},
 ): Promise<ServiceCosting> {
   const at = options.at ?? new Date();
@@ -76,23 +117,11 @@ export async function loadServiceCosting(
 
   let commission = null;
   if (options.specialistId) {
-    const rules = await tx
-      .select({
-        id: commissionRules.id,
-        serviceId: commissionRules.serviceId,
-        type: commissionRules.type,
-        basisPoints: commissionRules.basisPoints,
-        fixedAmountMinor: commissionRules.fixedAmountMinor,
-        activeFrom: commissionRules.activeFrom,
-        activeTo: commissionRules.activeTo,
-      })
-      .from(commissionRules)
-      .where(
-        and(
-          eq(commissionRules.specialistId, options.specialistId),
-          or(isNull(commissionRules.serviceId), eq(commissionRules.serviceId, service.id)),
-        ),
-      );
+    // Every rule the specialist has, kept to the ones that can apply to this
+    // service. A caller costing a list loads them once and hands them in.
+    const rules = (options.rules ?? (await loadCommissionRulesOf(tx, options.specialistId))).filter(
+      (rule) => rule.serviceId === null || rule.serviceId === service.id,
+    );
     commission = selectCommissionRule(rules, service.id, at);
   }
   if (!commission) reasons.push("missing_commission_rule");
