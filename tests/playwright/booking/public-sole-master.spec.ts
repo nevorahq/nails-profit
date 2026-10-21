@@ -5,16 +5,19 @@ import {
   seedStudio,
   useClientAddress,
   type Studio,
+  chooseMaster,
   chooseRibbonDay,
+  chooseService,
 } from "../helpers/studio";
 
 /**
- * A studio where one pair of hands does everything — an owner working under
- * their own name beside a studio called something else.
+ * A studio where one pair of hands does everything.
  *
- * There is nothing to choose, so no list; but who will do the nails is still
- * news to the client, and the page says it above the date and beside the time
- * held. Only when the master is the studio's own name is it left out.
+ * An owner working under their own name beside a studio called something else
+ * is still a master the client picks: the page asks the same two questions in
+ * the same order whoever works there, and names them beside the time held.
+ * Only when the master is the studio's own name is there no question at all,
+ * and the page goes from the service to the price and the days.
  */
 for (const width of [null, 375] as const) {
   test.describe(`the public page with one master${width ? ` at ${width} px` : ""}`, () => {
@@ -32,13 +35,19 @@ for (const width of [null, 375] as const) {
       if (studio) await disposeStudio(studio);
     });
 
-    test("names the master instead of offering a choice of one", async ({ page, browserErrors }, testInfo) => {
+    test("asks for the master even when there is one", async ({ page, browserErrors }, testInfo) => {
       void browserErrors;
       await page.goto(`/book/${studio.slug}`);
-      const master = page.locator(".public-booking-master");
-      await expect(master).toContainText("Specialist");
-      await expect(master).toContainText(studio.specialistName);
-      await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
+      await chooseService(page, studio.serviceId);
+      const master = page.getByRole("combobox", { name: "Specialist" });
+      await expect(master).toHaveValue("");
+      await expect(master.locator("option:not([disabled])")).toHaveText([studio.specialistName]);
+      await expect(page.locator(".public-booking-quote")).toHaveCount(0);
+      await expect(page.locator(".public-booking-days-strip")).toHaveCount(0);
+
+      await chooseMaster(page, studio.specialistName);
+      await expect(page.locator(".public-booking-quote")).toBeVisible();
+      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -56,16 +65,20 @@ for (const width of [null, 375] as const) {
       await expect(page.locator(".public-booking-summary")).toContainText(studio.specialistName);
     });
 
-    test("leaves the name out when it is the studio's own", async ({ page, browserErrors }) => {
+    test("asks nothing about the master when it is the studio's own name", async ({ page, browserErrors }) => {
       void browserErrors;
       await page.goto(`/book/${studio.slug}`);
       const studioName = (await page.locator(".public-booking-header .brand").textContent())!.trim();
       await studio.owner.patch(`/api/v1/specialists/${studio.specialistId}`, { name: studioName });
 
       await page.reload();
-      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
-      await expect(page.locator(".public-booking-master")).toHaveCount(0);
+      await expect(page.getByRole("combobox", { name: "Service" })).toBeVisible();
       await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
+      await expect(page.locator(".public-booking-quote")).toHaveCount(0);
+      await chooseService(page, studio.serviceId);
+      await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
+      await expect(page.locator(".public-booking-quote")).toBeVisible();
+      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
 
       await chooseRibbonDay(page, daysFromToday(2));
       await page.locator(".public-booking-slots button").first().click();

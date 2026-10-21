@@ -1374,8 +1374,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 /* Nothing to choose, so no box around it — but the same height as the date
    beside it, so the two read as one row. */
-.public-booking-master { display: grid; align-content: start; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
-.public-booking-master strong { display: flex; align-items: center; min-height: 48rem; color: var(--ink); font-size: 16rem; overflow-wrap: anywhere; }
 .public-booking-grid input, .public-booking-grid select { width: 100%; min-height: 48rem; padding: 12rem 14rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font-size: 16rem; }
 /* Lighter than the answer, dark enough to read: the example has to look
    like a hint, not like a field somebody already filled in. */
@@ -1441,7 +1439,7 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-days { margin-top: 20rem; min-width: 0; max-width: 100%; }
 .public-booking-days h2 { margin: 0 0 12rem; font-size: 18rem; }
 .public-booking-days-strip { display: flex; gap: 8rem; overflow-x: auto; padding-bottom: 8rem; scroll-snap-type: x proximity; }
-.public-booking-days-strip button { flex: 0 0 72rem; scroll-snap-align: start; display: grid; place-items: center; gap: 2rem; min-height: 76rem; padding: 8rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+.public-booking-days-strip button { flex: 0 0 88rem; scroll-snap-align: start; display: grid; place-items: center; gap: 2rem; min-height: 60rem; padding: 8rem; white-space: nowrap; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
 .public-booking-days-strip button span { color: var(--muted); font-size: 12rem; text-transform: capitalize; }
 .public-booking-days-strip button:hover:not(:disabled) { background: var(--sage-300); }
 .public-booking-days-strip button.is-selected { background: var(--accent); border-color: var(--accent); color: var(--surface-strong); }

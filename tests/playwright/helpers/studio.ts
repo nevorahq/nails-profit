@@ -526,6 +526,22 @@ export async function bookAppointment(
 }
 
 /**
+ * Picks a service on the public page, by its id or its name. Nothing is picked
+ * for the client, so this is the first thing any booking there does.
+ */
+export async function chooseService(page: Page, service: string) {
+  await page.getByRole("combobox", { name: /^Service/ }).selectOption(service);
+}
+
+/**
+ * Picks the master on the public page, even when only one does the sitting:
+ * no price, days or times are shown until somebody is.
+ */
+export async function chooseMaster(page: Page, name: string) {
+  await page.getByLabel("Specialist").selectOption({ label: name });
+}
+
+/**
  * Picks a day on the public page's ribbon. The day is part of the answer the
  * page fetched once, so this is a click and no further request.
  */

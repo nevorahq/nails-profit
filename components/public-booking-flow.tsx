@@ -187,7 +187,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     chosen.every((entry) => entry.service.specialists.some((other) => other.id === person.id)),
   );
   const sittingPayload = chosen.map((entry) => ({ service_id: entry.service.id, add_on_ids: entry.addOnIds }));
-  const [specialistId, setSpecialistId] = useState("any");
+  /** The master picked, or "" before one is: with several to choose from, no times are asked for until then. */
+  const [specialistId, setSpecialistId] = useState("");
   const [date, setDate] = useState(() => dateInZone(location.timezone));
   const [slots, setSlots] = useState<Slot[]>([]);
   /** The coming days and the times of each, from the one request the ribbon costs. */
@@ -263,18 +264,23 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * A studio of one publishes a page that offered a choice between «Любой
    * доступный» and the only name on it, printed that name under every slot,
    * and headed the confirmed time with it — three ways of telling somebody
-   * what they already knew from the studio's own name at the top. Where there
-   * is more than one pair of hands the choice is real and all three stay.
+   * what they already knew from the studio's own name at the top. There the
+   * master is taken as given and the page goes from the service to the days.
    *
-   * One master who is not the studio's name — an owner who works under their
-   * own, beside a studio called something else — is still news to the client:
-   * there is nothing to choose, but who will be doing the nails is said once
-   * above the date and again beside the time held.
+   * Anywhere else the client picks the master, even when only one does the
+   * sitting: the page asks the same two questions in the same order whoever
+   * works there, and who will be doing the nails is said again beside the
+   * time held.
    */
-  const namesSpecialist = masters.length > 1;
-  const soleMaster =
-    masters.length === 1 && !sameName(masters[0].name, profile.name) ? masters[0] : null;
-  const showsMaster = namesSpecialist || soleMaster !== null;
+  // Read off the whole catalogue, not the sitting: the master's field is on the
+  // page before any service is picked, greyed out until one is.
+  const everyone = [...new Map(services.flatMap((entry) => entry.specialists).map((person) => [person.id, person])).values()];
+  const solo = everyone.length === 1 && sameName(everyone[0].name, profile.name);
+  const showsMaster = everyone.length > 0 && !solo;
+  /** Whose times to show: the one picked, or the studio of one's own. */
+  const masterId = solo
+    ? (masters[0]?.id ?? "")
+    : masters.some((person) => person.id === specialistId) ? specialistId : "";
 
   useEffect(() => {
     let active = true;
@@ -295,8 +301,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
         const next = body.data.services as Service[];
         setServices(next);
-        setLines(next[0] ? [{ serviceId: next[0].id, addOnIds: [] }] : []);
-        setSpecialistId("any");
+        // Nothing is chosen for the client, even with one service on the list.
+        setLines([]);
+        setSpecialistId("");
         setSlots([]);
         setRibbon([]);
         setSearched(false);
@@ -446,10 +453,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     { price: 0, duration: 0 },
   );
 
-  /** A change to what is being booked: the times found were for something else. */
+  /**
+   * A change to what is being booked: the times found were for something else.
+   * The master picked stays picked while they do all of it (`masterId`).
+   */
   function changeLines(next: { serviceId: string; addOnIds: string[] }[]) {
     setLines(next);
-    setSpecialistId("any");
     setSlots([]);
     setRibbon([]);
     setSearched(false);
@@ -490,10 +499,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * small on purpose (`PUBLIC_BOOKING_AVAILABILITY_RULE`). Picking a day is
    * then free, because every day's times came with the answer.
    */
-  const sittingKey = JSON.stringify([locationId, specialistId, sittingPayload, ribbonRefresh]);
+  const sittingKey = JSON.stringify([locationId, masterId, sittingPayload, ribbonRefresh]);
   const catalogLoaded = services.length > 0;
   useEffect(() => {
-    if (!catalogLoaded || chosen.length === 0 || masters.length === 0) return;
+    if (!catalogLoaded || chosen.length === 0 || !masterId) return;
     let active = true;
     const timer = setTimeout(async () => {
       setPendingAction("availability");
@@ -507,7 +516,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         add_on_ids: chosen[0].addOnIds.join(","),
         // Every service of the sitting, so the times offered fit all of it.
         services: chosen.map((entry) => [entry.service.id, ...entry.addOnIds].join(":")).join("|"),
-        specialist_id: specialistId,
+        specialist_id: masterId,
         date: dateInZone(location.timezone),
         days: String(RIBBON_DAYS),
       });
@@ -902,6 +911,27 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
 
+            {/* Nothing below the service is shown until one is picked. */}
+            {services.length > 0 && chosen.length === 0 && (
+              <div className="public-booking-service">
+                <div className="public-booking-service-head">
+                  <label>
+                    {t("publicBooking.service")}
+                    <select
+                      value=""
+                      disabled={pending}
+                      onChange={(event) => changeLines([{ serviceId: event.target.value, addOnIds: [] }])}
+                    >
+                      <option value="" disabled>{t("publicBooking.chooseService")}</option>
+                      {services.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {chosen.map((entry, index) => {
               const number = index + 1;
               const label = chosen.length > 1 ? t("serviceLines.serviceN", { n: number }) : t("publicBooking.service");
@@ -979,7 +1009,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               );
             })}
 
-            {lines.length < MAX_PUBLIC_SERVICES && services.some((candidate) => !lines.some((line) => line.serviceId === candidate.id)) && (
+            {chosen.length > 0 && lines.length < MAX_PUBLIC_SERVICES && services.some((candidate) => !lines.some((line) => line.serviceId === candidate.id)) && (
               <button
                 type="button"
                 className="secondary-button public-booking-add-service"
@@ -1002,17 +1032,11 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             {/* Who and when, after what: the people offered are the ones who do
                 every service chosen above. */}
             <div className="public-booking-grid">
-              {soleMaster && (
-                <div className="public-booking-master">
-                  <span>{t("publicBooking.specialist")}</span>
-                  <strong>{soleMaster.name}</strong>
-                </div>
-              )}
-              {namesSpecialist && (
+              {showsMaster && (
                 <label>
                   {t("publicBooking.specialist")}
-                  <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
-                    <option value="any">{t("publicBooking.anySpecialist")}</option>
+                  <select value={masterId} disabled={pending || masters.length === 0} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
+                    <option value="" disabled>{t("publicBooking.chooseSpecialist")}</option>
                     {masters.map((person) => (
                       <option key={person.id} value={person.id}>{person.name}</option>
                     ))}
@@ -1020,6 +1044,17 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 </label>
               )}
             </div>
+
+            {/* What it costs and how long, once both questions are answered. */}
+            {chosen.length > 0 && masterId && (
+              <div className="public-booking-quote">
+                <strong>{money(quote.price)}</strong>
+                <div>
+                  <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
+                  <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
+                </div>
+              </div>
+            )}
 
             {ribbon.length > 0 && chosen.length > 0 && masters.length > 0 && (
               <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
@@ -1045,7 +1080,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                       >
                         <span>{weekday}</span>
                         <strong>{day}</strong>
-                        <span className="public-booking-day-state" aria-hidden="true">{free ? entry.slots.length : "—"}</span>
                       </button>
                     );
                   })}
@@ -1053,13 +1087,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
 
-            <div className="public-booking-quote">
-              <strong>{money(quote.price)}</strong>
-              <div>
-                <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
-                <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
-              </div>
-            </div>
           </form>
         ) : stage === "code" ? (
           <form onSubmit={confirmCode} noValidate>
@@ -1253,7 +1280,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               {slots.map((slot) => (
                 <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
                   <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
-                  {namesSpecialist && <span>{slot.specialist_name}</span>}
                 </button>
               ))}
             </div>

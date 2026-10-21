@@ -293,7 +293,10 @@ test.describe("authentication UI", () => {
     await expect(page.getByRole("button", { name: "Copy the link" })).toBeVisible();
 
     // With the price on it that was typed, not the one the product suggested.
+    // Somebody working alone is the studio's own name, so the service is the only question.
     await page.goto((await link.textContent())!.trim());
+    const service = page.getByRole("combobox", { name: "Service" });
+    await service.selectOption((await service.locator("option", { hasText: "Manicure" }).first().getAttribute("value"))!);
     await expect(page.locator(".public-booking-quote")).toContainText("350");
   });
 
