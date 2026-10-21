@@ -52,14 +52,17 @@ test.describe("the public booking page", () => {
     const strip = page.locator(".public-booking-days-strip");
     const timesHeading = page.getByRole("heading", { name: "Choose a time", exact: true });
 
-    // Nothing is picked for the client, even with one service on the list.
+    // Nothing is picked for the client, even with one service on the list. The
+    // master's field is there from the start, greyed out until a service is.
     await expect(service).toHaveValue("");
     await expect(service).toContainText("Choose a service");
-    await expect(page.getByLabel("Specialist")).toHaveCount(0);
+    await expect(page.getByLabel("Specialist")).toBeDisabled();
+    await expect(page.getByLabel("Specialist")).toContainText("Choose a specialist");
     await expect(quote).toHaveCount(0);
 
     // A service, and still no master: no price, days or times yet.
     await chooseService(page, studio.serviceId);
+    await expect(page.getByLabel("Specialist")).toBeEnabled();
     await expect(page.getByLabel("Specialist")).toHaveValue("");
     await expect(page.getByLabel("Specialist")).toContainText("Choose a specialist");
     await expect(page.getByLabel("Specialist")).not.toContainText("Any available");

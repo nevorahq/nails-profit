@@ -51,13 +51,13 @@ for (const width of [null, 375] as const) {
     test("two services are priced, timed and booked as one appointment", async ({ page, browserErrors }, testInfo) => {
       void browserErrors;
       await page.goto(`/book/${studio.slug}`);
-      // Four services and none picked for the client: nothing below the service yet.
+      // Four services and none picked for the client: the master waits, greyed out.
       const service = page.getByRole("combobox", { name: /^Service/ });
       await expect(service).toHaveCount(1);
       await expect(service).toHaveValue("");
       await expect(service).toContainText("Choose a service");
       await expect(page.locator(".public-booking-quote")).toHaveCount(0);
-      await expect(page.getByLabel("Specialist")).toHaveCount(0);
+      await expect(page.getByLabel("Specialist")).toBeDisabled();
       await expect(page.getByRole("button", { name: "+ Another service" })).toHaveCount(0);
 
       // The price waits for the master as well as the service.

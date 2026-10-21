@@ -72,6 +72,8 @@ for (const width of [null, 375] as const) {
       await studio.owner.patch(`/api/v1/specialists/${studio.specialistId}`, { name: studioName });
 
       await page.reload();
+      await expect(page.getByRole("combobox", { name: "Service" })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
       await expect(page.locator(".public-booking-quote")).toHaveCount(0);
       await chooseService(page, studio.serviceId);
       await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);

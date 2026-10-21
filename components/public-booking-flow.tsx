@@ -272,11 +272,14 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * works there, and who will be doing the nails is said again beside the
    * time held.
    */
-  const solo = masters.length === 1 && sameName(masters[0].name, profile.name);
-  const showsMaster = masters.length > 0 && !solo;
+  // Read off the whole catalogue, not the sitting: the master's field is on the
+  // page before any service is picked, greyed out until one is.
+  const everyone = [...new Map(services.flatMap((entry) => entry.specialists).map((person) => [person.id, person])).values()];
+  const solo = everyone.length === 1 && sameName(everyone[0].name, profile.name);
+  const showsMaster = everyone.length > 0 && !solo;
   /** Whose times to show: the one picked, or the studio of one's own. */
   const masterId = solo
-    ? masters[0].id
+    ? (masters[0]?.id ?? "")
     : masters.some((person) => person.id === specialistId) ? specialistId : "";
 
   useEffect(() => {
@@ -1032,7 +1035,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               {showsMaster && (
                 <label>
                   {t("publicBooking.specialist")}
-                  <select value={masterId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
+                  <select value={masterId} disabled={pending || masters.length === 0} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
                     <option value="" disabled>{t("publicBooking.chooseSpecialist")}</option>
                     {masters.map((person) => (
                       <option key={person.id} value={person.id}>{person.name}</option>
