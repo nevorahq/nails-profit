@@ -229,6 +229,14 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/public/bookings/invalid-token/status" }),
   },
   {
+    route: "/api/v1/public/bookings/[token]/calendar",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "The same token, giving the appointment as an .ics file for the client's calendar",
+    request: async () => ({ path: "/api/v1/public/bookings/invalid-token/calendar" }),
+  },
+  {
     route: "/api/v1/public/bookings/[token]/cancel",
     method: "POST",
     allowed: ALL_ROLES,

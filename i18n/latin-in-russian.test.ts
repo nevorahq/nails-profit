@@ -12,7 +12,7 @@ const allowed = new Set([
   // Messengers, providers and products
   "WhatsApp", "Telegram", "Viber", "Paddle", "Lemon", "Squeezy", "Nail", "Profit", "Maib",
   // Browsers and devices
-  "Chrome", "Safari", "Firefox", "iPhone", "Android", "Windows", "Excel",
+  "Chrome", "Safari", "Firefox", "iPhone", "Android", "Windows", "Excel", "Outlook", "Google",
   // Formats and protocols
   "CSV", "JPEG", "PNG", "WebP", "JSON", "UTF", "vcf", "API", "Email", "email", "cookie", "Cookie",
   // Examples inside placeholders
