@@ -526,6 +526,14 @@ export async function bookAppointment(
 }
 
 /**
+ * Picks the master on the public page. With more than one to choose from, no
+ * days or times are asked for until somebody is.
+ */
+export async function chooseMaster(page: Page, name: string) {
+  await page.getByLabel("Specialist").selectOption({ label: name });
+}
+
+/**
  * Picks a day on the public page's ribbon. The day is part of the answer the
  * page fetched once, so this is a click and no further request.
  */

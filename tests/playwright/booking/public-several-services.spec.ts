@@ -7,8 +7,13 @@ import {
   seedStudio,
   useClientAddress,
   type Studio,
+  chooseMaster,
   chooseRibbonDay,
 } from "../helpers/studio";
+
+async function chooseService(page: Page, name: string) {
+  await page.getByRole("combobox", { name: /^Service/ }).selectOption({ label: name });
+}
 
 /**
  * A stranger booking a manicure and a pedicure in one sitting.
@@ -49,7 +54,16 @@ for (const width of [null, 375] as const) {
     test("two services are priced, timed and booked as one appointment", async ({ page, browserErrors }, testInfo) => {
       void browserErrors;
       await page.goto(`/book/${studio.slug}`);
-      await expect(page.getByRole("combobox", { name: /^Service/ })).toHaveCount(1);
+      // Four services and none picked for the client: nothing below the service yet.
+      const service = page.getByRole("combobox", { name: /^Service/ });
+      await expect(service).toHaveCount(1);
+      await expect(service).toHaveValue("");
+      await expect(service).toContainText("Choose a service");
+      await expect(page.locator(".public-booking-quote")).toHaveCount(0);
+      await expect(page.getByLabel("Specialist")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "+ Another service" })).toHaveCount(0);
+
+      await chooseService(page, "Manicure with coating");
       await expect(page.locator(".public-booking-quote")).toContainText("MDL 600.00");
 
       await page.getByRole("button", { name: "+ Another service" }).click();
@@ -67,7 +81,7 @@ for (const width of [null, 375] as const) {
       await noSidewaysScroll(page);
       await page.screenshot({ path: testInfo.outputPath("public-two-services.png"), fullPage: true });
 
-      await page.getByLabel("Specialist").selectOption({ label: studio.specialistName });
+      await chooseMaster(page, studio.specialistName);
       await chooseRibbonDay(page, daysFromToday(2));
       const times = page.locator(".public-booking-slots button");
       await expect(times.first()).toBeVisible();
@@ -104,13 +118,16 @@ for (const width of [null, 375] as const) {
       });
 
       await page.goto(`/book/${studio.slug}`);
+      await chooseService(page, "Manicure with coating");
       await page.getByRole("button", { name: "+ Another service" }).click();
       await page.getByRole("combobox", { name: /^Service 2/ }).selectOption({ label: "Pedicure" });
       await expect(page.locator(".public-booking-card").getByRole("alert")).toContainText("No single specialist does all of these");
       await expect(page.locator(".public-booking-days-strip")).toHaveCount(0);
 
-      // Back to one service, and the page books as before.
+      // Back to one service, which only one master does: nothing to pick, so
+      // the page goes straight to the days.
       await page.getByRole("button", { name: "Remove service 2" }).click();
+      await expect(page.getByLabel("Specialist")).toHaveCount(0);
       await expect(page.locator(".public-booking-days-strip")).toBeVisible();
     });
   });

@@ -187,7 +187,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     chosen.every((entry) => entry.service.specialists.some((other) => other.id === person.id)),
   );
   const sittingPayload = chosen.map((entry) => ({ service_id: entry.service.id, add_on_ids: entry.addOnIds }));
-  const [specialistId, setSpecialistId] = useState("any");
+  /** The master picked, or "" before one is: with several to choose from, no times are asked for until then. */
+  const [specialistId, setSpecialistId] = useState("");
   const [date, setDate] = useState(() => dateInZone(location.timezone));
   const [slots, setSlots] = useState<Slot[]>([]);
   /** The coming days and the times of each, from the one request the ribbon costs. */
@@ -275,6 +276,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const soleMaster =
     masters.length === 1 && !sameName(masters[0].name, profile.name) ? masters[0] : null;
   const showsMaster = namesSpecialist || soleMaster !== null;
+  /** Whose times to show: the one picked, or the only one there is. */
+  const masterId =
+    masters.length === 1 ? masters[0].id : masters.some((person) => person.id === specialistId) ? specialistId : "";
 
   useEffect(() => {
     let active = true;
@@ -295,8 +299,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
         const next = body.data.services as Service[];
         setServices(next);
-        setLines(next[0] ? [{ serviceId: next[0].id, addOnIds: [] }] : []);
-        setSpecialistId("any");
+        // Nothing is chosen for the client, unless there is nothing to choose between.
+        setLines(next.length === 1 ? [{ serviceId: next[0].id, addOnIds: [] }] : []);
+        setSpecialistId("");
         setSlots([]);
         setRibbon([]);
         setSearched(false);
@@ -449,7 +454,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   /** A change to what is being booked: the times found were for something else. */
   function changeLines(next: { serviceId: string; addOnIds: string[] }[]) {
     setLines(next);
-    setSpecialistId("any");
+    setSpecialistId("");
     setSlots([]);
     setRibbon([]);
     setSearched(false);
@@ -490,10 +495,10 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * small on purpose (`PUBLIC_BOOKING_AVAILABILITY_RULE`). Picking a day is
    * then free, because every day's times came with the answer.
    */
-  const sittingKey = JSON.stringify([locationId, specialistId, sittingPayload, ribbonRefresh]);
+  const sittingKey = JSON.stringify([locationId, masterId, sittingPayload, ribbonRefresh]);
   const catalogLoaded = services.length > 0;
   useEffect(() => {
-    if (!catalogLoaded || chosen.length === 0 || masters.length === 0) return;
+    if (!catalogLoaded || chosen.length === 0 || !masterId) return;
     let active = true;
     const timer = setTimeout(async () => {
       setPendingAction("availability");
@@ -507,7 +512,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         add_on_ids: chosen[0].addOnIds.join(","),
         // Every service of the sitting, so the times offered fit all of it.
         services: chosen.map((entry) => [entry.service.id, ...entry.addOnIds].join(":")).join("|"),
-        specialist_id: specialistId,
+        specialist_id: masterId,
         date: dateInZone(location.timezone),
         days: String(RIBBON_DAYS),
       });
@@ -902,6 +907,27 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
 
+            {/* Nothing below the service is shown until one is picked. */}
+            {services.length > 0 && chosen.length === 0 && (
+              <div className="public-booking-service">
+                <div className="public-booking-service-head">
+                  <label>
+                    {t("publicBooking.service")}
+                    <select
+                      value=""
+                      disabled={pending}
+                      onChange={(event) => changeLines([{ serviceId: event.target.value, addOnIds: [] }])}
+                    >
+                      <option value="" disabled>{t("publicBooking.chooseService")}</option>
+                      {services.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {chosen.map((entry, index) => {
               const number = index + 1;
               const label = chosen.length > 1 ? t("serviceLines.serviceN", { n: number }) : t("publicBooking.service");
@@ -979,7 +1005,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               );
             })}
 
-            {lines.length < MAX_PUBLIC_SERVICES && services.some((candidate) => !lines.some((line) => line.serviceId === candidate.id)) && (
+            {chosen.length > 0 && lines.length < MAX_PUBLIC_SERVICES && services.some((candidate) => !lines.some((line) => line.serviceId === candidate.id)) && (
               <button
                 type="button"
                 className="secondary-button public-booking-add-service"
@@ -1012,7 +1038,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                 <label>
                   {t("publicBooking.specialist")}
                   <select value={specialistId} disabled={pending} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
-                    <option value="any">{t("publicBooking.anySpecialist")}</option>
+                    <option value="" disabled>{t("publicBooking.chooseSpecialist")}</option>
                     {masters.map((person) => (
                       <option key={person.id} value={person.id}>{person.name}</option>
                     ))}
@@ -1052,13 +1078,15 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
 
-            <div className="public-booking-quote">
-              <strong>{money(quote.price)}</strong>
-              <div>
-                <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
-                <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
+            {chosen.length > 0 && (
+              <div className="public-booking-quote">
+                <strong>{money(quote.price)}</strong>
+                <div>
+                  <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
+                  <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
+                </div>
               </div>
-            </div>
+            )}
           </form>
         ) : stage === "code" ? (
           <form onSubmit={confirmCode} noValidate>
@@ -1252,7 +1280,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               {slots.map((slot) => (
                 <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
                   <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
-                  {namesSpecialist && <span>{slot.specialist_name}</span>}
                 </button>
               ))}
             </div>
