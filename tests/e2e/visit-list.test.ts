@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
+import { eq } from "drizzle-orm";
+
 import { measureStatements } from "@/db/query-meter";
+import { visits } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { loadVisitList } from "@/lib/visit-list";
+import { loadVisitList, type VisitListFilters } from "@/lib/visit-list";
 
 import { dataOf } from "../helpers/api";
-import { closeTestConnections, resetDatabase } from "../helpers/database";
+import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createCanonicalStudio, type Studio } from "../helpers/studio";
 
 /**
@@ -31,13 +34,15 @@ async function closeVisit(clientId: string | null) {
   ).id;
 }
 
-function load() {
+function load(filters: Partial<VisitListFilters> = {}) {
   return measureStatements(() =>
     withTenant(studio.organizationId, (tx) =>
-      loadVisitList(tx, { userId: studio.owner.userId, role: "owner" }, { onlyVisit: null }, false),
+      loadVisitList(tx, { userId: studio.owner.userId, role: "owner" }, { onlyVisit: null, ...filters }, false),
     ),
   );
 }
+
+const day = (daysFromNow: number) => new Date(Date.now() + daysFromNow * 86_400_000).toISOString().slice(0, 10);
 
 beforeAll(async () => {
   await resetDatabase();
@@ -57,6 +62,9 @@ describe("the visit list", () => {
     const { result, statements } = await load();
 
     expect(result.detailed).toEqual([]);
+    // Nothing at all is not «nothing in this period»: the first is the page that
+    // teaches how to close a visit, the second only says the month is empty.
+    expect((await load({ from: day(-30), to: day(1) })).result.emptyBecauseOfPeriod).toBe(false);
     expect(result.people.map((person) => person.name)).toContain("Мастер");
     // The transaction's setup, the visits and the people; nothing is asked
     // about visits that are not there.
@@ -104,5 +112,42 @@ describe("the visit list", () => {
     expect(many.statements.length).toBe(few.statements.length);
     // setup, visits with their clients, the people, the newest snapshots, the lines.
     expect(many.statements.length).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("the visit list's period", () => {
+  test("leaves out visits closed outside it, and brings them back when the period reaches them", async () => {
+    const all = (await load()).result.detailed;
+    const old = all[all.length - 1].visit.id;
+    const twoMonthsAgo = new Date(Date.now() - 62 * 86_400_000);
+    await adminDb.update(visits).set({ completedAt: twoMonthsAgo }).where(eq(visits.id, old));
+
+    const thisMonth = await load({ from: day(-20), to: day(1) });
+    const wider = await load({ from: day(-90), to: day(1) });
+
+    expect(thisMonth.result.detailed.map((row) => row.visit.id)).not.toContain(old);
+    expect(thisMonth.result.detailed).toHaveLength(all.length - 1);
+    expect(wider.result.detailed.map((row) => row.visit.id)).toContain(old);
+    expect(wider.result.detailed).toHaveLength(all.length);
+  });
+
+  test("says an empty period is empty because of the period when the studio has visits", async () => {
+    const { result } = await load({ from: "2020-01-01", to: "2020-01-31" });
+
+    expect(result.detailed).toEqual([]);
+    expect(result.emptyBecauseOfPeriod).toBe(true);
+  });
+
+  test("does not say so when the list is not empty", async () => {
+    expect((await load({ from: day(-20), to: day(1) })).result.emptyBecauseOfPeriod).toBe(false);
+  });
+
+  test("a single visit asked for by id is found whatever the period", async () => {
+    const all = (await load()).result.detailed;
+    const old = all.find((row) => row.visit.completedAt.getTime() < Date.now() - 50 * 86_400_000)!;
+
+    const { result } = await load({ onlyVisit: old.visit.id });
+
+    expect(result.detailed.map((row) => row.visit.id)).toEqual([old.visit.id]);
   });
 });

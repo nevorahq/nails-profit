@@ -49,16 +49,22 @@ export async function loadVisitList(
     ownSpecialistId = own?.id ?? "00000000-0000-0000-0000-000000000000";
   }
 
-  const conditions = [
+  // Whose visits, and which one — kept apart from the days, because an empty
+  // list means something different depending on whether the days or the scope
+  // emptied it.
+  const scope = [
     filters.onlyVisit ? eq(visits.id, filters.onlyVisit) : undefined,
-    filters.from ? gte(visits.completedAt, new Date(filters.from)) : undefined,
-    filters.to ? lte(visits.completedAt, new Date(`${filters.to}T23:59:59.999Z`)) : undefined,
     ownSpecialistId
       ? eq(visits.specialistId, ownSpecialistId)
       : filters.specialist
         ? eq(visits.specialistId, filters.specialist)
         : undefined,
   ].filter(Boolean);
+  const days = [
+    filters.from ? gte(visits.completedAt, new Date(filters.from)) : undefined,
+    filters.to ? lte(visits.completedAt, new Date(`${filters.to}T23:59:59.999Z`)) : undefined,
+  ].filter(Boolean);
+  const conditions = [...scope, ...days];
 
   // The client's name comes with the visit: a left join, because a visit may
   // have none, and it is the same tenant on both sides.
@@ -137,5 +143,21 @@ export async function loadVisitList(
           .orderBy(asc(visitPhotos.createdAt))
       : [];
 
-  return { detailed, people, photoRows, canFilterBySpecialist: ownSpecialistId === null };
+  /*
+   * Whether an empty list is the period's doing. «Визитов пока нет» invites the
+   * first visit, which is the wrong thing to say to a studio whose month has
+   * just begun; one more statement, asked only when the list is empty and days
+   * were what could have emptied it.
+   */
+  let emptyBecauseOfPeriod = false;
+  if (rows.length === 0 && days.length > 0) {
+    const [any] = await tx
+      .select({ id: visits.id })
+      .from(visits)
+      .where(scope.length > 0 ? and(...scope) : undefined)
+      .limit(1);
+    emptyBecauseOfPeriod = any !== undefined;
+  }
+
+  return { detailed, people, photoRows, canFilterBySpecialist: ownSpecialistId === null, emptyBecauseOfPeriod };
 }

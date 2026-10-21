@@ -20,6 +20,7 @@ import { mayHandlePhotos, photoUrl } from "@/lib/visit-photos";
 import { requireWorkspace } from "@/lib/workspace";
 import { serviceNamesOf } from "@/lib/service-names";
 import { loadVisitList } from "@/lib/visit-list";
+import { presetRanges, todayIn, visitListPeriod } from "@/domain/report-period";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -56,8 +57,21 @@ export default async function VisitsPage({
   const showsPhotos = mayHandlePhotos(membership.role, "read") && getPhotoStorage() !== null;
   const addsPhotos = showsPhotos && mayHandlePhotos(membership.role, "write");
 
+  /*
+   * This month unless asked otherwise, by the studio's own clock — the list and
+   * the totals under it are for one period, the way the report is. See
+   * `visitListPeriod` for why one visit asked for by id is the exception.
+   */
+  const today = todayIn(new Date(), workspace.timezone);
+  const period = visitListPeriod(filters, onlyVisit, today);
+
   const data = await withTenant(membership.organizationId, (tx) =>
-    loadVisitList(tx, { userId: membership.userId, role: membership.role }, { ...filters, onlyVisit }, showsPhotos),
+    loadVisitList(
+      tx,
+      { userId: membership.userId, role: membership.role },
+      { from: period.from, to: period.to, specialist: filters.specialist, onlyVisit },
+      showsPhotos,
+    ),
   );
 
   const withMargin = data.detailed.filter(
@@ -122,10 +136,11 @@ export default async function VisitsPage({
       <nav className="calendar-toolbar" aria-label={t("filters.title")}>
         <PeriodFilter
           locale={locale}
-          from={filters.from}
-          to={filters.to}
+          from={period.from}
+          to={period.to}
           specialistId={filters.specialist}
           people={data.people}
+          presets={{ ranges: presetRanges(today), active: period.preset }}
           /* One master is not a choice — the same rule the dashboard and the
              calendar already apply. */
           showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
@@ -148,7 +163,13 @@ export default async function VisitsPage({
         </div>
       )}
 
-      {groups.length === 0 && (
+      {groups.length === 0 && data.emptyBecauseOfPeriod && (
+        // The studio has visits, just none in these days: not the page that
+        // teaches how to close the first one.
+        <p className="muted">{t("visits.noneInPeriod")}</p>
+      )}
+
+      {groups.length === 0 && !data.emptyBecauseOfPeriod && (
         <SectionEmpty
           section="visits"
           businessType={businessType}
