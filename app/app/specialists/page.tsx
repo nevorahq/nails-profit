@@ -41,7 +41,7 @@ export default async function SpecialistsPage() {
    */
   const showsPay = seesIndividualPay(membership.role);
 
-  const { people, catalogue } = await withTenant(membership.organizationId, async (tx) => {
+  const peopleRead = withTenant(membership.organizationId, async (tx) => {
     const cards = await loadSpecialistCards(tx, {
       ...(ownOnly ? { ownedBy: membership.userId } : {}),
       withoutPay: !showsPay,
@@ -73,8 +73,8 @@ export default async function SpecialistsPage() {
   // Read outside the tenant transaction because `membership` is the one table
   // RLS does not cover; the organization filter is what scopes it. Only someone
   // who may manage specialists is shown who could be linked to one.
-  const members = canManageCatalogue(membership.role, "commissions")
-    ? await db
+  const membersRead = canManageCatalogue(membership.role, "commissions")
+    ? db
         .select({
           user_id: memberships.userId,
           email: users.email,
@@ -96,13 +96,25 @@ export default async function SpecialistsPage() {
    * stood at when it was drawn. Null — one count — for everybody who has closed
    * a visit, which is every studio past its first day.
    */
-  const setupGuide = canManageCatalogue(membership.role, "services")
-    ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
+  const setupGuideRead = canManageCatalogue(membership.role, "services")
+    ? withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
     : null;
 
   // A one-person tier with its one master on file has no room for another:
   // the add controls are not offered, and the manager says why.
-  const room = canManage ? await organizationHasRoom(membership.organizationId, "specialist") : true;
+  const roomRead = canManage ? organizationHasRoom(membership.organizationId, "specialist") : true;
+
+  /*
+   * The cards, the accounts that could be linked to one, the setup guide and the
+   * tier's room are read together: none needs another's answer, and they used to
+   * be asked one after the other against a database in another region.
+   */
+  const [{ people, catalogue }, members, setupGuide, room] = await Promise.all([
+    peopleRead,
+    membersRead,
+    setupGuideRead,
+    roomRead,
+  ]);
 
   return (
     <main className="app-shell">

@@ -7,6 +7,7 @@ import {
   previousMonth,
   previousRangeOf,
   resolveReportPeriod,
+  visitListPeriod,
   todayIn,
   wholeMonthOf,
 } from "@/domain/report-period";
@@ -151,5 +152,38 @@ describe("the period a delta is measured against", () => {
     expect(previousRangeOf({ to: "2026-09-10", preset: "custom", month: null })).toBeNull();
     expect(previousRangeOf({ from: "2026-09-20", to: "2026-09-10", preset: "custom", month: null })).toBeNull();
     expect(previousRangeOf({ from: "2026-02-30", to: "2026-03-10", preset: "custom", month: null })).toBeNull();
+  });
+});
+
+describe("the period the visit list opens on", () => {
+  const today = { year: 2026, month: 10, day: 21 };
+
+  it("is this month when nothing was asked, so the list and its totals stay about one month", () => {
+    expect(visitListPeriod({}, null, today)).toEqual({ from: "2026-10-01", to: "2026-10-31", preset: "this_month" });
+  });
+
+  it("honours the days it was given, as the report does", () => {
+    expect(visitListPeriod({ from: "2026-09-01", to: "2026-09-30" }, null, today)).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-30",
+      preset: "last_month",
+    });
+    expect(visitListPeriod({ from: "2026-03-05" }, null, today)).toEqual({ from: "2026-03-05", to: undefined, preset: "custom" });
+  });
+
+  it("applies no default to one visit that was asked for, which may be from any month", () => {
+    expect(visitListPeriod({}, "5b2b7c0e-0000-4000-8000-000000000000", today)).toEqual({
+      from: undefined,
+      to: undefined,
+      preset: "custom",
+    });
+  });
+
+  it("still honours days given beside a visit", () => {
+    expect(visitListPeriod({ from: "2026-09-01" }, "5b2b7c0e-0000-4000-8000-000000000000", today)).toEqual({
+      from: "2026-09-01",
+      to: undefined,
+      preset: "custom",
+    });
   });
 });

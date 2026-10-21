@@ -62,7 +62,10 @@ describe("public online booking", () => {
       public_status: "published",
       confirmation_mode: "instant",
       min_lead_minutes: 0,
-      max_advance_days: 90,
+      // 120, not 90: these suites book up to thirteen Wednesdays ahead, and on a Wednesday
+      // the thirteenth is 91 days away — outside a 90-day window, so every Wednesday's run
+      // found no slot and failed for a reason that had nothing to do with the code.
+      max_advance_days: 120,
     });
   });
 

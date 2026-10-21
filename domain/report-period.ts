@@ -102,6 +102,28 @@ export function resolveReportPeriod(
 }
 
 /**
+ * The period the visit list opens on.
+ *
+ * This month, like the report, when nothing was asked: the list used to be every
+ * visit since the studio opened, which grows without end — a year of work is a
+ * page of megabytes and a total nobody asked for. The totals under the list are
+ * the sum of what the list shows, so a period here is a period there.
+ *
+ * One exception: a single visit asked for by id. The calendar links to it, it may
+ * be from any month, and narrowing it to this one would answer a link to a visit
+ * with an empty list. Days given beside it are still honoured.
+ */
+export function visitListPeriod(
+  query: Readonly<{ from?: string; to?: string }>,
+  onlyVisit: string | null,
+  today: LocalDate,
+): Pick<ReportPeriod, "from" | "to" | "preset"> {
+  if (onlyVisit && !query.from && !query.to) return { from: undefined, to: undefined, preset: "custom" };
+  const { from, to, preset } = resolveReportPeriod(query, today);
+  return { from, to, preset };
+}
+
+/**
  * The days a period is compared against for «к прошлому периоду».
  *
  * A whole month is compared with the whole month before it — September with

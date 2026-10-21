@@ -77,6 +77,18 @@ function createAuth() {
     schema,
     usePlural: true,
   }),
+  /*
+   * A session and its user in one statement rather than two. Every signed-in
+   * page and every API call starts by finding out who is asking, the database
+   * is in another region, and a statement with a parameter costs two round
+   * trips: the second lookup was a fifth of what a small page spent.
+   *
+   * A cookie cache would have saved more, and was tried first, but it cannot be
+   * refreshed from a server component — the render may not set cookies — so it
+   * would have worked for the five minutes after sign-in and then silently
+   * stopped. Needs `sessionRelations` in the schema.
+   */
+  experimental: { joins: true },
   user: {
     additionalFields: {
       legalAccepted: {

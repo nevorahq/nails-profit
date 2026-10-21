@@ -1,9 +1,6 @@
-import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 
-import { db } from "@/db";
-import { memberships, organizations } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { getAuthenticatedMembership } from "@/lib/membership";
 import type { AppLocale } from "@/i18n/messages";
 import { localeFromHeader } from "@/i18n/accept-language";
 
@@ -23,17 +20,13 @@ export async function resolveLocale(): Promise<AppLocale> {
   // auth instance first would construct it — and fail — before the render had a
   // chance to say it cannot be prerendered at all.
   const requestHeaders = await headers();
-  const session = await auth.api.getSession({ headers: requestHeaders });
 
-  if (session) {
-    const [row] = await db
-      .select({ locale: organizations.locale })
-      .from(memberships)
-      .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-      .where(eq(memberships.userId, session.user.id))
-      .limit(1);
-    if (row) return row.locale as AppLocale;
-  }
+  // The same memoized lookup the shell and the page use, so a render that asks
+  // for the language three times — the root layout twice and the page once —
+  // reads the session once. It used to read the session, the user and the
+  // membership afresh each time: nine queries for a page of static text.
+  const caller = await getAuthenticatedMembership();
+  if (caller.session && caller.organization) return caller.organization.locale as AppLocale;
 
-  return localeFromHeader((await headers()).get("accept-language"));
+  return localeFromHeader(requestHeaders.get("accept-language"));
 }

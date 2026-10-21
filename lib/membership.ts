@@ -43,9 +43,46 @@ export type ActiveMembership = Readonly<{
   preview: PreviewContext | null;
 }>;
 
+/**
+ * The organization columns every signed-in screen reads, fetched in the same
+ * query that finds the membership.
+ *
+ * They used to be read again by the shell, by `requireWorkspace` and by the
+ * language lookup, each with a query of its own. A query here costs a round
+ * trip to a database in another region, and the three together cost more than
+ * the rest of a small page: reading what the membership join has already
+ * touched is free, asking for it again is not.
+ */
+export type OrganizationBasics = Pick<
+  typeof organizations.$inferSelect,
+  | "id"
+  | "name"
+  | "slug"
+  | "bookingAccess"
+  | "locale"
+  | "currency"
+  | "type"
+  | "practicalCapacityBasisPoints"
+  | "staffNotices"
+  | "detailedAnalytics"
+  | "timezone"
+  | "setupConfirmedAt"
+>;
+
 export type CallerResult =
   | { session: false }
-  | { session: true; membership: ActiveMembership | null; userId: string };
+  | {
+      session: true;
+      membership: ActiveMembership | null;
+      userId: string;
+      /**
+       * The organization the membership belongs to, or null for an account
+       * with none. Present even when `membership` is null because a pilot
+       * account is not enrolled yet: that screen still speaks the studio's
+       * language.
+       */
+      organization: OrganizationBasics | null;
+    };
 
 /**
  * The caller's session together with the organization they act in. Ordering is
@@ -88,7 +125,24 @@ async function loadAuthenticatedMembership(): Promise<CallerResult> {
   if (!session) return { session: false };
 
   const [row] = await db
-    .select({ organizationId: memberships.organizationId, role: memberships.role })
+    .select({
+      organizationId: memberships.organizationId,
+      role: memberships.role,
+      organization: {
+        id: organizations.id,
+        name: organizations.name,
+        slug: organizations.slug,
+        bookingAccess: organizations.bookingAccess,
+        locale: organizations.locale,
+        currency: organizations.currency,
+        type: organizations.type,
+        practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
+        staffNotices: organizations.staffNotices,
+        detailedAnalytics: organizations.detailedAnalytics,
+        timezone: organizations.timezone,
+        setupConfirmedAt: organizations.setupConfirmedAt,
+      },
+    })
     .from(memberships)
     .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
     // Deletion removes memberships, so this join is belt and braces: a row left
@@ -113,6 +167,7 @@ async function loadAuthenticatedMembership(): Promise<CallerResult> {
   return {
     session: true,
     userId: session.user.id,
+    organization: row?.organization ?? null,
     membership:
       row &&
       (!isPilotAccessEnforced() || pilotStatus === "active")
@@ -178,6 +233,7 @@ async function loadActiveMembership(): Promise<CallerResult> {
   return {
     session: true,
     userId: caller.userId,
+    organization: caller.organization,
     membership: {
       userId: selection.targetUserId,
       userEmail: target.email,

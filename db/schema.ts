@@ -2838,6 +2838,31 @@ export const rateLimitWindows = pgTable(
   (table) => [index("rate_limit_window_expiry_idx").on(table.windowExpiresAt)],
 );
 
+/**
+ * What lets Better Auth read a session and its user in one query.
+ *
+ * With `experimental.joins` on, its Drizzle adapter asks Drizzle's relational
+ * API for a row with the row it points at attached, instead of looking one up
+ * and then the other. That API needs every relation the library joins across
+ * declared — session to user, account to user, and user to accounts — or the
+ * call fails at runtime instead of falling back. Nothing else reads them, and
+ * they change no table.
+ *
+ * Named `users` and `accounts`, not `user` and `account`: the adapter joins by
+ * the table's name, and the schema is plural (`usePlural` in `lib/auth.ts`).
+ */
+export const sessionRelations = relations(sessions, ({ one }) => ({
+  users: one(users, { fields: [sessions.userId], references: [users.id] }),
+}));
+
+export const accountRelations = relations(accounts, ({ one }) => ({
+  users: one(users, { fields: [accounts.userId], references: [users.id] }),
+}));
+
+export const userRelations = relations(users, ({ many }) => ({
+  accounts: many(accounts),
+}));
+
 export const organizationRelations = relations(organizations, ({ many }) => ({
   memberships: many(memberships),
   services: many(services),

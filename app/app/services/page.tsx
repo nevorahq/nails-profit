@@ -7,7 +7,7 @@ import { can, canManageCatalogue } from "@/domain/rbac";
 import { ServiceList, type ServiceRow } from "@/components/service-list";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { loadMaterialsModes, materialsModeAt, showsMaterialsField } from "@/lib/materials-mode";
-import { loadServiceCosting } from "@/lib/service-costing";
+import { loadServiceCostings } from "@/lib/service-costing";
 import { loadSetupGuide } from "@/lib/onboarding";
 import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
@@ -36,33 +36,38 @@ export default async function ServicesPage() {
    * «Первый расчёт» is the owner's list and the window would send them to a
    * dashboard panel they are not shown.
    */
-  const setupGuide = canManageCatalogue(membership.role, "services")
-    ? await withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
-    : null;
+  /*
+   * The setup guide and the catalogue are read together — neither needs the
+   * other's answer — and the catalogue's costings share one read of the
+   * specialist's commission rules instead of one per service.
+   */
+  const [setupGuide, { rows, materialsShown }] = await Promise.all([
+    canManageCatalogue(membership.role, "services")
+      ? withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
+      : null,
+    withTenant(membership.organizationId, async (tx) => {
+      // Read once for the page: the mode is the month's, not each service's.
+      const modes = await loadMaterialsModes(tx, membership.organizationId, workspace.timezone);
+      const materialsMode = materialsModeAt(modes);
+      const [specialist] = await tx
+        .select({ id: specialists.id })
+        .from(specialists)
+        .where(isNull(specialists.archivedAt))
+        .orderBy(asc(specialists.createdAt), asc(specialists.id))
+        .limit(1);
 
-  const { rows, materialsShown } = await withTenant(membership.organizationId, async (tx) => {
-    // Read once for the page: the mode is the month's, not each service's.
-    const modes = await loadMaterialsModes(tx, membership.organizationId);
-    const materialsMode = materialsModeAt(modes);
-    const [specialist] = await tx
-      .select({ id: specialists.id })
-      .from(specialists)
-      .where(isNull(specialists.archivedAt))
-      .orderBy(asc(specialists.createdAt), asc(specialists.id))
-      .limit(1);
+      const catalogue = await tx
+        .select()
+        .from(services)
+        .where(isNull(services.archivedAt))
+        .orderBy(asc(services.createdAt));
 
-    const catalogue = await tx
-      .select()
-      .from(services)
-      .where(isNull(services.archivedAt))
-      .orderBy(asc(services.createdAt));
-
-    const costed: ServiceRow[] = await Promise.all(
-      catalogue.map(async (service) => {
-        const costing = await loadServiceCosting(tx, service, {
-          specialistId: specialist?.id ?? null,
-          materialsMode,
-        });
+      const costings = await loadServiceCostings(tx, catalogue, {
+        specialistId: specialist?.id ?? null,
+        materialsMode,
+      });
+      const costed: ServiceRow[] = catalogue.map((service, index) => {
+        const costing = costings[index];
         return {
           id: service.id,
           displayName: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
@@ -80,10 +85,10 @@ export default async function ServicesPage() {
                 }
               : { status: "incomplete" as const, reasons: [...costing.reasons] },
         };
-      }),
-    );
-    return { rows: costed, materialsShown: showsMaterialsField(modes) };
-  });
+      });
+      return { rows: costed, materialsShown: showsMaterialsField(modes) };
+    }),
+  ]);
 
   // Two different permissions on one screen: a Master may add a service, and
   // only a catalogue manager may change or archive one. See `create_only` in

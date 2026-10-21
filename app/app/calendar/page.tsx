@@ -28,7 +28,7 @@ import {
   visitLines,
   visits,
 } from "@/db/schema";
-import { withTenant } from "@/db/tenant";
+import { readTogether } from "@/db/tenant";
 import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import {
   addLocalDays,
@@ -135,16 +135,104 @@ export default async function CalendarPage({
   const filters = await searchParams;
   const now = new Date();
 
-  const data = await withTenant(membership.organizationId, async (tx) => {
-    const places = await tx
-      .select({
-        id: locations.id,
-        name: locations.name,
-        timezone: locations.timezone,
-        status: locations.status,
-      })
-      .from(locations)
-      .orderBy(asc(locations.sortOrder), asc(locations.name));
+  /*
+   * Everything this page reads, in two rounds of reads that each run at once.
+   * It was one transaction and about twenty statements in a row against a
+   * database in another region. What the day needs first — the addresses, whose
+   * calendar this is, and the lists the forms offer — is asked together; what
+   * depends on the window those addresses fix is asked together after it.
+   */
+  const data = await (async () => {
+    const first = await readTogether(membership.organizationId, {
+      where: async (tx) => {
+        const places = await tx
+          .select({
+            id: locations.id,
+            name: locations.name,
+            timezone: locations.timezone,
+            status: locations.status,
+          })
+          .from(locations)
+          .orderBy(asc(locations.sortOrder), asc(locations.name));
+
+        const ownSpecialistId = await scopedSpecialistId(tx, membership);
+        return { places, ownSpecialistId };
+      },
+      lists: async (tx) => {
+        // The photo comes from the card, the way `app/app/visits/page.tsx` reads
+        // it: a card nobody has given one has none, and the list falls back to the
+        // initial.
+        const people = (
+          await tx
+            .select({
+              id: specialists.id,
+              name: specialists.name,
+              avatarVersion: specialistAvatars.version,
+            })
+            .from(specialists)
+            .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
+            .where(isNull(specialists.archivedAt))
+            .orderBy(asc(specialists.name))
+        ).map((person) => ({
+          id: person.id,
+          name: person.name,
+          avatar: avatarUrl(person.id, person.avatarVersion),
+        }));
+
+        const catalogue = await tx
+          .select({ id: services.id, name: services.name, durationMinutes: services.durationMinutes })
+          .from(services)
+          .where(isNull(services.archivedAt))
+          .orderBy(asc(services.createdAt));
+
+        const extras = await tx
+          .select({ id: addOns.id, name: addOns.name })
+          .from(addOns)
+          .where(isNull(addOns.archivedAt))
+          .orderBy(asc(addOns.createdAt));
+        // Which services each add-on goes with, so an appointment of two services
+        // pairs each add-on with its own. One linked to none stays on offer with
+        // any service, which is how this screen always offered it.
+        const addOnLinks = await tx
+          .select({ addOnId: serviceAddOns.addOnId, serviceId: serviceAddOns.serviceId })
+          .from(serviceAddOns);
+
+        return { people, catalogue, extras, addOnLinks };
+      },
+      links: async (tx) => {
+        const assignments = await tx
+          .select({
+            specialistId: specialistLocations.specialistId,
+            locationId: specialistLocations.locationId,
+          })
+          .from(specialistLocations);
+
+        const roster = await tx
+          .select({ id: clients.id, name: clients.name })
+          .from(clients)
+          .where(isNull(clients.archivedAt))
+          .orderBy(asc(clients.name))
+          .limit(500);
+
+        /*
+         * And the gap a studio keeps after each appointment. It is not free time —
+         * nothing can be booked into it — so counting it as free would offer the
+         * desk a ten-minute opening that the booking engine itself refuses.
+         */
+        const buffers = await tx
+          .select({
+            locationId: bookingSettings.locationId,
+            before: bookingSettings.bufferBeforeMinutes,
+            after: bookingSettings.bufferAfterMinutes,
+          })
+          .from(bookingSettings);
+
+        return { assignments, roster, buffers };
+      },
+    });
+    const { places, ownSpecialistId } = first.where;
+    const { people, catalogue, extras, addOnLinks } = first.lists;
+    const { assignments, roster, buffers } = first.links;
 
     const active = places.filter((place) => place.status === "active");
     // The anchor date is read in the timezone of the location being looked at,
@@ -165,268 +253,218 @@ export default async function CalendarPage({
       Date.UTC(grid.at(-1)!.year, grid.at(-1)!.month - 1, grid.at(-1)!.day + 2),
     );
 
-    const ownSpecialistId = await scopedSpecialistId(tx, membership);
     const requestedStatuses = (filters.status?.split(",") ?? []).filter(Boolean);
 
-    const rows = await tx
-      .select({
-        booking: bookings,
-        specialistName: specialists.name,
-        locationName: locations.name,
-        timezone: locations.timezone,
-        clientName: clients.name,
-        clientPhone: clients.normalizedPhone,
-        clientChannels: clients.contactChannels,
-        clientNotes: clients.notes,
-      })
-      .from(bookings)
-      .innerJoin(specialists, eq(bookings.specialistId, specialists.id))
-      .innerJoin(locations, eq(bookings.locationId, locations.id))
-      .leftJoin(clients, eq(bookings.clientId, clients.id))
-      .where(
-        and(
-          gte(bookings.startsAt, windowStart),
-          lt(bookings.startsAt, windowEnd),
-          ownSpecialistId
-            ? eq(bookings.specialistId, ownSpecialistId)
-            : filters.specialist
-              ? eq(bookings.specialistId, filters.specialist)
-              : undefined,
-          filters.location ? eq(bookings.locationId, filters.location) : undefined,
-          requestedStatuses.length > 0
-            ? inArray(bookings.status, requestedStatuses as (typeof bookings.$inferSelect)["status"][])
-            : undefined,
-        ),
-      )
-      .orderBy(asc(bookings.startsAt));
+    const second = await readTogether(membership.organizationId, {
+      appointments: async (tx) => {
+        const rows = await tx
+          .select({
+            booking: bookings,
+            specialistName: specialists.name,
+            locationName: locations.name,
+            timezone: locations.timezone,
+            clientName: clients.name,
+            clientPhone: clients.normalizedPhone,
+            clientChannels: clients.contactChannels,
+            clientNotes: clients.notes,
+          })
+          .from(bookings)
+          .innerJoin(specialists, eq(bookings.specialistId, specialists.id))
+          .innerJoin(locations, eq(bookings.locationId, locations.id))
+          .leftJoin(clients, eq(bookings.clientId, clients.id))
+          .where(
+            and(
+              gte(bookings.startsAt, windowStart),
+              lt(bookings.startsAt, windowEnd),
+              ownSpecialistId
+                ? eq(bookings.specialistId, ownSpecialistId)
+                : filters.specialist
+                  ? eq(bookings.specialistId, filters.specialist)
+                  : undefined,
+              filters.location ? eq(bookings.locationId, filters.location) : undefined,
+              requestedStatuses.length > 0
+                ? inArray(bookings.status, requestedStatuses as (typeof bookings.$inferSelect)["status"][])
+                : undefined,
+            ),
+          )
+          .orderBy(asc(bookings.startsAt));
 
-    // Widened in UTC, narrowed back in local time: a booking at 23:00 in one
-    // zone belongs to a different local day than the same instant in another.
-    const dated = rows.map((row) => ({
-      ...row,
-      localDate: localDateAt(row.booking.startsAt, row.timezone),
-    }));
-    const onDay = dated.filter((row) => row.localDate === selected);
+        // Widened in UTC, narrowed back in local time: a booking at 23:00 in one
+        // zone belongs to a different local day than the same instant in another.
+        const dated = rows.map((row) => ({
+          ...row,
+          localDate: localDateAt(row.booking.startsAt, row.timezone),
+        }));
+        const onDay = dated.filter((row) => row.localDate === selected);
 
-    /*
-     * The priced-up contents of an appointment, for the listed day alone.
-     *
-     * A month of dates is drawn from status and start time only — a mark in a
-     * cell says nothing about what was booked — so reading every line of every
-     * appointment in it would be a month of rows fetched to render nothing. The
-     * day below is the half that names services and totals money, and it is one
-     * date's worth.
-     */
-    const lines =
-      onDay.length === 0
-        ? []
-        : await tx
-            .select()
-            .from(bookingLines)
-            .where(
-              inArray(
-                bookingLines.bookingId,
-                onDay.map((row) => row.booking.id),
-              ),
-            );
+        /*
+         * The priced-up contents of an appointment, for the listed day alone.
+         *
+         * A month of dates is drawn from status and start time only — a mark in a
+         * cell says nothing about what was booked — so reading every line of every
+         * appointment in it would be a month of rows fetched to render nothing. The
+         * day below is the half that names services and totals money, and it is one
+         * date's worth.
+         */
+        const lines =
+          onDay.length === 0
+            ? []
+            : await tx
+                .select()
+                .from(bookingLines)
+                .where(
+                  inArray(
+                    bookingLines.bookingId,
+                    onDay.map((row) => row.booking.id),
+                  ),
+                );
 
-    // The photo comes from the card, the way `app/app/visits/page.tsx` reads
-    // it: a card nobody has given one has none, and the list falls back to the
-    // initial.
-    const people = (
-      await tx
-        .select({
-          id: specialists.id,
-          name: specialists.name,
-          avatarVersion: specialistAvatars.version,
-        })
-        .from(specialists)
-        .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
-        .where(isNull(specialists.archivedAt))
-        .orderBy(asc(specialists.name))
-    ).map((person) => ({
-      id: person.id,
-      name: person.name,
-      avatar: avatarUrl(person.id, person.avatarVersion),
-    }));
+        return { dated, onDay, lines };
+      },
+      manual: async (tx) => {
+        /*
+         * Visits closed by hand, with no appointment behind them — see
+         * `domain/calendar-visits`. Scoped exactly as the appointments are. Found
+         * by when they were closed and placed by when they began, so the window
+         * runs a day longer at its far end: a visit closed just after midnight
+         * still belongs to the evening before.
+         */
+        const placeIdsOf = (specialistId: string) =>
+          assignments
+            .filter(
+              (link) =>
+                link.specialistId === specialistId && active.some((place) => place.id === link.locationId),
+            )
+            .map((link) => link.locationId);
+        const visitRows = await tx
+          .select({
+            id: visits.id,
+            specialistId: visits.specialistId,
+            specialistName: specialists.name,
+            clientName: clients.name,
+            completedAt: visits.completedAt,
+            plannedDurationMinutes: visits.plannedDurationMinutes,
+            actualDurationMinutes: visits.actualDurationMinutes,
+          })
+          .from(visits)
+          .innerJoin(specialists, eq(visits.specialistId, specialists.id))
+          .leftJoin(clients, eq(visits.clientId, clients.id))
+          .where(
+            and(
+              isNull(visits.bookingId),
+              gte(visits.completedAt, windowStart),
+              lt(visits.completedAt, new Date(windowEnd.getTime() + 24 * 60 * 60_000)),
+              ownSpecialistId
+                ? eq(visits.specialistId, ownSpecialistId)
+                : filters.specialist
+                  ? eq(visits.specialistId, filters.specialist)
+                  : undefined,
+            ),
+          )
+          .orderBy(asc(visits.completedAt));
 
-    const catalogue = await tx
-      .select({ id: services.id, name: services.name, durationMinutes: services.durationMinutes })
-      .from(services)
-      .where(isNull(services.archivedAt))
-      .orderBy(asc(services.createdAt));
+        const handVisits = visitRows
+          .filter((row) =>
+            keepsManualVisit(
+              { specialistLocationIds: placeIdsOf(row.specialistId) },
+              { location: filters.location ?? "", statuses: requestedStatuses },
+            ),
+          )
+          .map((row) => {
+            const span = manualVisitSpan(row);
+            // The visit names no address, so its hours are read in the one being
+            // looked at, else its master's, else the calendar's own.
+            const place = filters.location || placeIdsOf(row.specialistId)[0];
+            const timezone = active.find((candidate) => candidate.id === place)?.timezone ?? anchorZone;
+            return { ...row, ...span, timezone, localDate: localDateAt(span.startsAt, timezone) };
+          });
+        const visitsOnDay = handVisits.filter((row) => row.localDate === selected);
+        const visitIds = visitsOnDay.map((row) => row.id);
 
-    const extras = await tx
-      .select({ id: addOns.id, name: addOns.name })
-      .from(addOns)
-      .where(isNull(addOns.archivedAt))
-      .orderBy(asc(addOns.createdAt));
-    // Which services each add-on goes with, so an appointment of two services
-    // pairs each add-on with its own. One linked to none stays on offer with
-    // any service, which is how this screen always offered it.
-    const addOnLinks = await tx
-      .select({ addOnId: serviceAddOns.addOnId, serviceId: serviceAddOns.serviceId })
-      .from(serviceAddOns);
+        // Names and money for the listed day alone, as with the appointments.
+        const handLines =
+          visitIds.length === 0
+            ? []
+            : await tx
+                .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
+                .from(visitLines)
+                .where(inArray(visitLines.visitId, visitIds));
+        // The newest version of each visit's figures, as `/app/visits` reads it.
+        const handRevenue =
+          visitIds.length === 0
+            ? []
+            : await tx
+                .selectDistinctOn([financialSnapshots.visitId], {
+                  visitId: financialSnapshots.visitId,
+                  revenueMinor: financialSnapshots.revenueMinor,
+                })
+                .from(financialSnapshots)
+                .where(inArray(financialSnapshots.visitId, visitIds))
+                .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
 
-    const assignments = await tx
-      .select({
-        specialistId: specialistLocations.specialistId,
-        locationId: specialistLocations.locationId,
-      })
-      .from(specialistLocations);
+        return { handVisits, visitsOnDay, handLines, handRevenue };
+      },
+      availability: async (tx) => {
+        const exceptionsRaw = await tx
+          .select({
+            id: availabilityExceptions.id,
+            specialistId: availabilityExceptions.specialistId,
+            locationId: availabilityExceptions.locationId,
+            startsAt: availabilityExceptions.startsAt,
+            endsAt: availabilityExceptions.endsAt,
+            reason: availabilityExceptions.reason,
+          })
+          .from(availabilityExceptions)
+          .where(
+            and(
+              ownSpecialistId
+                ? eq(availabilityExceptions.specialistId, ownSpecialistId)
+                : filters.specialist
+                  ? eq(availabilityExceptions.specialistId, filters.specialist)
+                  : undefined,
+              gte(availabilityExceptions.endsAt, windowStart),
+              lt(availabilityExceptions.startsAt, windowEnd),
+            ),
+          )
+          .orderBy(asc(availabilityExceptions.startsAt));
 
-    /*
-     * Visits closed by hand, with no appointment behind them — see
-     * `domain/calendar-visits`. Scoped exactly as the appointments are. Found
-     * by when they were closed and placed by when they began, so the window
-     * runs a day longer at its far end: a visit closed just after midnight
-     * still belongs to the evening before.
-     */
-    const placeIdsOf = (specialistId: string) =>
-      assignments
-        .filter(
-          (link) =>
-            link.specialistId === specialistId && active.some((place) => place.id === link.locationId),
-        )
-        .map((link) => link.locationId);
-    const visitRows = await tx
-      .select({
-        id: visits.id,
-        specialistId: visits.specialistId,
-        specialistName: specialists.name,
-        clientName: clients.name,
-        completedAt: visits.completedAt,
-        plannedDurationMinutes: visits.plannedDurationMinutes,
-        actualDurationMinutes: visits.actualDurationMinutes,
-      })
-      .from(visits)
-      .innerJoin(specialists, eq(visits.specialistId, specialists.id))
-      .leftJoin(clients, eq(visits.clientId, clients.id))
-      .where(
-        and(
-          isNull(visits.bookingId),
-          gte(visits.completedAt, windowStart),
-          lt(visits.completedAt, new Date(windowEnd.getTime() + 24 * 60 * 60_000)),
-          ownSpecialistId
-            ? eq(visits.specialistId, ownSpecialistId)
-            : filters.specialist
-              ? eq(visits.specialistId, filters.specialist)
-              : undefined,
-        ),
-      )
-      .orderBy(asc(visits.completedAt));
+        /*
+         * The shifts the day's tally measures its free time against.
+         *
+         * Without them there is no frame at all: the hours nobody booked would be
+         * indistinguishable from the hours a master is not in the studio, and a
+         * rota of 10:00–16:00 would be reported as a whole empty day.
+         *
+         * Read for the whole window and narrowed per day in the component: a rule
+         * carries a weekday and a range of dates it applies over, and which of them
+         * covers Thursday is a question about the day being listed.
+         */
+        const shifts = await tx
+          .select({
+            specialistId: scheduleRules.specialistId,
+            locationId: scheduleRules.locationId,
+            weekday: scheduleRules.weekday,
+            startMinute: scheduleRules.startMinute,
+            endMinute: scheduleRules.endMinute,
+            effectiveFrom: scheduleRules.effectiveFrom,
+            effectiveTo: scheduleRules.effectiveTo,
+          })
+          .from(scheduleRules)
+          .where(
+            ownSpecialistId
+              ? eq(scheduleRules.specialistId, ownSpecialistId)
+              : filters.specialist
+                ? eq(scheduleRules.specialistId, filters.specialist)
+                : undefined,
+          );
 
-    const handVisits = visitRows
-      .filter((row) =>
-        keepsManualVisit(
-          { specialistLocationIds: placeIdsOf(row.specialistId) },
-          { location: filters.location ?? "", statuses: requestedStatuses },
-        ),
-      )
-      .map((row) => {
-        const span = manualVisitSpan(row);
-        // The visit names no address, so its hours are read in the one being
-        // looked at, else its master's, else the calendar's own.
-        const place = filters.location || placeIdsOf(row.specialistId)[0];
-        const timezone = active.find((candidate) => candidate.id === place)?.timezone ?? anchorZone;
-        return { ...row, ...span, timezone, localDate: localDateAt(span.startsAt, timezone) };
-      });
-    const visitsOnDay = handVisits.filter((row) => row.localDate === selected);
-    const visitIds = visitsOnDay.map((row) => row.id);
+        return { exceptionsRaw, shifts };
+      },
+    });
 
-    // Names and money for the listed day alone, as with the appointments.
-    const handLines =
-      visitIds.length === 0
-        ? []
-        : await tx
-            .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
-            .from(visitLines)
-            .where(inArray(visitLines.visitId, visitIds));
-    // The newest version of each visit's figures, as `/app/visits` reads it.
-    const handRevenue =
-      visitIds.length === 0
-        ? []
-        : await tx
-            .selectDistinctOn([financialSnapshots.visitId], {
-              visitId: financialSnapshots.visitId,
-              revenueMinor: financialSnapshots.revenueMinor,
-            })
-            .from(financialSnapshots)
-            .where(inArray(financialSnapshots.visitId, visitIds))
-            .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
-
-    const roster = await tx
-      .select({ id: clients.id, name: clients.name })
-      .from(clients)
-      .where(isNull(clients.archivedAt))
-      .orderBy(asc(clients.name))
-      .limit(500);
-
-    const exceptionsRaw = await tx
-      .select({
-        id: availabilityExceptions.id,
-        specialistId: availabilityExceptions.specialistId,
-        locationId: availabilityExceptions.locationId,
-        startsAt: availabilityExceptions.startsAt,
-        endsAt: availabilityExceptions.endsAt,
-        reason: availabilityExceptions.reason,
-      })
-      .from(availabilityExceptions)
-      .where(
-        and(
-          ownSpecialistId
-            ? eq(availabilityExceptions.specialistId, ownSpecialistId)
-            : filters.specialist
-              ? eq(availabilityExceptions.specialistId, filters.specialist)
-              : undefined,
-          gte(availabilityExceptions.endsAt, windowStart),
-          lt(availabilityExceptions.startsAt, windowEnd),
-        ),
-      )
-      .orderBy(asc(availabilityExceptions.startsAt));
-
-    /*
-     * The shifts the day's tally measures its free time against.
-     *
-     * Without them there is no frame at all: the hours nobody booked would be
-     * indistinguishable from the hours a master is not in the studio, and a
-     * rota of 10:00–16:00 would be reported as a whole empty day.
-     *
-     * Read for the whole window and narrowed per day in the component: a rule
-     * carries a weekday and a range of dates it applies over, and which of them
-     * covers Thursday is a question about the day being listed.
-     */
-    const shifts = await tx
-      .select({
-        specialistId: scheduleRules.specialistId,
-        locationId: scheduleRules.locationId,
-        weekday: scheduleRules.weekday,
-        startMinute: scheduleRules.startMinute,
-        endMinute: scheduleRules.endMinute,
-        effectiveFrom: scheduleRules.effectiveFrom,
-        effectiveTo: scheduleRules.effectiveTo,
-      })
-      .from(scheduleRules)
-      .where(
-        ownSpecialistId
-          ? eq(scheduleRules.specialistId, ownSpecialistId)
-          : filters.specialist
-            ? eq(scheduleRules.specialistId, filters.specialist)
-            : undefined,
-      );
-
-    /*
-     * And the gap a studio keeps after each appointment. It is not free time —
-     * nothing can be booked into it — so counting it as free would offer the
-     * desk a ten-minute opening that the booking engine itself refuses.
-     */
-    const buffers = await tx
-      .select({
-        locationId: bookingSettings.locationId,
-        before: bookingSettings.bufferBeforeMinutes,
-        after: bookingSettings.bufferAfterMinutes,
-      })
-      .from(bookingSettings);
+    const { handVisits, visitsOnDay, handLines, handRevenue } = second.manual;
+    const { dated, onDay, lines } = second.appointments;
+    const { exceptionsRaw, shifts } = second.availability;
 
     return {
       shifts,
@@ -453,7 +491,7 @@ export default async function CalendarPage({
       selected,
       ownSpecialistId,
     };
-  });
+  })();
 
   // Section 6.1: an Analyst reads client history «без телефонов и email». The
   // name stays — a calendar with nobody's name on it is not a calendar.

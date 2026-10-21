@@ -6,7 +6,7 @@ import { resolveLocalizedText } from "@/i18n/localized-text";
 import type { AppLocale } from "@/i18n/messages";
 import { loadOnboarding, type OnboardingProgress } from "@/lib/onboarding";
 import { loadMaterialsModes, materialsModeAt } from "@/lib/materials-mode";
-import { loadServiceCosting } from "@/lib/service-costing";
+import { loadServiceCostings } from "@/lib/service-costing";
 
 /**
  * What `/app` shows a studio that has not closed a visit yet — and why that is
@@ -93,12 +93,14 @@ export async function loadStartScreen(
     ? materialsModeAt(await loadMaterialsModes(tx, organizationId))
     : undefined;
 
+  const costings = await loadServiceCostings(tx, catalogue, {
+    specialistId: specialist?.id ?? null,
+    materialsMode,
+  });
+
   const rows: FirstNumberRow[] = [];
-  for (const service of catalogue) {
-    const costed = await loadServiceCosting(tx, service, {
-      specialistId: specialist?.id ?? null,
-      materialsMode,
-    });
+  for (const [index, service] of catalogue.entries()) {
+    const costed = costings[index];
     /*
      * An incomplete service is left out rather than shown with dashes. The
      * checklist above is what reports a gap in the catalogue, in the one place

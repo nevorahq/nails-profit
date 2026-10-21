@@ -1,9 +1,6 @@
-import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import { db } from "@/db";
-import { organizations } from "@/db/schema";
 import { getActiveMembership, type ActiveMembership } from "@/lib/membership";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
@@ -61,22 +58,8 @@ async function loadWorkspace(): Promise<Workspace> {
   if (!caller.session) redirect("/login");
   if (!caller.membership) redirect("/app");
 
-  const [organization] = await db
-    .select({
-      name: organizations.name,
-      slug: organizations.slug,
-      bookingAccess: organizations.bookingAccess,
-      locale: organizations.locale,
-      currency: organizations.currency,
-      type: organizations.type,
-      practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
-      staffNotices: organizations.staffNotices,
-      detailedAnalytics: organizations.detailedAnalytics,
-      timezone: organizations.timezone,
-    })
-    .from(organizations)
-    .where(eq(organizations.id, caller.membership.organizationId))
-    .limit(1);
+  // Read by the membership lookup that already ran, so this costs no query.
+  const organization = caller.organization;
 
   return {
     membership: caller.membership,

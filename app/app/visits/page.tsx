@@ -1,5 +1,4 @@
 import { SectionEmpty } from "@/components/section-empty";
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import Link from "next/link";
 
 import { ToolIcon } from "@/components/icons";
@@ -8,17 +7,8 @@ import { PeriodFilter } from "@/components/period-filter";
 import { type AdjustLine, VisitAdjustForm } from "@/components/visit-adjust-form";
 import { VisitDeleteButton } from "@/components/visit-delete-button";
 import { VisitPhotos } from "@/components/visit-photos";
-import {
-  clients,
-  financialSnapshots,
-  specialistAvatars,
-  specialists,
-  visitLines,
-  visitPhotos,
-  visits,
-} from "@/db/schema";
 import { withTenant } from "@/db/tenant";
-import { can, canManageCatalogue, scopeFor } from "@/domain/rbac";
+import { can, canManageCatalogue } from "@/domain/rbac";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { businessLabel } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
@@ -29,6 +19,8 @@ import { getPhotoStorage } from "@/lib/photo-storage";
 import { mayHandlePhotos, photoUrl } from "@/lib/visit-photos";
 import { requireWorkspace } from "@/lib/workspace";
 import { serviceNamesOf } from "@/lib/service-names";
+import { loadVisitList } from "@/lib/visit-list";
+import { presetRanges, todayIn, visitListPeriod } from "@/domain/report-period";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -65,92 +57,22 @@ export default async function VisitsPage({
   const showsPhotos = mayHandlePhotos(membership.role, "read") && getPhotoStorage() !== null;
   const addsPhotos = showsPhotos && mayHandlePhotos(membership.role, "write");
 
-  const data = await withTenant(membership.organizationId, async (tx) => {
-    // Section 6.1: a Master sees only their own visits, resolved from the
-    // specialist row that carries their user id rather than from the query.
-    let ownSpecialistId: string | null = null;
-    if (scopeFor(membership.role, "bookings") === "own") {
-      const [own] = await tx
-        .select({ id: specialists.id })
-        .from(specialists)
-        .where(eq(specialists.userId, membership.userId))
-        .limit(1);
-      ownSpecialistId = own?.id ?? "00000000-0000-0000-0000-000000000000";
-    }
+  /*
+   * This month unless asked otherwise, by the studio's own clock — the list and
+   * the totals under it are for one period, the way the report is. See
+   * `visitListPeriod` for why one visit asked for by id is the exception.
+   */
+  const today = todayIn(new Date(), workspace.timezone);
+  const period = visitListPeriod(filters, onlyVisit, today);
 
-    const conditions = [
-      onlyVisit ? eq(visits.id, onlyVisit) : undefined,
-      filters.from ? gte(visits.completedAt, new Date(filters.from)) : undefined,
-      filters.to ? lte(visits.completedAt, new Date(`${filters.to}T23:59:59.999Z`)) : undefined,
-      ownSpecialistId
-        ? eq(visits.specialistId, ownSpecialistId)
-        : filters.specialist
-          ? eq(visits.specialistId, filters.specialist)
-          : undefined,
-    ].filter(Boolean);
-
-    const rows = await tx
-      .select()
-      .from(visits)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(visits.completedAt));
-
-    /*
-     * The photo comes from the card, which is where a studio sets it.
-     *
-     * It used to come from `user.image` through the linked account — a column
-     * nothing has ever written, so this list has drawn letters since it was
-     * built, and would have gone on drawing them for the masters who have no
-     * account to hang a picture off at all.
-     */
-    const people = await tx
-      .select({
-        id: specialists.id,
-        name: specialists.name,
-        avatarVersion: specialistAvatars.version,
-      })
-      .from(specialists)
-      .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
-      .where(isNull(specialists.archivedAt))
-      .orderBy(asc(specialists.name));
-
-    const detailed = await Promise.all(
-      rows.map(async (visit) => {
-        const [snapshot] = await tx
-          .select()
-          .from(financialSnapshots)
-          .where(eq(financialSnapshots.visitId, visit.id))
-          .orderBy(desc(financialSnapshots.snapshotVersion))
-          .limit(1);
-        const lines = await tx.select().from(visitLines).where(eq(visitLines.visitId, visit.id));
-        const [client] = visit.clientId
-          ? await tx.select({ name: clients.name }).from(clients).where(eq(clients.id, visit.clientId))
-          : [];
-        return { visit, snapshot, lines, clientName: client?.name ?? null };
-      }),
-    );
-
-    /*
-     * Photos of work, one query for the whole page and only for whoever may
-     * see them — an Analyst reads visits but not pictures of clients' hands,
-     * and the rows are not even fetched for them.
-     */
-    const photoRows =
-      showsPhotos && rows.length > 0
-        ? await tx
-            .select({
-              id: visitPhotos.id,
-              visitId: visitPhotos.visitId,
-              width: visitPhotos.width,
-              height: visitPhotos.height,
-            })
-            .from(visitPhotos)
-            .where(inArray(visitPhotos.visitId, rows.map((visit) => visit.id)))
-            .orderBy(asc(visitPhotos.createdAt))
-        : [];
-
-    return { detailed, people, photoRows, canFilterBySpecialist: ownSpecialistId === null };
-  });
+  const data = await withTenant(membership.organizationId, (tx) =>
+    loadVisitList(
+      tx,
+      { userId: membership.userId, role: membership.role },
+      { from: period.from, to: period.to, specialist: filters.specialist, onlyVisit },
+      showsPhotos,
+    ),
+  );
 
   const withMargin = data.detailed.filter(
     (row) => row.snapshot && row.snapshot.contributionMarginMinor !== null,
@@ -214,10 +136,11 @@ export default async function VisitsPage({
       <nav className="calendar-toolbar" aria-label={t("filters.title")}>
         <PeriodFilter
           locale={locale}
-          from={filters.from}
-          to={filters.to}
+          from={period.from}
+          to={period.to}
           specialistId={filters.specialist}
           people={data.people}
+          presets={{ ranges: presetRanges(today), active: period.preset }}
           /* One master is not a choice — the same rule the dashboard and the
              calendar already apply. */
           showSpecialist={data.canFilterBySpecialist && data.people.length > 1}
@@ -240,7 +163,13 @@ export default async function VisitsPage({
         </div>
       )}
 
-      {groups.length === 0 && (
+      {groups.length === 0 && data.emptyBecauseOfPeriod && (
+        // The studio has visits, just none in these days: not the page that
+        // teaches how to close the first one.
+        <p className="muted">{t("visits.noneInPeriod")}</p>
+      )}
+
+      {groups.length === 0 && !data.emptyBecauseOfPeriod && (
         <SectionEmpty
           section="visits"
           businessType={businessType}

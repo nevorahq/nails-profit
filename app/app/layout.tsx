@@ -1,10 +1,6 @@
-import { eq } from "drizzle-orm";
-
 import { AppShell } from "@/components/app-shell";
 import { LexiconProvider } from "@/components/lexicon-provider";
 import { PushWorker } from "@/components/push-worker";
-import { db } from "@/db";
-import { organizations } from "@/db/schema";
 import { organizationLogoUrl } from "@/domain/avatar-image";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
@@ -33,27 +29,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!caller.session || !caller.membership) return <>{children}</>;
 
-  const [organization] = await db
-    // The type decides which heading «Мастера» sits under, and nothing else
-    // on this screen — see `groupOf` in `components/nav-items.ts`.
-    .select({
-      name: organizations.name,
-      locale: organizations.locale,
-      type: organizations.type,
-      bookingAccess: organizations.bookingAccess,
-      detailedAnalytics: organizations.detailedAnalytics,
-    })
-    .from(organizations)
-    .where(eq(organizations.id, caller.membership.organizationId))
-    .limit(1);
-
   /*
-   * The studio's own mark for the topbar, or null — in which case the brand
-   * flower stays where it has always been. Read separately from the row above
-   * because the logo lives in its own table behind the tenant policy; memoized
-   * per request, so the settings page's own preview costs no second query.
+   * The organization came with the membership: the type decides which heading
+   * «Мастера» sits under, and nothing else on this screen — see `groupOf` in
+   * `components/nav-items.ts`.
+   *
+   * The studio's own mark for the topbar is read separately — it lives in its
+   * own table behind the tenant policy — and so is whether the tier opens
+   * expenses. Neither needs the other, and each runs in a transaction of its
+   * own on its own connection, so they are asked together rather than one after
+   * the other: that is the difference between one wait and two. The logo is
+   * memoized per request, so the settings page's own preview costs no second
+   * query.
    */
-  const logoVersion = await loadOrganizationLogoVersion(caller.membership.organizationId);
+  const organization = caller.organization;
+  const [logoVersion, expensesAllowed] = await Promise.all([
+    loadOrganizationLogoVersion(caller.membership.organizationId),
+    organizationAllows(caller.membership.organizationId, "expenses"),
+  ]);
 
   const { preview } = caller.membership;
   // A selection the membership check refused: the colleague left the team, or
@@ -91,7 +84,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }
         stalePreview={stalePreview}
         bookingOff={organization?.bookingAccess === "off"}
-        expensesOff={!(await organizationAllows(caller.membership.organizationId, "expenses"))}
+        expensesOff={!expensesAllowed}
       >
         {children}
       </AppShell>
