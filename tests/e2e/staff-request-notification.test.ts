@@ -67,7 +67,10 @@ beforeAll(async () => {
     public_status: "published",
     confirmation_mode: "manual",
     min_lead_minutes: 0,
-    max_advance_days: 90,
+    // 120, not 90: these suites book up to thirteen Wednesdays ahead, and on a Wednesday
+    // the thirteenth is 91 days away — outside a 90-day window, so every Wednesday's run
+    // found no slot and failed for a reason that had nothing to do with the code.
+    max_advance_days: 120,
   });
 }, 60_000);
 
@@ -443,7 +446,7 @@ describe("what a client does on the public page", () => {
         public_status: "published",
         confirmation_mode: mode,
         min_lead_minutes: 0,
-        max_advance_days: 90,
+        max_advance_days: 120,
       });
 
     await settings("instant");
