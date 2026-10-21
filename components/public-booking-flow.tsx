@@ -1045,7 +1045,6 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                       >
                         <span>{weekday}</span>
                         <strong>{day}</strong>
-                        <span className="public-booking-day-state" aria-hidden="true">{free ? entry.slots.length : "—"}</span>
                       </button>
                     );
                   })}

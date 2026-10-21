@@ -52,6 +52,18 @@ test.describe("the public booking page", () => {
     await expect(page.getByRole("button", { name: "Show available times" })).toHaveCount(0);
     await expect(strip.locator("button")).toHaveCount(14);
 
+    // A day shows its weekday and its date, the date on one line, and no count of times.
+    for (const cell of await strip.locator("button").all()) {
+      await expect(cell.locator("> *")).toHaveCount(2);
+      const fits = await cell.locator("strong").evaluate((date) => {
+        const box = date.getBoundingClientRect();
+        const button = date.parentElement!.getBoundingClientRect();
+        const lineHeight = parseFloat(getComputedStyle(date).lineHeight) || box.height;
+        return box.height < lineHeight * 1.5 && box.left >= button.left && box.right <= button.right;
+      });
+      expect(fits).toBe(true);
+    }
+
     // The first day with times is already chosen, and its times are under it.
     await expect(strip.locator("button.is-selected")).toHaveCount(1);
     const times = page.locator(".public-booking-slots button");
@@ -67,7 +79,7 @@ test.describe("the public booking page", () => {
     }
     expect(asked).toHaveLength(1);
 
-    // A day with nothing free is labelled so, for a reader that skips the digit.
+    // A day with nothing free is labelled so, for a reader that cannot see it greyed out.
     const empty = strip.locator("button[disabled]").first();
     if ((await empty.count()) > 0) await expect(empty).toHaveAttribute("aria-label", /no times/);
   });
