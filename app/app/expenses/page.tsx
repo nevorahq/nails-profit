@@ -66,7 +66,14 @@ export default async function ExpensesPage({
   // A category nobody offers is no filter at all — a hand-edited query string
   // must not decide what the enum column is compared against.
   const category = filters.category && isExpenseCategory(filters.category) ? filters.category : undefined;
-  const rows = await loadExpenses(membership.organizationId, {
+  /*
+   * Everything below is started at once and awaited together, after the last of
+   * it. It was six transactions in a row — each a round trip to open, one to
+   * close and one to set up, against a database in another region — and none of
+   * them needs another's answer. They overlap now, so the page waits for the
+   * slowest rather than for the sum.
+   */
+  const rowsRead = loadExpenses(membership.organizationId, {
     from: filters.from,
     to: filters.to,
     category,
@@ -77,7 +84,7 @@ export default async function ExpensesPage({
    * one: a draw has no category, and pretending otherwise would be the same
    * mistake that put them under `payroll` in the first place.
    */
-  const draws: OwnerDrawRow[] = await withTenant(membership.organizationId, (tx) => {
+  const drawsRead = withTenant(membership.organizationId, (tx): Promise<OwnerDrawRow[]> => {
     const bounds = [
       filters.from ? gte(ownerDraws.occurredOn, filters.from) : undefined,
       filters.to ? lte(ownerDraws.occurredOn, filters.to) : undefined,
@@ -104,11 +111,11 @@ export default async function ExpensesPage({
    * to correct yet — and null again once both steps are done, which is most of
    * this page's life: the ledger is a weekly habit, not a setup screen.
    */
-  const materials = await withTenant(membership.organizationId, (tx) =>
-    loadMaterialsModes(tx, membership.organizationId),
+  const materialsRead = withTenant(membership.organizationId, (tx) =>
+    loadMaterialsModes(tx, membership.organizationId, timezone),
   );
 
-  const monthGuide = await withTenant(membership.organizationId, (tx) =>
+  const monthGuideRead = withTenant(membership.organizationId, (tx) =>
     loadMonthGuide(tx, { month: monthOf(new Date()), currency, organizationId: membership.organizationId }),
   );
 
@@ -122,7 +129,7 @@ export default async function ExpensesPage({
    * rates and the payment methods. Read for every owner: whether a visit is
    * taxed is not an advanced question, whatever the report's wording is.
    */
-  const { answers, taxes, methods } = await withTenant(membership.organizationId, async (tx) => {
+  const moneyRead = withTenant(membership.organizationId, async (tx) => {
     const answers = await loadMoneyAnswers(tx, membership.organizationId);
 
     const taxes: TaxRuleRowView[] = (
@@ -173,8 +180,8 @@ export default async function ExpensesPage({
    * aggregate the monthly report shows.
    */
   const canReadLabour = detailedAnalytics;
-  const labour = canReadLabour
-    ? await withTenant(membership.organizationId, async (tx) => {
+  const labourRead = canReadLabour
+    ? withTenant(membership.organizationId, async (tx) => {
         const rules: LaborCostRow[] = (
           await tx
             .select({
@@ -222,7 +229,17 @@ export default async function ExpensesPage({
     : null;
 
   // «Старт» keeps the ledger readable and editable but adds nothing new.
-  const canAdd = await organizationAllows(membership.organizationId, "expenses");
+  const addAllowedRead = organizationAllows(membership.organizationId, "expenses");
+
+  const [rows, draws, materials, monthGuide, { answers, taxes, methods }, labour, canAdd] = await Promise.all([
+    rowsRead,
+    drawsRead,
+    materialsRead,
+    monthGuideRead,
+    moneyRead,
+    labourRead,
+    addAllowedRead,
+  ]);
 
   return (
     <main className="app-shell">

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { sql } from "drizzle-orm";
 
 import { measureStatements } from "@/db/query-meter";
-import { withTenant } from "@/db/tenant";
+import { readTogether, withTenant } from "@/db/tenant";
 import { resolveLocale } from "@/lib/locale";
 import { getActiveMembership } from "@/lib/membership";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
@@ -119,5 +119,41 @@ describe("a tenant transaction", () => {
     });
 
     expect(value).toBe(hostile);
+  });
+});
+
+describe("independent reads", () => {
+  const sleeps = (seconds: number) => async (tx: Parameters<Parameters<typeof withTenant>[1]>[0]) => {
+    await tx.execute(sql`select pg_sleep(${seconds})`);
+    return seconds;
+  };
+
+  test("overlap, so the wait is the slowest read and not the sum", async () => {
+    const started = performance.now();
+    const result = await readTogether(studio.organizationId, { a: sleeps(0.4), b: sleeps(0.4), c: sleeps(0.4) });
+    const elapsed = performance.now() - started;
+
+    expect(result).toEqual({ a: 0.4, b: 0.4, c: 0.4 });
+    // One after another these take 1.2 s; the margin is for the pool and the
+    // machine, not for the reads to run in turn.
+    expect(elapsed).toBeLessThan(1_000);
+  });
+
+  test("skip a read that is null and answer null for it", async () => {
+    const result = await readTogether(studio.organizationId, {
+      shown: async (tx) => (await tx.execute(sql`select 1 as one`))[0]?.one,
+      hidden: null,
+    });
+
+    expect(result).toEqual({ shown: 1, hidden: null });
+  });
+
+  test("each read still runs under the tenant's own policy", async () => {
+    const { seen } = await readTogether(studio.organizationId, {
+      seen: async (tx) =>
+        (await tx.execute(sql`select current_setting('app.current_organization_id', true) as organization`))[0]?.organization,
+    });
+
+    expect(seen).toBe(studio.organizationId);
   });
 });

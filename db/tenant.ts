@@ -72,3 +72,38 @@ function settingsFor(organizationId: string) {
     `select set_config('idle_in_transaction_session_timeout', '30000', true), set_config('app.current_organization_id', '${organizationId}', true)`,
   );
 }
+
+type Read<T> = (tx: TenantTransaction) => Promise<T>;
+
+/** What a read answers, or `null` where the read was `null` — distributes over a conditional `Read | null`. */
+type ReadResult<Candidate> = Candidate extends Read<infer Result> ? Result : null;
+
+/**
+ * Independent tenant reads, run at once.
+ *
+ * A page that needs six unrelated things used to ask for them one after the
+ * other, each in a transaction of its own, and every transaction is a round
+ * trip to open, one to close and one to set up — a database in another region
+ * turns the sum into seconds. `Promise.all` inside a single transaction does not
+ * help: its statements share one connection and go down it in turn. Separate
+ * transactions are separate connections, so they overlap, and the page waits
+ * for the slowest read instead of for all of them.
+ *
+ * Use it for reads that do not depend on each other and do not need to agree
+ * to the row: each sees the database as it was when its own transaction began.
+ * Figures that must add up to one another belong in one transaction.
+ *
+ * A read that is `null` is skipped and comes back `null`, which is how a page
+ * says «only for whoever may see this» without a ternary around every key.
+ * Each read takes a pool connection while it runs, so keep the list to what a
+ * page really shows.
+ */
+export async function readTogether<const Reads extends Record<string, Read<unknown> | null>>(
+  organizationId: string,
+  reads: Reads,
+): Promise<{ [Key in keyof Reads]: ReadResult<Reads[Key]> }> {
+  const entries = await Promise.all(
+    Object.entries(reads).map(async ([key, read]) => [key, read ? await withTenant(organizationId, read) : null] as const),
+  );
+  return Object.fromEntries(entries) as never;
+}

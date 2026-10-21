@@ -39,17 +39,28 @@ export function monthIn(at: Date, timezone: string): string {
 export async function loadMaterialsModes(
   tx: TenantTransaction,
   organizationId: string,
+  /**
+   * The studio's zone, when the caller already holds it. A page does — it came
+   * with the membership — and asking the database again is a round trip across
+   * a region for a value it is holding.
+   */
+  knownTimezone?: string,
 ): Promise<MaterialsModes> {
-  const [organization] = await tx
-    .select({ timezone: organizations.timezone })
-    .from(organizations)
-    .where(eq(organizations.id, organizationId))
-    .limit(1);
+  const timezone =
+    knownTimezone ??
+    (
+      await tx
+        .select({ timezone: organizations.timezone })
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+        .limit(1)
+    )[0]?.timezone ??
+    "UTC";
   const periods = await tx
     .select({ mode: materialsCostingPeriods.mode, effectiveFrom: materialsCostingPeriods.effectiveFrom })
     .from(materialsCostingPeriods)
     .orderBy(asc(materialsCostingPeriods.effectiveFrom));
-  return { periods, timezone: organization?.timezone ?? "UTC" };
+  return { periods, timezone };
 }
 
 /** The mode the month of `at` is counted in. */

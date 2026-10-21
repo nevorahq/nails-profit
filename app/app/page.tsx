@@ -14,7 +14,7 @@ import { ReportTabs } from "@/components/report-tabs";
 import { ServiceRankingCompact } from "@/components/service-ranking-compact";
 import { WorkspaceSetup } from "@/components/workspace-setup";
 import { specialists } from "@/db/schema";
-import { withTenant } from "@/db/tenant";
+import { readTogether, withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
 import { rebookRateDeltaPoints } from "@/domain/rebook-rate";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
@@ -154,16 +154,26 @@ export default async function AppPage({
    * report has seen. Asked before the start screen is chosen, because a studio
    * whose only work so far is unclosed bookings is still on that screen. Read
    * as the person being viewed, so a preview shows their own list.
+   *
+   * Read together with the start screen and the tier: none of the three needs
+   * another's answer, and they used to be asked one after the other.
    */
-  const unclosed = can(membership.role, "bookings", "write")
-    ? await withTenant(membership.organization.id, (tx) =>
-        loadUnclosedBookings(
-          tx,
-          { userId: effectiveUserId, role: membership.role },
-          { now: new Date(), locale, limit: 5 },
-        ),
-      )
-    : null;
+  const [unclosed, start, fullReports] = await Promise.all([
+    can(membership.role, "bookings", "write")
+      ? withTenant(membership.organization.id, (tx) =>
+          loadUnclosedBookings(
+            tx,
+            { userId: effectiveUserId, role: membership.role },
+            { now: new Date(), locale, limit: 5 },
+          ),
+        )
+      : null,
+    canManageCatalogue(membership.role, "services")
+      ? withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale, membership.organization.id))
+      : null,
+    // «Старт» reads this month only: any other period is the first thing «Соло» opens.
+    organizationAllows(membership.organization.id, "full_reports"),
+  ]);
   const closeDay =
     unclosed && unclosed.count > 0 ? (
       <CloseDayPanel
@@ -209,8 +219,7 @@ export default async function AppPage({
     redirect("/app/setup");
   }
 
-  if (canManageCatalogue(membership.role, "services")) {
-    const start = await withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale, membership.organization.id));
+  if (start) {
     if (start?.kind === "goal" && start.progress.next) {
       return (
         <FirstRun
@@ -266,8 +275,6 @@ export default async function AppPage({
    * `domain/report-period.ts` for why only the choice of month is local.
    */
   const today = todayIn(new Date(), membership.organization.timezone);
-  // «Старт» reads this month only: any other period is the first thing «Соло» opens.
-  const fullReports = await organizationAllows(membership.organization.id, "full_reports");
   const period = resolveReportPeriod(
     {
       from: fullReports && isCalendarDay(filters.from) ? filters.from : undefined,
@@ -322,157 +329,163 @@ export default async function AppPage({
 
   const oneSpecialist = Boolean(requestedSpecialist);
 
-  const data = await withTenant(organizationId, async (tx) => {
-    // Section 6.1: a Master sees "только собственные" — resolved from the
-    // specialist row carrying their user id, not from the query string. The
-    // effective user's, so an owner previewing a master reads that master's
-    // card rather than their own.
-    let effectiveSpecialist = requestedSpecialist ?? null;
-    let ownSpecialistId: string | null = null;
-    if (scopeFor(membership.role, "dashboard") === "own") {
-      const [own] = await tx
-        .select({ id: specialists.id })
-        .from(specialists)
-        .where(eq(specialists.userId, effectiveUserId))
-        .limit(1);
-      ownSpecialistId = own?.id ?? null;
-      effectiveSpecialist = own?.id ?? "00000000-0000-0000-0000-000000000000";
-    }
-
-    const dashboard = await loadDashboard(
-      tx,
-      {
-        from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
-        to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
-        specialistId: effectiveSpecialist,
-      },
-      locale,
+  /*
+   * Section 6.1: a Master sees "только собственные" — resolved from the
+   * specialist row carrying their user id, not from the query string. The
+   * effective user's, so an owner previewing a master reads that master's card
+   * rather than their own. Asked first and alone, because every read below is
+   * narrowed by it — and only for a master: nobody else has the extra wait.
+   */
+  let effectiveSpecialist = requestedSpecialist ?? null;
+  let ownSpecialistId: string | null = null;
+  if (scopeFor(membership.role, "dashboard") === "own") {
+    const [own] = await withTenant(organizationId, (tx) =>
+      tx.select({ id: specialists.id }).from(specialists).where(eq(specialists.userId, effectiveUserId)).limit(1),
     );
+    ownSpecialistId = own?.id ?? null;
+    effectiveSpecialist = own?.id ?? "00000000-0000-0000-0000-000000000000";
+  }
 
-    /*
-     * «Записались на следующий раз», over the very visits the cards count:
-     * the same period, the same narrowing to one master. Every role reads it
-     * in its own scope — a master their own, an analyst the studio's whole,
-     * which is an aggregate and never one person's.
-     */
-    const rebook = await loadRebookRate(tx, {
-      from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
-      to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
-      specialistId: effectiveSpecialist,
-    });
-    const previousRebook = previousRange
-      ? await loadRebookRate(tx, {
-          from: previousRange.from,
-          to: previousRange.to,
-          specialistId: effectiveSpecialist,
+  /*
+   * The expense ledger over the same period.
+   *
+   * Owner-only, and not merely on the screen: the `expenses` capability
+   * denies every other role even the read, so the query does not run for
+   * them. Hiding the card while still fetching the number would put rent and
+   * payroll in a manager's page payload.
+   *
+   * The period is the same one the cards use, matched on the day of the
+   * purchase (`spent_on`) rather than on when the row was written — the
+   * report answers for the month the money left, like the ledger page does.
+   */
+  const canSeeExpenses = can(membership.role, "expenses", "read") && !oneSpecialist;
+
+  /*
+   * Five reads, started together. They were one transaction and about forty
+   * statements in a row against a database in another region; they overlap now,
+   * so the page waits for the slowest. Each is a unit that has to agree with
+   * itself and with nothing else on the page: the cards and the comparison with
+   * the period before are the same visits read twice, which is why the second
+   * is in a block of its own and not a reason to share one.
+   */
+  const readPeriod = {
+    from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
+    to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
+  };
+  const reads = await readTogether(organizationId, {
+    current: async (tx) => {
+      const dashboard = await loadDashboard(tx, { ...readPeriod, specialistId: effectiveSpecialist }, locale);
+      /*
+       * «Записались на следующий раз», over the very visits the cards count:
+       * the same period, the same narrowing to one master. Every role reads it
+       * in its own scope — a master their own, an analyst the studio's whole,
+       * which is an aggregate and never one person's.
+       */
+      const rebook = await loadRebookRate(tx, { ...readPeriod, specialistId: effectiveSpecialist });
+      return { dashboard, rebook };
+    },
+    previous: previousRange
+      ? async (tx) => ({
+          rebook: await loadRebookRate(tx, {
+            from: previousRange.from,
+            to: previousRange.to,
+            specialistId: effectiveSpecialist,
+          }),
+          metrics: (
+            await loadDashboard(
+              tx,
+              { from: previousRange.from, to: previousRange.to, specialistId: effectiveSpecialist },
+              locale,
+            )
+          ).metrics,
         })
-      : null;
-
-    const previousMetrics = previousRange
-      ? (
-          await loadDashboard(
-            tx,
-            { from: previousRange.from, to: previousRange.to, specialistId: effectiveSpecialist },
-            locale,
-          )
-        ).metrics
-      : null;
-
-    /*
-     * The expense ledger over the same period.
-     *
-     * Owner-only, and not merely on the screen: the `expenses` capability
-     * denies every other role even the read, so the query does not run for
-     * them. Hiding the card while still fetching the number would put rent and
-     * payroll in a manager's page payload.
-     *
-     * The period is the same one the cards use, matched on the day of the
-     * purchase (`spent_on`) rather than on when the row was written — the
-     * report answers for the month the money left, like the ledger page does.
-     */
-    const canSeeExpenses = can(membership.role, "expenses", "read") && !oneSpecialist;
-    const expenseTotal = canSeeExpenses ? await sumExpensesMinor(tx, { from, to }, currency) : null;
-    const previousExpenseTotal =
-      canSeeExpenses && previousRange
-        ? await sumExpensesMinor(
-            tx,
-            {
-              from: previousRange.from.toISOString().slice(0, 10),
-              to: previousRange.to.toISOString().slice(0, 10),
-            },
-            currency,
-          )
-        : null;
-
-    const people = await loadSpecialistOptions(tx);
-    /*
-     * «Первый расчёт» is a setup checklist, and all three of its steps are
-     * catalogue work: a specialist with a commission rule, a priced service, a
-     * first closed visit. A role that cannot write the shared catalogue cannot
-     * advance any of them, so for a master the panel is three links to pages
-     * they do not have — a permanent, unfinishable list on the one screen they
-     * open every morning.
-     *
-     * Not computed rather than not rendered: the progress costs several
-     * queries, and nobody should pay for them to produce something the page
-     * then drops.
-     */
-    const onboarding = canManageCatalogue(membership.role, "services")
-      ? await loadOnboarding(tx)
-      : null;
-
-    /*
-     * The second checklist, and the two conditions it waits for.
-     *
-     * It waits for the first one to finish, because a studio with no closed
-     * visit has no month to correct — showing both at once would turn a path of
-     * three steps into a chore of five, which is the shape «Первый расчёт» was
-     * cut down from.
-     *
-     * And it is the owner's alone: «Затраты» is owner-only by the `expenses`
-     * capability, so for a manager both steps would be a list of doors that do
-     * not open.
-     */
-    const monthSetup =
-      onboarding?.complete && membership.role === "owner"
-        ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency, organizationId })
-        : null;
-
+      : null,
+    expenses: canSeeExpenses
+      ? async (tx) => ({
+          total: await sumExpensesMinor(tx, { from, to }, currency),
+          previousTotal: previousRange
+            ? await sumExpensesMinor(
+                tx,
+                {
+                  from: previousRange.from.toISOString().slice(0, 10),
+                  to: previousRange.to.toISOString().slice(0, 10),
+                },
+                currency,
+              )
+            : null,
+        })
+      : null,
     /*
      * The card the page opens with. A month's figure, never the filter's: for
      * the owner it is the monthly report's bottom line, read by the very call
      * that report makes, so the two cannot disagree.
      */
-    const headline = await loadHeadline(
-      tx,
-      { role: membership.role, month: headlineMonth, currency, organizationId, ownSpecialistId },
-      locale,
-    );
+    headline: async (tx) => ({
+      card: await loadHeadline(
+        tx,
+        { role: membership.role, month: headlineMonth, currency, organizationId, ownSpecialistId },
+        locale,
+      ),
+      /*
+       * Whether the card's profit is before taxes and the bank's fee because
+       * nobody has said what they are. Asked only of whoever could answer — the
+       * questions live on «Деньги», which is the owner's.
+       */
+      beforeTaxesHref: can(membership.role, "expenses", "read")
+        ? firstUnansweredHref(await loadMoneyAnswers(tx, organizationId))
+        : null,
+    }),
+    setup: async (tx) => {
+      const people = await loadSpecialistOptions(tx);
+      /*
+       * «Первый расчёт» is a setup checklist, and all three of its steps are
+       * catalogue work: a specialist with a commission rule, a priced service, a
+       * first closed visit. A role that cannot write the shared catalogue cannot
+       * advance any of them, so for a master the panel is three links to pages
+       * they do not have — a permanent, unfinishable list on the one screen they
+       * open every morning.
+       *
+       * Not computed rather than not rendered: the progress costs several
+       * queries, and nobody should pay for them to produce something the page
+       * then drops.
+       */
+      const onboarding = canManageCatalogue(membership.role, "services") ? await loadOnboarding(tx) : null;
 
-    /*
-     * Whether the card's profit is before taxes and the bank's fee because
-     * nobody has said what they are. Asked only of whoever could answer — the
-     * questions live on «Деньги», which is the owner's.
-     */
-    const beforeTaxesHref = can(membership.role, "expenses", "read")
-      ? firstUnansweredHref(await loadMoneyAnswers(tx, organizationId))
-      : null;
+      /*
+       * The second checklist, and the two conditions it waits for.
+       *
+       * It waits for the first one to finish, because a studio with no closed
+       * visit has no month to correct — showing both at once would turn a path
+       * of three steps into a chore of five, which is the shape «Первый расчёт»
+       * was cut down from.
+       *
+       * And it is the owner's alone: «Затраты» is owner-only by the `expenses`
+       * capability, so for a manager both steps would be a list of doors that do
+       * not open.
+       */
+      const monthSetup =
+        onboarding?.complete && membership.role === "owner"
+          ? await loadMonthSetup(tx, { month: monthOf(new Date()), currency, organizationId })
+          : null;
 
-    return {
-      ...dashboard,
-      rebook,
-      previousRebook,
-      headline,
-      beforeTaxesHref,
-      previousMetrics,
-      onboarding,
-      monthSetup,
-      people,
-      canFilterBySpecialist,
-      expenseTotal,
-      previousExpenseTotal,
-    };
+      return { people, onboarding, monthSetup };
+    },
   });
+
+  const data = {
+    ...reads.current.dashboard,
+    rebook: reads.current.rebook,
+    previousRebook: reads.previous?.rebook ?? null,
+    headline: reads.headline.card,
+    beforeTaxesHref: reads.headline.beforeTaxesHref,
+    previousMetrics: reads.previous?.metrics ?? null,
+    onboarding: reads.setup.onboarding,
+    monthSetup: reads.setup.monthSetup,
+    people: reads.setup.people,
+    canFilterBySpecialist,
+    expenseTotal: reads.expenses?.total ?? null,
+    previousExpenseTotal: reads.expenses?.previousTotal ?? null,
+  };
 
   const isMaster = membership.role === "master";
   const { metrics, previousMetrics } = data;

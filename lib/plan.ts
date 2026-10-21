@@ -1,4 +1,5 @@
 import { asc, count, desc, eq, isNull } from "drizzle-orm";
+import { cache } from "react";
 
 import { locations, organizations, organizationSubscriptions, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant, type TenantTransaction } from "@/db/tenant";
@@ -153,10 +154,20 @@ export function planLocationRefusal(id: string) {
  * route pays for the check only where it can refuse.
  */
 
+/**
+ * The tier for this request, read once. The shell asks whether expenses are open,
+ * the page asks about reports or the team, and each of those used to open a
+ * transaction and read three tables to learn the same thing — the tier. Memoized
+ * per request like `getActiveMembership`; outside a render it remembers nothing.
+ */
+const tierForRequest = cache((organizationId: string) =>
+  withTenant(organizationId, (tx) => enforcedTier(tx, organizationId)),
+);
+
 /** For a page: whether the studio's tier opens a feature, in a transaction of its own. */
 export async function organizationAllows(organizationId: string, feature: PlanFeature): Promise<boolean> {
   if (!isPlanLimitsEnforced()) return true;
-  return withTenant(organizationId, (tx) => planAllowsFeature(tx, organizationId, feature));
+  return planAllows(await tierForRequest(organizationId), feature);
 }
 
 /** For a page: whether one more master or address fits the studio's tier. */

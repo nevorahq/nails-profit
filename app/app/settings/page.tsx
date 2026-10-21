@@ -11,7 +11,7 @@ import { MaterialsModeSetting } from "@/components/materials-mode-setting";
 import { PushDeviceSwitch } from "@/components/push-device-switch";
 import { memberships, organizationSubscriptions, specialists, users } from "@/db/schema";
 import { db } from "@/db";
-import { withTenant } from "@/db/tenant";
+import { readTogether } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { getLemonSqueezyCheckoutUrl, getPaddleCheckoutConfig, isPublicAppUrlReachable } from "@/env";
 import { loadMaterialsModes, materialsModeAt, monthIn } from "@/lib/materials-mode";
@@ -41,6 +41,7 @@ export default async function SettingsPage({
     businessType,
     staffNotices,
     detailedAnalytics,
+    timezone,
   } = workspace;
   const register = registerOf(workspace);
 
@@ -50,51 +51,90 @@ export default async function SettingsPage({
   const canReadFinancialSettings = can(membership.role, "expenses", "read");
 
   /*
-   * The studio's own mark, which stands where `BrandMark`'s flower does until
-   * a logo exists. Only the version is read: it decides whether the preview
-   * draws the flower or an `<img>`, and it is the cache key in that image's
-   * URL. Memoized per request, so the topbar above this page and the block
-   * below share one query.
+   * Everything this page reads, asked for at once. None of it depends on any
+   * other part, and each used to wait its turn behind the one before — a
+   * transaction apiece, one after the other, against a database in another
+   * region. They overlap now, so the page waits for the slowest rather than for
+   * the sum.
+   *
+   * - The studio's own mark stands where `BrandMark`'s flower does until a logo
+   *   exists. Only the version is read: it decides whether the preview draws
+   *   the flower or an `<img>`, and it is the cache key in that image's URL.
+   *   Memoized per request, so the topbar above this page shares the query.
+   * - How the studio counts materials, for whoever sees its costs. It stays here
+   *   rather than moving to «Деньги» with the taxes, the payment methods and the
+   *   labour rules: it is a way of counting, chosen from a month on, not money
+   *   that comes or goes.
+   * - Which accounts the catalogue knows as a specialist. A master's calendar,
+   *   visits and commission all resolve through `specialist.user_id`, so a
+   *   master without that link signs in to an empty product and cannot be
+   *   booked — a state the team screen is where somebody would notice. Read
+   *   separately because `specialist` is tenant-scoped and `membership` is not.
+   * - What removing somebody would leave behind — see `loadUpcomingByUser` for
+   *   why the number belongs in the confirmation rather than in the response
+   *   that reports what was already done.
    */
-  const logoVersion = canReadOrg ? await loadOrganizationLogoVersion(membership.organizationId) : null;
-
-  /*
-   * How the studio counts materials, for whoever sees its costs. It stays
-   * here rather than moving to «Деньги» with the taxes, the payment methods
-   * and the labour rules: it is a way of counting, chosen from a month on, not
-   * money that comes or goes.
-   */
-  const materials = canReadFinancialSettings
-    ? await withTenant(membership.organizationId, async (tx) => {
-        const modes = await loadMaterialsModes(tx, membership.organizationId);
-        const currentMonth = monthIn(new Date(), modes.timezone);
-        return {
-          current: materialsModeAt(modes),
-          currentMonth,
-          scheduled: modes.periods
-            .filter((period) => period.effectiveFrom.slice(0, 7) > currentMonth)
-            .map((period) => ({ mode: period.mode, month: period.effectiveFrom.slice(0, 7) })),
-        };
-      })
-    : null;
-
-  const subscriptionRow = canReadOrg
-    ? (
-        await withTenant(membership.organizationId, (tx) =>
-          tx
-            .select({
-              provider: organizationSubscriptions.provider,
-              status: organizationSubscriptions.status,
-              current_period_end: organizationSubscriptions.currentPeriodEnd,
-              manage_url: organizationSubscriptions.manageUrl,
-              provider_subscription_id: organizationSubscriptions.providerSubscriptionId,
-              provider_customer_id: organizationSubscriptions.providerCustomerId,
-            })
-            .from(organizationSubscriptions)
-            .limit(1),
-        )
-      )[0] ?? null
-    : null;
+  const [tenant, memberRows, teamAllowed, logoVersion] = await Promise.all([
+    readTogether(membership.organizationId, {
+      materials: canReadFinancialSettings
+        ? async (tx) => {
+            const modes = await loadMaterialsModes(tx, membership.organizationId, timezone);
+            const currentMonth = monthIn(new Date(), modes.timezone);
+            return {
+              current: materialsModeAt(modes),
+              currentMonth,
+              scheduled: modes.periods
+                .filter((period) => period.effectiveFrom.slice(0, 7) > currentMonth)
+                .map((period) => ({ mode: period.mode, month: period.effectiveFrom.slice(0, 7) })),
+            };
+          }
+        : null,
+      subscription: canReadOrg
+        ? async (tx) =>
+            (
+              await tx
+                .select({
+                  provider: organizationSubscriptions.provider,
+                  status: organizationSubscriptions.status,
+                  current_period_end: organizationSubscriptions.currentPeriodEnd,
+                  manage_url: organizationSubscriptions.manageUrl,
+                  provider_subscription_id: organizationSubscriptions.providerSubscriptionId,
+                  provider_customer_id: organizationSubscriptions.providerCustomerId,
+                })
+                .from(organizationSubscriptions)
+                .limit(1)
+            )[0] ?? null
+        : null,
+      plan: canReadOrg ? (tx) => loadOrganizationPlan(tx, membership.organizationId) : null,
+      linkedAccounts: canReadTeam
+        ? async (tx) =>
+            new Set(
+              (await tx.select({ userId: specialists.userId }).from(specialists).where(isNull(specialists.archivedAt)))
+                .map((row) => row.userId)
+                .filter((userId): userId is string => userId !== null),
+            )
+        : null,
+      upcomingByUser: canReadTeam ? (tx) => loadUpcomingByUser(tx) : null,
+    }),
+    canReadTeam
+      ? db
+          .select({
+            id: memberships.id,
+            user_id: memberships.userId,
+            email: users.email,
+            role: memberships.role,
+          })
+          .from(memberships)
+          .innerJoin(users, eq(memberships.userId, users.id))
+          .where(eq(memberships.organizationId, membership.organizationId))
+          .orderBy(asc(memberships.createdAt))
+      : [],
+    canReadTeam ? organizationAllows(membership.organizationId, "team") : true,
+    canReadOrg ? loadOrganizationLogoVersion(membership.organizationId) : null,
+  ]);
+  const { materials, subscription: subscriptionRow, plan } = tenant;
+  const linkedAccounts = tenant.linkedAccounts ?? new Set<string>();
+  const upcomingByUser = tenant.upcomingByUser ?? new Map<string, number>();
 
   const subscription: SubscriptionStatusRow | null = subscriptionRow
     ? {
@@ -112,60 +152,10 @@ export default async function SettingsPage({
       }
     : null;
 
-  const teamAllowed = canReadTeam ? await organizationAllows(membership.organizationId, "team") : true;
-  const plan = canReadOrg
-    ? await withTenant(membership.organizationId, (tx) => loadOrganizationPlan(tx, membership.organizationId))
-    : null;
-
   const checkout: CheckoutConfig = {
     paddle: getPaddleCheckoutConfig(),
     lemonSqueezyUrl: getLemonSqueezyCheckoutUrl(),
   };
-
-  const memberRows = canReadTeam
-    ? await db
-        .select({
-          id: memberships.id,
-          user_id: memberships.userId,
-          email: users.email,
-          role: memberships.role,
-        })
-        .from(memberships)
-        .innerJoin(users, eq(memberships.userId, users.id))
-        .where(eq(memberships.organizationId, membership.organizationId))
-        .orderBy(asc(memberships.createdAt))
-    : [];
-
-  /*
-   * Which accounts the catalogue knows as a specialist. A master's calendar,
-   * visits and commission all resolve through `specialist.user_id`, so a master
-   * without that link signs in to an empty product and cannot be booked — a
-   * state the team screen is where somebody would notice. Read separately
-   * because `specialist` is tenant-scoped and `membership` is not.
-   */
-  const linkedAccounts = canReadTeam
-    ? new Set(
-        (
-          await withTenant(membership.organizationId, (tx) =>
-            tx
-              .select({ userId: specialists.userId })
-              .from(specialists)
-              .where(isNull(specialists.archivedAt)),
-          )
-        )
-          .map((row) => row.userId)
-          .filter((userId): userId is string => userId !== null),
-      )
-    : new Set<string>();
-
-  /*
-   * What removing somebody would leave behind — see `loadUpcomingByUser` for
-   * why the number belongs in the confirmation rather than in the response
-   * that reports what was already done.
-   */
-  const upcomingByUser = canReadTeam
-    ? await withTenant(membership.organizationId, (tx) => loadUpcomingByUser(tx))
-    : new Map<string, number>();
 
   const members: TeamMember[] = memberRows.map((row) => ({
     ...row,
