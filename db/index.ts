@@ -3,6 +3,7 @@ import postgres from "postgres";
 
 import { getServerEnv } from "@/env";
 import * as schema from "@/db/schema";
+import { queryMeterLogger } from "@/db/query-meter";
 import { lazyProxy } from "@/lib/lazy";
 
 /**
@@ -44,6 +45,15 @@ function connection() {
     // edge of capacity.
     max: 10,
     prepare: false,
+    // The driver's first act on every new connection is to ask the server for
+    // the type of each array in the catalogue, so that it can parse arrays it
+    // has not been told about. Nothing here reads or writes an array column —
+    // `inArray` expands to a list of parameters, not to an array — and a
+    // connection is opened by every cold function instance, so the question
+    // was a round trip across the ocean asked for an answer nobody used.
+    // `tests/integration/query-budget.test.ts` fails if an array column is
+    // ever added without this being reconsidered.
+    fetch_types: false,
   });
   client = created;
   // Development reloads the module on every edit; without the global each one
@@ -56,7 +66,7 @@ function instance() {
   const existing = database ?? globalForDb.drizzleDb;
   if (existing) return (database = existing);
 
-  const created = drizzle(connection(), { schema });
+  const created = drizzle(connection(), { schema, logger: queryMeterLogger });
   database = created;
   if (process.env.NODE_ENV !== "production") globalForDb.drizzleDb = created;
   return created;

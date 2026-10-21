@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .next-playwright/
+.next-perf/
 .photo-storage/
 coverage/
 playwright-report/

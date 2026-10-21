@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -14,20 +13,18 @@ import { ProfitTrendChart } from "@/components/profit-trend-chart";
 import { ReportTabs } from "@/components/report-tabs";
 import { ServiceRankingCompact } from "@/components/service-ranking-compact";
 import { WorkspaceSetup } from "@/components/workspace-setup";
-import { db } from "@/db";
-import { memberships, organizations, pilotEnrollments, specialists } from "@/db/schema";
+import { specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { buildProfitTrend } from "@/domain/dashboard-metrics";
 import { rebookRateDeltaPoints } from "@/domain/rebook-rate";
 import { can, canManageCatalogue, scopeFor, seesIndividualPay } from "@/domain/rbac";
-import { isPilotAccessEnforced, isPublicBookingEnabled } from "@/env";
+import { isPublicBookingEnabled } from "@/env";
 import type { AppLocale } from "@/i18n/messages";
 import type { BusinessType } from "@/i18n/business-labels";
 import { getTranslator, type MessageKey } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { queryFor } from "@/lib/filter-bar";
-import { auth } from "@/lib/auth";
 import { formatMoneyMinor, formatPercentDelta } from "@/lib/format";
 import { loadDashboard, loadSpecialistOptions } from "@/lib/dashboard";
 import { loadRebookRate } from "@/lib/rebook-rate";
@@ -89,11 +86,8 @@ export default async function AppPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; specialist?: string }>;
 }) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/login");
-
   /*
-   * The one page that resolves its own membership rather than going through
+   * The one page that resolves its own workspace rather than going through
    * `requireWorkspace`, because it owns the two states that have no workspace
    * to require: an account with no organization yet, and a pilot account not
    * enrolled. Both are answered below with a full-page card.
@@ -105,21 +99,19 @@ export default async function AppPage({
    * their studio's revenue believing it was one master's. `getActiveMembership`
    * is the memoized resolution the shell already made, so this costs nothing
    * and cannot disagree with it.
+   *
+   * It carries the organization too, read by the same query as the membership,
+   * and it has already applied the pilot rule: an organization with no
+   * membership beside it is an account that is not enrolled. This page used to
+   * look the session up again, the membership again, and the enrolment again —
+   * three more waits for answers the shell held.
    */
   const caller = await getActiveMembership();
-  const effectiveUserId = caller.session ? (caller.membership?.userId ?? caller.userId) : session.user.id;
+  if (!caller.session) redirect("/login");
+  const effectiveUserId = caller.membership?.userId ?? caller.userId;
 
-  const [membership] = await db
-    .select({
-      organization: organizations,
-      role: memberships.role,
-    })
-    .from(memberships)
-    .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-    .where(eq(memberships.userId, effectiveUserId))
-    .limit(1);
-
-  if (!membership) {
+  const organization = caller.organization;
+  if (!organization) {
     // No organization yet, so its language does not exist to ask: the browser's
     // preference is the only signal, and it becomes the new workspace's locale.
     return (
@@ -127,24 +119,13 @@ export default async function AppPage({
     );
   }
 
-  const locale = membership.organization.locale as AppLocale;
+  const locale = organization.locale as AppLocale;
   // Wording only: `organization.type` reaches no figure on this page.
-  const businessType = membership.organization.type as BusinessType;
-  const register = registerOf({ businessType, detailedAnalytics: membership.organization.detailedAnalytics });
+  const businessType = organization.type as BusinessType;
+  const register = registerOf({ businessType, detailedAnalytics: organization.detailedAnalytics });
   const t = getTranslator(locale, register);
 
-  const pilotStatus =
-    isPilotAccessEnforced()
-      ? await withTenant(membership.organization.id, async (tx) => {
-          const [enrollment] = await tx
-            .select({ status: pilotEnrollments.status })
-            .from(pilotEnrollments)
-            .limit(1);
-          return enrollment?.status ?? null;
-        })
-      : null;
-
-  if (isPilotAccessEnforced() && pilotStatus !== "active") {
+  if (!caller.membership) {
     return (
       <main className="auth-shell">
         <section className="auth-card workspace-card" aria-labelledby="pilot-access-title">
@@ -155,6 +136,8 @@ export default async function AppPage({
       </main>
     );
   }
+
+  const membership = { organization, role: caller.membership.role };
 
   if (!can(membership.role, "dashboard", "read")) {
     return (

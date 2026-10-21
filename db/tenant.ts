@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { db } from "@/db";
+import { recordTransaction } from "@/db/query-meter";
 import { isPreviewRequested } from "@/lib/preview-request";
 
 export type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -35,10 +36,39 @@ export type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>
 export async function withTenant<T>(organizationId: string, work: (tx: TenantTransaction) => Promise<T>) {
   const readOnly = await isPreviewRequested();
 
+  recordTransaction();
+
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select set_config('idle_in_transaction_session_timeout', '30000', true)`);
-    await tx.execute(sql`select set_config('app.current_organization_id', ${organizationId}, true)`);
+    await tx.execute(settingsFor(organizationId));
     if (readOnly) await tx.execute(sql`set transaction read only`);
     return work(tx);
   });
+}
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The two transaction-local settings, in one statement.
+ *
+ * Every tenant transaction pays for these before it does any work, and the
+ * database is in another region, so what matters is how many times it has to be
+ * asked — not what it is asked. They used to be two statements, and the second
+ * carried the organization as a parameter. A statement with a parameter costs
+ * two round trips, because the driver has to ask the server what type the
+ * parameter is before it can send it; one without costs one. Together that was
+ * three trips for setting up a transaction, and now it is one.
+ *
+ * The organization id is written into the text rather than passed, which is
+ * safe only because it is checked first: a UUID is hex digits and hyphens and
+ * cannot close the quote it sits in. Anything else — no caller passes one, but
+ * this is the boundary that keeps tenants apart, so it does not assume — takes
+ * the parameterised path, which is slower and cannot be injected into.
+ */
+function settingsFor(organizationId: string) {
+  if (!UUID_SHAPE.test(organizationId)) {
+    return sql`select set_config('idle_in_transaction_session_timeout', '30000', true), set_config('app.current_organization_id', ${organizationId}, true)`;
+  }
+  return sql.raw(
+    `select set_config('idle_in_transaction_session_timeout', '30000', true), set_config('app.current_organization_id', '${organizationId}', true)`,
+  );
 }
