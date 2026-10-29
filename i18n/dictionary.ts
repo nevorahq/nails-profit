@@ -151,6 +151,8 @@ const ru = {
   "clientReturn.messageNoLink": "Здравствуйте, {name}! Это {studio}. Подходит время следующего визита — напишите, когда вам удобно, подберём время.",
   "slotFill.message": "Здравствуйте, {name}! Это {studio}. Освободилось время: {when}, мастер {master}, {service}. Хотите занять? Запишитесь здесь: {link}",
   "slotFill.messageNoLink": "Здравствуйте, {name}! Это {studio}. Освободилось время: {when}, мастер {master}, {service}. Хотите занять? Ответьте на это сообщение — запишем вас.",
+  "messageComposer.label": "Текст сообщения — его можно поправить",
+  "messageComposer.empty": "Текста нет — напишите сообщение, и появятся способы отправить.",
   "clients.specialist": "Мастер",
 
   "common.cancel": "Отмена",
@@ -1879,6 +1881,8 @@ const ro: Record<MessageKey, Message> = {
   "clientReturn.messageNoLink": "Bună ziua, {name}! Aici {studio}. Se apropie timpul următoarei vizite — scrieți-ne când vă este comod și găsim o oră.",
   "slotFill.message": "Bună ziua, {name}! Aici {studio}. S-a eliberat o oră: {when}, maestru {master}, {service}. Doriți să o ocupați? Programați-vă aici: {link}",
   "slotFill.messageNoLink": "Bună ziua, {name}! Aici {studio}. S-a eliberat o oră: {when}, maestru {master}, {service}. Doriți să o ocupați? Răspundeți la acest mesaj și vă programăm.",
+  "messageComposer.label": "Textul mesajului — îl puteți corecta",
+  "messageComposer.empty": "Nu există text — scrieți mesajul și apar modurile de trimitere.",
   "clients.specialist": "Maestru",
 
   "common.cancel": "Anulare",
@@ -3607,6 +3611,8 @@ const en: Record<MessageKey, Message> = {
   "clientReturn.messageNoLink": "Hello, {name}! This is {studio}. It's nearly time for your next visit — write when it suits you and we'll find a time.",
   "slotFill.message": "Hello, {name}! This is {studio}. A time has opened up: {when}, with {master}, {service}. Would you like it? Book here: {link}",
   "slotFill.messageNoLink": "Hello, {name}! This is {studio}. A time has opened up: {when}, with {master}, {service}. Would you like it? Reply to this message and we'll book you in.",
+  "messageComposer.label": "Message text — you can edit it",
+  "messageComposer.empty": "There is no text — write a message and the ways to send it appear.",
   "clients.specialist": "Specialist",
 
   "common.cancel": "Cancel",

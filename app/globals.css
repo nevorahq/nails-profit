@@ -1313,6 +1313,9 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .client-return-ways { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8rem; }
 .client-return-ways a { display: inline-flex; align-items: center; gap: 6rem; }
 .client-return-ways p { flex-basis: 100%; margin: 0; }
+.message-composer { flex-basis: 100%; display: grid; gap: 8rem; }
+.message-composer label { font-size: 13rem; }
+.message-composer textarea { width: 100%; min-height: 120rem; font: inherit; resize: vertical; }
 
 /* Photos of work: square thumbnails on the visit card and the client card. */
 .visit-photos { display: grid; gap: 8rem; margin-top: 14rem; padding-top: 14rem; border-top: 1rem solid var(--line); }
