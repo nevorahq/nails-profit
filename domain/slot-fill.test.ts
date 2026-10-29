@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 
+import { BOOKING_LINK_TOKEN } from "@/domain/client-return";
+import { getTranslator } from "@/i18n/t";
 import {
+  describeSlotStart,
   rankSlotFill,
   SLOT_FILL_LIMIT,
   slotFillRefusal,
@@ -111,6 +114,56 @@ describe("rankSlotFill", () => {
   test("keeps whatever else the caller carried on the row", () => {
     const rows = [{ ...candidate("anna"), locale: "ro" }];
     expect(rankSlotFill(rows, WINDOW)[0].locale).toBe("ro");
+  });
+});
+
+describe("describeSlotStart", () => {
+  // 12:00 UTC on a Saturday: 14:00 in Chișinău (UTC+2 after the October change).
+  const start = new Date("2026-10-31T12:00:00.000Z");
+
+  test("reads the hour on the studio's clock, not UTC", () => {
+    expect(describeSlotStart(start, "Europe/Chisinau", "ru-MD")).toContain("14:00");
+    expect(describeSlotStart(start, "UTC", "ru-MD")).toContain("12:00");
+  });
+
+  test("moves to the next day when the studio's clock has crossed midnight", () => {
+    const lateEvening = new Date("2026-10-31T22:30:00.000Z");
+    expect(describeSlotStart(lateEvening, "Europe/Chisinau", "en-GB")).toBe("Sunday 1 November, 00:30");
+  });
+
+  test("names the weekday and month in the client's language", () => {
+    expect(describeSlotStart(start, "Europe/Chisinau", "ru-MD")).toMatch(/суббота.*31 октября/);
+    expect(describeSlotStart(start, "Europe/Chisinau", "ro-MD")).toMatch(/sâmbătă.*31 octombrie/);
+    expect(describeSlotStart(start, "Europe/Chisinau", "en-GB")).toMatch(/Saturday.*31 October/);
+  });
+});
+
+describe("the message offered with an hour", () => {
+  const start = new Date("2026-10-31T12:00:00.000Z");
+  const words = {
+    name: "Anna",
+    studio: "Belle",
+    when: describeSlotStart(start, "Europe/Chisinau", "ru-MD"),
+    master: "Irina",
+    service: "Manicure",
+  };
+
+  test.each(["ru", "ro", "en"] as const)("%s carries the hour, the master and the service with a link", (locale) => {
+    const say = getTranslator(locale);
+    const text = say("slotFill.message", { ...words, link: BOOKING_LINK_TOKEN });
+    for (const part of ["Anna", "Belle", "Irina", "Manicure", "14:00", BOOKING_LINK_TOKEN]) {
+      expect(text).toContain(part);
+    }
+  });
+
+  test.each(["ru", "ro", "en"] as const)("%s without a booking page asks to write back instead of showing a link", (locale) => {
+    const say = getTranslator(locale);
+    const text = say("slotFill.messageNoLink", words);
+    for (const part of ["Anna", "Belle", "Irina", "Manicure", "14:00"]) {
+      expect(text).toContain(part);
+    }
+    expect(text).not.toContain(BOOKING_LINK_TOKEN);
+    expect(text).not.toMatch(/\{\w+\}/);
   });
 });
 

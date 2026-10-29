@@ -71,7 +71,31 @@ export function rankSlotFill<T extends SlotFillCandidate>(
   return scored.slice(0, Math.max(0, limit)).map((entry) => entry.candidate);
 }
 
-export type SlotFillRefusal = "not_cancelled" | "in_past";
+/**
+ * When the hour is, as the wall clock of the studio: «суббота, 31 октября, 14:00».
+ *
+ * Read in the location's timezone and never UTC — `toISOString` would offer a
+ * client a time two or three hours off in Chișinău. The tag is the client's
+ * language, so the weekday and month come out in the words of the message
+ * around them.
+ */
+export function describeSlotStart(startsAt: Date, timezone: string, localeTag: string): string {
+  const date = new Intl.DateTimeFormat(localeTag, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: timezone,
+  }).format(startsAt);
+  const time = new Intl.DateTimeFormat(localeTag, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: timezone,
+  }).format(startsAt);
+  return `${date}, ${time}`;
+}
+
+export type SlotFillRefusal ="not_cancelled" | "in_past";
 
 /**
  * Why an appointment is not an hour to offer, or null when it is.

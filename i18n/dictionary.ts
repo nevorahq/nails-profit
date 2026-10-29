@@ -149,6 +149,8 @@ const ru = {
   "clientReturn.more": "Показать ещё {count}",
   "clientReturn.message": "Здравствуйте, {name}! Это {studio}. Подходит время следующего визита — выберите удобное окно: {link}",
   "clientReturn.messageNoLink": "Здравствуйте, {name}! Это {studio}. Подходит время следующего визита — напишите, когда вам удобно, подберём время.",
+  "slotFill.message": "Здравствуйте, {name}! Это {studio}. Освободилось время: {when}, мастер {master}, {service}. Хотите занять? Запишитесь здесь: {link}",
+  "slotFill.messageNoLink": "Здравствуйте, {name}! Это {studio}. Освободилось время: {when}, мастер {master}, {service}. Хотите занять? Ответьте на это сообщение — запишем вас.",
   "clients.specialist": "Мастер",
 
   "common.cancel": "Отмена",
@@ -1875,6 +1877,8 @@ const ro: Record<MessageKey, Message> = {
   "clientReturn.more": "Arată încă {count}",
   "clientReturn.message": "Bună ziua, {name}! Aici {studio}. Se apropie timpul următoarei vizite — alegeți o oră convenabilă: {link}",
   "clientReturn.messageNoLink": "Bună ziua, {name}! Aici {studio}. Se apropie timpul următoarei vizite — scrieți-ne când vă este comod și găsim o oră.",
+  "slotFill.message": "Bună ziua, {name}! Aici {studio}. S-a eliberat o oră: {when}, maestru {master}, {service}. Doriți să o ocupați? Programați-vă aici: {link}",
+  "slotFill.messageNoLink": "Bună ziua, {name}! Aici {studio}. S-a eliberat o oră: {when}, maestru {master}, {service}. Doriți să o ocupați? Răspundeți la acest mesaj și vă programăm.",
   "clients.specialist": "Maestru",
 
   "common.cancel": "Anulare",
@@ -3601,6 +3605,8 @@ const en: Record<MessageKey, Message> = {
   "clientReturn.more": "Show {count} more",
   "clientReturn.message": "Hello, {name}! This is {studio}. It's nearly time for your next visit — choose a time that suits you: {link}",
   "clientReturn.messageNoLink": "Hello, {name}! This is {studio}. It's nearly time for your next visit — write when it suits you and we'll find a time.",
+  "slotFill.message": "Hello, {name}! This is {studio}. A time has opened up: {when}, with {master}, {service}. Would you like it? Book here: {link}",
+  "slotFill.messageNoLink": "Hello, {name}! This is {studio}. A time has opened up: {when}, with {master}, {service}. Would you like it? Reply to this message and we'll book you in.",
   "clients.specialist": "Specialist",
 
   "common.cancel": "Cancel",
