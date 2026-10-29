@@ -3,7 +3,9 @@ import type { AppLocale } from "@/i18n/messages";
 import { requireCalendarCaller } from "@/lib/booking-http";
 import { apiError, apiSuccess, requestId } from "@/lib/http";
 import { publishedBookingSlug } from "@/lib/client-return";
+import { logEvent } from "@/lib/logger";
 import { getActiveMembership } from "@/lib/membership";
+import { recordPilotProductEvent } from "@/lib/pilot-events";
 import { loadSlotFill } from "@/lib/slot-fill";
 
 /**
@@ -64,6 +66,30 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const { offer } = outcome;
+
+  /*
+   * Counted once per appointment, after the answer is known and in a
+   * transaction of its own: a read-only preview or a failed insert must not
+   * take the list away from a desk that asked for it.
+   */
+  try {
+    await withTenant(actor.organizationId, (tx) =>
+      recordPilotProductEvent(tx, {
+        organizationId: actor.organizationId,
+        eventName: "slot_fill_opened",
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        source: "api",
+        entityType: "booking",
+        entityId: offer.bookingId,
+        metadata: { clients: offer.rows.length, has_booking_page: offer.bookingSlug !== null },
+      }),
+    );
+  } catch (error) {
+    logEvent("warn", "slot_fill.event_failed", { requestId: id, organizationId: actor.organizationId }, {
+      reason: error instanceof Error ? error.message : "unknown",
+    });
+  }
   const bookingPath = offer.bookingSlug ? `/book/${offer.bookingSlug}` : null;
 
   return apiSuccess(

@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { bookings } from "@/db/schema";
+import { bookings, pilotProductEvents } from "@/db/schema";
 import { dataOf, errorCodeOf, type Actor } from "../helpers/api";
 import { isoDay, weekdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
@@ -187,6 +187,34 @@ describe("the hour a cancellation gave back", () => {
     const response = await studio.owner.get(`/api/v1/bookings/${crypto.randomUUID()}/slot-fill`);
     expect(response.status).toBe(404);
     expect(errorCodeOf(response)).toBe("BOOKING_NOT_FOUND");
+  });
+});
+
+describe("what the studio's asking is counted as", () => {
+  const opened = (bookingId: string) =>
+    adminDb
+      .select()
+      .from(pilotProductEvents)
+      .where(and(eq(pilotProductEvents.eventName, "slot_fill_opened"), eq(pilotProductEvents.entityId, bookingId)));
+
+  test("is one event per cancelled appointment, however often the list is asked for", async () => {
+    const freed = await cancelled();
+    expect(await opened(freed.id)).toHaveLength(0);
+
+    for (let times = 0; times < 3; times += 1) {
+      expect((await studio.owner.get(`/api/v1/bookings/${freed.id}/slot-fill`)).status).toBe(200);
+    }
+
+    const events = await opened(freed.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ entityType: "booking", actorRole: "owner", source: "api" });
+    expect(events[0].metadata).toEqual({ clients: 1, has_booking_page: false });
+  });
+
+  test("is not recorded for an appointment that has no hour to offer", async () => {
+    const held = await book();
+    expect((await studio.owner.get(`/api/v1/bookings/${held.id}/slot-fill`)).status).toBe(409);
+    expect(await opened(held.id)).toHaveLength(0);
   });
 });
 
