@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 
-import { medianDays, returnDue, RETURN_GRACE_DAYS, type ReturnVisit } from "@/domain/client-return";
+import {
+  BOOKING_LINK_TOKEN,
+  medianDays,
+  returnDue,
+  RETURN_GRACE_DAYS,
+  withBookingLink,
+  type ReturnVisit,
+} from "@/domain/client-return";
 
 function visit(day: string, specialistId = "irina", hour = 12): ReturnVisit {
   return { day, completedAt: new Date(`${day}T${String(hour).padStart(2, "0")}:00:00.000Z`), specialistId };
@@ -68,5 +75,27 @@ describe("medianDays", () => {
 
   test("one long absence does not move the median", () => {
     expect(medianDays([21, 21, 120, 20, 22])).toBe(21);
+  });
+});
+
+describe("withBookingLink", () => {
+  test("puts the address where the token stood", () => {
+    expect(withBookingLink(`Запишитесь: ${BOOKING_LINK_TOKEN}`, "https://x.test/book/belle")).toBe(
+      "Запишитесь: https://x.test/book/belle",
+    );
+  });
+
+  test("puts it in every place the token appears", () => {
+    expect(withBookingLink(`${BOOKING_LINK_TOKEN} и ${BOOKING_LINK_TOKEN}`, "https://x.test")).toBe(
+      "https://x.test и https://x.test",
+    );
+  });
+
+  test("leaves a message without a page exactly as it was written", () => {
+    expect(withBookingLink("Напишите нам", null)).toBe("Напишите нам");
+  });
+
+  test("leaves a message with no token alone even when there is an address", () => {
+    expect(withBookingLink("Напишите нам", "https://x.test")).toBe("Напишите нам");
   });
 });

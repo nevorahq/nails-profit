@@ -107,3 +107,14 @@ export function returnDue(input: ReturnInput): ReturnDue | null {
     lastSpecialistId: last.specialistId,
   };
 }
+
+/**
+ * A message with its booking-page address in place of `BOOKING_LINK_TOKEN`.
+ *
+ * `link` is the absolute address, built in the browser from the page's own
+ * origin; null when the studio has no page that answers, in which case the
+ * message was written without a token and comes back as it is.
+ */
+export function withBookingLink(message: string, link: string | null): string {
+  return link === null ? message : message.replaceAll(BOOKING_LINK_TOKEN, link);
+}

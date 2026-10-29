@@ -30,7 +30,14 @@ export type PilotEventName =
   | "booking_rescheduled"
   | "booking_cancelled"
   | "booking_no_show"
-  | "booking_completed";
+  | "booking_completed"
+  /**
+   * The desk asked whom to offer an hour a cancellation gave back. Once per
+   * cancelled appointment, like the rest: it answers how many cancellations the
+   * studio tries to fill, which is what decides whether counting the ones that
+   * were filled is worth building.
+   */
+  | "slot_fill_opened";
 
 type ProductEventInput = Readonly<{
   organizationId: string;

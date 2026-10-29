@@ -1313,6 +1313,18 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .client-return-ways { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8rem; }
 .client-return-ways a { display: inline-flex; align-items: center; gap: 6rem; }
 .client-return-ways p { flex-basis: 100%; margin: 0; }
+.message-composer { flex-basis: 100%; display: grid; gap: 8rem; }
+.message-composer label { font-size: 13rem; }
+.message-composer textarea { width: 100%; min-height: 120rem; font: inherit; resize: vertical; }
+.slot-fill { display: grid; gap: 10rem; margin-top: 14rem; padding-top: 14rem; border-top: 1rem solid var(--line); }
+.slot-fill h3 { margin: 0; font-size: 15rem; }
+.slot-fill p { margin: 0; }
+.slot-fill > button { min-height: 44rem; }
+.slot-fill-list button { min-height: 44rem; }
+.slot-fill-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.slot-fill-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8rem 16rem; padding: 12rem 0; border-top: 1rem solid var(--line); }
+.slot-fill-who { display: grid; gap: 2rem; min-width: 0; flex: 1 1 220rem; }
+.slot-fill-who .muted { font-size: 13rem; }
 
 /* Photos of work: square thumbnails on the visit card and the client card. */
 .visit-photos { display: grid; gap: 8rem; margin-top: 14rem; padding-top: 14rem; border-top: 1rem solid var(--line); }
