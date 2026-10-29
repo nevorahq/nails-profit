@@ -16,6 +16,7 @@ import {
 import { ServiceLinesField, toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
 import { NextVisit } from "@/components/next-visit";
+import { SlotFillPanel } from "@/components/slot-fill-panel";
 import { PaidField, TipField, tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { ToolIcon } from "@/components/icons";
@@ -229,6 +230,8 @@ export function CalendarBoard({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The appointment cancelled on this page, whose freed hour is offered at once. */
+  const [justCancelled, setJustCancelled] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, BookingPreview | "loading" | "error">>({});
   /** «Клиент заплатил» per appointment, as typed; absent until somebody types. */
   const [paidInputs, setPaidInputs] = useState<Record<string, string>>({});
@@ -442,6 +445,8 @@ export function CalendarBoard({
     if (result && Array.isArray(result.client_notified) && result.client_notified.length === 0) {
       setNotice(t("calendar.clientNotReached"));
     }
+    // The hour is back: the same desk can still fill it, so ask whom to write to.
+    if (result) setJustCancelled(booking.id);
   }
 
   async function resendManageLink(bookingId: string) {
@@ -1302,6 +1307,20 @@ export function CalendarBoard({
                       */}
                       {canWrite && booking.status === "completed" && booking.clientId && (
                         <NextVisit bookingId={booking.id} locale={locale} localeTag={localeTag} />
+                      )}
+
+                      {/*
+                        A cancelled hour still to come is a gap somebody can fill:
+                        offered here to the clients who are due back, as a message
+                        the studio edits and sends itself.
+                      */}
+                      {canWrite && booking.status === "cancelled" && booking.localDate >= today && (
+                        <SlotFillPanel
+                          bookingId={booking.id}
+                          locale={locale}
+                          localeTag={localeTag}
+                          autoOpen={justCancelled === booking.id}
+                        />
                       )}
 
                       {canWrite && LIVE_STATUSES.has(booking.status) && (
