@@ -10,6 +10,7 @@ import {
   slotFillRefusal,
   type SlotFillRefusal,
 } from "@/domain/slot-fill";
+import { mayActOnSpecialist } from "@/lib/booking-access";
 import { findConflict, loadBooking } from "@/lib/booking-service";
 import { scopedClientSpecialistId, type ClientActor } from "@/lib/client-access";
 import { loadReturnList } from "@/lib/client-return";
@@ -42,6 +43,8 @@ export type SlotFillOffer = Readonly<{
   startsAt: Date;
   timezone: string;
   specialistName: string;
+  /** Echoed from the studio, so the caller knows whether `BOOKING_LINK_TOKEN` has a page to point at. */
+  bookingSlug: string | null;
   rows: readonly SlotFillRow[];
 }>;
 
@@ -79,6 +82,11 @@ export async function loadSlotFill(
 ): Promise<SlotFillOutcome> {
   const booking = await loadBooking(tx, input.bookingId);
   if (!booking) return { ok: false, failure: "not_found" };
+  // A Master offers the hours of their own calendar. Answering «not found»
+  // rather than «forbidden» keeps a colleague's id from confirming itself.
+  if (!(await mayActOnSpecialist(tx, actor, booking.specialistId))) {
+    return { ok: false, failure: "not_found" };
+  }
 
   const refusal = slotFillRefusal(booking, input.now);
   if (refusal) return { ok: false, failure: refusal };
@@ -171,7 +179,14 @@ export async function loadSlotFill(
 
   return {
     ok: true,
-    offer: { bookingId: booking.id, startsAt: booking.startsAt, timezone, specialistName, rows },
+    offer: {
+      bookingId: booking.id,
+      startsAt: booking.startsAt,
+      timezone,
+      specialistName,
+      bookingSlug: input.organization.bookingSlug,
+      rows,
+    },
   };
 }
 

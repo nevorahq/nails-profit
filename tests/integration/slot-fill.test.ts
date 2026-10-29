@@ -375,5 +375,22 @@ describe("the hour a cancellation gave back", () => {
       expect(outcome.ok && outcome.offer.rows.map((row) => row.clientId)).toEqual([clientOfMine.id]);
       expect(outcome.ok && outcome.offer.rows.map((row) => row.clientId)).not.toContain(colleagues);
     });
+
+    it("is told there is no such appointment for a colleague's hour", async () => {
+      const masterUser = await createUser();
+      await createSpecialist(organizationId, { name: "Мария", userId: masterUser.id });
+      await regular("Анна");
+      const colleagues = await appointment({ specialistId: olga });
+
+      expect(await offer(colleagues.id, "master", masterUser.id)).toEqual({ ok: false, failure: "not_found" });
+      expect((await offer(colleagues.id, "owner")).ok).toBe(true);
+    });
+
+    it("is told there is no such appointment by a master with no card of their own", async () => {
+      const orphan = await createUser();
+      const booking = await appointment();
+
+      expect(await offer(booking.id, "master", orphan.id)).toEqual({ ok: false, failure: "not_found" });
+    });
   });
 });
