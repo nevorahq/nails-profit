@@ -6,6 +6,8 @@ import { invitationTokenFromNext } from "@/domain/invitation-link";
 import { previewInvitation } from "@/lib/invitation-preview";
 import { resolveLocale } from "@/lib/locale";
 
+import { displayFont } from "../display-font";
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -57,7 +59,7 @@ export default async function LoginPage({
   const pendingInvitation = invitation?.status === "pending" ? invitation : null;
 
   return (
-    <main className="auth-shell">
+    <main className={`auth-shell auth-mint ${displayFont.variable}`}>
       <LoginForm
         initialMode={params.mode === "signup" ? "signup" : "signin"}
         locale={pendingInvitation?.locale ?? (await resolveLocale())}

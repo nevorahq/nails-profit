@@ -138,6 +138,7 @@ export function LoginForm({
   return (
     <section className="auth-card">
       <Link className="brand" href="/">
+        <span className="brand-np" aria-hidden="true">NP</span>
         Nail Profit OS
       </Link>
       <h1>{mode === "signup" ? t("auth.signUpTitle") : t("auth.welcomeBack")}</h1>

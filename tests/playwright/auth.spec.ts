@@ -116,6 +116,41 @@ test.describe("authentication UI", () => {
     await expect(page.locator(".form-error")).toHaveText("The passwords do not match");
   });
 
+  test("the sign-up card wears the landing's Mint shapes and fits a 375 px phone", async ({
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/login?mode=signup");
+
+    // The card shares the landing's tokens through `.auth-mint`; the pills are
+    // what the reference's buttons and fields look like, so a field or button
+    // that fell back to the soft-UI square would be read here as a radius.
+    await expect(page.locator(".auth-shell.auth-mint")).toHaveCount(1);
+    const radii = await page.evaluate(() => ({
+      field: getComputedStyle(document.querySelector('input[name="email"]')!).borderRadius,
+      button: getComputedStyle(document.querySelector("button.primary-button")!).borderRadius,
+      secondary: getComputedStyle(document.querySelector("button.switch-button")!).borderRadius,
+    }));
+    for (const radius of Object.values(radii)) expect(Number.parseFloat(radius)).toBeGreaterThan(20);
+
+    const overflow = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      card: (() => {
+        const box = document.querySelector(".auth-card")!.getBoundingClientRect();
+        return box.left < 0 || box.right > window.innerWidth;
+      })(),
+    }));
+    expect(overflow).toEqual({ document: 0, card: false });
+  });
+
+  test("the password-reset page keeps the soft card, not the Mint one", async ({ page, browserErrors }) => {
+    void browserErrors;
+    await page.goto("/forgot-password");
+    await expect(page.locator(".auth-mint")).toHaveCount(0);
+  });
+
   test("keeps the consent to one line on the narrowest phone", async ({ page, browserErrors }) => {
     void browserErrors;
     /*
