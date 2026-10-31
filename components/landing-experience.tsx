@@ -35,8 +35,6 @@ type Copy = {
   intro: string;
   seeExample: string;
   demoLabel: string;
-  toastTitle: string;
-  toastNote: string;
   service: string;
   price: string;
   taxes: string;
@@ -124,8 +122,6 @@ const content: Record<AppLocale, Copy> = {
     intro: "Клиенты записываются онлайн, вы закрываете визит — и видно, сколько остаётся с каждой услуги после комиссии, налогов и времени мастера.",
     seeExample: "Посмотреть расчёт",
     demoLabel: "Пример визита",
-    toastTitle: "Визит закрыт",
-    toastNote: "Прибыль уже в отчёте",
     service: "Маникюр с покрытием",
     price: "Цена услуги",
     taxes: "Налоги и эквайринг",
@@ -235,8 +231,6 @@ const content: Record<AppLocale, Copy> = {
     intro: "Clienții se programează online, dvs. închideți vizita — și vedeți cât rămâne din fiecare serviciu după comision, taxe și timpul specialistului.",
     seeExample: "Vezi calculul",
     demoLabel: "Exemplu de vizită",
-    toastTitle: "Vizită închisă",
-    toastNote: "Profitul e deja în raport",
     service: "Manichiură cu acoperire",
     price: "Prețul serviciului",
     taxes: "Taxe și comision bancar",
@@ -346,8 +340,6 @@ const content: Record<AppLocale, Copy> = {
     intro: "Clients book online, you close the visit — and see what each service leaves you after commission, taxes and specialist time.",
     seeExample: "See the calculation",
     demoLabel: "Visit example",
-    toastTitle: "Visit closed",
-    toastNote: "The profit is already in the report",
     service: "Gel manicure",
     price: "Service price",
     taxes: "Taxes and card fees",
@@ -523,7 +515,6 @@ export function LandingExperience({
               <button className={mode === "studio" ? "active" : ""} type="button" onClick={() => setMode("studio")}>{copy.forStudio}</button>
             </div>
           </div>
-          <div className="hero-toast"><span aria-hidden="true">✓</span><span><strong>{copy.toastTitle}</strong><small>{copy.toastNote}</small></span></div>
         </div>
       </section>
 

@@ -212,27 +212,28 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .legal-footer { display: flex; justify-content: center; gap: 18rem; flex-wrap: wrap; margin-top: 28rem; color: var(--muted); font-size: 13rem; }
 
 /*
- * The landing page, on the product's own five colours, in the Mint System's
- * shapes.
+ * The landing page, on the product's greens, in the Mint System's shapes.
  *
- * The Mint System reference (forest, mint, ivory, ink) is read as roles, not as
- * new hues: its forest is `--forest-700`, its mint `--sage-300`, its ivory the
- * product's `--surface` and `--surface-strong`, its ink `--forest-950`. The
- * landing used to carry a private palette and changed colour worlds at the
- * moment someone signed in; taking the reference literally would have reopened
- * that seam. What it does change is form: soft raised cards on an ivory
- * canvas, pill-shaped buttons and switches, spaced capital labels, and a
- * serif for the headlines.
+ * The Mint System reference (forest, mint, ivory, ink) is read as roles: its
+ * forest is `--forest-700`, its mint `--sage-300`, its ink `--forest-950`. The
+ * landing once carried a private palette and changed colour worlds at the
+ * moment someone signed in, so the greens stay the application's own. The one
+ * exception is the ground: the product's surfaces lean green, and the
+ * reference asks for a warm ivory, so the canvas and the cards take a neutral
+ * warm white the greens sit on — the colours carry over into the application,
+ * only the paper under them changes. Beyond that it changes form: soft raised
+ * cards, pill-shaped buttons and switches, spaced capital labels, and a serif
+ * for the headlines.
  *
  * Contrast was the constraint that decided the mapping rather than taste.
- * `--sage-600` reaches 3.2:1 on the canvas, so it carries figures and shapes
+ * `--sage-600` reaches 3.3:1 on the canvas, so it carries figures and shapes
  * but never small text; `--forest-700` passes 7:1 and takes everything that
  * has to be read. Mint is a fill and an edge only — on the ivory it is far too
  * light to write in.
  */
 .marketing-page {
-  --marketing-canvas: var(--surface);
-  --marketing-surface: var(--surface-strong);
+  --marketing-canvas: #f6f4ee;
+  --marketing-surface: #fdfcf9;
   --marketing-ink: var(--forest-950);
   --marketing-muted: var(--forest-700);
   --marketing-line: rgba(15, 42, 29, 0.09);
@@ -246,10 +247,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   --marketing-sunken: var(--marketing-mint-soft);
   /** The colour money is written in, on light and dark alike. */
   --marketing-profit: var(--sage-600);
-  /** On the ink-filled panel: the featured plan. */
-  --marketing-on-dark: var(--surface-strong);
-  --marketing-on-dark-muted: var(--sage-300);
-  --marketing-on-dark-line: rgba(174, 195, 176, 0.28);
   /*
    * A raised card, lit from the top-left like the rest of the product's soft
    * surfaces: a hairline highlight on the top edge, a near shadow that seats
@@ -310,10 +307,10 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * closes the heading the way the reference closes its type specimen.
  */
 .marketing-kicker { margin: 0 0 22rem; color: var(--marketing-muted); font-size: 11rem; font-weight: 600; letter-spacing: .28em; text-transform: uppercase; }
-/* The serif draws old-style figures by default, which dance in an amount; every
- * place it sets a number asks for lining ones instead. */
+/* Every place the serif sets a number asks for lining figures, so an amount
+ * keeps one height whatever face the serif resolves to. */
 .hero-copy h1, .section-lead h2, .product-copy h2, .calculator-copy h2, .pricing-head h2, .marketing-final h2 { margin: 0; font-family: var(--marketing-display); font-weight: 500; letter-spacing: -.015em; font-variant-numeric: lining-nums; }
-.hero-copy h1 { font-size: clamp(54rem, 5.2vw, 86rem); line-height: 1.04; }
+.hero-copy h1 { font-size: clamp(50rem, 4.6vw, 76rem); line-height: 1.06; }
 .hero-copy h1 em { color: var(--marketing-accent); font-style: italic; font-weight: inherit; }
 .section-lead h2, .product-copy h2, .calculator-copy h2, .pricing-head h2, .marketing-final h2 { font-size: clamp(36rem, 3.3vw, 56rem); line-height: 1.1; }
 .section-lead h2::after, .product-copy h2::after, .calculator-copy h2::after, .pricing-head h2::after { display: block; width: 72rem; height: 2rem; margin-top: 26rem; border-radius: 2rem; background: var(--marketing-mint); content: ""; }
@@ -328,7 +325,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .hero-visual::after { position: absolute; inset: 0 38rem 38rem 0; border-radius: 32rem; background: linear-gradient(130deg, rgba(15, 42, 29, .08), transparent 52%); content: ""; pointer-events: none; }
 /* The reference's palette swatch, laid over the photo's corner. */
 .hero-sun { position: absolute; top: -30rem; right: -14rem; width: 150rem; height: 150rem; border-radius: 50%; background: var(--marketing-mint); mix-blend-mode: multiply; opacity: .9; }
-.hero-calculation { position: absolute; right: 0; bottom: 0; width: 320rem; padding: 22rem; border-radius: 24rem; background: rgba(251, 253, 248, .96); box-shadow: var(--marketing-raise-high); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
+.hero-calculation { position: absolute; right: 0; bottom: 0; width: 320rem; padding: 22rem; border-radius: 24rem; background: rgba(253, 252, 249, .96); box-shadow: var(--marketing-raise-high); backdrop-filter: blur(8rem); animation: calculation-float 6s ease-in-out infinite; }
 .calculation-topline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14rem; color: var(--marketing-muted); font-size: 10rem; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; }
 .calculation-topline i { display: block; width: 7rem; height: 7rem; border-radius: 50%; background: var(--marketing-profit); box-shadow: 0 0 0 4rem var(--marketing-mint-soft); }
 .hero-calculation > strong { display: block; margin-bottom: 14rem; font-family: var(--marketing-display); font-size: 19rem; font-weight: 500; }
@@ -342,11 +339,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .calculation-tabs { display: flex; gap: 4rem; margin-top: 16rem; padding: 4rem; border-radius: 999rem; background: var(--marketing-mint-soft); }
 .calculation-tabs button { flex: 1; min-height: 32rem; border: 0; border-radius: 999rem; background: transparent; color: var(--marketing-muted); font-size: 11rem; font-weight: 600; cursor: pointer; transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
 .calculation-tabs button.active { background: var(--marketing-accent); color: var(--on-accent); }
-/* The reference's «Changes saved» notice, saying what closing a visit does. */
-.hero-toast { position: absolute; bottom: 74rem; left: -48rem; display: flex; align-items: center; gap: 12rem; padding: 12rem 22rem 12rem 12rem; border-radius: 20rem; background: var(--marketing-surface); box-shadow: var(--marketing-raise-high); }
-.hero-toast > span:first-child { display: grid; flex: none; width: 34rem; height: 34rem; place-items: center; border-radius: 50%; background: var(--marketing-accent); color: var(--on-accent); font-size: 15rem; line-height: 1; }
-.hero-toast strong { display: block; font-size: 13rem; font-weight: 600; }
-.hero-toast small { display: block; margin-top: 2rem; color: var(--marketing-muted); font-size: 11rem; }
 
 .section-wrap { width: min(1248rem, calc(100% - 96rem)); margin: 0 auto; }
 .section-lead > p:last-child, .product-copy > p:last-child, .calculator-copy > p:last-child { max-width: 475rem; margin: 24rem 0 0; color: var(--marketing-muted); font-size: 16rem; line-height: 1.65; }
@@ -444,10 +436,6 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .hero-visual::after { border-radius: 24rem; }
   .hero-sun { top: -16rem; right: -4rem; width: 88rem; height: 88rem; }
   .hero-calculation { right: 0; width: min(282rem, 82%); padding: 16rem; border-radius: 20rem; }
-  .hero-toast { bottom: auto; top: 22rem; left: -6rem; padding: 9rem 16rem 9rem 9rem; border-radius: 16rem; }
-  .hero-toast > span:first-child { width: 28rem; height: 28rem; font-size: 13rem; }
-  .hero-toast strong { font-size: 12rem; }
-  .hero-toast small { font-size: 10rem; }
   .marketing-reason, .marketing-product, .marketing-calculator { gap: 38rem; padding: 68rem 0; }
   .section-lead h2, .product-copy h2, .calculator-copy h2, .marketing-final h2 { font-size: 34rem; }
   .marketing-pillars { padding: 4rem 20rem; border-radius: 24rem; }
@@ -470,8 +458,8 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * Pricing: the studio's own subscription, not the MDL visit economics above it.
  * The free Start and the Solo/Studio/Business line, billed in euro, with a
  * 1/6/12-month prepay switch that only changes what the cards read. «Студия» is
- * the featured plan and carries the page's one dark panel; the others take the
- * secondary button, so the featured card's is the only filled one in the row.
+ * the featured plan: the same light card, edged in forest and raised, and the
+ * only filled button in the row — the others take the secondary one.
  */
 .marketing-pricing { padding: 100rem 0 116rem; }
 .pricing-head { display: grid; justify-items: center; max-width: 640rem; margin: 0 auto 60rem; text-align: center; }
@@ -496,37 +484,30 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
  * cards lift; the featured one is already raised and only deepens its shadow,
  * so its resting offset never moves. */
 .pricing-card:not(.featured):hover { transform: translateY(-6rem); box-shadow: var(--marketing-raise-high); }
-.pricing-card.featured { background: var(--marketing-ink); color: var(--marketing-on-dark); box-shadow: 0 30rem 60rem -24rem rgba(15, 42, 29, .55); transform: translateY(-14rem); transition: box-shadow var(--duration-base) var(--ease-standard); }
-.pricing-card.featured:hover { box-shadow: 0 40rem 72rem -24rem rgba(15, 42, 29, .65); }
-.pricing-badge { position: absolute; top: -12rem; left: 28rem; padding: 5rem 13rem; border-radius: 999rem; background: var(--marketing-mint); color: var(--marketing-ink); font-size: 10rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+/* The edge is an inset shadow rather than a border, so the featured card keeps
+ * the same box as its neighbours and the row stays aligned. */
+.pricing-card.featured { box-shadow: inset 0 0 0 2rem var(--marketing-accent), var(--marketing-raise-high); transform: translateY(-14rem); transition: box-shadow var(--duration-base) var(--ease-standard); }
+.pricing-card.featured:hover { box-shadow: inset 0 0 0 2rem var(--marketing-accent), 0 2rem 4rem rgba(15, 42, 29, .08), 0 36rem 64rem -22rem rgba(15, 42, 29, .38); }
+.pricing-badge { position: absolute; top: -12rem; left: 28rem; padding: 5rem 13rem; border-radius: 999rem; background: var(--marketing-accent); color: var(--on-accent); font-size: 10rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
 .pricing-tier h3 { margin: 0; font-family: var(--marketing-display); font-size: 24rem; font-weight: 500; }
 .pricing-tier p { margin: 6rem 0 0; color: var(--marketing-muted); font-size: 12rem; line-height: 1.45; }
-.pricing-card.featured .pricing-tier p { color: var(--marketing-on-dark-muted); }
 .pricing-price { display: flex; align-items: baseline; gap: 8rem; margin-top: 4rem; }
 .pricing-price span { color: var(--marketing-muted); font-size: 13rem; font-weight: 500; }
-.pricing-card.featured .pricing-price span { color: var(--marketing-on-dark-muted); }
 .pricing-terms { display: flex; align-items: center; flex-wrap: wrap; gap: 8rem; min-height: 22rem; margin: 0; color: var(--marketing-muted); font-size: 12rem; }
-.pricing-card.featured .pricing-terms { color: var(--marketing-on-dark-muted); }
 /* The figure and the terms line are re-keyed on every period switch, so this
  * entrance replays each time the amount changes, not only on first load. */
 .pricing-price strong { display: inline-block; font-family: var(--marketing-display); font-size: 46rem; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: lining-nums tabular-nums; animation: pricing-figure var(--duration-base) var(--ease-standard) backwards; }
 .pricing-terms { animation: pricing-figure var(--duration-base) var(--ease-standard) backwards; }
 @keyframes pricing-figure { from { opacity: 0; transform: translateY(7rem); } }
 .pricing-save { padding: 3rem 9rem; border-radius: 999rem; background: var(--marketing-mint-soft); color: var(--marketing-accent); font-size: 10rem; font-weight: 600; }
-.pricing-card.featured .pricing-save { background: var(--marketing-on-dark-line); color: var(--marketing-on-dark); }
 .pricing-features { flex: 1; display: grid; align-content: start; gap: 12rem; margin: 8rem 0 0; padding: 20rem 0 0; border-top: 1rem solid var(--marketing-line); list-style: none; }
-.pricing-card.featured .pricing-features { border-color: var(--marketing-on-dark-line); }
 .pricing-features li { position: relative; padding-left: 28rem; font-size: 13rem; line-height: 1.5; }
 .pricing-features li::before { position: absolute; top: 1rem; left: 0; display: grid; width: 18rem; height: 18rem; place-items: center; border-radius: 50%; background: var(--marketing-mint-soft); color: var(--marketing-accent); font-size: 10rem; font-weight: 700; line-height: 1; content: "✓"; }
-.pricing-card.featured .pricing-features li::before { background: var(--marketing-on-dark-line); color: var(--marketing-on-dark); }
 .pricing-cta { width: 100%; margin-top: 4rem; }
 .pricing-card:not(.featured) .pricing-cta { background: var(--marketing-mint-soft); box-shadow: inset 0 0 0 1rem var(--marketing-mint); color: var(--marketing-ink); }
 .pricing-card:not(.featured) .pricing-cta:hover { background: rgba(174, 195, 176, .48); }
 .pricing-card:not(.featured) .pricing-cta span { color: var(--marketing-accent); }
-.pricing-card.featured .pricing-cta { background: var(--marketing-on-dark); box-shadow: none; color: var(--marketing-ink); }
-.pricing-card.featured .pricing-cta:hover { background: var(--marketing-on-dark-muted); }
 .pricing-card > small { color: var(--marketing-muted); font-size: 10rem; text-align: center; }
-.pricing-card.featured > small { color: var(--marketing-on-dark-muted); }
 .pricing-note { max-width: 620rem; margin: 48rem auto 0; color: var(--marketing-muted); font-size: 11rem; line-height: 1.6; text-align: center; }
 /* These overrides follow the base rules above rather than joining the shared
  * marketing media blocks higher up the file: same specificity, so source order
