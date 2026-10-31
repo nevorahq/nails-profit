@@ -1,12 +1,12 @@
 import { headers } from "next/headers";
 
+import { AuthShell } from "@/components/auth-shell";
 import { LoginForm } from "@/components/login-form";
 import { auth } from "@/lib/auth";
 import { invitationTokenFromNext } from "@/domain/invitation-link";
 import { previewInvitation } from "@/lib/invitation-preview";
 import { resolveLocale } from "@/lib/locale";
 
-import { displayFont } from "../display-font";
 
 export default async function LoginPage({
   searchParams,
@@ -59,7 +59,7 @@ export default async function LoginPage({
   const pendingInvitation = invitation?.status === "pending" ? invitation : null;
 
   return (
-    <main className={`auth-shell auth-mint ${displayFont.variable}`}>
+    <AuthShell>
       <LoginForm
         initialMode={params.mode === "signup" ? "signup" : "signin"}
         locale={pendingInvitation?.locale ?? (await resolveLocale())}
@@ -72,6 +72,6 @@ export default async function LoginPage({
           }
         }
       />
-    </main>
+    </AuthShell>
   );
 }

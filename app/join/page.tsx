@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 
+import { AuthBrand, AuthShell } from "@/components/auth-shell";
 import { JoinAccept, JoinSwitchAccount } from "@/components/join-actions";
 import { db } from "@/db";
 import { memberships, organizations } from "@/db/schema";
@@ -98,7 +99,7 @@ export default async function JoinPage({
         <p className="muted" style={{ marginBottom: "20rem" }}>
           {t("join.acceptedHint")}
         </p>
-        <a className="primary-button" href={session ? "/app" : signInHref} style={centeredButton}>
+        <a className="primary-button" href={session ? "/app" : signInHref}>
           {session ? t("join.goToApp") : t("join.loginButton")}
         </a>
       </Card>
@@ -109,7 +110,7 @@ export default async function JoinPage({
     return (
       <Card title={t("join.title")}>
         <Summary invitation={invitation} t={t} />
-        <a className="primary-button" href={signUpHref} style={centeredButton}>
+        <a className="primary-button" href={signUpHref}>
           {t("join.createAccount")}
         </a>
         <a className="switch-button" href={signInHref}>
@@ -145,7 +146,7 @@ export default async function JoinPage({
             ? t("join.alreadyMemberSame", { org: membership.organizationName })
             : t("join.alreadyMemberOther", { org: membership.organizationName })}
         </div>
-        <a className="primary-button" href="/app" style={centeredButton}>
+        <a className="primary-button" href="/app">
           {t("join.goToApp")}
         </a>
       </Card>
@@ -160,16 +161,15 @@ export default async function JoinPage({
   );
 }
 
-const centeredButton = { display: "block", textAlign: "center" } as const;
-
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main className="auth-shell">
+    <AuthShell>
       <section className="auth-card">
-        <h1 style={{ fontSize: "22rem", fontWeight: 750, marginBottom: "12rem" }}>{title}</h1>
+        <AuthBrand />
+        <h1>{title}</h1>
         {children}
       </section>
-    </main>
+    </AuthShell>
   );
 }
 

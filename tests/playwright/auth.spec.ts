@@ -145,10 +145,18 @@ test.describe("authentication UI", () => {
     expect(overflow).toEqual({ document: 0, card: false });
   });
 
-  test("the password-reset page keeps the soft card, not the Mint one", async ({ page, browserErrors }) => {
+  test("every screen on an auth card wears the Mint shapes", async ({ page, browserErrors }) => {
     void browserErrors;
-    await page.goto("/forgot-password");
-    await expect(page.locator(".auth-mint")).toHaveCount(0);
+    // Recovery, a dead reset link and a dead invitation: three screens that
+    // reach `.auth-card` without passing through the sign-in form. One of them
+    // built on a bare `<main className="auth-shell">` would fall back to the
+    // soft-UI square and read here as a radius.
+    for (const path of ["/forgot-password", "/reset-password", "/join?token=none"]) {
+      await page.goto(path);
+      await expect(page.locator(".auth-shell.auth-mint .auth-card")).toHaveCount(1);
+      const radius = await page.locator(".auth-card").evaluate((card) => getComputedStyle(card).borderRadius);
+      expect(Number.parseFloat(radius)).toBeGreaterThan(15);
+    }
   });
 
   test("keeps the consent to one line on the narrowest phone", async ({ page, browserErrors }) => {

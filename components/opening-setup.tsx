@@ -9,6 +9,7 @@ import { parseIntegerValue, parseMoneyMinor } from "@/domain/import-values";
 import type { AppLocale } from "@/i18n/messages";
 import { getErrorMessage } from "@/i18n/messages";
 import { type MessageKey } from "@/i18n/t";
+import { AuthShell } from "@/components/auth-shell";
 import { ClientsStart } from "@/components/clients-start";
 import { useRegister, useTranslator } from "@/components/lexicon-provider";
 import type { OpeningSetupView } from "@/lib/opening-setup";
@@ -152,11 +153,11 @@ export function OpeningSetup({
 
   if (saved) {
     return (
-      <main className="auth-shell">
+      <AuthShell>
         <section className="auth-card workspace-card opening-card">
           <ClientsStart locale={locale} onLater={goToApp} heading="h1" />
         </section>
-      </main>
+      </AuthShell>
     );
   }
 
@@ -165,7 +166,7 @@ export function OpeningSetup({
   const none = problemFor("services");
 
   return (
-    <main className="auth-shell">
+    <AuthShell>
       <section className="auth-card workspace-card opening-card">
         <h1>{t("openingSetup.title")}</h1>
         <p className="muted">{t("openingSetup.lead")}</p>
@@ -294,6 +295,6 @@ export function OpeningSetup({
           )}
         </div>
       </section>
-    </main>
+    </AuthShell>
   );
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
+import { AuthShell } from "@/components/auth-shell";
 import { currencies, type Currency } from "@/domain/money";
 import { catalogueEntry } from "@/domain/service-catalogue";
 import {
@@ -183,7 +184,7 @@ export function WorkspaceSetup({
   }
 
   return (
-    <main className="auth-shell">
+    <AuthShell>
       <section className="auth-card workspace-card">
         <label className="setup-language">
           {t("workspace.language")}
@@ -342,6 +343,6 @@ export function WorkspaceSetup({
         untouched and still refuses an owner with a live studio, so the way back
         is to call it directly or to put this control back.
       */}
-    </main>
+    </AuthShell>
   );
 }

@@ -532,11 +532,11 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
   .pricing-price strong { font-size: 40rem; }
 }
 /*
- * The sign-in card in the Mint System's shapes, shared with the landing so
+ * The auth cards in the Mint System's shapes, shared with the landing so
  * someone who presses «Начать расчёт» arrives on a page that looks like the one
- * they left. Scoped to `.auth-mint`, which only `app/login` carries: the
- * password-reset pages, the invitation page and the setup screens share
- * `.auth-card` and keep the soft surface they have.
+ * they left. Scoped to `.auth-mint`, which `components/auth-shell.tsx` puts on
+ * every screen that stands on `.auth-card`: sign-in, password recovery, the
+ * invitation page and the two set-up screens.
  *
  * Every selector leads with `.auth-shell.auth-mint`. The soft-UI block further
  * down the file dresses the same fields and buttons at the same specificity,
@@ -549,7 +549,11 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-shell.auth-mint .auth-card h1 { margin: 0 0 36rem; font-family: var(--marketing-display); font-size: 38rem; font-weight: 500; line-height: 1.12; letter-spacing: -.015em; }
 .auth-shell.auth-mint .auth-card h1::after { display: block; width: 72rem; height: 2rem; margin: 24rem auto 0; border-radius: 2rem; background: var(--marketing-mint); content: ""; }
 /* Direct children only: the consent sentence is a label too, and reads as a sentence. */
-.auth-shell.auth-mint .auth-card form > label { color: var(--marketing-muted); font-size: 11rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.auth-shell.auth-mint .auth-card form > label,
+.auth-shell.auth-mint .auth-card fieldset > label:not(.radio-row),
+.auth-shell.auth-mint .opening-service-fields label,
+.auth-shell.auth-mint .opening-times label,
+.auth-shell.auth-mint .setup-language { color: var(--marketing-muted); font-size: 11rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
 .auth-shell.auth-mint .auth-card .field-hint { margin-top: 8rem; font-size: 12rem; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .auth-shell.auth-mint .auth-card input:not([type="checkbox"]):not([type="radio"]) { min-height: 52rem; margin-top: 10rem; padding: 0 22rem; border: 0; border-radius: 999rem; background: var(--marketing-surface); box-shadow: inset 0 0 0 1rem var(--marketing-mint); font-size: 16rem; letter-spacing: 0; text-transform: none; transition: box-shadow var(--duration-fast) var(--ease-standard); }
 .auth-shell.auth-mint .auth-card input:not([type="checkbox"]):not([type="radio"]):focus { box-shadow: inset 0 0 0 2rem var(--marketing-accent); }
@@ -558,11 +562,17 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-shell.auth-mint .password-toggle { min-height: 52rem; margin-top: 10rem; padding: 0 20rem; border: 0; border-radius: 999rem; background: var(--marketing-mint-soft); box-shadow: inset 0 0 0 1rem var(--marketing-mint); color: var(--marketing-ink); font-size: 13rem; font-weight: 600; transition: background var(--duration-fast) var(--ease-standard); }
 .auth-shell.auth-mint .password-toggle:hover { background: rgba(174, 195, 176, .48); }
 .auth-shell.auth-mint .consent-field { grid-template-columns: 24rem 1fr; align-items: center; gap: 12rem; }
-.auth-shell.auth-mint .auth-card .consent-field input[type="checkbox"] { width: 24rem; height: 24rem; margin: 0; border-radius: 8rem; background-color: var(--marketing-surface); box-shadow: inset 0 0 0 1rem var(--marketing-mint); }
-.auth-shell.auth-mint .auth-card .consent-field input[type="checkbox"]:checked { background-color: var(--marketing-accent); box-shadow: none; }
+.auth-shell.auth-mint .auth-card input[type="checkbox"],
+.auth-shell.auth-mint .auth-card input[type="radio"] { width: 24rem; height: 24rem; margin: 0; border-radius: 8rem; background-color: var(--marketing-surface); box-shadow: inset 0 0 0 1rem var(--marketing-mint); }
+.auth-shell.auth-mint .auth-card input[type="radio"] { border-radius: 999rem; }
+.auth-shell.auth-mint .auth-card input[type="checkbox"]:checked { background-color: var(--marketing-accent); box-shadow: none; }
+.auth-shell.auth-mint .auth-card input[type="radio"]:checked { box-shadow: inset 0 0 0 2rem var(--marketing-accent); }
+.auth-shell.auth-mint .auth-card .radio-row { gap: 12rem; padding: 7rem 0; font-size: 14rem; }
 .auth-shell.auth-mint .consent-field label { font-size: 13rem; line-height: 1.45; }
 .auth-shell.auth-mint .consent-field a { color: var(--marketing-accent); font-weight: 600; }
-.auth-shell.auth-mint .auth-card .primary-button { width: 100%; min-height: 52rem; margin-top: 6rem; border-radius: 999rem; background: var(--marketing-accent); box-shadow: 0 12rem 24rem -14rem rgba(15, 42, 29, .7); font-size: 14rem; font-weight: 600; letter-spacing: .01em; transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard); }
+.auth-shell.auth-mint .auth-card .primary-button { width: 100%; min-height: 52rem; justify-content: center; text-align: center; border-radius: 999rem; background: var(--marketing-accent); box-shadow: 0 12rem 24rem -14rem rgba(15, 42, 29, .7); font-size: 14rem; font-weight: 600; letter-spacing: .01em; transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard); }
+/* The submit button only: in a row of buttons the offset would stagger them. */
+.auth-shell.auth-mint .auth-card form > .primary-button { margin-top: 6rem; }
 .auth-shell.auth-mint .auth-card .primary-button:hover:not(:disabled) { background: var(--marketing-accent-dark); box-shadow: 0 16rem 28rem -14rem rgba(15, 42, 29, .8); }
 .auth-shell.auth-mint .auth-card .primary-button:active:not(:disabled) { box-shadow: 0 6rem 12rem -10rem rgba(15, 42, 29, .7); transform: translateY(1rem); }
 /* The way to the other form is the secondary button; the reset link is plain text. */
@@ -571,6 +581,21 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .auth-shell.auth-mint .auth-card a.switch-button { margin-top: 20rem; color: var(--marketing-muted); font-size: 13rem; font-weight: 600; text-underline-offset: 4rem; }
 .auth-shell.auth-mint .auth-card a.switch-button:hover { color: var(--marketing-ink); }
 .auth-shell.auth-mint .form-error { border-radius: 18rem; }
+.auth-shell.auth-mint .auth-card > p { color: var(--marketing-muted); font-size: 16rem; line-height: 1.6; margin-top: -10rem; }
+.auth-shell.auth-mint .auth-card .secondary-button { min-height: 52rem; justify-content: center; text-align: center; padding: 0 28rem; border: 0; border-radius: 999rem; background: var(--marketing-mint-soft); box-shadow: inset 0 0 0 1rem var(--marketing-mint); color: var(--marketing-ink); font-size: 14rem; font-weight: 600; }
+.auth-shell.auth-mint .auth-card .secondary-button:hover:not(:disabled) { background: rgba(174, 195, 176, .48); }
+/* A list of choices sits on its own mint-edged plate, the way the reference sets a task. */
+.auth-shell.auth-mint .auth-card fieldset { margin: 0; padding: 18rem 20rem; border: 0; border-radius: 20rem; box-shadow: inset 0 0 0 1rem var(--marketing-mint); }
+.auth-shell.auth-mint .auth-card legend, .auth-shell.auth-mint .checkbox-set legend { padding: 0 6rem; color: var(--marketing-muted); font-size: 11rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.auth-shell.auth-mint .auth-card select { min-height: 52rem; margin-top: 10rem; padding: 0 20rem; border: 0; border-radius: 999rem; background-color: var(--marketing-surface); box-shadow: inset 0 0 0 1rem var(--marketing-mint); font-size: 16rem; letter-spacing: 0; text-transform: none; }
+.auth-shell.auth-mint .auth-card select:focus { box-shadow: inset 0 0 0 2rem var(--marketing-accent); }
+.auth-shell.auth-mint .auth-card .setup-language select { min-height: 40rem; margin-top: 0; padding: 0 16rem; font-size: 13rem; }
+.auth-shell.auth-mint .setup-language { margin-bottom: 18rem; }
+.auth-shell.auth-mint .opening-service { border-bottom-color: var(--marketing-line); }
+.auth-shell.auth-mint .opening-service-fields input:not([type="checkbox"]):not([type="radio"]), .auth-shell.auth-mint .opening-times input:not([type="checkbox"]):not([type="radio"]) { margin-top: 0; }
+.auth-shell.auth-mint .opening-days .chip { min-width: 52rem; min-height: 44rem; border: 0; border-radius: 999rem; background: var(--marketing-surface); box-shadow: inset 0 0 0 1rem var(--marketing-mint); color: var(--marketing-ink); font-weight: 600; }
+.auth-shell.auth-mint .opening-days .chip.is-on { background: var(--marketing-accent); box-shadow: none; color: var(--on-accent); }
+.auth-shell.auth-mint .field-error { font-weight: 600; }
 .auth-shell.auth-mint .warning-banner.session-link { margin: 0 0 26rem; border-radius: 20rem; }
 .auth-shell.auth-mint .legal-footer { gap: 8rem 26rem; margin-top: 34rem; color: var(--marketing-muted); font-size: 10rem; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; }
 .auth-shell.auth-mint .legal-footer a { color: inherit; text-decoration: none; }
