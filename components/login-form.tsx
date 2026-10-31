@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { AuthBrand } from "@/components/auth-shell";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
@@ -137,9 +138,7 @@ export function LoginForm({
 
   return (
     <section className="auth-card">
-      <Link className="brand" href="/">
-        Nail Profit OS
-      </Link>
+      <AuthBrand />
       <h1>{mode === "signup" ? t("auth.signUpTitle") : t("auth.welcomeBack")}</h1>
       {activeEmail && (
         /*

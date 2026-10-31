@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+import { AuthBrand } from "@/components/auth-shell";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
@@ -29,9 +30,7 @@ export function ResetPasswordForm({
   if (!token || linkError) {
     return (
       <section className="auth-card">
-        <Link className="brand" href="/">
-          Nail Profit OS
-        </Link>
+        <AuthBrand />
         <h1>{t("auth.linkInvalid")}</h1>
         <p>{t("auth.linkInvalidBody")}</p>
         <Link className="primary-button" href="/forgot-password">
@@ -67,9 +66,7 @@ export function ResetPasswordForm({
 
   return (
     <section className="auth-card">
-      <Link className="brand" href="/">
-        Nail Profit OS
-      </Link>
+      <AuthBrand />
       <h1>{t("auth.newPassword")}</h1>
       <p>{t("auth.newPasswordHint")}</p>
       {/* `post` and a button that waits for React — see `components/login-form.tsx`. */}

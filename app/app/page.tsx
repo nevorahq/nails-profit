@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AuthBrand, AuthShell } from "@/components/auth-shell";
 import { CloseDayPanel } from "@/components/close-day-panel";
 import { FirstNumbers } from "@/components/first-numbers";
 import { FirstRun } from "@/components/first-run";
@@ -127,13 +128,13 @@ export default async function AppPage({
 
   if (!caller.membership) {
     return (
-      <main className="auth-shell">
+      <AuthShell>
         <section className="auth-card workspace-card" aria-labelledby="pilot-access-title">
-          <span className="brand">Nail Profit OS</span>
+          <AuthBrand linked={false} />
           <h1 id="pilot-access-title">{t("pilot.accessTitle")}</h1>
           <p>{t("pilot.accessBody")}</p>
         </section>
-      </main>
+      </AuthShell>
     );
   }
 

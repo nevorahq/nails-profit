@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 
 import {
   addOnMonthlyPriceMinor,
@@ -439,11 +439,25 @@ const content: Record<AppLocale, Copy> = {
   },
 };
 
+/** How far along its track a slider's thumb sits, for the filled part of the track. */
+function trackFill(value: number, min: number, max: number) {
+  return { "--fill": `${((value - min) / (max - min)) * 100}%` } as CSSProperties;
+}
+
 function Money({ value }: { value: number }) {
   return <>{new Intl.NumberFormat("ru-RU").format(value)} MDL</>;
 }
 
-export function LandingExperience({ locale, supportEmail = null }: { locale: AppLocale; supportEmail?: string | null }) {
+export function LandingExperience({
+  locale,
+  supportEmail = null,
+  displayFont = "",
+}: {
+  locale: AppLocale;
+  supportEmail?: string | null;
+  /** The class that declares `--font-display`, loaded by the page so only the landing pays for it. */
+  displayFont?: string;
+}) {
   const copy = content[locale];
   const [mode, setMode] = useState<"solo" | "studio">("studio");
   const [price, setPrice] = useState(600);
@@ -456,7 +470,7 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
   const hourly = Math.round((takeHome / 1.5) * 100) / 100;
 
   return (
-    <main className="marketing-page">
+    <main className={`marketing-page ${displayFont}`.trim()}>
       <div className="marketing-grain" aria-hidden="true" />
       <nav className="marketing-nav" aria-label="Main navigation">
         <Link className="marketing-brand" href="#top" aria-label="Nail Profit OS">
@@ -476,12 +490,12 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
 
       <section id="top" className="marketing-hero" aria-labelledby="hero-title">
         <div className="hero-copy marketing-reveal">
-          <p className="marketing-kicker"><span />{copy.eyebrow}</p>
+          <p className="marketing-kicker">{copy.eyebrow}</p>
           <h1 id="hero-title">{copy.titleFirst}<br /><em>{copy.titleAccent}</em></h1>
           <p className="marketing-intro">{copy.intro}</p>
           <div className="hero-actions">
-            <Link className="marketing-cta" href="/login?mode=signup">{copy.start}<span aria-hidden="true">↗</span></Link>
-            <a className="marketing-text-action" href="#calculator">{copy.seeExample}<span aria-hidden="true">↓</span></a>
+            <Link className="marketing-cta" href="/login?mode=signup">{copy.start}<span aria-hidden="true">→</span></Link>
+            <a className="marketing-secondary" href="#calculator">{copy.seeExample}<span aria-hidden="true">↓</span></a>
           </div>
           <p className="hero-fine-print">{copy.usesRealData}</p>
         </div>
@@ -501,13 +515,12 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
               <button className={mode === "studio" ? "active" : ""} type="button" onClick={() => setMode("studio")}>{copy.forStudio}</button>
             </div>
           </div>
-          <div className="hero-stamp"><span>01</span><span>Real<br />economics</span></div>
         </div>
       </section>
 
       <section id="how" className="marketing-reason section-wrap">
         <div className="section-lead marketing-reveal">
-          <p className="marketing-kicker"><span />{copy.reasonEyebrow}</p>
+          <p className="marketing-kicker">{copy.reasonEyebrow}</p>
           <h2>{copy.reasonTitle}</h2>
           <p>{copy.reasonBody}</p>
         </div>
@@ -528,7 +541,7 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
           <p><span>◒</span>{copy.usesRealData}</p>
         </div>
         <div className="product-copy marketing-reveal marketing-reveal-delayed">
-          <p className="marketing-kicker"><span />{copy.productEyebrow}</p>
+          <p className="marketing-kicker">{copy.productEyebrow}</p>
           <h2>{copy.productTitle}</h2>
           <p>{copy.productBody}</p>
           <div className="product-report" aria-label={copy.service}>
@@ -543,14 +556,14 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
 
       <section id="calculator" className="marketing-calculator section-wrap">
         <div className="calculator-copy marketing-reveal">
-          <p className="marketing-kicker"><span />{copy.calculatorEyebrow}</p>
+          <p className="marketing-kicker">{copy.calculatorEyebrow}</p>
           <h2>{copy.calculatorTitle}</h2>
           <p>{copy.calculatorBody}</p>
         </div>
         <div className="calculator-card marketing-reveal marketing-reveal-delayed">
-          <label>{copy.priceInput}<output><Money value={price} /></output><input type="range" min="300" max="1200" step="10" value={price} onChange={(event) => setPrice(Number(event.target.value))} /></label>
-          <label>{copy.taxInput}<output><Money value={taxes} /></output><input type="range" min="0" max="250" step="1" value={taxes} onChange={(event) => setTaxes(Number(event.target.value))} /></label>
-          <label>{copy.commissionInput}<output><Money value={commission} /></output><input type="range" min="0" max="500" step="10" value={commission} onChange={(event) => setCommission(Number(event.target.value))} /></label>
+          <label>{copy.priceInput}<output><Money value={price} /></output><input type="range" min="300" max="1200" step="10" value={price} style={trackFill(price, 300, 1200)} onChange={(event) => setPrice(Number(event.target.value))} /></label>
+          <label>{copy.taxInput}<output><Money value={taxes} /></output><input type="range" min="0" max="250" step="1" value={taxes} style={trackFill(taxes, 0, 250)} onChange={(event) => setTaxes(Number(event.target.value))} /></label>
+          <label>{copy.commissionInput}<output><Money value={commission} /></output><input type="range" min="0" max="500" step="10" value={commission} style={trackFill(commission, 0, 500)} onChange={(event) => setCommission(Number(event.target.value))} /></label>
           <div className="calculator-result">
             <span>{copy.youKeep}</span><strong><Money value={takeHome} /></strong>
             <div><span>{copy.perHour}</span><b><Money value={hourly} /></b></div>
@@ -561,7 +574,7 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
 
       <section id="pricing" className="marketing-pricing section-wrap">
         <div className="pricing-head marketing-reveal">
-          <p className="marketing-kicker"><span />{copy.pricingEyebrow}</p>
+          <p className="marketing-kicker">{copy.pricingEyebrow}</p>
           <h2>{copy.pricingTitle}</h2>
           <p>{copy.pricingBody}</p>
           <div className="pricing-period" role="group" aria-label={copy.pricingPeriodGroupLabel}>
@@ -621,7 +634,7 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
                   ))}
                 </ul>
                 <Link className="marketing-cta pricing-cta" href="/login?mode=signup">
-                  {free ? copy.pricingStartCta : copy.pricingCta}<span aria-hidden="true">↗</span>
+                  {free ? copy.pricingStartCta : copy.pricingCta}<span aria-hidden="true">→</span>
                 </Link>
                 <small>{fill(free ? copy.pricingStartNote : copy.pricingTrial, { days: signupTrial.days })}</small>
               </article>
@@ -646,7 +659,7 @@ export function LandingExperience({ locale, supportEmail = null }: { locale: App
         <span className="marketing-mark">NP</span>
         <h2>{copy.finalTitle}</h2>
         <p>{copy.finalBody}</p>
-        <Link className="marketing-cta" href="/login?mode=signup">{copy.start}<span aria-hidden="true">↗</span></Link>
+        <Link className="marketing-cta" href="/login?mode=signup">{copy.start}<span aria-hidden="true">→</span></Link>
       </section>
 
       <footer className="marketing-footer">

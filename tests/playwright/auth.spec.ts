@@ -116,6 +116,49 @@ test.describe("authentication UI", () => {
     await expect(page.locator(".form-error")).toHaveText("The passwords do not match");
   });
 
+  test("the sign-up card wears the landing's Mint shapes and fits a 375 px phone", async ({
+    page,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/login?mode=signup");
+
+    // The card shares the landing's tokens through `.auth-mint`; the pills are
+    // what the reference's buttons and fields look like, so a field or button
+    // that fell back to the soft-UI square would be read here as a radius.
+    await expect(page.locator(".auth-shell.auth-mint")).toHaveCount(1);
+    const radii = await page.evaluate(() => ({
+      field: getComputedStyle(document.querySelector('input[name="email"]')!).borderRadius,
+      button: getComputedStyle(document.querySelector("button.primary-button")!).borderRadius,
+      secondary: getComputedStyle(document.querySelector("button.switch-button")!).borderRadius,
+    }));
+    for (const radius of Object.values(radii)) expect(Number.parseFloat(radius)).toBeGreaterThan(20);
+
+    const overflow = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      card: (() => {
+        const box = document.querySelector(".auth-card")!.getBoundingClientRect();
+        return box.left < 0 || box.right > window.innerWidth;
+      })(),
+    }));
+    expect(overflow).toEqual({ document: 0, card: false });
+  });
+
+  test("every screen on an auth card wears the Mint shapes", async ({ page, browserErrors }) => {
+    void browserErrors;
+    // Recovery, a dead reset link and a dead invitation: three screens that
+    // reach `.auth-card` without passing through the sign-in form. One of them
+    // built on a bare `<main className="auth-shell">` would fall back to the
+    // soft-UI square and read here as a radius.
+    for (const path of ["/forgot-password", "/reset-password", "/join?token=none"]) {
+      await page.goto(path);
+      await expect(page.locator(".auth-shell.auth-mint .auth-card")).toHaveCount(1);
+      const radius = await page.locator(".auth-card").evaluate((card) => getComputedStyle(card).borderRadius);
+      expect(Number.parseFloat(radius)).toBeGreaterThan(15);
+    }
+  });
+
   test("keeps the consent to one line on the narrowest phone", async ({ page, browserErrors }) => {
     void browserErrors;
     /*

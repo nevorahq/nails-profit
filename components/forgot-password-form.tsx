@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
+import { AuthBrand } from "@/components/auth-shell";
 import type { AppLocale } from "@/i18n/messages";
 import { getTranslator } from "@/i18n/t";
 import { authClient } from "@/lib/auth-client";
@@ -31,9 +32,7 @@ export function ForgotPasswordForm({ locale }: { locale: AppLocale }) {
   if (sent) {
     return (
       <section className="auth-card">
-        <Link className="brand" href="/">
-          Nail Profit OS
-        </Link>
+        <AuthBrand />
         <h1>{t("auth.checkMail")}</h1>
 <p>{t("auth.checkMailBody")}</p>
         <Link className="switch-button" href="/login">
@@ -45,9 +44,7 @@ export function ForgotPasswordForm({ locale }: { locale: AppLocale }) {
 
   return (
     <section className="auth-card">
-      <Link className="brand" href="/">
-        Nail Profit OS
-      </Link>
+      <AuthBrand />
       <h1>{t("auth.recoverTitle")}</h1>
       <p>{t("auth.recoverBody")}</p>
       <form onSubmit={submit}>

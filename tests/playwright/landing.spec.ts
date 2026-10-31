@@ -79,6 +79,25 @@ test.describe("landing experience", () => {
     await expect(page.getByLabel("Studio name")).toBeVisible();
   });
 
+  test("slider tracks fill up to the thumb and follow it", async ({ page, browserErrors }) => {
+    void browserErrors;
+    await page.goto("/");
+
+    const price = page.locator(".calculator-card").getByRole("slider").first();
+    const fill = () => price.evaluate((input) => (input as HTMLInputElement).style.getPropertyValue("--fill"));
+    // 600 on a 300–1200 track is a third of the way along.
+    expect(Number.parseFloat(await fill())).toBeCloseTo(33.33, 1);
+    // Retried for the same reason as the calculator test: a value set before
+    // React listens is lost.
+    await expect(async () => {
+      await price.fill("1190");
+      await price.fill("1200");
+      expect(await fill()).toBe("100%");
+    }).toPass({ timeout: 15_000 });
+    await price.fill("300");
+    await expect.poll(fill).toBe("0%");
+  });
+
   test("pricing switches every card between prepay periods", async ({ page, browserErrors }) => {
     void browserErrors;
     await page.goto("/");
