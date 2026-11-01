@@ -136,11 +136,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         price_minor: existing.priceMinor,
         duration_minutes: existing.durationMinutes,
         materials_minor: existing.materialsMinor,
+        currency: existing.currency,
       },
       after: {
         price_minor: service.priceMinor,
         duration_minutes: service.durationMinutes,
         materials_minor: service.materialsMinor,
+        currency: service.currency,
       },
       requestId: requestIdentifier,
     });

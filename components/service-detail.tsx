@@ -320,6 +320,25 @@ export function ServiceDetail({
     router.push(`/app/services/${service.id}${query}`);
   }
 
+  /**
+   * Re-record the service in the studio's currency, the price as it stands.
+   *
+   * Only for the one case this offers: a service written in another currency
+   * than its studio's, which the booking page then does not show. The amounts
+   * are not converted — what the number meant is the studio's to say, and it
+   * says so by pressing this rather than by a rate the page made up.
+   */
+  async function useStudioCurrency() {
+    setPending(true);
+    setError(null);
+    const response = await fetch(`/api/v1/services/${service.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currency }),
+    });
+    await finish(response);
+  }
+
   async function finish(response: Response) {
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
@@ -346,6 +365,16 @@ export function ServiceDetail({
 
       <section className="panel">
         <h2>{t("services.priceAndDuration")}</h2>
+        {service.currency !== null && service.currency !== currency && (
+          <div className="warning-banner" role="status">
+            <p>{t("services.foreignCurrency", { service: service.currency, studio: currency })}</p>
+            {canManage && (
+              <button type="button" className="secondary-button" disabled={pending} onClick={useStudioCurrency}>
+                {t("services.useStudioCurrency", { studio: currency })}
+              </button>
+            )}
+          </div>
+        )}
         <form className="inline-form" onSubmit={saveBasics}>
           <label>
             {t("services.priceIn", { currency: service.currency ?? "MDL" })}

@@ -1,7 +1,7 @@
-import { asc, isNull } from "drizzle-orm";
+import { asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { services, specialists } from "@/db/schema";
+import { organizations, services, specialists } from "@/db/schema";
 import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
@@ -25,7 +25,15 @@ const createServiceSchema = z.object({
   name: localizedName,
   price_minor: z.int().min(0).nullable().optional(),
   duration_minutes: z.int().positive().nullable().optional(),
-  currency: z.enum(currencies).default("MDL"),
+  /**
+   * Absent means the studio's own currency, read where the service is written.
+   *
+   * It used to default to MDL here, and the catalogue form sends no currency, so
+   * every service a studio on RUB or EUR added came out in lei — and a booking
+   * page only offers services in its studio's currency, so they were missing
+   * from it without a word.
+   */
+  currency: z.enum(currencies).optional(),
   /**
    * What one sitting uses up in materials; null is «not given». Capped well
    * above any service so a slipped finger cannot cost one at a fortune.
@@ -130,6 +138,12 @@ export async function POST(request: Request) {
   }
 
   const service = await withTenant(actor.organizationId, async (tx) => {
+    const [studio] = await tx
+      .select({ currency: organizations.currency })
+      .from(organizations)
+      .where(eq(organizations.id, actor.organizationId))
+      .limit(1);
+
     const [created] = await tx
       .insert(services)
       .values({
@@ -137,7 +151,7 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         priceMinor: parsed.data.price_minor ?? null,
         durationMinutes: parsed.data.duration_minutes ?? null,
-        currency: parsed.data.currency,
+        currency: parsed.data.currency ?? studio.currency,
         materialsMinor: parsed.data.materials_minor ?? null,
         createdBy: actor.userId,
         updatedBy: actor.userId,

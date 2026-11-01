@@ -1154,6 +1154,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .pl-history { margin: 0 0 18rem; }
 .pl-history summary { cursor: pointer; color: var(--muted); font-size: 13rem; padding: 6rem 0; }
 .pl-history .compact-list { margin: 8rem 0 0; color: var(--muted); font-size: 13rem; }
+.service-foreign-currency { display: block; margin-top: 4rem; color: var(--danger); font-size: 12rem; line-height: 1.35; }
 .unit-hint { margin-left: 8rem; color: var(--muted); font-size: 13rem; }
 
 /*
