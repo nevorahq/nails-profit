@@ -1609,6 +1609,25 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .modal-card.public-booking-map { width: min(720rem, 100%); border: 0; border-radius: var(--mint-radius); }
 .public-booking-map .public-booking-map-address { margin-bottom: 16rem; }
 .public-booking-map iframe { display: block; width: 100%; height: min(420rem, 55vh); margin: 0 0 18rem; border: 0; border-radius: var(--mint-radius-sm); background: var(--mint-soft); }
+/* The services of the master just picked, and the note when some were taken off. */
+.public-booking-services { min-width: 0; margin-top: 20rem; }
+.public-booking-notice { margin: 0 0 12rem; padding: 10rem 14rem; border-radius: var(--mint-radius-sm); background: var(--mint-soft); color: var(--ink); font-size: 14rem; line-height: 1.45; }
+/* The master's services: cards to tick, up to three, the add-ons of a ticked one beneath it. */
+.public-booking-service-cards { display: grid; gap: 10rem; min-width: 0; margin: 0; padding: 0; border: 0; }
+.public-booking-service-cards > legend { margin-bottom: 10rem; padding: 0; color: var(--muted); font-size: 13rem; font-weight: 750; }
+.public-booking-service-card { display: grid; gap: 12rem; min-width: 0; padding: 14rem 16rem; border: 1rem solid var(--line); border-radius: var(--mint-radius-sm); background: var(--surface-strong); transition: background 0.15s ease, border-color 0.15s ease; }
+/* `.public-booking-shell label:has(> input[type=checkbox])` makes a row of any label like this; a card is two lines beside its box. */
+.public-booking-shell .public-booking-service-card > label:has(> input[type="checkbox"]) { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12rem; row-gap: 2rem; cursor: pointer; }
+.public-booking-service-card > label > input { grid-row: 1 / span 2; }
+.public-booking-service-card-name { color: var(--ink); font-size: 16rem; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.public-booking-service-card > label > small { grid-column: 2; color: var(--muted); font-size: 13rem; }
+.public-booking-service-card[data-picked] { border-color: var(--accent); background: var(--mint-soft); }
+.public-booking-service-card[data-full] { opacity: 0.55; }
+.public-booking-service-card[data-full] > label { cursor: default; }
+.public-booking-hint-line { margin: 0; color: var(--muted); font-size: 13rem; line-height: 1.45; }
+/* What the sitting comes to, for two services or more. */
+.public-booking-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4rem 14rem; margin: 14rem 0 0; padding: 14rem 16rem; border-radius: var(--mint-radius-sm); background: var(--mint-soft); color: var(--ink); font-size: 14rem; }
+.public-booking-total strong { margin-left: auto; font-size: 18rem; }
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
 .public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 /* Nothing to choose, so no box around it — but the same height as the date
@@ -1637,7 +1656,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-quote span { color: var(--sage-300); font-size: 14rem; }
 .public-booking-slots { margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
 .public-booking-slots h2 { margin: 0 0 12rem; font-size: 18rem; }
-.public-booking-slots .public-booking-hint { margin: 0; color: var(--muted); font-size: 14rem; line-height: 1.5; }
 /* The times run in one row that scrolls sideways, like the days above them. */
 .public-booking-slots > div { display: flex; gap: 8rem; overflow-x: auto; padding-bottom: 8rem; scroll-snap-type: x proximity; }
 .public-booking-slots button { flex: 0 0 88rem; scroll-snap-align: start; white-space: nowrap; min-height: 60rem; display: grid; place-items: center; gap: 2rem; padding: 8rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }

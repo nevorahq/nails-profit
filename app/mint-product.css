@@ -305,6 +305,7 @@
 .public-booking-shell .public-booking-grid label,
 .public-booking-shell .public-booking-service-head label,
 .public-booking-shell .public-booking-masters legend,
+.public-booking-shell .public-booking-service-cards > legend,
 .public-booking-shell .public-booking-options legend {
   color: var(--muted);
   font-size: 11rem;

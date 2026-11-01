@@ -114,6 +114,8 @@ export type PublicSpecialist = Readonly<{
   sortOrder: number;
   /** What they charge for the service asked about, when it is not its list price. */
   ownPriceMinor: number | null;
+  /** And how long they take for it, when that is not the service's own length. */
+  ownDurationMinutes: number | null;
 }>;
 
 /** Specialists assigned to both the location and the requested service. */
@@ -156,6 +158,7 @@ export async function publicSpecialistsFor(
       specialistId: specialistServices.specialistId,
       serviceId: specialistServices.serviceId,
       priceMinor: specialistServices.priceOverrideMinor,
+      durationMinutes: specialistServices.durationOverrideMinutes,
     })
     .from(specialistServices)
     .where(inArray(specialistServices.specialistId, people.map((person) => person.id)));
@@ -167,12 +170,12 @@ export async function publicSpecialistsFor(
       // the internal booking endpoint as well.
       return own.length === 0 || own.some((assignment) => assignment.serviceId === serviceId);
     })
-    .map((person) => ({
-      ...person,
-      ownPriceMinor:
-        assignments.find((assignment) => assignment.specialistId === person.id && assignment.serviceId === serviceId)
-          ?.priceMinor ?? null,
-    }));
+    .map((person) => {
+      const own = assignments.find(
+        (assignment) => assignment.specialistId === person.id && assignment.serviceId === serviceId,
+      );
+      return { ...person, ownPriceMinor: own?.priceMinor ?? null, ownDurationMinutes: own?.durationMinutes ?? null };
+    });
 }
 
 export async function loadPublicCatalog(slug: string, locationId: string) {
@@ -250,11 +253,12 @@ export async function loadPublicCatalog(slug: string, locationId: string) {
             price_delta_minor: extra.priceDeltaMinor,
             duration_delta_minutes: extra.durationDeltaMinutes,
           })),
-        // Each master's price for this service: their own, or the list's.
-        specialists: people.map(({ id, name, ownPriceMinor }) => ({
+        // What each master charges, and how long they take: their own, or the list's.
+        specialists: people.map(({ id, name, ownPriceMinor, ownDurationMinutes }) => ({
           id,
           name,
           price_minor: ownPriceMinor ?? service.priceMinor,
+          duration_minutes: ownDurationMinutes ?? service.durationMinutes,
         })),
       });
     }

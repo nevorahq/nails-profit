@@ -61,7 +61,7 @@ for (const width of [null, 375] as const) {
       void browserErrors;
       await studio.owner.patch(`/api/v1/locations/${studio.locationId}`, { address: null });
       await page.goto(`/book/${studio.slug}`);
-      await expect(page.getByRole("combobox", { name: "Service" })).toBeVisible();
+      await expect(page.getByRole("radio").first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Address on the map" })).toHaveCount(0);
     });
   });
