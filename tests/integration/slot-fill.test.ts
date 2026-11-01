@@ -15,6 +15,7 @@ import {
   createUser,
   createVisit,
 } from "../helpers/factories";
+import { daysAgoInStudio } from "../helpers/calendar";
 
 /**
  * The query half of the offer made after a cancellation: which appointments are
@@ -25,20 +26,7 @@ import {
  */
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
-/**
- * Noon of the day `days` calendar days before today in the studio's zone.
- *
- * Not `Date.now() - days * DAY`: that is a count of hours, and the studio counts
- * days. Across a change of clocks the two differ by an hour, so for the last hour
- * of each local evening a visit "thirty days ago" landed on a different calendar
- * day than the one thirty days back, and the rhythm was off by one.
- */
-const daysAgo = (days: number) => {
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Chisinau" }).format(new Date());
-  const day = new Date(`${today}T12:00:00Z`);
-  day.setUTCDate(day.getUTCDate() - days);
-  return day;
-};
+const daysAgo = daysAgoInStudio;
 
 describe("the hour a cancellation gave back", () => {
   let organizationId: string;

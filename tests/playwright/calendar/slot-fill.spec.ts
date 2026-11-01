@@ -1,5 +1,6 @@
 import { expect, test } from "../fixtures";
 import { closeTestConnections } from "../../helpers/database";
+import { daysAgoInStudio } from "../../helpers/calendar";
 import { createVisit } from "../../helpers/factories";
 import {
   bookAppointment,
@@ -22,7 +23,6 @@ import {
  */
 test.use({ viewport: { width: 375, height: 812 } });
 
-const DAY = 24 * 60 * 60 * 1000;
 
 test.describe("the hour a cancellation gave back", () => {
   let studio: Studio;
@@ -51,7 +51,7 @@ test.describe("the hour a cancellation gave back", () => {
         specialistId: studio.specialistId,
         serviceId: studio.serviceId,
         clientId: client.id,
-        completedAt: new Date(Date.now() - days * DAY),
+        completedAt: daysAgoInStudio(days),
       });
     }
     return client.id;

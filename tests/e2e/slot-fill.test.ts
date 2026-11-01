@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { bookings, pilotProductEvents } from "@/db/schema";
 import { dataOf, errorCodeOf, type Actor } from "../helpers/api";
-import { isoDay, weekdayAhead } from "../helpers/calendar";
+import { daysAgoInStudio, isoDay, weekdayAhead } from "../helpers/calendar";
 import { adminDb, closeTestConnections, resetDatabase } from "../helpers/database";
 import { createClient, createVisit } from "../helpers/factories";
 import { createCanonicalStudio, inviteMember, type Studio } from "../helpers/studio";
@@ -35,7 +35,6 @@ type Offer = {
 };
 
 const ZONE = "Europe/Chisinau";
-const DAY = 24 * 60 * 60 * 1000;
 
 let studio: Studio;
 let master: Actor;
@@ -72,7 +71,7 @@ beforeAll(async () => {
       specialistId: studio.specialistId,
       clientId: client.id,
       serviceId: studio.serviceId,
-      completedAt: new Date(Date.now() - days * DAY),
+      completedAt: daysAgoInStudio(days),
     });
   }
 }, 60_000);
