@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { displayFont } from "@/app/display-font";
 import { PublicBookingFlow } from "@/components/public-booking-flow";
 import { loadPublicProfile } from "@/lib/public-booking";
 
@@ -25,5 +26,11 @@ export default async function PublicBookingPage({
   const profile = await loadPublicProfile(slug);
   if (!profile) notFound();
 
-  return <PublicBookingFlow profile={profile.dto} />;
+  // The Mint headline serif is declared for this subtree only, as on the landing:
+  // the application screens never download it.
+  return (
+    <div className={displayFont.variable}>
+      <PublicBookingFlow profile={profile.dto} />
+    </div>
+  );
 }

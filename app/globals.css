@@ -7,15 +7,33 @@
   --leaf-100: #e3eed4;
 
   /* Semantic tokens keep components independent from raw palette values. */
+  /*
+   * The application wears the Mint System too (see `mint-product.css`), so the
+   * semantic tokens are read the way the landing reads them: forest-700 is the
+   * Mint reference's forest — what is clicked and what is emphasised —
+   * forest-950 is its ink, and the paper under both is the warm ivory. The
+   * raw palette above is untouched; only the roles moved, which is why every
+   * component that already asks for `--accent` or `--surface` follows.
+   */
   --ink: var(--forest-950);
   --muted: var(--forest-700);
-  --paper: var(--leaf-100);
-  --surface: #f3f7ed;
-  --surface-strong: #fbfdf8;
-  --line: rgba(55, 85, 52, 0.22);
-  --accent: var(--forest-950);
-  --accent-dark: var(--forest-700);
-  --on-accent: #f3f7ed;
+  --paper: #f6f4ee;
+  --surface: #fdfcf9;
+  --surface-strong: #ffffff;
+  --line: rgba(15, 42, 29, 0.12);
+  --accent: var(--forest-700);
+  --accent-dark: var(--forest-950);
+  --on-accent: #fdfcf9;
+  --mint: var(--sage-300);
+  --mint-soft: rgba(174, 195, 176, 0.28);
+  --mint-soft-hover: rgba(174, 195, 176, 0.48);
+  --mint-raise: inset 0 1rem 0 rgba(255, 255, 255, 0.9), 0 1rem 2rem rgba(15, 42, 29, 0.05), 0 18rem 40rem -18rem rgba(15, 42, 29, 0.22);
+  --mint-raise-high: inset 0 1rem 0 rgba(255, 255, 255, 0.9), 0 2rem 4rem rgba(15, 42, 29, 0.06), 0 28rem 56rem -20rem rgba(15, 42, 29, 0.3);
+  --mint-radius: 28rem;
+  --mint-radius-sm: 18rem;
+  /* No `--mint-display` here: it would resolve `--font-display` at :root, where
+   * that variable does not exist. `mint-product.css` declares it on the shells
+   * that carry the font class. */
   --sage: var(--sage-300);
   --focus-ring: rgba(55, 85, 52, 0.22);
   --danger: #8b2f3f;
@@ -128,21 +146,30 @@ html {
   position: relative;
   scroll-behavior: smooth;
 
-  font-size: calc(100vw / (390 * 1));
+  /*
+   * Every length in this file is in `rem`, so the root size IS the scale.
+   *
+   * Phone (up to the 680 breakpoint the layouts switch at): 1rem is 1/390 of
+   * the screen, as designed — capped, so a wide phone or a small tablet held
+   * upright does not blow 16rem text up to 26px.
+   *
+   * Everything wider: 1rem is 1/1920 of the screen, the width the desktop
+   * layouts were drawn at. Left alone that makes 16rem text 10.7px on a 1280
+   * laptop and 6.4px on a 768 tablet, so the scale stops shrinking at 1px —
+   * one rem is one pixel, body text 16px, the smallest labels 10px — and the
+   * layouts below carry the width from there.
+   */
+  font-size: min(calc(100vw / 390), 1.2px);
 
-  @media screen and (min-width: 640px) {
-    font-size: calc(100vw / (1920 * 1));
+  @media screen and (min-width: 681px) {
+    font-size: max(calc(100vw / 1920), 1px);
   }
 }
 
 body {
   margin: 0;
   color: var(--ink);
-  background:
-    radial-gradient(circle at 78% 12%, rgba(174, 195, 176, 0.62), transparent 34%),
-    radial-gradient(circle at 12% 82%, rgba(243, 247, 237, 0.72), transparent 32%),
-    var(--paper);
-  background-attachment: fixed;
+  background: var(--paper);
   font-size: 16rem;
   line-height: 1.5;
 }
@@ -288,7 +315,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .marketing-brand { display: inline-flex; align-items: center; gap: 12rem; color: var(--marketing-ink); font-size: 18rem; font-weight: 650; letter-spacing: -.02em; text-decoration: none; }
 .marketing-brand sup { margin-left: 3rem; color: var(--marketing-accent); font-size: 9rem; letter-spacing: .12em; vertical-align: top; }
 .marketing-mark { display: inline-grid; width: 34rem; height: 34rem; place-items: center; border-radius: 50%; background: var(--marketing-accent); color: var(--on-accent); font-size: 10rem; font-weight: 600; letter-spacing: .04em; }
-.marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: 36rem; }
+/* The gap gives way before the labels do: at tablet width 36rem of air
+ * between four items is what pushed «Pricing» into «Sign in». */
+.marketing-nav-links, .marketing-nav-actions { display: flex; align-items: center; gap: clamp(16rem, 2.4vw, 36rem); }
 .marketing-nav-links a, .marketing-login { color: var(--marketing-muted); font-size: 11rem; font-weight: 600; letter-spacing: .2em; text-decoration: none; text-transform: uppercase; transition: color var(--duration-fast) var(--ease-standard); }
 .marketing-nav-links a:hover, .marketing-login:hover { color: var(--marketing-ink); }
 
