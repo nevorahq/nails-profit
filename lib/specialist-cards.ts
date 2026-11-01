@@ -43,6 +43,8 @@ export type SpecialistRow = {
   service_assignments: {
     service_id: string;
     duration_minutes: number | null;
+    /** The master's own price for it; null charges the service's. */
+    price_minor: number | null;
   }[];
 };
 
@@ -101,6 +103,7 @@ export async function loadSpecialistCards(
       specialistId: specialistServices.specialistId,
       serviceId: specialistServices.serviceId,
       durationMinutes: specialistServices.durationOverrideMinutes,
+      priceMinor: specialistServices.priceOverrideMinor,
     })
     .from(specialistServices)
     .where(inArray(specialistServices.specialistId, ids));
@@ -187,6 +190,7 @@ export async function loadSpecialistCards(
         .map((assignment) => ({
           service_id: assignment.serviceId,
           duration_minutes: assignment.durationMinutes,
+          price_minor: assignment.priceMinor,
         })),
     };
   });

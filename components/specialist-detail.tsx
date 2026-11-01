@@ -21,7 +21,7 @@ import { factsFor, type SpecialistPlace } from "@/lib/specialist-bookability";
 import { describeRule, ruleFromForm } from "@/lib/commission-rule";
 import type { SpecialistRow } from "@/lib/specialist-cards";
 
-export type ServiceOption = { id: string; name: string; duration_minutes: number | null };
+export type ServiceOption = { id: string; name: string; duration_minutes: number | null; price_minor: number | null };
 
 export type LinkableMember = {
   user_id: string;
@@ -172,6 +172,14 @@ export function SpecialistDetail({
       ]),
     ),
   );
+  const [priceByService, setPriceByService] = useState<Record<string, string>>(
+    Object.fromEntries(
+      person.service_assignments.map((assignment) => [
+        assignment.service_id,
+        assignment.price_minor === null ? "" : String(assignment.price_minor / 100),
+      ]),
+    ),
+  );
 
   async function send(url: string, payload: unknown, form?: HTMLFormElement, method = "POST") {
     setPending(true);
@@ -302,6 +310,10 @@ export function SpecialistDetail({
           service_id: serviceId,
           duration_minutes: durationByService[serviceId]?.trim()
             ? Number(durationByService[serviceId])
+            : null,
+          // Empty charges the service's own price; a number is this master's.
+          price_minor: priceByService[serviceId]?.trim()
+            ? Math.round(Number(priceByService[serviceId]) * 100)
             : null,
         })),
       },
@@ -724,6 +736,9 @@ export function SpecialistDetail({
                         {assignment.duration_minutes} {t("common.minutes")}
                       </span>
                     )}
+                    {assignment.price_minor !== null && (
+                      <span className="unit-hint">{formatMoneyMinor(assignment.price_minor, currency)}</span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -765,6 +780,23 @@ export function SpecialistDetail({
                           onChange={(event) =>
                             setDurationByService({
                               ...durationByService,
+                              [service.id]: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t("specialists.priceOverride", { currency })}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          disabled={!ticked}
+                          placeholder={service.price_minor === null ? "—" : String(service.price_minor / 100)}
+                          value={priceByService[service.id] ?? ""}
+                          onChange={(event) =>
+                            setPriceByService({
+                              ...priceByService,
                               [service.id]: event.target.value,
                             })
                           }

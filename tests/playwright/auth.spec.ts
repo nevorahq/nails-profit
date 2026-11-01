@@ -337,10 +337,15 @@ test.describe("authentication UI", () => {
 
     // With the price on it that was typed, not the one the product suggested.
     // Somebody working alone is the studio's own name, so the service is the only question.
+    // The page no longer prints a price card; the catalogue it asks for is where the price is.
+    const catalogue = page.waitForResponse((response) => response.url().includes("/catalog?"));
     await page.goto((await link.textContent())!.trim());
+    expect(((await (await catalogue).json()) as { data: { services: { name: string; price_minor: number }[] } }).data.services).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: expect.stringContaining("Manicure"), price_minor: 35000 })]),
+    );
     const service = page.getByRole("combobox", { name: "Service" });
     await service.selectOption((await service.locator("option", { hasText: "Manicure" }).first().getAttribute("value"))!);
-    await expect(page.locator(".public-booking-quote")).toContainText("350");
+    await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
   });
 
   test("a studio whose owner works is costed like anybody else", async ({

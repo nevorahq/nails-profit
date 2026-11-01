@@ -48,38 +48,39 @@ test.describe("the public booking page", () => {
 
     await page.goto(`/book/${studio.slug}`);
     const service = page.getByRole("combobox", { name: "Service" });
-    const quote = page.locator(".public-booking-quote");
     const strip = page.locator(".public-booking-days-strip");
+    const openDays = strip.locator("button:not(:disabled)");
     const timesHeading = page.getByRole("heading", { name: "Choose a time", exact: true });
 
     // Nothing is picked for the client, even with one service on the list. The
-    // master's field is there from the start, greyed out until a service is.
+    // master's field is there from the start and can be used before a service.
     await expect(service).toHaveValue("");
     await expect(service).toContainText("Choose a service");
-    await expect(page.getByLabel("Specialist")).toBeDisabled();
-    await expect(page.getByLabel("Specialist")).toContainText("Choose a specialist");
-    await expect(quote).toHaveCount(0);
-
-    // A service, and still no master: no price, days or times yet.
-    await chooseService(page, studio.serviceId);
-    await expect(page.getByLabel("Specialist")).toBeEnabled();
-    await expect(page.getByLabel("Specialist")).toHaveValue("");
-    await expect(page.getByLabel("Specialist")).toContainText("Choose a specialist");
-    await expect(page.getByLabel("Specialist")).not.toContainText("Any available");
-    await expect(quote).toHaveCount(0);
-    await expect(strip).toHaveCount(0);
-    await expect(timesHeading).toHaveCount(0);
-
-    // Both answered: the price, and under it the days.
-    await chooseMaster(page, studio.specialistName);
-    await expect(quote).toContainText("MDL 600.00");
+    // Each service says what it costs, in the list the client chooses from.
+    await expect(service).toContainText("Manicure with coating — MDL 600.00");
+    await expect(page.getByRole("radio").first()).toBeEnabled();
+    // The days and the time are on the page from the start, with nothing to
+    // choose in them: every day greyed out, and a line saying what unlocks them.
     await expect(strip).toBeVisible();
-    const quoteAboveDays = await page.evaluate(() => {
-      const price = document.querySelector(".public-booking-quote")!.getBoundingClientRect();
-      const days = document.querySelector(".public-booking-days")!.getBoundingClientRect();
-      return price.bottom <= days.top;
-    });
-    expect(quoteAboveDays).toBe(true);
+    await expect(strip.locator("button")).toHaveCount(14);
+    await expect(openDays).toHaveCount(0);
+    // None is marked chosen: a greyed-out selected day would be unreadable.
+    await expect(strip.locator("button.is-selected")).toHaveCount(0);
+    await expect(timesHeading).toBeVisible();
+    await expect(page.getByText("Choose a service and a specialist, then a day")).toBeVisible();
+
+    // A service, and still no master: still nothing to choose.
+    await chooseService(page, studio.serviceId);
+    await expect(page.getByRole("radio").first()).toBeEnabled();
+    await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
+    await expect(page.locator(".public-booking-masters")).not.toContainText("Any available");
+    await expect(openDays).toHaveCount(0);
+    await expect(page.locator(".public-booking-slots button")).toHaveCount(0);
+
+    // Both answered: the days open, and no price card stands above them.
+    await chooseMaster(page, studio.specialistName);
+    await expect(openDays.first()).toBeVisible();
+    await expect(page.locator(".public-booking-quote")).toHaveCount(0);
     // No date field and no search button: the days are the control.
     await expect(page.getByLabel("Date")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Show available times" })).toHaveCount(0);
@@ -100,6 +101,24 @@ test.describe("the public booking page", () => {
     // The first day with times is already chosen, and its times are under it.
     await expect(strip.locator("button.is-selected")).toHaveCount(1);
     const times = page.locator(".public-booking-slots button");
+    // The two headings are set the same.
+    const headingSize = (heading: string) =>
+      page.getByRole("heading", { name: heading, exact: true }).evaluate((el) => getComputedStyle(el).fontSize);
+    expect(await headingSize("Choose a time")).toBe(await headingSize("Choose a day"));
+    // A time is padded like a day, so the two rows read as one family.
+    const padding = (cell: typeof times) => cell.first().evaluate((el) => getComputedStyle(el).padding);
+    await expect(times.first()).toBeVisible();
+    expect(await padding(times)).toBe(await padding(strip.locator("button")));
+    const radius = (cell: typeof times) => cell.first().evaluate((el) => getComputedStyle(el).borderRadius);
+    expect(await radius(times)).toBe(await radius(strip.locator("button")));
+    // One row that scrolls sideways, cut to the same width as a day.
+    const row = await page.locator(".public-booking-slots > div").evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { display: style.display, overflowX: style.overflowX };
+    });
+    expect(row).toEqual({ display: "flex", overflowX: "auto" });
+    const width = (cell: typeof times) => cell.first().evaluate((el) => el.getBoundingClientRect().width);
+    expect(await width(times)).toBe(await width(strip.locator("button")));
     await expect(times.first()).toBeVisible();
     // The master is chosen above, so a time is only a time.
     await expect(times.first()).toHaveText(/^\d{1,2}:\d{2}(\s?[AP]M)?$/);
@@ -139,7 +158,6 @@ test.describe("the public booking page", () => {
     // and the studio has two specialists free at the same hour.
     await chooseService(page, studio.serviceId);
     await chooseMaster(page, studio.specialistName);
-    await expect(page.getByText("MDL 600.00")).toBeVisible();
     await chooseRibbonDay(page, daysFromToday(2));
 
     const times = page.locator(".public-booking-slots button");

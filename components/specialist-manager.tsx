@@ -30,7 +30,7 @@ export type OrganizationMember = {
   role: string;
 };
 
-type ServiceOption = { id: string; name: string; duration_minutes: number | null };
+type ServiceOption = { id: string; name: string; duration_minutes: number | null; price_minor: number | null };
 
 
 /** What a card made for this account is called until somebody renames it. */

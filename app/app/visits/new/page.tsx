@@ -1,4 +1,4 @@
-import { and, asc, gt, isNull, lte, or } from "drizzle-orm";
+import { and, asc, gt, isNotNull, isNull, lte, or } from "drizzle-orm";
 import Link from "next/link";
 
 import {
@@ -8,6 +8,7 @@ import {
   paymentMethods,
   serviceAddOns,
   services,
+  specialistServices,
   specialists,
 } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
@@ -118,11 +119,26 @@ export default async function NewVisitPage() {
       .where(isNull(specialists.archivedAt))
       .orderBy(asc(specialists.createdAt));
 
+    // Each master's own prices, so the total the form shows is what will be recorded.
+    const ownPrices = await tx
+      .select({
+        specialistId: specialistServices.specialistId,
+        serviceId: specialistServices.serviceId,
+        priceMinor: specialistServices.priceOverrideMinor,
+      })
+      .from(specialistServices)
+      .where(isNotNull(specialistServices.priceOverrideMinor));
+
     const people = rows.map((person) => {
       const mine = ruleRows.filter((rule) => rule.specialistId === person.id);
       return {
         id: person.id,
         name: person.name,
+        price_by_service: Object.fromEntries(
+          ownPrices
+            .filter((row) => row.specialistId === person.id)
+            .map((row) => [row.serviceId, row.priceMinor as number]),
+        ),
         covered_service_ids: mine.some((rule) => rule.serviceId === null)
           ? null
           : mine

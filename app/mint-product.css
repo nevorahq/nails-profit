@@ -304,6 +304,7 @@
 
 .public-booking-shell .public-booking-grid label,
 .public-booking-shell .public-booking-service-head label,
+.public-booking-shell .public-booking-masters legend,
 .public-booking-shell .public-booking-options legend {
   color: var(--muted);
   font-size: 11rem;
@@ -355,7 +356,8 @@
   transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.public-booking-shell .public-booking-slots button { border-radius: 999rem; }
+/* A time is cut like a day: the two rows are one family. */
+.public-booking-shell .public-booking-slots button,
 .public-booking-shell .public-booking-days-strip button { border-radius: 20rem; }
 
 .public-booking-shell .public-booking-slots button:hover:not(:disabled),

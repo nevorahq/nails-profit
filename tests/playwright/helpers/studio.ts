@@ -538,7 +538,8 @@ export async function chooseService(page: Page, service: string) {
  * no price, days or times are shown until somebody is.
  */
 export async function chooseMaster(page: Page, name: string) {
-  await page.getByLabel("Specialist").selectOption({ label: name });
+  // The radio is visually hidden; the round photo and the name are the target.
+  await page.locator(".public-booking-master", { hasText: name }).click();
 }
 
 /**

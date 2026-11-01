@@ -9,6 +9,7 @@ import {
   organizations,
   serviceAddOns,
   services,
+  specialistAvatars,
   specialistLocations,
   specialistServices,
   specialists,
@@ -111,6 +112,8 @@ export type PublicSpecialist = Readonly<{
   id: string;
   name: string;
   sortOrder: number;
+  /** What they charge for the service asked about, when it is not its list price. */
+  ownPriceMinor: number | null;
 }>;
 
 /** Specialists assigned to both the location and the requested service. */
@@ -152,16 +155,24 @@ export async function publicSpecialistsFor(
     .select({
       specialistId: specialistServices.specialistId,
       serviceId: specialistServices.serviceId,
+      priceMinor: specialistServices.priceOverrideMinor,
     })
     .from(specialistServices)
     .where(inArray(specialistServices.specialistId, people.map((person) => person.id)));
 
-  return people.filter((person) => {
-    const own = assignments.filter((assignment) => assignment.specialistId === person.id);
-    // Empty means the solo-friendly “all active services” convention used by
-    // the internal booking endpoint as well.
-    return own.length === 0 || own.some((assignment) => assignment.serviceId === serviceId);
-  });
+  return people
+    .filter((person) => {
+      const own = assignments.filter((assignment) => assignment.specialistId === person.id);
+      // Empty means the solo-friendly “all active services” convention used by
+      // the internal booking endpoint as well.
+      return own.length === 0 || own.some((assignment) => assignment.serviceId === serviceId);
+    })
+    .map((person) => ({
+      ...person,
+      ownPriceMinor:
+        assignments.find((assignment) => assignment.specialistId === person.id && assignment.serviceId === serviceId)
+          ?.priceMinor ?? null,
+    }));
 }
 
 export async function loadPublicCatalog(slug: string, locationId: string) {
@@ -239,14 +250,83 @@ export async function loadPublicCatalog(slug: string, locationId: string) {
             price_delta_minor: extra.priceDeltaMinor,
             duration_delta_minutes: extra.durationDeltaMinutes,
           })),
-        specialists: people.map(({ id, name }) => ({ id, name })),
+        // Each master's price for this service: their own, or the list's.
+        specialists: people.map(({ id, name, ownPriceMinor }) => ({
+          id,
+          name,
+          price_minor: ownPriceMinor ?? service.priceMinor,
+        })),
       });
     }
+
+    // One read for every face on the page, not one per service: a master who
+    // does six services is still one picture.
+    const faceIds = [...new Set(serviceDtos.flatMap((service) => service.specialists.map((person) => person.id)))];
+    const faces =
+      faceIds.length === 0
+        ? []
+        : await tx
+            .select({ specialistId: specialistAvatars.specialistId, version: specialistAvatars.version })
+            .from(specialistAvatars)
+            .where(inArray(specialistAvatars.specialistId, faceIds));
+    const photoVersion = new Map(faces.map((face) => [face.specialistId, face.version]));
 
     return {
       organization: profile.organization,
       location: profile.dto.locations.find((location) => location.id === locationId)!,
-      dto: { services: serviceDtos },
+      dto: {
+        services: serviceDtos.map((service) => ({
+          ...service,
+          specialists: service.specialists.map((person) => ({
+            ...person,
+            photo_version: photoVersion.get(person.id) ?? null,
+          })),
+        })),
+      },
     };
+  });
+}
+
+/**
+ * Whose face a public page may show: a master who can be booked on a published
+ * address of a studio that takes public bookings, and nobody else.
+ *
+ * The staff endpoint is behind a session; this one is not, so the question of
+ * which photos it hands out is answered here rather than left to a guessed id.
+ * A card that is archived, or that sits on no published address, is not on the
+ * page, and neither is its picture.
+ */
+export async function loadPublicAvatar(slug: string, specialistId: string, options: { bytes: boolean }) {
+  const organization = await findPublicOrganization(slug);
+  if (!organization) return null;
+
+  return withTenant(organization.id, async (tx) => {
+    const [meta] = await tx
+      .select({
+        mimeType: specialistAvatars.mimeType,
+        version: specialistAvatars.version,
+        updatedAt: specialistAvatars.updatedAt,
+      })
+      .from(specialistAvatars)
+      .innerJoin(specialists, eq(specialists.id, specialistAvatars.specialistId))
+      .innerJoin(specialistLocations, eq(specialistLocations.specialistId, specialists.id))
+      .innerJoin(bookingSettings, eq(bookingSettings.locationId, specialistLocations.locationId))
+      .where(
+        and(
+          eq(specialistAvatars.specialistId, specialistId),
+          isNull(specialists.archivedAt),
+          eq(bookingSettings.publicStatus, "published"),
+        ),
+      )
+      .limit(1);
+    if (!meta) return null;
+    if (!options.bytes) return { ...meta, bytes: null };
+
+    const [row] = await tx
+      .select({ bytes: specialistAvatars.bytes })
+      .from(specialistAvatars)
+      .where(eq(specialistAvatars.specialistId, specialistId))
+      .limit(1);
+    return row ? { ...meta, bytes: row.bytes } : null;
   });
 }
