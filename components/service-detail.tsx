@@ -21,6 +21,11 @@ export type ServiceDetailData = {
   currency: string | null;
   /** Null is «not given»; see `materialsShown`. */
   materials_minor?: number | null;
+  /**
+   * The masters who charge their own price for it. The price above is what
+   * everyone else charges, and what the breakdown below is worked out on.
+   */
+  master_prices?: { name: string; price_minor: number }[];
   costing:
     | {
         status: "complete";
@@ -381,6 +386,15 @@ export function ServiceDetail({
             {t("common.save")}
           </button>
         </form>
+        {(service.master_prices?.length ?? 0) > 0 && (
+          <p className="muted service-master-prices">
+            {t("services.masterPrices", {
+              prices: service.master_prices!
+                .map((entry) => `${entry.name} — ${formatMoneyMinor(entry.price_minor, currency)}`)
+                .join(", "),
+            })}
+          </p>
+        )}
         {materialsShown && canManage && <p className="muted">{t("services.materialsHint")}</p>}
         {materialsShown && canManage && materialsHintMinor !== null && (
           <p className="materials-suggestion">

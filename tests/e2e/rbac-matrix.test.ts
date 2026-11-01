@@ -149,6 +149,16 @@ const cases: readonly Case[] = [
     request: async () => ({ path: "/api/v1/public/booking/unknown-studio/catalog?location_id=00000000-0000-4000-8000-000000000000" }),
   },
   {
+    route: "/api/v1/public/booking/[slug]/specialists/[specialistId]/avatar",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "A master's photo for the public page; only a master that page offers, and an unknown slug is a 404",
+    request: async () => ({
+      path: "/api/v1/public/booking/unknown-studio/specialists/00000000-0000-4000-8000-000000000000/avatar",
+    }),
+  },
+  {
     route: "/api/v1/public/booking/[slug]/availability",
     method: "GET",
     allowed: ALL_ROLES,

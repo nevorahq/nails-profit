@@ -7,6 +7,7 @@ import {
   financialSnapshots,
   paymentMethods,
   services,
+  specialistServices,
   specialists,
   taxRules,
   visitLines,
@@ -288,6 +289,18 @@ export async function buildVisitDraft(
   const addOnRows = addOnIds.length > 0 ? await tx.select().from(addOns).where(inArray(addOns.id, addOnIds)) : [];
   const addOnById = new Map(addOnRows.map((addOn) => [addOn.id, addOn]));
 
+  // What this master charges for each service, where it is not the list price.
+  const ownPrices = await tx
+    .select({ serviceId: specialistServices.serviceId, priceMinor: specialistServices.priceOverrideMinor })
+    .from(specialistServices)
+    .where(
+      and(
+        eq(specialistServices.specialistId, input.specialistId),
+        inArray(specialistServices.serviceId, serviceIds),
+      ),
+    );
+  const ownPriceOf = new Map(ownPrices.map((row) => [row.serviceId, row.priceMinor]));
+
   const rules = await tx
     .select({
       id: commissionRules.id,
@@ -377,7 +390,9 @@ export async function buildVisitDraft(
         kind: "service",
         addOnId: null,
         nameSnapshot: (service.name ?? {}) as Record<string, string>,
-        priceMinor: quote?.priceMinor ?? service.priceMinor ?? 0,
+        // The quote first (a booking already told the client), then this
+        // master's own price, then the list.
+        priceMinor: quote?.priceMinor ?? ownPriceOf.get(service.id) ?? service.priceMinor ?? 0,
         durationMinutes: service.durationMinutes ?? 0,
       }, service.materialsMinor),
       ...chosen.map((addOn) =>

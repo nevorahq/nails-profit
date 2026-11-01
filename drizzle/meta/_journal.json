@@ -477,6 +477,13 @@
       "when": 1791280742596,
       "tag": "0067_a_rented_chair_pays_rent_not_revenue",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793551727270,
+      "tag": "0068_a_master_charges_their_own_price",
+      "breakpoints": true
     }
   ]
 }

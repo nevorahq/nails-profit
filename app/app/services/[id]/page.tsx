@@ -1,7 +1,7 @@
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
-import { addOns, serviceAddOns, services, specialists } from "@/db/schema";
+import { addOns, serviceAddOns, services, specialistServices, specialists } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { allocatedFixedCostMinor } from "@/domain/capacity";
 import { can, canManageCatalogue } from "@/domain/rbac";
@@ -55,6 +55,20 @@ export default async function ServicePage({
       .orderBy(asc(specialists.createdAt), asc(specialists.id))
       .limit(1);
 
+    // The masters who charge their own price for this service, by name.
+    const masterPrices = await tx
+      .select({ name: specialists.name, priceMinor: specialistServices.priceOverrideMinor })
+      .from(specialistServices)
+      .innerJoin(specialists, eq(specialists.id, specialistServices.specialistId))
+      .where(
+        and(
+          eq(specialistServices.serviceId, service.id),
+          isNotNull(specialistServices.priceOverrideMinor),
+          isNull(specialists.archivedAt),
+        ),
+      )
+      .orderBy(asc(specialists.sortOrder), asc(specialists.createdAt));
+
     const modes = await loadMaterialsModes(tx, membership.organizationId);
     const materialsShown = showsMaterialsField(modes);
     /*
@@ -105,6 +119,7 @@ export default async function ServicePage({
     if (!showsFixedCosts) {
       return {
         service,
+        masterPrices,
         costing,
         catalogue,
         linked: linked.map((row) => row.addOnId),
@@ -128,6 +143,7 @@ export default async function ServicePage({
 
     return {
       service,
+      masterPrices,
       costing,
       catalogue,
       linked: linked.map((row) => row.addOnId),
@@ -153,6 +169,7 @@ export default async function ServicePage({
     duration_minutes: loaded.service.durationMinutes,
     currency: loaded.service.currency,
     materials_minor: loaded.service.materialsMinor,
+    master_prices: loaded.masterPrices.map((row) => ({ name: row.name, price_minor: row.priceMinor as number })),
     costing:
       loaded.costing.status === "complete"
         ? {

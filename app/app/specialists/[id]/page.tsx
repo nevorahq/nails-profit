@@ -104,6 +104,7 @@ export default async function SpecialistPage({ params }: { params: Promise<{ id:
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
         duration_minutes: service.durationMinutes,
+        price_minor: service.priceMinor,
       })),
     };
   });

@@ -66,6 +66,7 @@ export default async function SpecialistsPage() {
         id: service.id,
         name: resolveLocalizedText(service.name, locale, locale) ?? t("common.unnamed"),
         duration_minutes: service.durationMinutes,
+        price_minor: service.priceMinor,
       })),
     };
   });

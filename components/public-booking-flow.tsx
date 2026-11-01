@@ -57,7 +57,8 @@ type Service = {
   price_minor: number;
   duration_minutes: number;
   add_ons: AddOn[];
-  specialists: { id: string; name: string }[];
+  /** Who does it, and what each charges for it: their own price, or the list's. */
+  specialists: { id: string; name: string; photo_version: number | null; price_minor: number }[];
 };
 type Slot = {
   starts_at: string;
@@ -153,6 +154,14 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const t = useMemo(() => getTranslator(profile.locale), [profile.locale]);
   const [locationId, setLocationId] = useState(profile.locations[0]?.id ?? "");
   const location = profile.locations.find((entry) => entry.id === locationId) ?? profile.locations[0];
+  const [mapOpen, setMapOpen] = useState(false);
+  /*
+   * The map is found by the address as written, with no key and no coordinates
+   * stored: Google's own embed resolves the text. A point with no address has
+   * nothing to find, so it has no button either.
+   */
+  const mapAddress = location?.address?.trim() || null;
+  const mapQuery = mapAddress ? encodeURIComponent(mapAddress) : "";
   /*
    * Whether an address is the only way to finish, rather than merely the
    * channel a code would use if one were asked for.
@@ -278,9 +287,36 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const solo = everyone.length === 1 && sameName(everyone[0].name, profile.name);
   const showsMaster = everyone.length > 0 && !solo;
   /** Whose times to show: the one picked, or the studio of one's own. */
+  const offered = chosen.length === 0 ? everyone : masters;
   const masterId = solo
     ? (masters[0]?.id ?? "")
-    : masters.some((person) => person.id === specialistId) ? specialistId : "";
+    : offered.some((person) => person.id === specialistId) ? specialistId : "";
+  /**
+   * A service as the list offers it: the name, and what it costs by itself.
+   *
+   * Masters may charge their own price for it. Once one is picked the list
+   * says theirs; before that one price is said as it is, and several as the
+   * lowest with «from».
+   */
+  const serviceLabel = (entry: Service) => {
+    const theirs = entry.specialists.find((person) => person.id === masterId);
+    if (theirs) return `${entry.name} — ${money(theirs.price_minor)}`;
+    const prices = entry.specialists.map((person) => person.price_minor);
+    const lowest = prices.length > 0 ? Math.min(...prices) : entry.price_minor;
+    const highest = prices.length > 0 ? Math.max(...prices) : entry.price_minor;
+    return lowest === highest
+      ? `${entry.name} — ${money(lowest)}`
+      : `${entry.name} — ${t("publicBooking.priceFrom", { price: money(lowest) })}`;
+  };
+
+  useEffect(() => {
+    if (!mapOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMapOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mapOpen]);
 
   useEffect(() => {
     let active = true;
@@ -436,22 +472,17 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (Object.keys(fieldErrors).length > 0 || codeError) errorSummaryRef.current?.focus();
   }, [fieldErrors, codeError]);
 
-  const quote = chosen.reduce(
-    (total, entry) => {
-      const selected = entry.service.add_ons.filter((addOn) => entry.addOnIds.includes(addOn.id));
-      return {
-        price:
-          total.price +
-          entry.service.price_minor +
-          selected.reduce((sum, addOn) => sum + addOn.price_delta_minor, 0),
-        duration:
-          total.duration +
-          entry.service.duration_minutes +
-          selected.reduce((sum, addOn) => sum + addOn.duration_delta_minutes, 0),
-      };
-    },
-    { price: 0, duration: 0 },
-  );
+  const daysReady = ribbon.length > 0 && chosen.length > 0 && masters.length > 0;
+  /** The coming days, real once there is something to ask about and greyed out before. */
+  const shownDays: typeof ribbon = daysReady
+    ? ribbon
+    : Array.from({ length: RIBBON_DAYS }, (_, index) => {
+        const stamp = new Date(`${dateInZone(location.timezone)}T12:00:00Z`);
+        stamp.setUTCDate(stamp.getUTCDate() + index);
+        return { date: stamp.toISOString().slice(0, 10), slots: [] };
+      });
+  /** Every day of the ribbon was searched and none has a time: the card says so instead of the times block. */
+  const nothingToOffer = !pending && !held && searched && Boolean(service) && slots.length === 0 && firstDayWithTimes(ribbon) === null;
 
   /**
    * A change to what is being booked: the times found were for something else.
@@ -846,7 +877,16 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   return (
     <main className="public-booking-shell">
       <header className="public-booking-header">
-        <span className="brand">{profile.name}</span>
+        <div className="public-booking-header-title">
+          <span className="brand">{profile.name}</span>
+          {mapAddress && (
+            <span className="public-booking-place">
+              <button type="button" className="public-booking-map-button" onClick={() => setMapOpen(true)}>
+                {t("publicBooking.map")}
+              </button>
+            </span>
+          )}
+        </div>
         {/*
           * The badge says what the page is until it has something better to
           * say. For a stranger that is «Online-запись» — the page's own label,
@@ -862,6 +902,40 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           <span className="role-badge">{t("publicBooking.eyebrow")}</span>
         )}
       </header>
+      {mapOpen && mapAddress && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setMapOpen(false)}>
+          <div
+            className="modal-card public-booking-map"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="public-booking-map-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="public-booking-map-title">{profile.name}</h2>
+            <p className="public-booking-map-address">{mapAddress}</p>
+            <iframe
+              title={t("publicBooking.mapTitle", { address: mapAddress })}
+              src={`https://www.google.com/maps?q=${mapQuery}&hl=${profile.locale}&output=embed`}
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            <div className="button-row">
+              <a
+                className="secondary-button"
+                href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("publicBooking.mapOpen")}
+              </a>
+              <button type="button" className="primary-button" onClick={() => setMapOpen(false)}>
+                {t("publicBooking.mapClose")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/*
         * The badge's colour and one word cannot say *which* appointment, and a
         * page that answers "ожидает подтверждения" without saying what for has
@@ -924,7 +998,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                     >
                       <option value="" disabled>{t("publicBooking.chooseService")}</option>
                       {services.map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                        <option key={candidate.id} value={candidate.id}>{serviceLabel(candidate)}</option>
                       ))}
                     </select>
                   </label>
@@ -959,7 +1033,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                               !lines.some((line) => line.serviceId === candidate.id),
                           )
                           .map((candidate) => (
-                            <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                            <option key={candidate.id} value={candidate.id}>{serviceLabel(candidate)}</option>
                           ))}
                       </select>
                     </label>
@@ -1031,50 +1105,60 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
             {/* Who and when, after what: the people offered are the ones who do
                 every service chosen above. */}
-            <div className="public-booking-grid">
-              {showsMaster && (
-                <label>
-                  {t("publicBooking.specialist")}
-                  <select value={masterId} disabled={pending || masters.length === 0} onChange={(event) => { setSpecialistId(event.target.value); setSlots([]); setRibbon([]); setSearched(false); }}>
-                    <option value="" disabled>{t("publicBooking.chooseSpecialist")}</option>
-                    {masters.map((person) => (
-                      <option key={person.id} value={person.id}>{person.name}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-
-            {/* What it costs and how long, once both questions are answered. */}
-            {chosen.length > 0 && masterId && (
-              <div className="public-booking-quote">
-                <strong>{money(quote.price)}</strong>
-                <div>
-                  <span>{t("publicBooking.minutes", { count: quote.duration })}</span>
-                  <span>{t("publicBooking.timezone", { zone: location.timezone })}</span>
+            {showsMaster && (
+              <fieldset className="public-booking-masters">
+                <legend>{t("publicBooking.specialist")}</legend>
+                <div className="public-booking-masters-row">
+                  {offered.map((person) => (
+                    <label key={person.id} className="public-booking-master">
+                      <input
+                        type="radio"
+                        name="public-booking-master"
+                        className="sr-only"
+                        value={person.id}
+                        checked={person.id === masterId}
+                        onChange={() => { setSpecialistId(person.id); setSlots([]); setRibbon([]); setSearched(false); }}
+                      />
+                      <span className="avatar" aria-hidden="true">
+                        {person.photo_version === null ? (
+                          person.name.trim().slice(0, 1).toUpperCase() || "?"
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+                          <img src={`/api/v1/public/booking/${profile.slug}/specialists/${person.id}/avatar?v=${person.photo_version}`} alt="" loading="lazy" />
+                        )}
+                      </span>
+                      <span className="public-booking-master-name">{person.name}</span>
+                    </label>
+                  ))}
                 </div>
-              </div>
+              </fieldset>
             )}
 
-            {ribbon.length > 0 && chosen.length > 0 && masters.length > 0 && (
-              <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
+            {/*
+              * On the page from the start. Until a service and a master are
+              * picked there is nothing to offer, so the coming days stand there
+              * greyed out; they take their real state from the ribbon once it
+              * arrives, without the page changing shape underneath the client.
+              */}
+            <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
                 <h2 id="booking-days-title">{t("publicBooking.chooseDay")}</h2>
                 <div className="public-booking-days-strip">
-                  {ribbon.map((entry) => {
+                  {shownDays.map((entry) => {
                     const free = entry.slots.length > 0;
                     const stamp = new Date(`${entry.date}T12:00:00Z`);
                     const tag = localeTag(profile.locale);
                     const weekday = new Intl.DateTimeFormat(tag, { timeZone: "UTC", weekday: "short" }).format(stamp);
                     const day = new Intl.DateTimeFormat(tag, { timeZone: "UTC", day: "numeric", month: "short" }).format(stamp);
                     const state = free ? t("publicBooking.slotCount", { count: entry.slots.length }) : t("publicBooking.dayNone");
+                    const label = daysReady ? t("publicBooking.dayLabel", { date: `${weekday}, ${day}`, state }) : `${weekday}, ${day}`;
                     return (
                       <button
                         key={entry.date}
                         data-date={entry.date}
                         type="button"
-                        className={entry.date === date ? "is-selected" : undefined}
-                        aria-pressed={entry.date === date}
-                        aria-label={t("publicBooking.dayLabel", { date: `${weekday}, ${day}`, state })}
+                        className={daysReady && entry.date === date ? "is-selected" : undefined}
+                        aria-pressed={daysReady && entry.date === date}
+                        aria-label={label}
                         disabled={!free || pendingAction === "hold"}
                         onClick={() => chooseDay(entry)}
                       >
@@ -1084,8 +1168,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                     );
                   })}
                 </div>
-              </div>
-            )}
+            </div>
 
           </form>
         ) : stage === "code" ? (
@@ -1273,19 +1356,25 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           </p>
         )}
 
-        {!held && slots.length > 0 && (
+        {!held && !nothingToOffer && (
           <div className="public-booking-slots">
             <h2>{t("publicBooking.chooseTime")}</h2>
-            <div>
-              {slots.map((slot) => (
-                <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
-                  <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
-                </button>
-              ))}
-            </div>
+            {slots.length > 0 ? (
+              <div>
+                {slots.map((slot) => (
+                  <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
+                    <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="public-booking-hint">
+                {t(daysReady ? "publicBooking.timesHintDay" : "publicBooking.timesHintStart")}
+              </p>
+            )}
           </div>
         )}
-        {!pending && !held && searched && service && slots.length === 0 && firstDayWithTimes(ribbon) === null && (
+        {nothingToOffer && (
           <div className="public-booking-empty" role="status">
             <strong>{t("publicBooking.noSlotsTitle")}</strong>
             <p className="muted">{t("publicBooking.noSlotsRibbon")}</p>

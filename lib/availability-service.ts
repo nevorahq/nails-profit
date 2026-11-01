@@ -51,8 +51,9 @@ export type BookingDraft = Readonly<{
  *
  * The duration is the specialist's own when they have an override: the same
  * service takes a beginner longer than the master who trained them, and a slot
- * search that ignores that either overbooks one or wastes the other's day.
- * Add-on deltas apply on top either way.
+ * search that ignores that either overbooks one or wastes the other's day. The
+ * price is theirs too when they charge their own. Add-on deltas apply on top
+ * either way.
  */
 export async function loadBookingDraft(
   tx: TenantTransaction,
@@ -68,6 +69,7 @@ export async function loadBookingDraft(
   const [assignment] = await tx
     .select({
       durationOverrideMinutes: specialistServices.durationOverrideMinutes,
+      priceOverrideMinor: specialistServices.priceOverrideMinor,
     })
     .from(specialistServices)
     .where(
@@ -88,8 +90,8 @@ export async function loadBookingDraft(
   const durationMinutes =
     baseDuration + chosen.reduce((total, addOn) => total + addOn.durationDeltaMinutes, 0);
 
-  const priceMinor =
-    (service.priceMinor ?? 0) + chosen.reduce((total, addOn) => total + addOn.priceDeltaMinor, 0);
+  const basePrice = assignment?.priceOverrideMinor ?? service.priceMinor ?? 0;
+  const priceMinor = basePrice + chosen.reduce((total, addOn) => total + addOn.priceDeltaMinor, 0);
 
   // A negative total is not a discount, it is a mistake in the add-on deltas,
   // and quoting it would be worse than refusing to quote at all.
@@ -101,7 +103,7 @@ export async function loadBookingDraft(
       serviceId: service.id,
       addOnId: null,
       nameSnapshot: (service.name ?? {}) as LocalizedText,
-      priceMinor: service.priceMinor ?? 0,
+      priceMinor: basePrice,
       durationMinutes: baseDuration,
     },
     ...chosen.map((addOn) => ({

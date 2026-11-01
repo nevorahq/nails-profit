@@ -1905,11 +1905,18 @@ export const specialistLocations = pgTable(
 );
 
 /**
- * Which services a specialist performs, and how long they take *them*.
+ * Which services a specialist performs, how long they take *them*, and what a
+ * client pays *them* for it.
  *
  * The duration override is why this is not a boolean: the same service takes a
  * beginner longer than the master who trained them, and a slot search that
  * ignores the difference either overbooks one or wastes the other's day.
+ *
+ * The price override is the same fact about money. A studio charges more for a
+ * senior master's manicure than for a junior's, and with one price per service
+ * the difference could only be typed in as a surcharge at every close. Null is
+ * the service's own price — which is what every row written before this column
+ * meant, so no booking, visit or report moves.
  */
 export const specialistServices = pgTable(
   "specialist_service",
@@ -1925,6 +1932,7 @@ export const specialistServices = pgTable(
       .notNull()
       .references(() => services.id, { onDelete: "restrict" }),
     durationOverrideMinutes: integer("duration_override_minutes"),
+    priceOverrideMinor: bigint("price_override_minor", { mode: "number" }),
     ...auditColumns,
   },
   (table) => [
@@ -1933,6 +1941,10 @@ export const specialistServices = pgTable(
     check(
       "specialist_service_duration_positive",
       sql`${table.durationOverrideMinutes} is null or ${table.durationOverrideMinutes} > 0`,
+    ),
+    check(
+      "specialist_service_price_non_negative",
+      sql`${table.priceOverrideMinor} is null or ${table.priceOverrideMinor} >= 0`,
     ),
   ],
 );

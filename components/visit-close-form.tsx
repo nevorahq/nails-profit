@@ -39,6 +39,8 @@ export type CloseFormSpecialist = {
    * refused with MISSING_COMMISSION_RULE.
    */
   covered_service_ids: string[] | null;
+  /** This person's own price per service, where they charge one; the rest are the list's. */
+  price_by_service: Record<string, number>;
 };
 
 export type CloseFormAddOn = {
@@ -107,10 +109,11 @@ export function VisitCloseForm({
 
   const money = (amountMinor: number) => formatMoneyMinor(amountMinor, currency, localeTag(locale));
 
+  const ownPrices = specialists.find((person) => person.id === specialistId)?.price_by_service ?? {};
   const pickerServices = services.map((item) => ({
     id: item.id,
     name: item.displayName,
-    priceMinor: item.price_minor,
+    priceMinor: ownPrices[item.id] ?? item.price_minor,
     durationMinutes: item.duration_minutes,
   }));
   const pickerAddOns = addOns.map((addOn) => ({

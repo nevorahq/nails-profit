@@ -39,15 +39,14 @@ for (const width of [null, 375] as const) {
       void browserErrors;
       await page.goto(`/book/${studio.slug}`);
       await chooseService(page, studio.serviceId);
-      const master = page.getByRole("combobox", { name: "Specialist" });
-      await expect(master).toHaveValue("");
-      await expect(master.locator("option:not([disabled])")).toHaveText([studio.specialistName]);
-      await expect(page.locator(".public-booking-quote")).toHaveCount(0);
-      await expect(page.locator(".public-booking-days-strip")).toHaveCount(0);
+      await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
+      await expect(page.locator(".public-booking-master-name")).toHaveText([studio.specialistName]);
+      // The days are on the page, greyed out, until there is a master to ask.
+      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
+      await expect(page.locator(".public-booking-days-strip button:not(:disabled)")).toHaveCount(0);
 
       await chooseMaster(page, studio.specialistName);
-      await expect(page.locator(".public-booking-quote")).toBeVisible();
-      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
+      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -65,6 +64,20 @@ for (const width of [null, 375] as const) {
       await expect(page.locator(".public-booking-summary")).toContainText(studio.specialistName);
     });
 
+    test("keeps a master picked before any service", async ({ page, browserErrors }) => {
+      void browserErrors;
+      await page.goto(`/book/${studio.slug}`);
+      await expect(page.getByRole("combobox", { name: "Service" })).toBeVisible();
+
+      await chooseMaster(page, studio.specialistName);
+      await expect(page.getByRole("radio", { checked: true })).toHaveValue(studio.specialistId);
+      await expect(page.locator(".public-booking-days-strip button:not(:disabled)")).toHaveCount(0);
+
+      await chooseService(page, studio.serviceId);
+      await expect(page.getByRole("radio", { checked: true })).toHaveValue(studio.specialistId);
+      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+    });
+
     test("asks nothing about the master when it is the studio's own name", async ({ page, browserErrors }) => {
       void browserErrors;
       await page.goto(`/book/${studio.slug}`);
@@ -73,12 +86,11 @@ for (const width of [null, 375] as const) {
 
       await page.reload();
       await expect(page.getByRole("combobox", { name: "Service" })).toBeVisible();
-      await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
-      await expect(page.locator(".public-booking-quote")).toHaveCount(0);
+      await expect(page.getByRole("group", { name: "Specialist" })).toHaveCount(0);
+      await expect(page.locator(".public-booking-days-strip button:not(:disabled)")).toHaveCount(0);
       await chooseService(page, studio.serviceId);
-      await expect(page.getByRole("combobox", { name: "Specialist" })).toHaveCount(0);
-      await expect(page.locator(".public-booking-quote")).toBeVisible();
-      await expect(page.locator(".public-booking-days-strip")).toBeVisible();
+      await expect(page.getByRole("group", { name: "Specialist" })).toHaveCount(0);
+      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
 
       await chooseRibbonDay(page, daysFromToday(2));
       await page.locator(".public-booking-slots button").first().click();

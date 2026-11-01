@@ -1,0 +1,2 @@
+ALTER TABLE "specialist_service" ADD COLUMN "price_override_minor" bigint;--> statement-breakpoint
+ALTER TABLE "specialist_service" ADD CONSTRAINT "specialist_service_price_non_negative" CHECK ("specialist_service"."price_override_minor" is null or "specialist_service"."price_override_minor" >= 0);

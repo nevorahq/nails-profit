@@ -1107,7 +1107,7 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 .specialist-service-list legend { margin-bottom: 10rem; font-weight: 700; }
 .specialist-service-row {
   display: grid;
-  grid-template-columns: minmax(190rem, 1fr) minmax(140rem, 180rem);
+  grid-template-columns: minmax(190rem, 1fr) minmax(120rem, 160rem) minmax(120rem, 160rem);
   align-items: end;
   gap: 14rem;
   padding: 14rem;
@@ -1585,6 +1585,30 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-intro h1, .public-booking-success h1 { font-size: clamp(38rem, 6vw, 64rem); }
 .public-booking-card { width: min(100%, 760rem); margin: 0 auto; padding: clamp(22rem, 5vw, 42rem); border: 1rem solid var(--line); border-radius: 4rem; background: rgba(243, 247, 237, 0.9); box-shadow: var(--shadow); }
 .public-booking-card form { display: grid; gap: 24rem; }
+/* Whom to book: round photos in one row that scrolls sideways when the studio
+   has more masters than the card is wide. The radio inside each label is the
+   control; the circle only shows which one it is. */
+.public-booking-masters { min-width: 0; margin: 0; padding: 0; border: 0; }
+.public-booking-masters legend { padding: 0; margin-bottom: 10rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
+.public-booking-masters-row { display: flex; gap: 16rem; padding: 10rem 10rem 12rem; overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+/* `.public-booking-shell label:has(> input[type=radio])` makes a row of any label like this; a master is a column. */
+.public-booking-shell .public-booking-masters .public-booking-master:has(> input[type="radio"]) { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); font-size: 14rem; font-weight: 600; color: var(--ink); letter-spacing: 0; text-transform: none; justify-items: center; align-content: start; gap: 8rem; flex: none; width: 88rem; cursor: pointer; scroll-snap-align: start; }
+.public-booking-masters .public-booking-master input { position: absolute; top: 0; left: 50%; width: 1rem; height: 1rem; min-height: 0; margin: 0; padding: 0; opacity: 0; pointer-events: none; }
+.public-booking-master .avatar { width: 72rem; height: 72rem; font-size: 28rem; box-shadow: 0 0 0 1rem var(--line); transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.public-booking-master:hover .avatar { transform: translateY(-1rem); }
+.public-booking-master:has(input:checked) .avatar { box-shadow: 0 0 0 3rem var(--surface), 0 0 0 6rem var(--accent); }
+.public-booking-master:has(input:focus-visible) .avatar { outline: 3rem solid var(--accent); outline-offset: 6rem; }
+.public-booking-masters .public-booking-master-name { display: block; width: 100%; max-width: 100%; letter-spacing: 0; text-transform: none; white-space: normal; color: var(--ink); font-size: 14rem; font-weight: 650; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+.public-booking-master:has(input:checked) .public-booking-master-name { color: var(--accent); font-weight: 800; }
+/* The studio's name with its address and the way to see it on a map. */
+.public-booking-header-title { display: grid; gap: 4rem; min-width: 0; }
+.public-booking-place { display: flex; flex-wrap: wrap; align-items: center; gap: 4rem 10rem; min-width: 0; color: var(--muted); font-size: 13rem; line-height: 1.35; }
+.public-booking-map-button { display: inline-flex; align-items: center; min-height: 28rem; padding: 2rem 12rem; border: 0; border-radius: 999rem; background: var(--mint-soft); color: var(--accent); font-size: 13rem; font-weight: 700; cursor: pointer; }
+.public-booking-map-button:hover { background: var(--mint-soft-hover); }
+.public-booking-map-button:focus-visible { outline: 3rem solid var(--accent); outline-offset: 2rem; }
+.modal-card.public-booking-map { width: min(720rem, 100%); border: 0; border-radius: var(--mint-radius); }
+.public-booking-map .public-booking-map-address { margin-bottom: 16rem; }
+.public-booking-map iframe { display: block; width: 100%; height: min(420rem, 55vh); margin: 0 0 18rem; border: 0; border-radius: var(--mint-radius-sm); background: var(--mint-soft); }
 .public-booking-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rem; }
 .public-booking-grid label { display: grid; gap: 7rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
 /* Nothing to choose, so no box around it — but the same height as the date
@@ -1612,9 +1636,11 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-quote div { display: grid; gap: 3rem; text-align: right; }
 .public-booking-quote span { color: var(--sage-300); font-size: 14rem; }
 .public-booking-slots { margin-top: 30rem; padding-top: 24rem; border-top: 1rem solid var(--line); }
-.public-booking-slots h2 { margin: 0 0 16rem; }
-.public-booking-slots > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10rem; }
-.public-booking-slots button { min-height: 60rem; display: grid; place-items: center; gap: 2rem; padding: 10rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+.public-booking-slots h2 { margin: 0 0 12rem; font-size: 18rem; }
+.public-booking-slots .public-booking-hint { margin: 0; color: var(--muted); font-size: 14rem; line-height: 1.5; }
+/* The times run in one row that scrolls sideways, like the days above them. */
+.public-booking-slots > div { display: flex; gap: 8rem; overflow-x: auto; padding-bottom: 8rem; scroll-snap-type: x proximity; }
+.public-booking-slots button { flex: 0 0 88rem; scroll-snap-align: start; white-space: nowrap; min-height: 60rem; display: grid; place-items: center; gap: 2rem; padding: 8rem; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
 .public-booking-slots button:hover:not(:disabled) { background: var(--sage-300); }
 .public-booking-slots button span { color: var(--muted); font-size: 12rem; }
 .public-booking-summary { display: grid; gap: 14rem; padding: 20rem; border-radius: 4rem; background: var(--forest-950); color: var(--on-accent); }
@@ -2261,7 +2287,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
   .public-booking-intro { margin: 46rem auto 24rem; text-align: left; }
   .public-booking-card { padding: 22rem 16rem; border-radius: 4rem; }
   .public-booking-grid { grid-template-columns: 1fr; }
-  .public-booking-slots > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .public-booking-loading { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .public-booking-quote { align-items: flex-start; }
   .public-booking-quote div { text-align: right; }

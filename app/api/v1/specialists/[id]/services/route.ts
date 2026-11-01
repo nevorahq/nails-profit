@@ -9,16 +9,20 @@ import { apiError, apiSuccess, requestId, toFieldErrors } from "@/lib/http";
 import { getActiveMembership } from "@/lib/membership";
 
 /**
- * Which services a specialist performs, and how long they take *them*.
+ * Which services a specialist performs, how long they take *them*, and what
+ * they charge for it.
  *
  * The duration override is why this endpoint is not a list of ids: the same
  * service takes a beginner longer than the master who trained them, and a slot
  * search that ignores the difference either overbooks one or wastes the other's
- * day. Absent, the service's own duration applies.
+ * day. The price override is the same for money: a senior master's manicure
+ * costs more than a junior's. Absent, the service's own duration and price apply.
  */
 const entrySchema = z.object({
   service_id: z.uuid(),
   duration_minutes: z.int().positive().max(720).nullable().optional(),
+  // Validated like the service's own price: zero is a price, a negative is not.
+  price_minor: z.int().min(0).nullable().optional(),
 });
 
 const linkSchema = z.object({ services: z.array(entrySchema).max(200) });
@@ -76,6 +80,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
           specialistId: specialist.id,
           serviceId: entry.service_id,
           durationOverrideMinutes: entry.duration_minutes ?? null,
+          priceOverrideMinor: entry.price_minor ?? null,
           createdBy: actor.userId,
           updatedBy: actor.userId,
         })),
