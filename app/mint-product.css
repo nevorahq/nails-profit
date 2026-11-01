@@ -1,0 +1,440 @@
+/*
+ * The Mint System on the screens people work in: the application (`/app`) and
+ * the public booking pages (`/book`, `/booking`).
+ *
+ * `globals.css` already moved the roles — paper, surface, line and accent are
+ * the landing's ivory, mint and forest — so every component follows its colour
+ * without being touched. This file changes what colour cannot: the shapes.
+ * Pill buttons and fields, soft raised cards with a hairline highlight, a mint
+ * edge instead of a pressed-in shadow, a mint chip for the current place.
+ *
+ * It is a separate file, loaded after `globals.css`, for one reason: the soft
+ * UI block there dresses the same fields and buttons at the same specificity,
+ * so source order has to decide — and a late file is the one place that is
+ * guaranteed to be late. Selectors lead with the shell they live in
+ * (`.app-shell-root`, `.public-booking-shell`) to match the specificity of
+ * what they replace, never to beat it with `!important`.
+ *
+ * What is deliberately not here: layout. Where a screen sits and how it folds
+ * is `globals.css`'s business and its media queries; this file only says what
+ * things look like.
+ */
+
+/* ---- Surfaces ----------------------------------------------------------- */
+
+.app-shell-root .panel,
+.public-booking-shell .panel {
+  border: 0;
+  border-radius: 24rem;
+  background: var(--surface);
+  box-shadow: var(--mint-raise);
+}
+
+.app-shell-root .metric-card,
+.app-shell-root .empty-state,
+.app-shell-root .checkbox-set,
+.app-shell-root .metric {
+  border: 0;
+  border-radius: 20rem;
+  background: var(--surface);
+  box-shadow: var(--mint-raise);
+}
+
+/* The icon tile on a metric: the reference's soft mint square, not a leaf one. */
+.app-shell-root .metric-card-icon { border-radius: 12rem; background: var(--mint-soft); }
+
+.app-shell-root .app-shell > .data-table {
+  border-radius: 24rem;
+  background: var(--surface);
+  box-shadow: var(--mint-raise);
+}
+
+.app-shell-root .app-shell > .data-table th,
+.app-shell-root .app-shell > .data-table td { border-bottom-color: var(--line); }
+
+.app-shell-root .warning-banner,
+.public-booking-shell .warning-banner,
+.public-booking-shell .form-error-summary,
+.app-shell-root .form-error { border-radius: 18rem; }
+
+/* ---- Buttons ------------------------------------------------------------ */
+
+/* The filled forest pill that moves a person forward... */
+.app-shell-root .primary-button,
+.public-booking-shell .primary-button {
+  min-height: 48rem;
+  padding: 0 28rem;
+  border-radius: 999rem;
+  background: var(--accent);
+  box-shadow: 0 12rem 24rem -14rem rgba(15, 42, 29, 0.7);
+  font-size: 15rem;
+  font-weight: 600;
+  transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.app-shell-root .primary-button:hover:not(:disabled),
+.public-booking-shell .primary-button:hover:not(:disabled) {
+  background: var(--accent-dark);
+  box-shadow: 0 16rem 28rem -14rem rgba(15, 42, 29, 0.8);
+}
+
+.app-shell-root .primary-button:active:not(:disabled),
+.public-booking-shell .primary-button:active:not(:disabled) {
+  box-shadow: 0 6rem 12rem -10rem rgba(15, 42, 29, 0.7);
+  transform: translateY(1rem);
+}
+
+/* ...and the mint-edged one for everything else. */
+.app-shell-root .secondary-button,
+.public-booking-shell .secondary-button {
+  min-height: 48rem;
+  padding: 0 24rem;
+  border: 0;
+  border-radius: 999rem;
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+  color: var(--ink);
+  font-size: 15rem;
+  font-weight: 600;
+}
+
+.app-shell-root .secondary-button:hover:not(:disabled),
+.public-booking-shell .secondary-button:hover:not(:disabled) {
+  background: var(--mint-soft-hover);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+}
+
+.app-shell-root .secondary-button:active:not(:disabled) { box-shadow: inset 0 0 0 1rem var(--mint); transform: translateY(1rem); }
+
+.app-shell-root .password-toggle,
+.public-booking-shell .password-toggle {
+  border: 0;
+  border-radius: 999rem;
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+}
+
+/* ---- Fields ------------------------------------------------------------- */
+
+/* A field is a pill with a mint edge — not pressed into the page, laid on it. */
+.app-shell-root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.public-booking-shell input:not([type="checkbox"]):not([type="radio"]) { padding-inline: 20rem; }
+
+/* A select keeps the end padding it already has: that is the arrow's room. */
+.app-shell-root select,
+.public-booking-shell select { padding-inline-start: 20rem; }
+
+.app-shell-root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.app-shell-root select,
+.public-booking-shell input:not([type="checkbox"]):not([type="radio"]),
+.public-booking-shell select {
+  min-height: 48rem;
+  border: 0;
+  border-radius: 999rem;
+  background-color: var(--surface-strong);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.app-shell-root textarea,
+.public-booking-shell textarea {
+  border: 0;
+  border-radius: 20rem;
+  background: var(--surface-strong);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+}
+
+.app-shell-root input:not([type="checkbox"]):not([type="radio"]):focus,
+.app-shell-root select:focus,
+.app-shell-root textarea:focus,
+.public-booking-shell input:not([type="checkbox"]):not([type="radio"]):focus,
+.public-booking-shell select:focus,
+.public-booking-shell textarea:focus {
+  box-shadow: inset 0 0 0 2rem var(--accent);
+}
+
+.app-shell-root input[readonly],
+.public-booking-shell input[readonly] { background-color: var(--mint-soft); }
+
+.app-shell-root [aria-invalid="true"],
+.public-booking-shell [aria-invalid="true"] {
+  background-color: var(--danger-soft);
+  box-shadow: inset 0 0 0 1rem var(--danger);
+}
+
+/* Boxes and dots: the same mint edge, filled forest when chosen. */
+.app-shell-root input[type="checkbox"],
+.public-booking-shell input[type="checkbox"] {
+  border-radius: 8rem;
+  background-color: var(--surface-strong);
+  box-shadow: inset 0 0 0 1rem var(--sage-600);
+}
+
+.app-shell-root input[type="radio"],
+.public-booking-shell input[type="radio"] {
+  background-color: var(--surface-strong);
+  box-shadow: inset 0 0 0 1rem var(--sage-600);
+}
+
+.app-shell-root input[type="checkbox"]:checked,
+.public-booking-shell input[type="checkbox"]:checked { box-shadow: none; }
+
+.app-shell-root input[type="radio"]:checked,
+.public-booking-shell input[type="radio"]:checked { box-shadow: inset 0 0 0 2rem var(--accent); }
+
+.public-booking-shell .public-booking-consent input[type="checkbox"],
+.public-booking-shell .public-booking-consent input[type="checkbox"]:checked { border-radius: 14rem; }
+
+/* ---- Chips and badges --------------------------------------------------- */
+
+.app-shell-root .role-badge,
+.app-shell-root .badge-accent,
+.app-shell-root .badge-warning,
+.app-shell-root .badge-done,
+.public-booking-shell .role-badge {
+  border-radius: 999rem;
+}
+
+.app-shell-root .badge-accent,
+.public-booking-shell .role-badge { background: var(--mint-soft); color: var(--ink); }
+
+/* ---- The frame: topbar, sidebar, bottom bar ----------------------------- */
+
+.app-shell-root .app-topbar {
+  border-bottom: 1rem solid var(--line);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.app-shell-root .app-sidebar { background: var(--surface); }
+
+/* Where you are is a mint pill with a dot — the reference's chosen day. */
+.app-shell-root .sidebar-link,
+.app-shell-root .sidebar-link.active { border-radius: 999rem; }
+
+.app-shell-root .sidebar-link:hover { background: var(--mint-soft); }
+
+.app-shell-root .sidebar-link.active {
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+  color: var(--ink);
+}
+
+.app-shell-root .sidebar-link.active::before {
+  inset-block: 50% auto;
+  inset-inline: auto 16rem;
+  width: 7rem;
+  height: 7rem;
+  margin-top: -3.5rem;
+  border-radius: 50%;
+}
+
+.app-shell-root .sidebar-group-title,
+.app-shell-root .metric-card-label { letter-spacing: 0.2em; }
+
+.app-shell-root .bottom-nav {
+  border-radius: 24rem 24rem 0 0;
+  background: var(--surface);
+  box-shadow: 0 -10rem 30rem -12rem rgba(15, 42, 29, 0.28);
+}
+
+.app-shell-root .bottom-link .nav-icon,
+.app-shell-root .bottom-link.active { border-radius: 999rem; }
+
+.app-shell-root .bottom-link.active { box-shadow: none; }
+.app-shell-root .bottom-link.active .nav-icon { background: var(--mint-soft); box-shadow: inset 0 0 0 1rem var(--mint); }
+
+.app-shell-root .topbar-account:hover,
+.app-shell-root .topbar-notifications:hover { box-shadow: inset 0 0 0 1rem var(--mint); background: var(--mint-soft); }
+
+/* ---- The public booking pages ------------------------------------------- */
+
+/* Declared here, under the element that has `--font-display`, not at :root. */
+.public-booking-shell {
+  --mint-display: var(--font-display), Georgia, "Times New Roman", serif;
+  background: var(--paper);
+}
+
+.public-booking-shell .public-booking-header { border-bottom-color: var(--line); }
+.public-booking-shell .public-booking-header .brand { font-size: 18rem; font-weight: 650; letter-spacing: -0.02em; }
+
+/* The label over the headline: small capitals, spaced wide, as on the landing. */
+.public-booking-shell .eyebrow {
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+}
+
+/* Centred at every width: `globals.css` left-aligns the intro on a phone, and
+ * the eyebrow, headline and stroke read as one block only when they share an axis. */
+.public-booking-shell .public-booking-intro { text-align: center; }
+/* Two lines break evenly rather than leaving «время» alone on the second. */
+.public-booking-shell .public-booking-intro h1 { text-wrap: balance; }
+
+.public-booking-shell .public-booking-intro h1,
+.public-booking-shell .public-booking-success h1 {
+  margin: 20rem 0 0;
+  font-family: var(--mint-display);
+  font-size: clamp(36rem, 4.4vw, 60rem);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  font-variant-numeric: lining-nums;
+}
+
+/* The short mint stroke that closes a heading, as on the landing's. */
+.public-booking-shell .public-booking-intro h1::after,
+.public-booking-shell .public-booking-success h1::after {
+  display: block;
+  width: 72rem;
+  height: 2rem;
+  margin: 26rem auto 0;
+  border-radius: 2rem;
+  background: var(--mint);
+  content: "";
+}
+
+.public-booking-shell .public-booking-card {
+  border: 0;
+  border-radius: var(--mint-radius);
+  background: var(--surface);
+  box-shadow: var(--mint-raise);
+}
+
+.public-booking-shell .public-booking-grid label,
+.public-booking-shell .public-booking-service-head label,
+.public-booking-shell .public-booking-options legend {
+  color: var(--muted);
+  font-size: 11rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.public-booking-shell .public-booking-options {
+  border: 0;
+  border-radius: 20rem;
+  box-shadow: inset 0 0 0 1rem var(--mint);
+}
+
+.public-booking-shell .public-booking-options label { font-size: 15rem; letter-spacing: 0; text-transform: none; }
+
+.public-booking-shell .public-booking-yours,
+.public-booking-shell .public-booking-empty {
+  border: 0;
+  border-radius: 20rem;
+  background: var(--surface);
+  box-shadow: var(--mint-raise);
+}
+
+/* The quote and the summary are the forest panel of the reference. */
+.public-booking-shell .public-booking-quote,
+.public-booking-shell .public-booking-summary {
+  border-radius: 20rem;
+  background: var(--forest-700);
+}
+
+.public-booking-shell .public-booking-quote strong { font-family: var(--mint-display); font-weight: 500; font-variant-numeric: lining-nums tabular-nums; }
+
+.public-booking-shell .public-booking-card h2,
+.public-booking-shell .public-booking-empty strong {
+  font-family: var(--mint-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-variant-numeric: lining-nums;
+}
+
+.public-booking-shell .public-booking-slots { border-top-color: var(--line); }
+
+.public-booking-shell .public-booking-slots button,
+.public-booking-shell .public-booking-days-strip button {
+  border: 0;
+  background: var(--surface-strong);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+  transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.public-booking-shell .public-booking-slots button { border-radius: 999rem; }
+.public-booking-shell .public-booking-days-strip button { border-radius: 20rem; }
+
+.public-booking-shell .public-booking-slots button:hover:not(:disabled),
+.public-booking-shell .public-booking-days-strip button:hover:not(:disabled) { background: var(--mint-soft-hover); }
+
+.public-booking-shell .public-booking-days-strip button.is-selected {
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--on-accent);
+}
+
+.public-booking-shell .public-booking-days-strip button:disabled { background: transparent; box-shadow: inset 0 0 0 1rem var(--line); }
+
+.public-booking-shell .public-booking-status { border-radius: 18rem; background: var(--mint-soft); box-shadow: inset 0 0 0 1rem var(--mint); }
+.public-booking-shell .public-booking-loading > span:not(.sr-only) { border-radius: 999rem; }
+
+/* ---- Tablet: 681–1100 --------------------------------------------------- */
+
+/*
+ * Wide enough for the sidebar, not for everything the desktop puts beside it.
+ * The root scale stops at 1px (see `html` in `globals.css`), so below about
+ * 1100 the layouts drawn for 1920 have no spare width, and what overflowed
+ * first was the tables: the phone's scroll-instead-of-squash rule only
+ * started at 680, so a 768 tablet pushed a 189–289px table past the screen.
+ */
+@media (min-width: 681px) and (max-width: 1100px) {
+  .app-shell-root .app-frame,
+  .app-shell-root .app-topbar { grid-template-columns: 216rem minmax(0, 1fr); }
+
+  .app-shell-root .app-sidebar { padding-inline: 12rem; }
+
+  .app-shell-root .data-table { display: block; overflow-x: auto; white-space: nowrap; }
+  .app-shell-root .data-table.pl-table { display: table; white-space: normal; }
+}
+
+/* ---- Chips, days, small surfaces ---------------------------------------- */
+
+.app-shell-root .period-preset {
+  border: 0;
+  border-radius: 999rem;
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1rem var(--mint);
+}
+
+.app-shell-root .period-preset:hover { background: var(--mint-soft-hover); }
+.app-shell-root .period-preset[aria-current="true"] { background: var(--accent); box-shadow: none; }
+
+/* A date is a circle, as in the reference: today a ring, the chosen day filled. */
+.app-shell-root .calendar-cell { width: 100%; max-width: 60rem; margin-inline: auto; border-radius: 999rem; }
+.app-shell-root .calendar-cell:hover { background: var(--mint-soft); }
+.app-shell-root .calendar-cell.is-today { border-color: var(--mint); background: var(--mint-soft); }
+
+.app-shell-root .calendar-cell.is-selected,
+.app-shell-root .calendar-cell.is-selected:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.app-shell-root .calendar-entry { border-radius: 16rem; }
+
+.cookie-consent-banner { border: 0; border-radius: 20rem; box-shadow: var(--mint-raise-high); }
+.cookie-consent-decline, .cookie-consent-accept { border-radius: 999rem; }
+
+/* ---- The account chip gives way before the title does ------------------- */
+
+/*
+ * The title is `flex: 1; min-width: 0`, so it is whatever the chip leaves. An
+ * email is as long as it likes, and at tablet width a long one took the whole
+ * row: the heading was in the DOM at zero width, and a browser test reading it
+ * as hidden is how this was found. The chip is now the thing that shrinks — its
+ * text truncates, and the title keeps a floor.
+ */
+@media (min-width: 681px) {
+  .app-shell-root .topbar-main-cell { min-width: 0; }
+  .app-shell-root .topbar-title { flex: 1 0 auto; min-width: 8em; max-width: 60%; }
+  .app-shell-root .topbar-actions { flex: 0 1 auto; min-width: 0; }
+  .app-shell-root .account-menu { min-width: 0; }
+  .app-shell-root .topbar-account { min-width: 0; max-width: 100%; }
+  .app-shell-root .topbar-account-text { min-width: 0; }
+  .app-shell-root .topbar-account-text strong,
+  .app-shell-root .topbar-account-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

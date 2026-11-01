@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Onest } from "next/font/google";
 
 import "./globals.css";
+import "./mint-product.css";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { getPostHogConfig } from "@/env";

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { displayFont } from "@/app/display-font";
 import { PublicBookingManage } from "@/components/public-booking-manage";
 import { loadPublicBookingAccess } from "@/lib/public-booking-access";
 
@@ -18,5 +19,9 @@ export default async function BookingManagePage({
   const { token } = await params;
   const access = await loadPublicBookingAccess(token);
   if (!access) notFound();
-  return <PublicBookingManage token={token} initial={access.dto} />;
+  return (
+    <div className={displayFont.variable}>
+      <PublicBookingManage token={token} initial={access.dto} />
+    </div>
+  );
 }
