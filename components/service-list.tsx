@@ -540,6 +540,11 @@ export function ServiceList({
               <tr key={service.id}>
                 <td>
                   <Link href={`/app/services/${service.id}`}>{service.displayName}</Link>
+                  {service.currency !== null && service.currency !== currency && (
+                    <small className="service-foreign-currency">
+                      {t("services.foreignCurrency", { service: service.currency, studio: currency })}
+                    </small>
+                  )}
                 </td>
                 <td>
                   {service.price_minor === null

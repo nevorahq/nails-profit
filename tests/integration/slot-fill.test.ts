@@ -15,6 +15,7 @@ import {
   createUser,
   createVisit,
 } from "../helpers/factories";
+import { daysAgoInStudio } from "../helpers/calendar";
 
 /**
  * The query half of the offer made after a cancellation: which appointments are
@@ -25,7 +26,7 @@ import {
  */
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
-const daysAgo = (days: number) => new Date(Date.now() - days * DAY);
+const daysAgo = daysAgoInStudio;
 
 describe("the hour a cancellation gave back", () => {
   let organizationId: string;

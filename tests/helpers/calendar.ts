@@ -56,3 +56,18 @@ export function weekdayAhead(weekday: number, nth = 1): Date {
 export function wednesdayAhead(nth = 1): string {
   return isoDay(weekdayAhead(3, nth));
 }
+
+/**
+ * Noon of the day `days` calendar days before today in the studio's zone.
+ *
+ * Not `Date.now() - days * DAY`: that counts hours, and the studio counts days.
+ * Across a change of clocks the two differ by an hour, so for the last hour of
+ * each local evening a visit "thirty days ago" fell on a different calendar
+ * day than thirty days back, and a client's rhythm was off by one.
+ */
+export function daysAgoInStudio(days: number, timezone = "Europe/Chisinau"): Date {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  const day = new Date(`${today}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - days);
+  return day;
+}

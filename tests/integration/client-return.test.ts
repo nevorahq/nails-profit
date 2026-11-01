@@ -13,6 +13,7 @@ import {
   createUser,
   createVisit,
 } from "../helpers/factories";
+import { daysAgoInStudio } from "../helpers/calendar";
 
 /**
  * The query half of «Пора позвать»: which visits and appointments reach
@@ -21,7 +22,7 @@ import {
  * come, and a Master's narrowing — against PostgreSQL.
  */
 const DAY = 24 * 60 * 60 * 1000;
-const daysAgo = (days: number) => new Date(Date.now() - days * DAY);
+const daysAgo = daysAgoInStudio;
 
 describe("the clients worth inviting back", () => {
   let organizationId: string;
