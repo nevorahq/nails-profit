@@ -526,11 +526,19 @@ export async function bookAppointment(
 }
 
 /**
- * Picks a service on the public page, by its id or its name. Nothing is picked
- * for the client, so this is the first thing any booking there does.
+ * Ticks a service on the public page, by its id or its name. Nothing is ticked
+ * for the client, and the services only appear once a master is picked.
  */
 export async function chooseService(page: Page, service: string) {
-  await page.getByRole("combobox", { name: /^Service/ }).selectOption(service);
+  const box = /^[0-9a-f-]{36}$/i.test(service)
+    ? page.locator(`.public-booking-service-cards input[value="${service}"]`)
+    : page.locator(".public-booking-service-card", { hasText: service }).locator("> label > input");
+  await box.check();
+}
+
+/** The services a master offers on the public page, as the cards that list them. */
+export function serviceCards(page: Page) {
+  return page.locator(".public-booking-service-cards");
 }
 
 /**

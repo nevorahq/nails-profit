@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { PASSWORD, signedInContext, signUp, uniqueSuffix } from "./helpers/studio";
+import { PASSWORD, chooseService, signedInContext, signUp, uniqueSuffix } from "./helpers/studio";
 
 test.describe("authentication UI", () => {
   test("sign-in and sign-up modes expose the right fields", async ({ page, browserErrors }) => {
@@ -343,8 +343,7 @@ test.describe("authentication UI", () => {
     expect(((await (await catalogue).json()) as { data: { services: { name: string; price_minor: number }[] } }).data.services).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: expect.stringContaining("Manicure"), price_minor: 35000 })]),
     );
-    const service = page.getByRole("combobox", { name: "Service" });
-    await service.selectOption((await service.locator("option", { hasText: "Manicure" }).first().getAttribute("value"))!);
+    await chooseService(page, "Manicure");
     await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
   });
 

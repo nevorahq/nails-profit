@@ -1,7 +1,7 @@
 import { expect, test } from "../fixtures";
 import {
   chooseMaster,
-  chooseService,
+  serviceCards,
   disposeStudio,
   seedStudio,
   signedInContext,
@@ -13,9 +13,8 @@ import {
  * A master who charges their own price, from the card where it is set to the
  * page a client books on.
  *
- * The colleague charges 750 for the manicure the list prices at 600. Until a
- * master is picked the service says «from» the lower of the two; once one is,
- * it says theirs.
+ * The colleague charges 750 for the manicure the list prices at 600. The
+ * services are the picked master's, each at what that master charges.
  */
 test.describe("a master's own price", () => {
   let studio: Studio;
@@ -62,13 +61,10 @@ test.describe("a master's own price", () => {
     await useClientAddress(page, baseURL!);
     await page.goto(`/book/${studio.slug}`);
 
-    const service = page.getByRole("combobox", { name: "Service" });
-    await expect(service).toContainText("Manicure with coating — from MDL 600.00");
-
-    await chooseService(page, studio.serviceId);
+    // The services are the master's, at what this master charges.
     await chooseMaster(page, studio.colleagueName);
-    await expect(page.getByRole("combobox", { name: /^Service/ })).toContainText("Manicure with coating — MDL 750.00");
+    await expect(serviceCards(page)).toContainText("MDL 750.00");
     await chooseMaster(page, studio.specialistName);
-    await expect(page.getByRole("combobox", { name: /^Service/ })).toContainText("Manicure with coating — MDL 600.00");
+    await expect(serviceCards(page)).toContainText("MDL 600.00");
   });
 });

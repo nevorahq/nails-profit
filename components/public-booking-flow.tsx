@@ -58,7 +58,7 @@ type Service = {
   duration_minutes: number;
   add_ons: AddOn[];
   /** Who does it, and what each charges for it: their own price, or the list's. */
-  specialists: { id: string; name: string; photo_version: number | null; price_minor: number }[];
+  specialists: { id: string; name: string; photo_version: number | null; price_minor: number; duration_minutes: number }[];
 };
 type Slot = {
   starts_at: string;
@@ -181,10 +181,18 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   const [services, setServices] = useState<Service[]>([]);
   /*
    * What the client is booking: one service, or up to three in one sitting,
-   * each with its own add-ons. One master does all of it, so only the people
-   * who do every service chosen are offered.
+   * each with its own add-ons. The master comes first and does all of it, so
+   * only the services that master does are offered.
    */
   const [lines, setLines] = useState<{ serviceId: string; addOnIds: string[] }[]>([]);
+  /** Services taken off the sitting when the master changed to one who does not do them. */
+  const [dropped, setDropped] = useState<string[]>([]);
+  /**
+   * The block that has just opened below the one the client answered. On a
+   * phone it can open under the fold and look like nothing happened, so it is
+   * brought into view — gently, and only as far as it takes to show it.
+   */
+  const reveal = useRef<"services" | "days" | "times" | null>(null);
   const chosen = lines.flatMap((line) => {
     const entry = services.find((candidate) => candidate.id === line.serviceId);
     return entry ? [{ service: entry, addOnIds: line.addOnIds }] : [];
@@ -192,11 +200,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   /** The first service, for everything that names the sitting by one id. */
   const service = chosen[0]?.service ?? null;
   const sittingName = chosen.map((entry) => entry.service.name).join(" + ");
-  const masters = (service?.specialists ?? []).filter((person) =>
-    chosen.every((entry) => entry.service.specialists.some((other) => other.id === person.id)),
-  );
   const sittingPayload = chosen.map((entry) => ({ service_id: entry.service.id, add_on_ids: entry.addOnIds }));
-  /** The master picked, or "" before one is: with several to choose from, no times are asked for until then. */
+  /** The master picked, or "" before one is: nothing below the master is shown until then. */
   const [specialistId, setSpecialistId] = useState("");
   const [date, setDate] = useState(() => dateInZone(location.timezone));
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -281,33 +286,60 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * works there, and who will be doing the nails is said again beside the
    * time held.
    */
-  // Read off the whole catalogue, not the sitting: the master's field is on the
-  // page before any service is picked, greyed out until one is.
+  // Read off the whole catalogue: the master is the first question, so the
+  // people to choose from are everybody a service is offered by.
   const everyone = [...new Map(services.flatMap((entry) => entry.specialists).map((person) => [person.id, person])).values()];
   const solo = everyone.length === 1 && sameName(everyone[0].name, profile.name);
   const showsMaster = everyone.length > 0 && !solo;
-  /** Whose times to show: the one picked, or the studio of one's own. */
-  const offered = chosen.length === 0 ? everyone : masters;
+  /** Whose services and times to show: the one picked, or the studio of one's own. */
   const masterId = solo
-    ? (masters[0]?.id ?? "")
-    : offered.some((person) => person.id === specialistId) ? specialistId : "";
-  /**
-   * A service as the list offers it: the name, and what it costs by itself.
-   *
-   * Masters may charge their own price for it. Once one is picked the list
-   * says theirs; before that one price is said as it is, and several as the
-   * lowest with «from».
-   */
-  const serviceLabel = (entry: Service) => {
-    const theirs = entry.specialists.find((person) => person.id === masterId);
-    if (theirs) return `${entry.name} — ${money(theirs.price_minor)}`;
-    const prices = entry.specialists.map((person) => person.price_minor);
-    const lowest = prices.length > 0 ? Math.min(...prices) : entry.price_minor;
-    const highest = prices.length > 0 ? Math.max(...prices) : entry.price_minor;
-    return lowest === highest
-      ? `${entry.name} — ${money(lowest)}`
-      : `${entry.name} — ${t("publicBooking.priceFrom", { price: money(lowest) })}`;
+    ? (everyone[0]?.id ?? "")
+    : everyone.some((person) => person.id === specialistId) ? specialistId : "";
+  /** What the master does: the services the page may offer, and nothing else. */
+  const offeredServices = masterId
+    ? services.filter((entry) => entry.specialists.some((person) => person.id === masterId))
+    : [];
+  /** «2 ч 30 мин»: a length, in the interface's language. */
+  const minutesText = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return [hours > 0 ? t("publicBooking.hoursShort", { count: hours }) : "", rest > 0 || hours === 0 ? t("publicBooking.minutes", { count: rest }) : ""]
+      .filter(Boolean)
+      .join(" ");
   };
+  /**
+   * What the sitting costs and how long it takes, with this master's own price
+   * and length for each service and the add-ons chosen on it. Said only for two
+   * services or more; for one the card above already says it.
+   */
+  const sittingTotals = chosen.reduce(
+    (total, entry) => {
+      const theirs = entry.service.specialists.find((person) => person.id === masterId);
+      const picked = entry.service.add_ons.filter((addOn) => entry.addOnIds.includes(addOn.id));
+      return {
+        price:
+          total.price +
+          Math.max(0, (theirs?.price_minor ?? entry.service.price_minor) + picked.reduce((sum, addOn) => sum + addOn.price_delta_minor, 0)),
+        minutes:
+          total.minutes +
+          (theirs?.duration_minutes ?? entry.service.duration_minutes) +
+          picked.reduce((sum, addOn) => sum + addOn.duration_delta_minutes, 0),
+      };
+    },
+    { price: 0, minutes: 0 },
+  );
+
+  useEffect(() => {
+    const target = reveal.current;
+    if (!target) return;
+    const block = document.getElementById(`booking-${target}`);
+    if (!block) return;
+    reveal.current = null;
+    block.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "nearest",
+    });
+  });
 
   useEffect(() => {
     if (!mapOpen) return;
@@ -339,6 +371,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         setServices(next);
         // Nothing is chosen for the client, even with one service on the list.
         setLines([]);
+        setDropped([]);
         setSpecialistId("");
         setSlots([]);
         setRibbon([]);
@@ -472,8 +505,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
     if (Object.keys(fieldErrors).length > 0 || codeError) errorSummaryRef.current?.focus();
   }, [fieldErrors, codeError]);
 
-  const daysReady = ribbon.length > 0 && chosen.length > 0 && masters.length > 0;
-  /** The coming days, real once there is something to ask about and greyed out before. */
+  const daysReady = ribbon.length > 0 && chosen.length > 0;
+  /** The coming days: real once the ribbon is in, greyed out for the moment it takes to arrive. */
   const shownDays: typeof ribbon = daysReady
     ? ribbon
     : Array.from({ length: RIBBON_DAYS }, (_, index) => {
@@ -489,10 +522,39 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
    * The master picked stays picked while they do all of it (`masterId`).
    */
   function changeLines(next: { serviceId: string; addOnIds: string[] }[]) {
+    // The first service opens the days; later changes only refresh them.
+    if (lines.length === 0 && next.length > 0) reveal.current = "days";
     setLines(next);
+    setDropped([]);
     setSlots([]);
     setRibbon([]);
     setSearched(false);
+  }
+
+  /**
+   * The master is the first question, so changing the answer has to settle what
+   * hung from it. The services this master also does stay, add-ons and all;
+   * the ones they do not are taken off and named — a pick that quietly
+   * disappeared from the sitting would leave the client booking something they
+   * did not ask for, or wondering where it went.
+   */
+  function pickMaster(id: string) {
+    const theirs = new Set(
+      services.filter((entry) => entry.specialists.some((person) => person.id === id)).map((entry) => entry.id),
+    );
+    const kept = lines.filter((line) => theirs.has(line.serviceId));
+    setDropped(
+      lines
+        .filter((line) => !theirs.has(line.serviceId))
+        .map((line) => services.find((entry) => entry.id === line.serviceId)?.name ?? "")
+        .filter(Boolean),
+    );
+    setSpecialistId(id);
+    setLines(kept);
+    setSlots([]);
+    setRibbon([]);
+    setSearched(false);
+    reveal.current = kept.length > 0 ? "days" : "services";
   }
 
   /**
@@ -571,6 +633,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         setDate(first ?? days[0]?.date ?? dateInZone(location.timezone));
         setSlots(days.find((day) => day.date === first)?.slots ?? []);
         setSearched(true);
+        if (first) reveal.current = "times";
       } catch {
         if (active) setError(t("publicBooking.offline"));
       } finally {
@@ -588,6 +651,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
   function chooseDay(entry: RibbonEntry) {
     setDate(entry.date);
     setSlots(entry.slots);
+    reveal.current = "times";
   }
 
   async function chooseSlot(slot: Slot) {
@@ -985,131 +1049,12 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </div>
             )}
 
-            {/* Nothing below the service is shown until one is picked. */}
-            {services.length > 0 && chosen.length === 0 && (
-              <div className="public-booking-service">
-                <div className="public-booking-service-head">
-                  <label>
-                    {t("publicBooking.service")}
-                    <select
-                      value=""
-                      disabled={pending}
-                      onChange={(event) => changeLines([{ serviceId: event.target.value, addOnIds: [] }])}
-                    >
-                      <option value="" disabled>{t("publicBooking.chooseService")}</option>
-                      {services.map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>{serviceLabel(candidate)}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {chosen.map((entry, index) => {
-              const number = index + 1;
-              const label = chosen.length > 1 ? t("serviceLines.serviceN", { n: number }) : t("publicBooking.service");
-              return (
-                <div className="public-booking-service" key={`${index}:${entry.service.id}`}>
-                  <div className="public-booking-service-head">
-                    <label>
-                      {label}
-                      <select
-                        value={entry.service.id}
-                        disabled={pending}
-                        onChange={(event) =>
-                          changeLines(
-                            lines.map((line, position) =>
-                              position === index ? { serviceId: event.target.value, addOnIds: [] } : line,
-                            ),
-                          )
-                        }
-                      >
-                        {/* A service already in the sitting is not offered twice. */}
-                        {services
-                          .filter(
-                            (candidate) =>
-                              candidate.id === entry.service.id ||
-                              !lines.some((line) => line.serviceId === candidate.id),
-                          )
-                          .map((candidate) => (
-                            <option key={candidate.id} value={candidate.id}>{serviceLabel(candidate)}</option>
-                          ))}
-                      </select>
-                    </label>
-                    {chosen.length > 1 && (
-                      <button
-                        type="button"
-                        className="inline-action"
-                        disabled={pending}
-                        aria-label={t("serviceLines.removeN", { n: number })}
-                        onClick={() => changeLines(lines.filter((_, position) => position !== index))}
-                      >
-                        {t("serviceLines.remove")}
-                      </button>
-                    )}
-                  </div>
-                  {entry.service.add_ons.length > 0 && (
-                    <fieldset className="public-booking-options">
-                      <legend>{chosen.length > 1 ? `${t("publicBooking.addOns")} · ${label}` : t("publicBooking.addOns")}</legend>
-                      {entry.service.add_ons.map((addOn) => (
-                        <label key={addOn.id}>
-                          <input
-                            type="checkbox"
-                            checked={entry.addOnIds.includes(addOn.id)}
-                            disabled={pending}
-                            onChange={(event) =>
-                              changeLines(
-                                lines.map((line, position) =>
-                                  position === index
-                                    ? {
-                                        serviceId: line.serviceId,
-                                        addOnIds: event.target.checked
-                                          ? [...line.addOnIds, addOn.id]
-                                          : line.addOnIds.filter((id) => id !== addOn.id),
-                                      }
-                                    : line,
-                                ),
-                              )
-                            }
-                          />
-                          <span>{addOn.name}</span>
-                          <small>{money(addOn.price_delta_minor)}</small>
-                        </label>
-                      ))}
-                    </fieldset>
-                  )}
-                </div>
-              );
-            })}
-
-            {chosen.length > 0 && lines.length < MAX_PUBLIC_SERVICES && services.some((candidate) => !lines.some((line) => line.serviceId === candidate.id)) && (
-              <button
-                type="button"
-                className="secondary-button public-booking-add-service"
-                disabled={pending}
-                onClick={() => {
-                  const next = services.find((candidate) => !lines.some((line) => line.serviceId === candidate.id));
-                  if (next) changeLines([...lines, { serviceId: next.id, addOnIds: [] }]);
-                }}
-              >
-                {t("serviceLines.add")}
-              </button>
-            )}
-
-            {/* One master does the whole sitting; when nobody does all of it,
-                say so here rather than after a search that cannot find a time. */}
-            {service && masters.length === 0 && (
-              <p className="form-error" role="alert">{t("publicBooking.noCommonSpecialist")}</p>
-            )}
-
-            {/* Who and when, after what: the people offered are the ones who do
-                every service chosen above. */}
+            {/* The first question: everybody the page offers, and each picks their own services below. */}
             {showsMaster && (
               <fieldset className="public-booking-masters">
                 <legend>{t("publicBooking.specialist")}</legend>
                 <div className="public-booking-masters-row">
-                  {offered.map((person) => (
+                  {everyone.map((person) => (
                     <label key={person.id} className="public-booking-master">
                       <input
                         type="radio"
@@ -1117,7 +1062,7 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                         className="sr-only"
                         value={person.id}
                         checked={person.id === masterId}
-                        onChange={() => { setSpecialistId(person.id); setSlots([]); setRibbon([]); setSearched(false); }}
+                        onChange={() => pickMaster(person.id)}
                       />
                       <span className="avatar" aria-hidden="true">
                         {person.photo_version === null ? (
@@ -1134,13 +1079,106 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
               </fieldset>
             )}
 
+            {/* Below the master: what this master does, and nothing else. */}
+            {masterId && (
+              <div id="booking-services" className="public-booking-services">
+                {dropped.length > 0 && (
+                  <p className="public-booking-notice" role="status">
+                    {t("publicBooking.servicesDropped", { names: dropped.join(", ") })}
+                  </p>
+                )}
+              {offeredServices.length > 0 && (
+                <fieldset className="public-booking-service-cards">
+                  <legend>{t("publicBooking.services")}</legend>
+                  {offeredServices.map((candidate) => {
+                    const line = lines.find((entry) => entry.serviceId === candidate.id);
+                    const picked = line !== undefined;
+                    // Three at most: the rest wait until one is taken off.
+                    const full = !picked && lines.length >= MAX_PUBLIC_SERVICES;
+                    const theirs = candidate.specialists.find((person) => person.id === masterId);
+                    return (
+                      <div
+                        key={candidate.id}
+                        className="public-booking-service-card"
+                        data-picked={picked ? "true" : undefined}
+                        data-full={full ? "true" : undefined}
+                      >
+                        <label>
+                          <input
+                            type="checkbox"
+                            value={candidate.id}
+                            checked={picked}
+                            disabled={full}
+                            onChange={(event) =>
+                              changeLines(
+                                event.target.checked
+                                  ? [...lines, { serviceId: candidate.id, addOnIds: [] }]
+                                  : lines.filter((entry) => entry.serviceId !== candidate.id),
+                              )
+                            }
+                          />
+                          <span className="public-booking-service-card-name">{candidate.name}</span>
+                          <small>
+                            {minutesText(theirs?.duration_minutes ?? candidate.duration_minutes)}
+                            {" · "}
+                            {money(theirs?.price_minor ?? candidate.price_minor)}
+                          </small>
+                        </label>
+                        {line && candidate.add_ons.length > 0 && (
+                          <fieldset className="public-booking-options">
+                            <legend>{`${t("publicBooking.addOns")} · ${candidate.name}`}</legend>
+                            {candidate.add_ons.map((addOn) => (
+                              <label key={addOn.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={line.addOnIds.includes(addOn.id)}
+                                  onChange={(event) =>
+                                    changeLines(
+                                      lines.map((entry) =>
+                                        entry.serviceId === candidate.id
+                                          ? {
+                                              serviceId: entry.serviceId,
+                                              addOnIds: event.target.checked
+                                                ? [...entry.addOnIds, addOn.id]
+                                                : entry.addOnIds.filter((id) => id !== addOn.id),
+                                            }
+                                          : entry,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <span>{addOn.name}</span>
+                                <small>{money(addOn.price_delta_minor)}</small>
+                              </label>
+                            ))}
+                          </fieldset>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {lines.length >= MAX_PUBLIC_SERVICES && (
+                    <p className="public-booking-hint-line">{t("publicBooking.servicesLimit", { count: MAX_PUBLIC_SERVICES })}</p>
+                  )}
+                </fieldset>
+              )}
+              {chosen.length > 1 && (
+                <p className="public-booking-total" aria-live="polite">
+                  <span>{t("publicBooking.total")}</span>
+                  <strong>{money(sittingTotals.price)}</strong>
+                  <span>{minutesText(sittingTotals.minutes)}</span>
+                </p>
+              )}
+              </div>
+            )}
+
             {/*
-              * On the page from the start. Until a service and a master are
-              * picked there is nothing to offer, so the coming days stand there
-              * greyed out; they take their real state from the ribbon once it
-              * arrives, without the page changing shape underneath the client.
+              * After a service. Its length and add-ons decide which days have a
+              * time, so there is nothing true to say about a day before one is
+              * picked. The days stand greyed out for the moment the ribbon takes
+              * to arrive, so the page does not change shape when it does.
               */}
-            <div className="public-booking-days" role="group" aria-labelledby="booking-days-title">
+            {chosen.length > 0 && (
+              <div id="booking-days" className="public-booking-days" role="group" aria-labelledby="booking-days-title">
                 <h2 id="booking-days-title">{t("publicBooking.chooseDay")}</h2>
                 <div className="public-booking-days-strip">
                   {shownDays.map((entry) => {
@@ -1168,7 +1206,8 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
                     );
                   })}
                 </div>
-            </div>
+              </div>
+            )}
 
           </form>
         ) : stage === "code" ? (
@@ -1356,22 +1395,16 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
           </p>
         )}
 
-        {!held && !nothingToOffer && (
-          <div className="public-booking-slots">
+        {!held && slots.length > 0 && (
+          <div id="booking-times" className="public-booking-slots">
             <h2>{t("publicBooking.chooseTime")}</h2>
-            {slots.length > 0 ? (
-              <div>
-                {slots.map((slot) => (
-                  <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
-                    <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="public-booking-hint">
-                {t(daysReady ? "publicBooking.timesHintDay" : "publicBooking.timesHintStart")}
-              </p>
-            )}
+            <div>
+              {slots.map((slot) => (
+                <button key={`${slot.starts_at}:${slot.specialist_id}`} type="button" onClick={() => chooseSlot(slot)} disabled={pending}>
+                  <strong>{new Intl.DateTimeFormat(localeTag(profile.locale), { timeZone: location.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(slot.starts_at))}</strong>
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {nothingToOffer && (
