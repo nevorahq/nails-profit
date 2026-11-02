@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures";
-import { openBookingForm } from "../helpers/booking-form";
+import { chooseService, openBookingForm, typeNewClient } from "../helpers/booking-form";
 import { daysFromToday, disposeStudio, isoDate, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
@@ -94,12 +94,13 @@ for (const width of [null, 375] as const) {
       await page.goto(`/app/calendar?date=${isoDate(day)}&specialist=${studio.specialistId}`);
 
       const compose = await openBookingForm(page);
-      await compose.getByLabel("Specialist").selectOption({ label: studio.specialistName });
-      await compose.getByRole("button", { name: "+ Another service" }).click();
-      await expect(compose.getByRole("combobox", { name: /^Service 2/ }).locator("option:checked")).toHaveText("Pedicure");
+      // Two taps, one for each: no list to open, and the sitting is named at the foot.
+      await chooseService(compose, "Manicure with coating");
+      await chooseService(compose, "Pedicure");
+      await expect(compose.locator(".service-rows-total")).toContainText("1,000");
       await compose.getByLabel("Date").fill(isoDate(day));
       await compose.getByLabel("Time", { exact: true }).fill("10:00");
-      await compose.getByLabel("New client's name").fill("Anna Two-Services");
+      await typeNewClient(compose, "Anna Two-Services");
 
       await noSidewaysScroll(page);
       await page.screenshot({ path: testInfo.outputPath("calendar-two-services.png"), fullPage: true });

@@ -49,7 +49,7 @@ test.describe("the public booking page", () => {
 
     await page.goto(`/book/${studio.slug}`);
     const cards = serviceCards(page);
-    const strip = page.locator(".public-booking-days-strip");
+    const strip = page.locator(".day-strip");
     const openDays = strip.locator("button:not(:disabled)");
     const timesHeading = page.getByRole("heading", { name: "Choose a time", exact: true });
 
@@ -57,7 +57,7 @@ test.describe("the public booking page", () => {
     // Nothing below it is on the page: not the services, not the days, not the times.
     await expect(page.getByRole("radio").first()).toBeEnabled();
     await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
-    await expect(page.locator(".public-booking-masters")).not.toContainText("Any available");
+    await expect(page.locator(".master-picker")).not.toContainText("Any available");
     await expect(cards).toHaveCount(0);
     await expect(strip).toHaveCount(0);
     await expect(timesHeading).toHaveCount(0);
@@ -418,8 +418,8 @@ test.describe("the public booking page", () => {
 
     await chooseMaster(page, studio.specialistName);
     await chooseService(page, studio.serviceId);
-    await expect(page.locator(".public-booking-days-strip button")).toHaveCount(14);
-    await expect(page.locator(".public-booking-days-strip button:not([disabled])")).toHaveCount(0);
+    await expect(page.locator(".day-strip button")).toHaveCount(14);
+    await expect(page.locator(".day-strip button:not([disabled])")).toHaveCount(0);
     await expect(page.locator(".public-booking-slots button")).toHaveCount(0);
     await expect(page.locator(".public-booking-empty")).toContainText("in the next two weeks");
   });

@@ -62,16 +62,16 @@ for (const width of [null, 375] as const) {
       await chooseMaster(page, studio.specialistName);
       await expect(cards).toBeVisible();
       await expect(cards.getByRole("checkbox", { checked: true })).toHaveCount(0);
-      await expect(page.locator(".public-booking-days-strip")).toHaveCount(0);
+      await expect(page.locator(".day-strip")).toHaveCount(0);
       await expect(page.locator(".public-booking-total")).toHaveCount(0);
       await chooseService(page, studio.serviceId);
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+      await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
       // One service says what it costs on its own card; there is no total yet.
       await expect(page.locator(".public-booking-total")).toHaveCount(0);
 
       // A second adds up: the price, and the time the two take together.
       await chooseService(page, "Pedicure");
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+      await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
       await expect(page.locator(".public-booking-total")).toContainText("MDL 1,000.00");
       await expect(page.locator(".public-booking-total")).toContainText("2 h 30 min");
 
@@ -131,18 +131,18 @@ for (const width of [null, 375] as const) {
       // Only their own services are offered: the other is somebody else's.
       await expect(names).toHaveText(["Manicure with coating"]);
       await chooseService(page, studio.serviceId);
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+      await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
 
       // The other master does not do the manicure: it comes off, and the page says so.
       await chooseMaster(page, studio.colleagueName);
       await expect(page.locator(".public-booking-notice")).toContainText("Manicure with coating");
       await expect(serviceCards(page).getByRole("checkbox", { checked: true })).toHaveCount(0);
       await expect(names).toHaveText(["Pedicure"]);
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)")).toHaveCount(0);
+      await expect(page.locator(".day-strip button:not(:disabled)")).toHaveCount(0);
 
       await chooseService(page, pedicure.id);
       await expect(page.locator(".public-booking-notice")).toHaveCount(0);
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+      await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
     });
 
     test("a service both do survives a change of master", async ({ page, browserErrors }) => {
@@ -150,12 +150,12 @@ for (const width of [null, 375] as const) {
       await page.goto(`/book/${studio.slug}`);
       await chooseMaster(page, studio.specialistName);
       await chooseService(page, studio.serviceId);
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+      await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
 
       await chooseMaster(page, studio.colleagueName);
       await expect(page.locator(".public-booking-notice")).toHaveCount(0);
       await expect(serviceCards(page).getByRole("checkbox", { checked: true })).toHaveValue(studio.serviceId);
-      await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+      await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
     });
   });
 }

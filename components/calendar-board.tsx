@@ -14,8 +14,14 @@ import {
   type Span,
 } from "@/components/calendar-free-time";
 import { BookingSlotPicker } from "@/components/booking-slot-picker";
+import { ClientPicker, type PickableClient } from "@/components/client-picker";
+import { DayMoreTile } from "@/components/day-more-tile";
+import { DayStrip } from "@/components/day-strip";
+import { MasterPicker } from "@/components/master-picker";
 import { slotsUrl } from "@/components/booking-slots";
-import { ServiceLinesField, toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
+import { TimeMoreTile } from "@/components/time-more-tile";
+import { ServiceRows } from "@/components/service-rows";
+import { toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
 import { NextVisit } from "@/components/next-visit";
 import { SlotFillPanel } from "@/components/slot-fill-panel";
@@ -125,12 +131,9 @@ export type CalendarVisit = Readonly<{
   revenueMinor: number | null;
 }>;
 
-type Option = Readonly<{ id: string; name: string }>;
-
 /**
- * A specialist as the board draws them: the option plus the photo their name is
- * shown beside. Kept apart from `Option` so the service, add-on and client
- * selects are not handed a field they have no use for.
+ * A specialist as the board draws them: an id and a name plus the photo the name
+ * is shown beside.
  */
 type Person = Readonly<{ id: string; name: string; avatar?: string | null }>;
 
@@ -178,6 +181,7 @@ export function CalendarBoard({
   locations,
   specialists,
   services,
+  offers,
   addOns,
   assignments,
   clients,
@@ -205,11 +209,28 @@ export function CalendarBoard({
   visits?: readonly CalendarVisit[];
   locations: readonly Readonly<{ id: string; name: string; timezone: string }>[];
   specialists: readonly Person[];
-  services: readonly Readonly<{ id: string; name: string; durationMinutes: number | null }>[];
+  services: readonly Readonly<{ id: string; name: string; durationMinutes: number | null; priceMinor: number | null }>[];
+  /**
+   * Who does which service, with their own price and length where they have
+   * one. A master with no rows does everything: the studio of one has not had
+   * to list its own catalogue, and the server reads it the same way.
+   */
+  offers: readonly Readonly<{
+    specialistId: string;
+    serviceId: string;
+    priceMinor: number | null;
+    durationMinutes: number | null;
+  }>[];
   /** `serviceIds` null: offered with any service, as the calendar always has. */
-  addOns: readonly Readonly<{ id: string; name: string; serviceIds: readonly string[] | null }>[];
+  addOns: readonly Readonly<{
+    id: string;
+    name: string;
+    priceDeltaMinor: number;
+    durationDeltaMinutes: number;
+    serviceIds: readonly string[] | null;
+  }>[];
   assignments: readonly Readonly<{ specialistId: string; locationId: string }>[];
-  clients: readonly Option[];
+  clients: readonly PickableClient[];
   filters: Readonly<{ location: string; specialist: string; status: string }>;
   ownSpecialistId: string | null;
   /**
@@ -347,6 +368,8 @@ export function CalendarBoard({
     const data = new FormData(form);
     const locationId = String(data.get("location_id"));
 
+    if (composeLinesNow.length === 0) return setError(t("calendar.pickService"));
+
     const when = instantAt(timezoneOf(locationId), String(data.get("date")), String(data.get("time")));
     if (when === "invalid") return setError(t("calendar.timeInvalid"));
     if (when === "gap") return setError(t("calendar.timeDoesNotExist"));
@@ -377,7 +400,7 @@ export function CalendarBoard({
     const payload = {
       location_id: locationId,
       specialist_id: String(data.get("specialist_id")),
-      services: toServicesPayload(composeLines),
+      services: toServicesPayload(composeLinesNow),
       ...(clientId ? { client_id: clientId } : {}),
       starts_at: when.toISOString(),
     };
@@ -389,7 +412,7 @@ export function CalendarBoard({
     if (created) {
       setComposeOpen(false);
       setComposeTime("");
-      setComposeLines(firstLines());
+      setComposeLines([]);
     }
   }
 
@@ -590,8 +613,10 @@ export function CalendarBoard({
    */
   const [composeLocation, setComposeLocation] = useState(locations[0]?.id ?? "");
   // What the new appointment is made of: one service, or several in one sitting.
-  const firstLines = (): ServiceLine[] => (services[0] ? [{ serviceId: services[0].id, addOnIds: [] }] : []);
-  const [composeLines, setComposeLines] = useState<ServiceLine[]>(firstLines);
+  // Nothing is chosen for the desk — the first service on the list is a guess, and
+  // a wrong one is booked as readily as a right one — except where there is only
+  // one service to choose, which `composeLinesNow` takes.
+  const [composeLines, setComposeLines] = useState<ServiceLine[]>([]);
 
   /*
    * The appointment form lives in a window, opened from the round «+». Its
@@ -600,7 +625,8 @@ export function CalendarBoard({
    */
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeDate, setComposeDate] = useState(selected);
-  const [composeSpecialist, setComposeSpecialist] = useState("");
+  // null: the master whose calendar is open; an id: the one picked in the form; "": asked to choose again.
+  const [composeSpecialist, setComposeSpecialist] = useState<string | null>(null);
   const [composeTime, setComposeTime] = useState("");
   const composeCard = useRef<HTMLDivElement>(null);
 
@@ -615,6 +641,7 @@ export function CalendarBoard({
     setAlternatives({ zone: "UTC", entries: [] });
     setComposeDate(selected);
     setComposeTime("");
+    setComposeSpecialist(null);
     setComposeOpen(true);
     // The form is the first thing on the page, so the page is taken to it: from
     // further down it would open above the screen, with nothing to say so.
@@ -716,9 +743,47 @@ export function CalendarBoard({
 
   // The chosen master, or the first one offered when the address changed under
   // them and they no longer work there.
-  const composeSpecialistId = bookable.some((person) => person.id === composeSpecialist)
-    ? composeSpecialist
-    : (bookable[0]?.id ?? "");
+  //
+  // Whose calendar is open comes first: the desk looking at one master's day is
+  // almost always booking that master, so the form opens on them and does not ask.
+  // With everybody on screen nobody is chosen for the desk — a first master
+  // picked by default would be a decision nobody made — and the form asks whom
+  // before it shows anything that depends on the answer. A studio of one has no
+  // one to ask. When the chosen master cannot be booked at the address the form
+  // is on, the form asks again.
+  const chosenSpecialist =
+    bookable.find((person) => person.id === (composeSpecialist ?? filters.specialist)) ??
+    (bookable.length === 1 ? bookable[0] : null);
+  const composeSpecialistId = chosenSpecialist?.id ?? "";
+
+  /*
+   * What this master does, at their prices. The price list is the studio's; the
+   * master's own rows narrow it and may restate a price or a length. No rows is
+   * everything, as for the server, which refuses a service outside a non-empty
+   * list — so a service offered here that the master does not do would only be
+   * found out at «Записать».
+   */
+  const theirOffers = offers.filter((offer) => offer.specialistId === composeSpecialistId);
+  const offeredServices = services
+    .filter((service) => theirOffers.length === 0 || theirOffers.some((offer) => offer.serviceId === service.id))
+    .map((service) => {
+      const own = theirOffers.find((offer) => offer.serviceId === service.id);
+      const price = own?.priceMinor ?? service.priceMinor;
+      return {
+        id: service.id,
+        name: service.name,
+        durationMinutes: own?.durationMinutes ?? service.durationMinutes,
+        priceMinor: price ?? undefined,
+      };
+    });
+  // The sitting as the form shows it: what was chosen that this master does. A
+  // service the new master does not do drops out on a change of master; with
+  // nothing left, the only service on offer is taken, and otherwise none is.
+  const composeLinesNow: ServiceLine[] = (() => {
+    const kept = composeLines.filter((line) => offeredServices.some((service) => service.id === line.serviceId));
+    if (kept.length === 0 && offeredServices.length === 1) return [{ serviceId: offeredServices[0].id, addOnIds: [] }];
+    return kept;
+  })();
 
   /*
    * The shortest thing the studio sells, which is what separates a window from
@@ -949,7 +1014,6 @@ export function CalendarBoard({
               <ToolIcon name="close" />
             </button>
             <h2 id="new-booking-title">{t("calendar.newBooking")}</h2>
-              <p className="muted">{t("calendar.newBookingHint")}</p>
               {errorBanner}
               <form className="inline-form" onSubmit={createBooking}>
                 {/*
@@ -978,89 +1042,130 @@ export function CalendarBoard({
                 ) : (
                   <input type="hidden" name="location_id" value={composeLocation} />
                 )}
-                {bookable.length > 1 ? (
-                  <label>
-                    {t("calendar.specialist")}
-                    <select
-                      name="specialist_id"
-                      required
-                      value={composeSpecialistId}
-                      onChange={(event) => setComposeSpecialist(event.target.value)}
-                    >
-                      {bookable.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                {chosenSpecialist === null ? (
+                  // Nobody chosen yet: the one question, and nothing under it that
+                  // depends on the answer — whose services, whose free times.
+                  <>
+                    <MasterPicker
+                      legend={t("calendar.whoToBook")}
+                      name="specialist_choice"
+                      people={bookable.map((person) => ({
+                        id: person.id,
+                        name: person.name,
+                        avatar: person.avatar ?? null,
+                      }))}
+                      value=""
+                      onChange={setComposeSpecialist}
+                    />
+                    <div className="button-row">
+                      <button className="secondary-button" type="button" onClick={closeCompose} disabled={pending}>
+                        {t("common.cancel")}
+                      </button>
+                    </div>
+                  </>
                 ) : (
-                  <input type="hidden" name="specialist_id" value={bookable[0]?.id ?? ""} />
-                )}
-                <ServiceLinesField
-                  idPrefix="compose"
-                  lines={composeLines}
-                  services={services}
+                  <>
+                    <input type="hidden" name="specialist_id" value={chosenSpecialist.id} />
+                    {/*
+                      Who this is for, by their face and name. The face is not
+                      pressed; the one button beside the name takes the form back
+                      to the question. Only where there was a choice: a studio of
+                      one has no one else to name.
+                    */}
+                    {bookable.length > 1 && (
+                      <div className="calendar-compose-master">
+                        <span className="avatar" aria-hidden="true">
+                          {chosenSpecialist.avatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+                            <img src={chosenSpecialist.avatar} alt="" />
+                          ) : (
+                            chosenSpecialist.name.trim().slice(0, 1).toUpperCase() || "?"
+                          )}
+                        </span>
+                        <p>
+                          {t("calendar.specialist")}: <strong>{chosenSpecialist.name}</strong>
+                        </p>
+                        <button type="button" className="calendar-compose-change" onClick={() => setComposeSpecialist("")}>
+                          {t("calendar.clientChange")}
+                        </button>
+                      </div>
+                    )}
+                <ServiceRows
+                  lines={composeLinesNow}
+                  services={offeredServices}
                   addOns={addOns}
                   addOnsLegend={t("calendar.addOns")}
                   locale={locale}
+                  formatPrice={money}
                   onChange={setComposeLines}
                 />
-                <label>
-                  {t("calendar.date")}
-                  <input
-                    type="date"
-                    name="date"
-                    value={composeDate}
-                    onChange={(event) => setComposeDate(event.target.value)}
-                    required
-                  />
-                </label>
+                {/*
+                  The next two weeks as buttons, as on the public page, because
+                  most appointments are written for «сегодня» or «на этой
+                  неделе» and a date field is a calendar to open for that. «Ещё»
+                  at the end is the date field itself, for any other day, and is
+                  what the form reads.
+                */}
+                <DayStrip
+                  days={stripDates(today, composeDate).map((date) => {
+                    const stamp = new Date(`${date}T12:00:00Z`);
+                    const weekday = new Intl.DateTimeFormat(localeTag, { timeZone: "UTC", weekday: "short" }).format(stamp);
+                    const day = new Intl.DateTimeFormat(localeTag, { timeZone: "UTC", day: "numeric", month: "short" }).format(stamp);
+                    return {
+                      date,
+                      top: date === today ? t("calendar.today") : date === addDaysTo(today, 1) ? t("calendar.tomorrow") : weekday,
+                      main: day,
+                      label: `${weekday}, ${day}`,
+                    };
+                  })}
+                  selected={composeDate}
+                  onPick={setComposeDate}
+                  trailing={
+                    <DayMoreTile
+                      label={t("calendar.moreDates")}
+                      fieldLabel={t("calendar.otherDate")}
+                      value={composeDate}
+                      today={today}
+                      localeTag={localeTag}
+                      labels={{
+                        title: t("calendar.pickDate"),
+                        today: t("calendar.today"),
+                        close: t("calendar.closeForm"),
+                        previous: t("calendar.previousMonth"),
+                        next: t("calendar.nextMonth"),
+                      }}
+                      onChange={setComposeDate}
+                    />
+                  }
+                />
                 {/*
                   The free times of that date for that master and that sitting.
-                  Tapping one fills the time field below; the field stays,
-                  because the desk may book a time the grid does not offer.
+                  Tapping one sets the time the form reads from the hidden field
+                  above; «Другое» on its heading is the way to a time the grid
+                  does not offer, because the desk may book one.
                 */}
+                {composeLinesNow.length === 0 && <p className="compose-hint">{t("calendar.pickServiceFirst")}</p>}
                 <BookingSlotPicker
                   url={slotsUrl({
                     locationId: composeLocation,
                     specialistId: composeSpecialistId,
                     date: composeDate,
-                    lines: composeLines,
+                    lines: composeLinesNow,
                   })}
                   value={composeTime}
                   onPick={setComposeTime}
                   locale={locale}
+                  trailing={
+                    <TimeMoreTile
+                      label={t("calendar.otherTime")}
+                      fieldLabel={t("calendar.time")}
+                      value={composeTime}
+                      onChange={setComposeTime}
+                    />
+                  }
                 />
-                <label>
-                  {t("calendar.time")}
-                  <input
-                    type="time"
-                    name="time"
-                    value={composeTime}
-                    onChange={(event) => setComposeTime(event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  {t("calendar.client")}
-                  <select name="client_id" defaultValue="">
-                    <option value="">{t("calendar.newClient")}</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {t("calendar.clientName")}
-                  <input name="client_name" maxLength={200} placeholder={t("calendar.clientNameHint")} />
-                </label>
-                <label>
-                  {t("calendar.clientPhone")}
-                  <input name="client_phone" inputMode="tel" maxLength={32} />
-                </label>
+                <input type="hidden" name="time" value={composeTime} />
+                <ClientPicker clients={clients} locale={locale} />
                 <div className="button-row">
                   <button className="secondary-button" type="button" onClick={closeCompose} disabled={pending}>
                     {t("common.cancel")}
@@ -1069,6 +1174,8 @@ export function CalendarBoard({
                     {pending ? t("common.saving") : t("calendar.book")}
                   </button>
                 </div>
+                </>
+                )}
               </form>
             </div>
           </div>
@@ -1855,6 +1962,31 @@ function queryFor(state: Record<string, string>) {
  * 28th and comes back as January's 28th, which is a day, rather than a month
  * nobody asked for.
  */
+/** The window of days the form's strip shows: two weeks, as the public page does. */
+const STRIP_DAYS = 14;
+
+/**
+ * The days the strip offers: from today, or from the chosen day when that lies
+ * beyond the first two weeks, so the day picked on the date field is always on
+ * screen and lit. A day in the past is never offered; the date field still
+ * takes one, because the desk writes up yesterday's work too.
+ */
+function stripDates(today: string, chosen: string): string[] {
+  const first = chosen > today && chosen >= addDaysTo(today, STRIP_DAYS) ? chosen : today;
+  return Array.from({ length: STRIP_DAYS }, (_, offset) => addDaysTo(first, offset));
+}
+
+function addDaysTo(date: string, days: number): string {
+  const parsed = parseLocalDate(date);
+  if (!parsed) return date;
+  const moved = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day + days));
+  return formatLocalDate({
+    year: moved.getUTCFullYear(),
+    month: moved.getUTCMonth() + 1,
+    day: moved.getUTCDate(),
+  });
+}
+
 function dateIn(date: string, part: Readonly<{ year?: number; month?: number }>) {
   const parsed = parseLocalDate(date);
   if (!parsed) return date;

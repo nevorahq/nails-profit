@@ -344,7 +344,7 @@ test.describe("authentication UI", () => {
       expect.arrayContaining([expect.objectContaining({ name: expect.stringContaining("Manicure"), price_minor: 35000 })]),
     );
     await chooseService(page, "Manicure");
-    await expect(page.locator(".public-booking-days-strip button:not(:disabled)").first()).toBeVisible();
+    await expect(page.locator(".day-strip button:not(:disabled)").first()).toBeVisible();
   });
 
   test("a studio whose owner works is costed like anybody else", async ({
