@@ -130,28 +130,43 @@ test.describe("the month grid", () => {
     const context = await signedInContext(browser, studio.owner, baseURL!);
     const page = await context.newPage();
 
-    // The month and the year are two controls, so they are read as values
-    // rather than as the text of the bar: the bar's text is every option in
-    // both lists.
-    const month = page.locator(".calendar-period select").first();
-    const year = page.locator(".calendar-period select").last();
+    // The month and its year are one list, so it is read as a value rather than
+    // as the text of the bar: the bar's text is every option in the list.
+    const month = page.locator(".calendar-period select");
 
     await page.goto("/app/calendar?date=2026-01-31");
-    await expect(month).toHaveValue("1");
-    await expect(year).toHaveValue("2026");
+    await expect(page.locator(".calendar-period select")).toHaveCount(1);
+    await expect(month).toHaveValue("2026-01");
 
     // Choosing is applying: there is nothing to press after.
-    await month.selectOption("2");
+    await month.selectOption("2026-02");
     await expect(page).toHaveURL(/date=2026-02-28/);
-    await expect(month).toHaveValue("2");
+    await expect(month).toHaveValue("2026-02");
+
+    // The year is a part of the month's name, so crossing one is a choice from
+    // the same list, and there is no second control to choose it with.
+    await month.selectOption("2027-01");
+    await expect(page).toHaveURL(/date=2027-01-28/);
+    await expect(month).toHaveValue("2027-01");
 
     // A leap day is the year's own version of the same trap: 2028 has a 29th of
-    // February and 2027 does not. It is also a year outside the list's own
-    // range, which the anchor joins so the control shows the year it is on.
+    // February and 2027 does not. 2028 is outside what the list reaches from
+    // today's month, and it still shows the month it is on, because the list is
+    // built around the month on screen.
     await page.goto("/app/calendar?date=2028-02-29");
-    await expect(year).toHaveValue("2028");
-    await year.selectOption("2027");
+    await expect(month).toHaveValue("2028-02");
+    await month.selectOption("2027-02");
     await expect(page).toHaveURL(/date=2027-02-28/);
+
+    // Any month is reachable, though a far one takes more than one choice: the
+    // list reaches twenty-four months back, and is built again from where the
+    // choice lands.
+    await page.goto("/app/calendar?date=2026-06-15");
+    await expect(month.locator("option")).toHaveCount(37);
+    await expect(month.locator("option").first()).toHaveAttribute("value", "2024-06");
+    await expect(month.locator("option").last()).toHaveAttribute("value", "2027-06");
+    await month.selectOption("2027-06");
+    await expect(month.locator("option").last()).toHaveAttribute("value", "2028-06");
 
     // The arrows are gone — they stepped one month, which is what the month
     // select does. «Сегодня» stayed, and it is the reason they could: it is the

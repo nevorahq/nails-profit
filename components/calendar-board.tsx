@@ -13,6 +13,8 @@ import {
   type ShiftRule,
   type Span,
 } from "@/components/calendar-free-time";
+import { BookingSlotPicker } from "@/components/booking-slot-picker";
+import { slotsUrl } from "@/components/booking-slots";
 import { ServiceLinesField, toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
 import { NextVisit } from "@/components/next-visit";
@@ -145,6 +147,10 @@ const OCCUPYING = new Set(["pending_confirmation", "confirmed", "completed", "no
 
 const CANCELLATION_REASONS = ["client_request", "studio_request", "no_contact", "duplicate", "other"];
 
+/** The months the month list reaches either side of the one on screen. */
+const MONTHS_BACK = 24;
+const MONTHS_FORWARD = 12;
+
 type Alternative = Readonly<{ date: string; slots: string[] }>;
 
 type BookingPreview = {
@@ -182,6 +188,7 @@ export function CalendarBoard({
   buffers,
   canWrite,
   canFilterBySpecialist,
+  studio,
   focusBookingId = null,
   businessType,
   currency,
@@ -218,6 +225,8 @@ export function CalendarBoard({
   buffers: readonly Readonly<{ locationId: string; before: number; after: number }>[];
   canWrite: boolean;
   canFilterBySpecialist: boolean;
+  /** The studio's own face, which is the «all masters» button of the filter. */
+  studio: Readonly<{ name: string; logo: string | null }>;
   /** Whose earnings the preview under an appointment is naming. */
   businessType: BusinessType;
   currency: string;
@@ -378,7 +387,8 @@ export function CalendarBoard({
       zone: timezoneOf(locationId),
     });
     if (created) {
-      form.reset();
+      setComposeOpen(false);
+      setComposeTime("");
       setComposeLines(firstLines());
     }
   }
@@ -584,76 +594,94 @@ export function CalendarBoard({
   const [composeLines, setComposeLines] = useState<ServiceLine[]>(firstLines);
 
   /*
-   * The compose form's `<details>` opens on its own summary click — that part
-   * is the browser's. This only handles the anchors that point at it from
-   * elsewhere: the toolbar's «Новая запись» button and the round one in the
-   * mobile title row (`app/app/calendar/page.tsx`, a Server Component, so it
-   * cannot hold this listener itself).
-   *
-   * Delegated on `document` rather than attached to one link, because the two
-   * anchors are rendered by two different components and neither is in scope
-   * of the other. `block: "nearest"` is what makes the phone/desktop split in
-   * the request happen without branching on viewport width: the form usually
-   * sits below the fold on a phone and already inside it on a wide screen, so
-   * "scroll only if it is not already visible" produces exactly that split.
-   *
-   * The round mobile button is the one place this doubles as a close control
-   * (its "+" is a "−" once the panel is open, purely via the `:has()` rule on
-   * `.header-action .icon-minus` in globals.css) — the toolbar's labelled
-   * button stays open-only, since it is never on screen at the same time as
-   * the panel it would be closing. The `toggle` event, which fires on the
-   * `<details>` whichever way it changed (this handler, or its own summary),
-   * is what keeps that button's `aria-label` in sync in every case.
+   * The appointment form lives in a window, opened from the round «+». Its
+   * date, master and time are held here because the free times shown above the
+   * time field are a question about all three.
    */
-  const composeRef = useRef<HTMLDetailsElement>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeDate, setComposeDate] = useState(selected);
+  const [composeSpecialist, setComposeSpecialist] = useState("");
+  const [composeTime, setComposeTime] = useState("");
+  const composeCard = useRef<HTMLDivElement>(null);
+
+  /**
+   * Opens the window on the day the calendar is showing: the desk is looking at
+   * a date because that is the one it is about to book, so asking for it again
+   * would be the first thing the form made it do.
+   */
+  function openCompose() {
+    setError(null);
+    setNotice(null);
+    setAlternatives({ zone: "UTC", entries: [] });
+    setComposeDate(selected);
+    setComposeTime("");
+    setComposeOpen(true);
+    // The form is the first thing on the page, so the page is taken to it: from
+    // further down it would open above the screen, with nothing to say so.
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }
+
+  function closeCompose() {
+    setComposeOpen(false);
+    setError(null);
+    setAlternatives({ zone: "UTC", entries: [] });
+  }
+
+  /*
+   * Two ways in that are not this page's own button. The phone's «+»
+   * (`components/quick-actions.tsx`) links to `#new-booking` by full path, and
+   * arriving from another page lands with that hash in the address; both end in
+   * the same window. Delegated on `document` because the anchor is rendered by
+   * the shell, which is out of scope of this component.
+   *
+   * The click is taken in the capture phase and stopped, so the link never
+   * navigates. Followed, it would load `/app/calendar` without the query: the
+   * day and the master the desk was looking at would be swapped for today and
+   * everyone, under a window that is about to book into the old ones. The
+   * shell's menu is closed here for the same reason — its own handler no longer
+   * sees the click.
+   *
+   * The hash is dropped once it has been acted on: left in the address, a
+   * reload would open the window again on a page the desk had just closed it on.
+   */
+  const openComposeRef = useRef(openCompose);
+  useEffect(() => {
+    openComposeRef.current = openCompose;
+  });
 
   useEffect(() => {
-    function revealCompose() {
-      const details = composeRef.current;
-      if (!details) return;
-      details.open = true;
-      details.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
     function onClick(event: MouseEvent) {
-      // The phone's «+» (`components/quick-actions.tsx`) links here by full
-      // path, so it is answered on this page as well as on arrival.
       const trigger = (event.target as HTMLElement).closest(
         'a[href="#new-booking"], a[href="/app/calendar#new-booking"]',
       );
       if (!trigger) return;
       event.preventDefault();
-      const details = composeRef.current;
-      if (!details) return;
-      if (trigger.classList.contains("header-action")) {
-        details.open = !details.open;
-        if (details.open) details.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      } else {
-        revealCompose();
-      }
-    }
-
-    function onToggle() {
-      const details = composeRef.current;
-      if (!details) return;
-      document.querySelectorAll<HTMLAnchorElement>('a.header-action[href="#new-booking"]').forEach((button) => {
-        const label = details.open ? button.dataset.labelOpen : button.dataset.labelClosed;
-        if (label) button.setAttribute("aria-label", label);
+      event.stopPropagation();
+      document.querySelectorAll<HTMLDetailsElement>("details.quick-actions[open]").forEach((menu) => {
+        menu.open = false;
       });
+      openComposeRef.current();
     }
 
-    const details = composeRef.current;
-    document.addEventListener("click", onClick);
-    details?.addEventListener("toggle", onToggle);
-    // A direct link or a page refresh with the hash already set: the browser
-    // scrolled to the closed `<details>` before this ran, so it is opened and
-    // recentred rather than left shut with the summary sitting at the top.
-    if (location.hash === "#new-booking") revealCompose();
-    return () => {
-      document.removeEventListener("click", onClick);
-      details?.removeEventListener("toggle", onToggle);
-    };
+    document.addEventListener("click", onClick, true);
+    if (location.hash === "#new-booking") {
+      openComposeRef.current();
+      history.replaceState(history.state, "", location.pathname + location.search);
+    }
+    return () => document.removeEventListener("click", onClick, true);
   }, []);
+
+  useEffect(() => {
+    if (!composeOpen) return;
+    // Without `preventScroll` the browser scrolls the card flush to the top of
+    // its scroll box, and the room kept above it is scrolled away at once.
+    composeCard.current?.focus({ preventScroll: true });
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") closeCompose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [composeOpen]);
 
   /*
    * Opened once, on arrival, rather than held open: after this it is the
@@ -685,6 +713,12 @@ export function CalendarBoard({
     const theirs = assignments.filter((link) => link.specialistId === person.id);
     return theirs.length === 0 || theirs.some((link) => link.locationId === composeLocation);
   });
+
+  // The chosen master, or the first one offered when the address changed under
+  // them and they no longer work there.
+  const composeSpecialistId = bookable.some((person) => person.id === composeSpecialist)
+    ? composeSpecialist
+    : (bookable[0]?.id ?? "");
 
   /*
    * The shortest thing the studio sells, which is what separates a window from
@@ -796,17 +830,23 @@ export function CalendarBoard({
     return { shift, free };
   })();
 
-  /**
-   * The month and the year the grid is drawing, each one a list to choose from.
+  /*
+   * The month and its year, in one list.
    *
-   * Read off the selected date rather than passed down, because they are the
-   * same fact: the grid is built around the anchor, and the anchor is the day
-   * the list below is showing.
+   * The year used to be a control of its own, and a year is not a thing the
+   * calendar needs a place for: it is a part of the month's name. One list has
+   * to stop somewhere, though, and wherever it stops is a month nobody can
+   * reach — so it does not stop at a fixed place. It is built around the month
+   * on screen, two years back to one forward (a studio reads back over its own
+   * records and books forward only as far as `max_advance_days` allows), and it
+   * is built again from wherever the choice lands. Any month is reachable; it is
+   * only that the far ones take two choices instead of one.
    *
-   * Two controls rather than one list of «сентябрь 2026 г.». A single list has
-   * to stop somewhere, and wherever it stops is a month nobody can reach; split,
-   * the months are always all twelve and only the years are a list — a short
-   * one, and one that can be widened without touching the other half.
+   * Read from `selected`, not from the clock: this renders on the server and
+   * hydrates in the browser, and `new Date()` on both sides of that is two
+   * readings — on New Year's Eve, of two different years. A link kept from
+   * further back still shows the month it is actually on, because the list is
+   * centred on it.
    */
   const anchor = parseLocalDate(selected) ?? { year: 1970, month: 1, day: 1 };
 
@@ -816,27 +856,20 @@ export function CalendarBoard({
    * instant is within a few hours of the month before — far enough west and
    * every name in this list would be off by one.
    */
-  const monthNames = Array.from({ length: 12 }, (_, index) =>
-    new Date(Date.UTC(anchor.year, index, 15, 12)).toLocaleDateString(localeTag, { month: "long" }),
-  );
+  const monthName = (year: number, month: number) =>
+    new Date(Date.UTC(year, month - 1, 15, 12)).toLocaleDateString(localeTag, { month: "long" });
 
-  /*
-   * Two years back and one forward, which is where the work is: a studio reads
-   * back over its own records and books forward only as far as it takes
-   * bookings, which `max_advance_days` caps in months rather than years.
-   *
-   * Taken from `today` rather than from the clock. This renders on the server
-   * and hydrates in the browser, and `new Date()` on both sides of that is two
-   * readings — on New Year's Eve, of two different years.
-   *
-   * The anchor's own year joins the list wherever it falls, so a link somebody
-   * kept from further back still shows the year it is actually on rather than
-   * silently displaying a different one.
-   */
-  const thisYear = Number(today.slice(0, 4));
-  const years = [
-    ...new Set([anchor.year, thisYear - 2, thisYear - 1, thisYear, thisYear + 1]),
-  ].sort((left, right) => left - right);
+  const monthOptions = Array.from({ length: MONTHS_BACK + 1 + MONTHS_FORWARD }, (_, position) => {
+    const counted = anchor.year * 12 + (anchor.month - 1) + (position - MONTHS_BACK);
+    const year = Math.floor(counted / 12);
+    const month = (counted % 12) + 1;
+    return {
+      value: `${year}-${String(month).padStart(2, "0")}`,
+      year,
+      month,
+      label: `${monthName(year, month)} ${year}`,
+    };
+  });
 
   /**
    * The listed day, spelled out — the name of the panel below the grid rather
@@ -858,142 +891,307 @@ export function CalendarBoard({
       new Date(`${day.date}T12:00:00`).toLocaleDateString(localeTag, { weekday: "short" }),
     );
 
+  /*
+   * One refusal, drawn where the desk is looking: under the toolbar, or inside
+   * the appointment window while it is open — behind its backdrop a banner
+   * would be an error nobody can see.
+   */
+  const errorBanner = error && (
+    <div className="form-error" role="alert">
+      {error}
+      {alternatives.entries.length > 0 && (
+        <ul className="compact-list">
+          {alternatives.entries.map((option) => (
+            <li key={option.date}>
+              {option.date}:{" "}
+              {option.slots.map((slot) => clockAt(slot, alternatives.zone)).join(", ")}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  /*
+   * The appointment form, in the page's own flow: first in the board, under the
+   * top bar, as tall as its form and with nothing in it that scrolls. It is the
+   * page that scrolls, so the whole form is always reachable — the end of it is
+   * the end of the page, with the room the bottom bar needs already kept there.
+   * (As a box of its own between the bars it ran out of scroll before it ran out
+   * of form.) A fixed layer under it dims the rest of the page and stops it being
+   * pressed; the bars stay above that layer, as they are above any content.
+   *
+   * Not closed by tapping outside, unlike the question windows: this one holds a
+   * form with a client half typed into it, and a stray tap outside it must not
+   * throw that away. Esc and «Отмена» close it.
+   */
+  const composeDialog = composeOpen && canWrite && bookable.length > 0 && locations.length > 0 && services.length > 0 && (
+    <>
+      <div className="calendar-compose-dim" aria-hidden="true" />
+          <div className="calendar-compose-scroll">
+            <div
+              className="modal-card calendar-compose-dialog"
+              id="new-booking"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="new-booking-title"
+              tabIndex={-1}
+              ref={composeCard}
+            >
+              <button
+              className="calendar-compose-close"
+              type="button"
+              aria-label={t("calendar.closeForm")}
+              title={t("calendar.closeForm")}
+              onClick={closeCompose}
+              disabled={pending}
+            >
+              <ToolIcon name="close" />
+            </button>
+            <h2 id="new-booking-title">{t("calendar.newBooking")}</h2>
+              <p className="muted">{t("calendar.newBookingHint")}</p>
+              {errorBanner}
+              <form className="inline-form" onSubmit={createBooking}>
+                {/*
+                  The address and the master are asked for only where there is
+                  a choice; with one of each the two selects were four taps of
+                  ceremony in front of every appointment a studio of one wrote
+                  by hand. Hidden rather than dropped, because the endpoint
+                  still needs both and this form is read from `FormData`.
+                */}
+                {locations.length > 1 ? (
+                  <label>
+                    {t("calendar.location")}
+                    <select
+                      name="location_id"
+                      required
+                      value={composeLocation}
+                      onChange={(event) => setComposeLocation(event.target.value)}
+                    >
+                      {locations.map((place) => (
+                        <option key={place.id} value={place.id}>
+                          {place.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <input type="hidden" name="location_id" value={composeLocation} />
+                )}
+                {bookable.length > 1 ? (
+                  <label>
+                    {t("calendar.specialist")}
+                    <select
+                      name="specialist_id"
+                      required
+                      value={composeSpecialistId}
+                      onChange={(event) => setComposeSpecialist(event.target.value)}
+                    >
+                      {bookable.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <input type="hidden" name="specialist_id" value={bookable[0]?.id ?? ""} />
+                )}
+                <ServiceLinesField
+                  idPrefix="compose"
+                  lines={composeLines}
+                  services={services}
+                  addOns={addOns}
+                  addOnsLegend={t("calendar.addOns")}
+                  locale={locale}
+                  onChange={setComposeLines}
+                />
+                <label>
+                  {t("calendar.date")}
+                  <input
+                    type="date"
+                    name="date"
+                    value={composeDate}
+                    onChange={(event) => setComposeDate(event.target.value)}
+                    required
+                  />
+                </label>
+                {/*
+                  The free times of that date for that master and that sitting.
+                  Tapping one fills the time field below; the field stays,
+                  because the desk may book a time the grid does not offer.
+                */}
+                <BookingSlotPicker
+                  url={slotsUrl({
+                    locationId: composeLocation,
+                    specialistId: composeSpecialistId,
+                    date: composeDate,
+                    lines: composeLines,
+                  })}
+                  value={composeTime}
+                  onPick={setComposeTime}
+                  locale={locale}
+                />
+                <label>
+                  {t("calendar.time")}
+                  <input
+                    type="time"
+                    name="time"
+                    value={composeTime}
+                    onChange={(event) => setComposeTime(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  {t("calendar.client")}
+                  <select name="client_id" defaultValue="">
+                    <option value="">{t("calendar.newClient")}</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t("calendar.clientName")}
+                  <input name="client_name" maxLength={200} placeholder={t("calendar.clientNameHint")} />
+                </label>
+                <label>
+                  {t("calendar.clientPhone")}
+                  <input name="client_phone" inputMode="tel" maxLength={32} />
+                </label>
+                <div className="button-row">
+                  <button className="secondary-button" type="button" onClick={closeCompose} disabled={pending}>
+                    {t("common.cancel")}
+                  </button>
+                  <button className="primary-button" type="submit" disabled={pending}>
+                    {pending ? t("common.saving") : t("calendar.book")}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+    </>
+  );
+
   return (
     <>
+      {composeDialog}
       <nav className="calendar-toolbar" aria-label={t("calendar.period")}>
-        <div className="calendar-where">
+        <div className="calendar-where calendar-where-board">
           {/*
-            Whose calendar this is, open on the bar rather than folded behind a
-            «Фильтры» button.
-
-            It is the only filter with a control now, and it is the one a studio
-            actually reaches for — «покажи день Ирины» is a question asked many
-            times a day, where the address and the status were asked once and
-            then left alone. Folded away it cost two taps every time and, on a
-            phone, a panel that opened off the side of the screen.
-
-            First in the bar, because it is the widest thing it says: the month
-            after it is a statement about the calendar this select has already
-            chosen.
-
-            Navigated rather than submitted: the grid's own dates are `<Link>`s
-            through `queryFor`, and routing this the same way keeps one
-            mechanism instead of a form that would need every other filter
-            copied into hidden fields to avoid dropping them.
+            The month, with its year, which is what the grid below is drawing. A
+            date was only ever needed here while the board was one day wide; the
+            day the list is showing is named over the list itself, where the
+            reader is when they need it.
           */}
-          {canFilterBySpecialist && specialists.length > 1 && (
+          <span className="calendar-period">
             <select
-              className="calendar-specialist"
-              aria-label={t("calendar.specialist")}
-              value={filters.specialist}
-              onChange={(event) =>
-                router.push(
-                  queryFor({ ...filters, specialist: event.target.value, date: selected }),
-                )
-              }
+              aria-label={t("calendar.month")}
+              value={`${anchor.year}-${String(anchor.month).padStart(2, "0")}`}
+              onChange={(event) => {
+                const [year, month] = event.target.value.split("-").map(Number);
+                router.push(queryFor({ ...filters, date: dateIn(selected, { year, month }) }));
+              }}
             >
-              <option value="">{t("calendar.allSpecialists")}</option>
-              {specialists.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
+              {monthOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
-          )}
-
+          </span>
           {/*
             The way back, and the one control of the old set that was not a
             second way to do something.
 
             The arrows went because the month select already steps a month, and
             they stepped exactly one. This does something neither the grid nor
-            the selects can: today's date wears a ring in the grid and can be
+            the select can: today's date wears a ring in the grid and can be
             pressed — but only while today is in the month on screen. From March
-            2027 the way home is two changes of two fields, each its own trip to
-            the server, and this is one.
+            2027 the way home is a change of the month, a trip to the server of
+            its own, and this is one.
           */}
           <Link className="secondary-button" href={queryFor({ ...filters, date: today })}>
             {t("calendar.today")}
           </Link>
 
           {/*
-            The month, which is what the arrows now step and what the grid
-            below is drawing. A date was only ever needed here while the board
-            was one day wide; the day the list is showing is named over the
-            list itself, where the reader is when they need it.
-          */}
-          <span className="calendar-period">
-            <select
-              aria-label={t("calendar.month")}
-              value={anchor.month}
-              onChange={(event) =>
-                router.push(
-                  queryFor({
-                    ...filters,
-                    date: dateIn(selected, { month: Number(event.target.value) }),
-                  }),
-                )
-              }
-            >
-              {monthNames.map((name, index) => (
-                <option key={name} value={index + 1}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label={t("calendar.year")}
-              value={anchor.year}
-              onChange={(event) =>
-                router.push(
-                  queryFor({
-                    ...filters,
-                    date: dateIn(selected, { year: Number(event.target.value) }),
-                  }),
-                )
-              }
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </span>
+            Whose calendar this is: the studio's own face first, then each master,
+            as buttons rather than a list to open — on the bar's second row, big,
+            under the month and «Сегодня», because they are what the desk presses
+            most and a face is not something to find at 40 units.
 
-        </div>
+            It is the filter a studio reaches for many times a day — «покажи день
+            Ирины» — and a select cost two taps every time and, on a phone, a
+            sheet that opened off the side of the screen. A row of faces is one
+            tap and shows the choices before it is made. First is the studio
+            itself, «все мастера»; pressing the master who is already chosen
+            takes the filter off again.
 
-        <div className="calendar-tools">
-          {/*
-            An anchor to the form that already exists further down the page,
-            not a new one. The direction puts a primary action in the toolbar;
-            duplicating the compose form to get it there would mean two places
-            a booking can be made and two places a bug can live.
+            Links, not buttons: choosing is going to a page the server reads, the
+            same mechanism the grid's own dates and «Сегодня» use through
+            `queryFor`, so the address keeps the filter and a face can be opened
+            in another tab. `aria-current` says which is on — and the ring, and
+            the name written under the row, say it too, because a face at 40
+            units is not something to tell two masters apart by, nor colour
+            something to carry a state alone.
           */}
-          {canWrite && locations.length > 0 && services.length > 0 && (
-            <a className="primary-button calendar-create" href="#new-booking">
-              <ToolIcon name="plus" />
-              {t("calendar.newBooking")}
-            </a>
+          {canFilterBySpecialist && specialists.length > 1 && (
+            <div className="calendar-masters">
+              <div className="calendar-masters-row" role="group" aria-label={t("calendar.specialist")}>
+                <Link
+                  className="calendar-pick"
+                  href={queryFor({ ...filters, specialist: "", date: selected })}
+                  aria-current={filters.specialist === "" ? "true" : undefined}
+                  aria-label={t("calendar.allSpecialists")}
+                  title={t("calendar.allSpecialists")}
+                >
+                  <span className="avatar avatar-studio" aria-hidden="true">
+                    {studio.logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- the studio's own logo, not a build-time asset.
+                      <img src={studio.logo} alt="" />
+                    ) : (
+                      studio.name.trim().slice(0, 1).toUpperCase() || "?"
+                    )}
+                  </span>
+                </Link>
+                {specialists.map((person) => {
+                  const chosen = filters.specialist === person.id;
+                  return (
+                    <Link
+                      key={person.id}
+                      className="calendar-pick"
+                      href={queryFor({ ...filters, specialist: chosen ? "" : person.id, date: selected })}
+                      aria-current={chosen ? "true" : undefined}
+                      aria-label={person.name}
+                      title={person.name}
+                    >
+                      <span className="avatar" aria-hidden="true">
+                        {person.avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
+                          <img src={person.avatar} alt="" />
+                        ) : (
+                          person.name.trim().slice(0, 1).toUpperCase() || "?"
+                        )}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+              <p className="calendar-masters-caption" aria-live="polite">
+                {specialists.find((person) => person.id === filters.specialist)?.name ??
+                  t("calendar.allSpecialists")}
+              </p>
+            </div>
           )}
+
         </div>
       </nav>
 
-      {error && (
-        <div className="form-error" role="alert">
-          {error}
-          {alternatives.entries.length > 0 && (
-            <ul className="compact-list">
-              {alternatives.entries.map((option) => (
-                <li key={option.date}>
-                  {option.date}:{" "}
-                  {option.slots.map((slot) => clockAt(slot, alternatives.zone)).join(", ")}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {/* While the appointment window is open it shows the refusal itself. */}
+      {!composeOpen && errorBanner}
       {notice && <p className="booking-manage-notice" role="status">{notice}</p>}
 
       {/*
@@ -1010,7 +1208,7 @@ export function CalendarBoard({
         The marks are `aria-hidden`: they are a picture of the count, and the
         count is already in the cell's own words underneath them.
       */}
-      <section className="panel calendar-month" aria-label={`${monthNames[anchor.month - 1]} ${anchor.year}`}>
+      <section className="panel calendar-month" aria-label={`${monthName(anchor.year, anchor.month)} ${anchor.year}`}>
         <div className="calendar-weekdays" aria-hidden="true">
           {weekdayNames.map((name, index) => (
             <span key={index}>{name}</span>
@@ -1552,100 +1750,15 @@ export function CalendarBoard({
       </section>
 
       {canWrite && bookable.length > 0 && locations.length > 0 && services.length > 0 && (
-        /*
-         * Closed by default. The form was open on the page at all times, which
-         * on a phone put an eleven-field form between the day and the next
-         * thing worth scrolling to. `<details>` gives the open/close and the
-         * keyboard behaviour for free; the toolbar and header actions layer a
-         * scroll-into-view on top rather than duplicating either.
-         */
-        <details className="panel calendar-compose" id="new-booking" ref={composeRef}>
-          <summary>
-            <h2>{t("calendar.newBooking")}</h2>
-          </summary>
-          <p className="muted">{t("calendar.newBookingHint")}</p>
-          <form className="inline-form" onSubmit={createBooking}>
-            {/*
-              The address and the master are asked for only where there is a
-              choice; with one of each the two selects were four taps of
-              ceremony in front of every appointment a studio of one wrote by
-              hand. Hidden rather than dropped, because the endpoint still
-              needs both and this form is read from `FormData`.
-            */}
-            {locations.length > 1 ? (
-              <label>
-                {t("calendar.location")}
-                <select
-                  name="location_id"
-                  required
-                  value={composeLocation}
-                  onChange={(event) => setComposeLocation(event.target.value)}
-                >
-                  {locations.map((place) => (
-                    <option key={place.id} value={place.id}>
-                      {place.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <input type="hidden" name="location_id" value={composeLocation} />
-            )}
-            {bookable.length > 1 ? (
-              <label>
-                {t("calendar.specialist")}
-                <select name="specialist_id" required>
-                  {bookable.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <input type="hidden" name="specialist_id" value={bookable[0]?.id ?? ""} />
-            )}
-            <ServiceLinesField
-              idPrefix="compose"
-              lines={composeLines}
-              services={services}
-              addOns={addOns}
-              addOnsLegend={t("calendar.addOns")}
-              locale={locale}
-              onChange={setComposeLines}
-            />
-            <label>
-              {t("calendar.date")}
-              <input type="date" name="date" defaultValue={selected} required />
-            </label>
-            <label>
-              {t("calendar.time")}
-              <input type="time" name="time" required />
-            </label>
-            <label>
-              {t("calendar.client")}
-              <select name="client_id" defaultValue="">
-                <option value="">{t("calendar.newClient")}</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("calendar.clientName")}
-              <input name="client_name" maxLength={200} placeholder={t("calendar.clientNameHint")} />
-            </label>
-            <label>
-              {t("calendar.clientPhone")}
-              <input name="client_phone" inputMode="tel" maxLength={32} />
-            </label>
-            <button className="primary-button" type="submit" disabled={pending}>
-              {pending ? t("common.saving") : t("calendar.book")}
-            </button>
-          </form>
-        </details>
+        <button
+          className="calendar-fab"
+          type="button"
+          aria-label={t("quick.booking")}
+          title={t("quick.booking")}
+          onClick={openCompose}
+        >
+          <ToolIcon name="plus" />
+        </button>
       )}
 
       {/*

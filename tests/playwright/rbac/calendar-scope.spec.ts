@@ -62,7 +62,7 @@ test.describe("a master sees their own calendar and no further", () => {
     // A calendar that is only ever theirs has nothing to choose between, so the
     // toolbar offers no specialist filter at all. (The compose form below still
     // names one — a booking has to be made for somebody — but only ever them.)
-    await expect(masterPage.locator(".calendar-specialist")).toHaveCount(0);
+    await expect(masterPage.locator(".calendar-masters")).toHaveCount(0);
 
     const ownerContext = await signedInContext(browser, studio.owner, baseURL!);
     const ownerPage = await ownerContext.newPage();

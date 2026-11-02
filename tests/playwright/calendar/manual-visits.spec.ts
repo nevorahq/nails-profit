@@ -125,9 +125,9 @@ test.describe("a visit closed without an appointment", () => {
     };
     const onColleaguesDay = together ? 2 : 1;
 
-    // The master select on the bar.
+    // The master's face on the bar.
     await page.goto(calendarOf(colleague));
-    await page.getByRole("combobox", { name: "Specialist" }).selectOption(studio.colleagueId);
+    await page.locator(".calendar-masters-row").getByRole("link", { name: studio.colleagueName }).click();
     await expect(page).toHaveURL(new RegExp(`specialist=${studio.colleagueId}`));
     const narrowed = page.locator(".calendar-daylist .calendar-entry.is-visit");
     await expect(narrowed).toHaveCount(1);

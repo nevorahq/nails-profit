@@ -1141,6 +1141,15 @@ const cases: readonly Case[] = [
     request: async (fixture) => ({ path: `/api/v1/bookings/${fixture.bookingId}/next-slots?weeks=3` }),
   },
   {
+    route: "/api/v1/availability/slots",
+    method: "GET",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write: the free times the appointment form offers, which an Analyst cannot take",
+    request: async (fixture) => ({
+      path: `/api/v1/availability/slots?location_id=${fixture.locationId}&specialist_id=${fixture.studio.specialistId}&date=2030-01-07&services=${fixture.studio.serviceId}`,
+    }),
+  },
+  {
     route: "/api/v1/bookings/[id]/slot-fill",
     method: "GET",
     allowed: ["owner", "manager", "master"],
