@@ -547,7 +547,7 @@ export function serviceCards(page: Page) {
  */
 export async function chooseMaster(page: Page, name: string) {
   // The radio is visually hidden; the round photo and the name are the target.
-  await page.locator(".public-booking-master", { hasText: name }).click();
+  await page.locator(".master-picker-item", { hasText: name }).click();
 }
 
 /**
@@ -555,5 +555,5 @@ export async function chooseMaster(page: Page, name: string) {
  * page fetched once, so this is a click and no further request.
  */
 export async function chooseRibbonDay(page: Page, date: Date) {
-  await page.locator(`.public-booking-days-strip button[data-date="${isoDate(date)}"]`).click();
+  await page.locator(`.day-strip button[data-date="${isoDate(date)}"]`).click();
 }

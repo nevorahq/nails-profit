@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { slotTimes } from "@/components/booking-slots";
 import { useTranslator } from "@/components/lexicon-provider";
@@ -26,11 +26,14 @@ export function BookingSlotPicker({
   value,
   onPick,
   locale,
+  trailing,
 }: {
   url: string | null;
   value: string;
   onPick: (time: string) => void;
   locale: AppLocale;
+  /** After the last time, in the shape of one: the calendar's «Другое», for a time the grid does not offer. Shown only once there are free times. */
+  trailing?: ReactNode;
 }) {
   const t = useTranslator(locale);
   const [answer, setAnswer] = useState<Answer | null>(null);
@@ -69,8 +72,14 @@ export function BookingSlotPicker({
       )}
       {current !== null && current.times === null && <p className="muted">{t("calendar.slotsFailed")}</p>}
       {current?.times && times.length === 0 && <p className="muted">{t("calendar.noFreeSlots")}</p>}
-      {times.length > 0 && (
+      {(times.length > 0 || value) && (
         <div className="slot-picker-list">
+          {/* A time typed or picked by hand is not in the grid; it stands there all the same, lit. */}
+          {value && !times.includes(value) && (
+            <button type="button" className="slot-chip is-on" aria-pressed="true" onClick={() => onPick(value)}>
+              {value}
+            </button>
+          )}
           {times.map((time) => (
             <button
               key={time}
@@ -82,6 +91,8 @@ export function BookingSlotPicker({
               {time}
             </button>
           ))}
+          {/* Only where there is a grid to be the exception to: not while it loads, not on a day with no times. */}
+          {times.length > 0 && trailing}
         </div>
       )}
     </fieldset>

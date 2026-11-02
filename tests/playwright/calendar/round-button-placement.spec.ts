@@ -89,4 +89,33 @@ test.describe("the round button on the bar", () => {
     expect(menu.x + menu.width / 2).toBeCloseTo(width / 2, 0);
     await context.close();
   });
+
+  test("rounds its items and drops them out last-first", async ({ baseURL, browser, browserErrors }) => {
+    void browserErrors;
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    const page = await context.newPage();
+    test.skip((page.viewportSize()?.width ?? 0) > 680, "the bar and this button are the phone's");
+    // The suite runs with reduced motion, which switches every animation off.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/app/calendar");
+
+    await page.locator(".quick-actions-toggle").click();
+    const items =page.locator(".quick-actions-menu li");
+    const count = await items.count();
+    expect(count).toBeGreaterThan(1);
+
+    const radius = await page
+      .locator(".quick-actions-menu a")
+      .first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+    expect(radius).toBeGreaterThanOrEqual(10);
+
+    // The last item is nearest the button and goes first; each one above waits longer.
+    const delays = await items.evaluateAll((els) =>
+      els.map((el) => parseFloat(getComputedStyle(el).animationDelay)),
+    );
+    expect(delays[count - 1]).toBe(0);
+    for (let i = count - 1; i > 0; i--) expect(delays[i - 1]).toBeGreaterThan(delays[i]);
+    await context.close();
+  });
 });

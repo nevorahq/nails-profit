@@ -23,6 +23,7 @@ import {
   services,
   specialistAvatars,
   specialistLocations,
+  specialistServices,
   specialists,
   visitLines,
   visits,
@@ -184,13 +185,23 @@ export default async function CalendarPage({
         }));
 
         const catalogue = await tx
-          .select({ id: services.id, name: services.name, durationMinutes: services.durationMinutes })
+          .select({
+            id: services.id,
+            name: services.name,
+            durationMinutes: services.durationMinutes,
+            priceMinor: services.priceMinor,
+          })
           .from(services)
           .where(isNull(services.archivedAt))
           .orderBy(asc(services.createdAt));
 
         const extras = await tx
-          .select({ id: addOns.id, name: addOns.name })
+          .select({
+            id: addOns.id,
+            name: addOns.name,
+            priceDeltaMinor: addOns.priceDeltaMinor,
+            durationDeltaMinutes: addOns.durationDeltaMinutes,
+          })
           .from(addOns)
           .where(isNull(addOns.archivedAt))
           .orderBy(asc(addOns.createdAt));
@@ -211,8 +222,20 @@ export default async function CalendarPage({
           })
           .from(specialistLocations);
 
+        // Who does which service, with their own price and length where they have
+        // one. A master with no rows here does everything, so the form must be
+        // told the rows and not only «which services exist».
+        const offers = await tx
+          .select({
+            specialistId: specialistServices.specialistId,
+            serviceId: specialistServices.serviceId,
+            priceMinor: specialistServices.priceOverrideMinor,
+            durationMinutes: specialistServices.durationOverrideMinutes,
+          })
+          .from(specialistServices);
+
         const roster = await tx
-          .select({ id: clients.id, name: clients.name })
+          .select({ id: clients.id, name: clients.name, phone: clients.normalizedPhone })
           .from(clients)
           .where(isNull(clients.archivedAt))
           .orderBy(asc(clients.name))
@@ -231,12 +254,12 @@ export default async function CalendarPage({
           })
           .from(bookingSettings);
 
-        return { assignments, roster, buffers };
+        return { assignments, roster, buffers, offers };
       },
     });
     const { places, ownSpecialistId } = first.where;
     const { people, catalogue, extras, addOnLinks } = first.lists;
-    const { assignments, roster, buffers } = first.links;
+    const { assignments, roster, buffers, offers } = first.links;
 
     const active = places.filter((place) => place.status === "active");
     // The anchor date is read in the timezone of the location being looked at,
@@ -486,6 +509,7 @@ export default async function CalendarPage({
       extras,
       addOnLinks,
       assignments,
+      offers,
       roster,
       exceptionsRaw,
       anchorZone,
@@ -649,18 +673,26 @@ export default async function CalendarPage({
           id: service.id,
           name: resolveLocalizedText(service.name, locale, locale) ?? t("calendar.service"),
           durationMinutes: service.durationMinutes,
+          priceMinor: service.priceMinor,
         }))}
+        offers={data.offers}
         addOns={data.extras.map((addOn) => {
           const linked = data.addOnLinks.filter((link) => link.addOnId === addOn.id).map((link) => link.serviceId);
           return {
             id: addOn.id,
             name: resolveLocalizedText(addOn.name, locale, locale) ?? "",
+            priceDeltaMinor: addOn.priceDeltaMinor,
+            durationDeltaMinutes: addOn.durationDeltaMinutes,
             serviceIds: linked.length > 0 ? linked : null,
           };
         })}
         assignments={data.assignments}
         focusBookingId={filters.booking ?? null}
-        clients={data.roster}
+        clients={data.roster.map((client) => ({
+          id: client.id,
+          name: client.name,
+          phone: hideContacts ? null : client.phone,
+        }))}
         filters={{
           location: filters.location ?? "",
           specialist: filters.specialist ?? "",

@@ -304,7 +304,7 @@
 
 .public-booking-shell .public-booking-grid label,
 .public-booking-shell .public-booking-service-head label,
-.public-booking-shell .public-booking-masters legend,
+.public-booking-shell .master-picker legend,
 .public-booking-shell .public-booking-service-cards > legend,
 .public-booking-shell .public-booking-options legend {
   color: var(--muted);
@@ -350,7 +350,7 @@
 .public-booking-shell .public-booking-slots { border-top-color: var(--line); }
 
 .public-booking-shell .public-booking-slots button,
-.public-booking-shell .public-booking-days-strip button {
+.day-strip button {
   border: 0;
   background: var(--surface-strong);
   box-shadow: inset 0 0 0 1rem var(--mint);
@@ -359,18 +359,18 @@
 
 /* A time is cut like a day: the two rows are one family. */
 .public-booking-shell .public-booking-slots button,
-.public-booking-shell .public-booking-days-strip button { border-radius: 20rem; }
+.day-strip button { border-radius: 20rem; }
 
 .public-booking-shell .public-booking-slots button:hover:not(:disabled),
-.public-booking-shell .public-booking-days-strip button:hover:not(:disabled) { background: var(--mint-soft-hover); }
+.day-strip button:hover:not(:disabled) { background: var(--mint-soft-hover); }
 
-.public-booking-shell .public-booking-days-strip button.is-selected {
+.day-strip button.is-selected {
   background: var(--accent);
   box-shadow: none;
   color: var(--on-accent);
 }
 
-.public-booking-shell .public-booking-days-strip button:disabled { background: transparent; box-shadow: inset 0 0 0 1rem var(--line); }
+.day-strip button:disabled { background: transparent; box-shadow: inset 0 0 0 1rem var(--line); }
 
 .public-booking-shell .public-booking-status { border-radius: 18rem; background: var(--mint-soft); box-shadow: inset 0 0 0 1rem var(--mint); }
 .public-booking-shell .public-booking-loading > span:not(.sr-only) { border-radius: 999rem; }

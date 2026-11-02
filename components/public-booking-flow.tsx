@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { DayStrip } from "@/components/day-strip";
+import { MasterPicker } from "@/components/master-picker";
 import { dateInZone, firstDayWithTimes, RIBBON_DAYS } from "@/lib/public-booking-ribbon";
 import { FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
@@ -1051,32 +1053,20 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
 
             {/* The first question: everybody the page offers, and each picks their own services below. */}
             {showsMaster && (
-              <fieldset className="public-booking-masters">
-                <legend>{t("publicBooking.specialist")}</legend>
-                <div className="public-booking-masters-row">
-                  {everyone.map((person) => (
-                    <label key={person.id} className="public-booking-master">
-                      <input
-                        type="radio"
-                        name="public-booking-master"
-                        className="sr-only"
-                        value={person.id}
-                        checked={person.id === masterId}
-                        onChange={() => pickMaster(person.id)}
-                      />
-                      <span className="avatar" aria-hidden="true">
-                        {person.photo_version === null ? (
-                          person.name.trim().slice(0, 1).toUpperCase() || "?"
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element -- a studio's own photo, not a build-time asset.
-                          <img src={`/api/v1/public/booking/${profile.slug}/specialists/${person.id}/avatar?v=${person.photo_version}`} alt="" loading="lazy" />
-                        )}
-                      </span>
-                      <span className="public-booking-master-name">{person.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <MasterPicker
+                legend={t("publicBooking.specialist")}
+                name="public-booking-master"
+                people={everyone.map((person) => ({
+                  id: person.id,
+                  name: person.name,
+                  avatar:
+                    person.photo_version === null
+                      ? null
+                      : `/api/v1/public/booking/${profile.slug}/specialists/${person.id}/avatar?v=${person.photo_version}`,
+                }))}
+                value={masterId}
+                onChange={pickMaster}
+              />
             )}
 
             {/* Below the master: what this master does, and nothing else. */}
@@ -1180,32 +1170,28 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
             {chosen.length > 0 && (
               <div id="booking-days" className="public-booking-days" role="group" aria-labelledby="booking-days-title">
                 <h2 id="booking-days-title">{t("publicBooking.chooseDay")}</h2>
-                <div className="public-booking-days-strip">
-                  {shownDays.map((entry) => {
+                <DayStrip
+                  days={shownDays.map((entry) => {
                     const free = entry.slots.length > 0;
                     const stamp = new Date(`${entry.date}T12:00:00Z`);
                     const tag = localeTag(profile.locale);
                     const weekday = new Intl.DateTimeFormat(tag, { timeZone: "UTC", weekday: "short" }).format(stamp);
                     const day = new Intl.DateTimeFormat(tag, { timeZone: "UTC", day: "numeric", month: "short" }).format(stamp);
                     const state = free ? t("publicBooking.slotCount", { count: entry.slots.length }) : t("publicBooking.dayNone");
-                    const label = daysReady ? t("publicBooking.dayLabel", { date: `${weekday}, ${day}`, state }) : `${weekday}, ${day}`;
-                    return (
-                      <button
-                        key={entry.date}
-                        data-date={entry.date}
-                        type="button"
-                        className={daysReady && entry.date === date ? "is-selected" : undefined}
-                        aria-pressed={daysReady && entry.date === date}
-                        aria-label={label}
-                        disabled={!free || pendingAction === "hold"}
-                        onClick={() => chooseDay(entry)}
-                      >
-                        <span>{weekday}</span>
-                        <strong>{day}</strong>
-                      </button>
-                    );
+                    return {
+                      date: entry.date,
+                      top: weekday,
+                      main: day,
+                      label: daysReady ? t("publicBooking.dayLabel", { date: `${weekday}, ${day}`, state }) : `${weekday}, ${day}`,
+                      disabled: !free || pendingAction === "hold",
+                    };
                   })}
-                </div>
+                  selected={daysReady ? date : null}
+                  onPick={(picked) => {
+                    const entry = shownDays.find((candidate) => candidate.date === picked);
+                    if (entry) chooseDay(entry);
+                  }}
+                />
               </div>
             )}
 

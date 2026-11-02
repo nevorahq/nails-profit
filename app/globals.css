@@ -1591,19 +1591,20 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-card form { display: grid; gap: 24rem; }
 /* Whom to book: round photos in one row that scrolls sideways when the studio
    has more masters than the card is wide. The radio inside each label is the
-   control; the circle only shows which one it is. */
-.public-booking-masters { min-width: 0; margin: 0; padding: 0; border: 0; }
-.public-booking-masters legend { padding: 0; margin-bottom: 10rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
-.public-booking-masters-row { display: flex; gap: 16rem; padding: 10rem 10rem 12rem; overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
-/* `.public-booking-shell label:has(> input[type=radio])` makes a row of any label like this; a master is a column. */
-.public-booking-shell .public-booking-masters .public-booking-master:has(> input[type="radio"]) { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); font-size: 14rem; font-weight: 600; color: var(--ink); letter-spacing: 0; text-transform: none; justify-items: center; align-content: start; gap: 8rem; flex: none; width: 88rem; cursor: pointer; scroll-snap-align: start; }
-.public-booking-masters .public-booking-master input { position: absolute; top: 0; left: 50%; width: 1rem; height: 1rem; min-height: 0; margin: 0; padding: 0; opacity: 0; pointer-events: none; }
-.public-booking-master .avatar { width: 72rem; height: 72rem; font-size: 28rem; box-shadow: 0 0 0 1rem var(--line); transition: box-shadow 0.15s ease, transform 0.15s ease; }
-.public-booking-master:hover .avatar { transform: translateY(-1rem); }
-.public-booking-master:has(input:checked) .avatar { box-shadow: 0 0 0 3rem var(--surface), 0 0 0 6rem var(--accent); }
-.public-booking-master:has(input:focus-visible) .avatar { outline: 3rem solid var(--accent); outline-offset: 6rem; }
-.public-booking-masters .public-booking-master-name { display: block; width: 100%; max-width: 100%; letter-spacing: 0; text-transform: none; white-space: normal; color: var(--ink); font-size: 14rem; font-weight: 650; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
-.public-booking-master:has(input:checked) .public-booking-master-name { color: var(--accent); font-weight: 800; }
+   control; the circle only shows which one it is. Shared by the public page and
+   the calendar's «Новая запись» (`master-picker.tsx`). */
+.master-picker { flex: 1 1 100%; min-width: 0; margin: 0; padding: 0; border: 0; }
+.master-picker legend { padding: 0; margin-bottom: 10rem; color: var(--muted); font-size: 13rem; font-weight: 750; }
+.master-picker-row { contain: inline-size; display: flex; gap: 16rem; padding: 10rem 10rem 12rem; overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+/* `.public-booking-shell label:has(> input[type=radio])` makes a row of any label like this, and `.inline-form label` a column of caption and field; a master is a column of face and name. */
+.master-picker .master-picker-item:has(> input[type="radio"]) { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); font-size: 14rem; font-weight: 600; color: var(--ink); letter-spacing: 0; text-transform: none; justify-items: center; align-content: start; gap: 8rem; flex: none; width: 88rem; cursor: pointer; scroll-snap-align: start; }
+.master-picker .master-picker-item input { position: absolute; top: 0; left: 50%; width: 1rem; min-width: 0; height: 1rem; min-height: 0; margin: 0; padding: 0; opacity: 0; pointer-events: none; }
+.master-picker-item .avatar { width: 72rem; height: 72rem; font-size: 28rem; box-shadow: 0 0 0 1rem var(--line); transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.master-picker-item:hover .avatar { transform: translateY(-1rem); }
+.master-picker-item:has(input:checked) .avatar { box-shadow: 0 0 0 3rem var(--surface), 0 0 0 6rem var(--accent); }
+.master-picker-item:has(input:focus-visible) .avatar { outline: 3rem solid var(--accent); outline-offset: 6rem; }
+.master-picker .master-picker-name { display: block; width: 100%; max-width: 100%; letter-spacing: 0; text-transform: none; white-space: normal; color: var(--ink); font-size: 14rem; font-weight: 650; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+.master-picker-item:has(input:checked) .master-picker-name { color: var(--accent); font-weight: 800; }
 /* The studio's name with its address and the way to see it on a map. */
 .public-booking-header-title { display: grid; gap: 4rem; min-width: 0; }
 .public-booking-place { display: flex; flex-wrap: wrap; align-items: center; gap: 4rem 10rem; min-width: 0; color: var(--muted); font-size: 13rem; line-height: 1.35; }
@@ -1701,14 +1702,25 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .public-booking-card form { min-width: 0; }
 .public-booking-days { margin-top: 20rem; min-width: 0; max-width: 100%; }
 .public-booking-days h2 { margin: 0 0 12rem; font-size: 18rem; }
-.public-booking-days-strip { display: flex; gap: 8rem; overflow-x: auto; padding-bottom: 8rem; scroll-snap-type: x proximity; }
-.public-booking-days-strip button { flex: 0 0 88rem; scroll-snap-align: start; display: grid; place-items: center; gap: 2rem; min-height: 60rem; padding: 8rem; white-space: nowrap; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
-.public-booking-days-strip button span { color: var(--muted); font-size: 12rem; text-transform: capitalize; }
-.public-booking-days-strip button:hover:not(:disabled) { background: var(--sage-300); }
-.public-booking-days-strip button.is-selected { background: var(--accent); border-color: var(--accent); color: var(--surface-strong); }
-.public-booking-days-strip button.is-selected span { color: inherit; }
-.public-booking-days-strip button:disabled { border-color: var(--line); background: transparent; cursor: default; opacity: 0.55; }
-.public-booking-days-strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The days to pick from, in a row that scrolls sideways (`day-strip.tsx`): the public page's and the calendar form's. */
+/* `contain: inline-size`: a scroll container still offers the sum of its buttons as its minimum width to a parent that sizes to content, and the whole form went as wide as fourteen days. */
+.day-strip { flex: 1 1 100%; min-width: 0; contain: inline-size; display: flex; gap: 8rem; overflow-x: auto; padding-bottom: 8rem; scroll-snap-type: x proximity; }
+.day-strip button { flex: 0 0 88rem; scroll-snap-align: start; display: grid; place-items: center; gap: 2rem; min-height: 60rem; padding: 8rem; white-space: nowrap; border: 1rem solid var(--sage-600); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); cursor: pointer; }
+.day-strip button span { color: var(--muted); font-size: 12rem; text-transform: capitalize; }
+.day-strip button:hover:not(:disabled) { background: var(--sage-300); }
+.day-strip button.is-selected { background: var(--accent); border-color: var(--accent); color: var(--surface-strong); }
+.day-strip button.is-selected span { color: inherit; }
+.day-strip button:disabled { border-color: var(--line); background: transparent; cursor: default; opacity: 0.55; }
+.day-strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* «Ещё», the strip's last tile (`day-more-tile.tsx`): the form's date field behind a tile the size of a day. It stays at the right edge while the days scroll under it, because the strip is longer than a phone and the end of it is a long way to go for the one tile that reaches every other day. */
+/* Snapping would pull the row back to its first day when it is moved just far enough to clear the tile; the public page's strip, which has no tile, keeps it. */
+.day-strip:has(.day-more) { scroll-snap-type: none; }
+.day-more { position: sticky; right: 0; flex: 0 0 auto; display: grid; padding-left: 6rem; background: var(--surface); }
+.day-strip .day-more button { flex: none; width: auto; min-width: 0; gap: 4rem; padding: 8rem 10rem; }
+.day-more button strong { font-size: 13rem; }
+.day-more button svg { width: 20rem; height: 20rem; stroke: currentColor; fill: none; stroke-width: 1.75; }
+.day-more button > span { display: grid; place-items: center; }
+.day-strip .day-more-input { position: absolute; inset: 0 0 0 6rem; width: calc(100% - 6rem); height: 100%; min-width: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .public-booking-empty strong { font-size: 18rem; }
 .public-booking-success { margin-top: 14vh; text-align: center; }
 .public-booking-success p { color: var(--muted); margin-bottom: 26rem; }
@@ -2991,11 +3003,31 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
     list-style: none;
   }
 
+  /*
+   * The items drop out of the button one by one, the last first: the list sits
+   * above the button, so the last item is the nearest to it and the wave runs
+   * upward. On the `li`, not the `ul` — the `ul` already carries a transform to
+   * centre itself. A closed <details> doesn't render its content, so this plays
+   * on every open without script. (Reduced motion is switched off at the foot
+   * of the file.)
+   */
+  .quick-actions-menu li {
+    transform-origin: 50% 100%;
+    animation: quick-action-in var(--duration-base) var(--ease-standard) backwards;
+  }
+  .quick-actions-menu li:nth-last-child(2) { animation-delay: 50ms; }
+  .quick-actions-menu li:nth-last-child(3) { animation-delay: 100ms; }
+  .quick-actions-menu li:nth-last-child(n+4) { animation-delay: 150ms; }
+
+  @keyframes quick-action-in {
+    from { opacity: 0; transform: translateY(18rem) scale(0.9); }
+  }
+
   .quick-actions-menu a {
     display: block;
     padding: 12rem 16rem;
     border: 1rem solid var(--line);
-    border-radius: 4rem;
+    border-radius: 14rem;
     background: var(--surface-strong);
     box-shadow: var(--shadow);
     color: var(--ink);
@@ -3602,9 +3634,14 @@ body .app-main > .app-shell.app-shell:has(> .calendar-compose-scroll) { padding-
   }
 }
 .modal-card.calendar-compose-dialog:focus { outline: none; }
-.calendar-compose-dialog h2 { margin: 0 0 8rem; }
-.modal-card.calendar-compose-dialog p.muted { margin: 0 0 18rem; font-size: 14rem; line-height: 1.5; }
+.calendar-compose-dialog h2 { margin: 0 0 20rem; }
 .calendar-compose-dialog .inline-form { margin-bottom: 0; }
+/* Whose appointment it is, when the calendar behind has already said: their face, centred on the form, and the name under it. Not a control. */
+.calendar-compose-master { flex: 1 1 100%; display: grid; justify-items: center; gap: 8rem; margin: 4rem 0; }
+.calendar-compose-master .avatar { pointer-events: none; }
+.calendar-compose-master .avatar { width: 72rem; height: 72rem; font-size: 28rem; }
+.modal-card.calendar-compose-dialog .calendar-compose-master p { margin: 0; font-size: 15rem; line-height: 1.4; text-align: center; color: var(--muted); }
+.calendar-compose-master strong { color: var(--ink); font-weight: 750; }
 .calendar-compose-dialog .inline-form > .button-row { flex-basis: 100%; margin-top: 4rem; }
 
 /*
@@ -3615,10 +3652,38 @@ body .app-main > .app-shell.app-shell:has(> .calendar-compose-scroll) { padding-
 .slot-picker { flex: 1 1 100%; min-width: 0; margin: 0; padding: 0; border: 0; }
 .slot-picker legend { padding: 0; margin-bottom: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
 .modal-card .slot-picker p { margin: 0; font-size: 14rem; line-height: 1.5; text-align: left; }
-.slot-picker-list { display: flex; flex-wrap: wrap; gap: 8rem; max-height: 176rem; overflow-y: auto; }
-.slot-chip { min-width: 64rem; min-height: 44rem; padding: 0 12rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: 15rem; font-weight: 700; cursor: pointer; }
+/* Four equal cells to a row, however many times there are: a grid of the same size everywhere reads faster than a ragged one, and the last cell, «Другое», is one of them. */
+.slot-picker-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8rem; }
+.slot-chip { width: 100%; min-width: 0; min-height: 44rem; padding: 0 4rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: 15rem; font-weight: 700; cursor: pointer; }
+/* «Другое» (`time-more-tile.tsx`): the last chip of the grid, the time field behind it. Dashed, because it is not a time but a way to one. */
+.time-more { position: relative; display: grid; min-width: 0; }
+.time-more .slot-chip { display: inline-flex; align-items: center; justify-content: center; gap: 3rem; border-style: dashed; color: var(--accent); font-size: 12rem; white-space: nowrap; overflow: hidden; }
+.time-more svg { flex: none; width: 12rem; height: 12rem; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
+.slot-picker .time-more-input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .slot-chip:hover { border-color: var(--accent); }
 .slot-chip.is-on { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+
+/*
+ * Who the appointment is for (`client-picker.tsx`): one search, then either the
+ * client that was found or two fields for a new one. A block of its own in the
+ * form's row, whichever of the three it is showing.
+ */
+.client-picker { flex: 1 1 100%; min-width: 0; display: grid; gap: 10rem; }
+.client-picker label > input { width: 100%; }
+.client-picker-hint, .compose-hint { margin: 0; font-size: 13rem; line-height: 1.4; color: var(--muted); }
+.modal-card .compose-hint { flex: 1 1 100%; text-align: left; }
+.client-picker-list { display: grid; gap: 6rem; margin: 0; padding: 0; list-style: none; }
+.client-picker-option { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2rem 12rem; min-height: 44rem; padding: 10rem 14rem; border: 1rem solid var(--line); border-radius: 14rem; background: var(--surface-strong); color: var(--ink); font-size: 15rem; cursor: pointer; }
+.client-picker-option small, .client-picker-card small { color: var(--muted); font-size: 13rem; }
+.client-picker-option:hover, .client-picker-option[aria-selected="true"] { border-color: var(--accent); }
+.client-picker-new { border-style: dashed; }
+.client-picker-chosen { display: grid; gap: 6rem; }
+.client-picker-label { font-size: 13rem; font-weight: 600; color: var(--muted); }
+.client-picker-card { display: flex; align-items: center; justify-content: space-between; gap: 12rem; min-height: 52rem; padding: 8rem 8rem 8rem 16rem; border: 1rem solid var(--accent); border-radius: 14rem; background: var(--surface-strong); }
+.client-picker-who { display: grid; gap: 2rem; min-width: 0; font-size: 16rem; overflow-wrap: anywhere; }
+.client-picker-chosen > .client-picker-change { justify-self: start; }
+.client-picker-change, .calendar-compose-change { min-height: 40rem; padding: 0 14rem; border: 0; border-radius: 999rem; background: var(--mint-soft, transparent); color: var(--accent); font: inherit; font-size: 14rem; font-weight: 700; cursor: pointer; }
+.client-picker-change:hover, .calendar-compose-change:hover { background: var(--leaf-100); }
 
 /*
  * The round «+» that opens that window from the calendar itself.
@@ -4164,3 +4229,54 @@ body:has(.calendar-fab) .app-main > .app-shell { padding-bottom: 112rem; }
 .danger-details[open] > summary { margin-bottom: 8rem; }
 /* A hyphenated label («Онлайн-запись») would otherwise be capitalised word by word. */
 .public-booking-header .role-badge { text-transform: none; }
+
+/*
+ * What the appointment is made of (`service-rows.tsx`): one row to tick for each
+ * service of the master, its add-ons under it once it is ticked, and what the
+ * sitting comes to at the foot. The public page's cards in a form's size.
+ */
+.service-rows { flex: 1 1 100%; min-width: 0; display: grid; gap: 8rem; margin: 0; padding: 0; border: 0; }
+.service-rows > legend { padding: 0; margin-bottom: 6rem; color: var(--muted); font-size: 13rem; font-weight: 600; }
+.service-row { display: grid; gap: 10rem; min-width: 0; padding: 10rem 14rem; border: 1rem solid var(--line); border-radius: 14rem; background: var(--surface-strong); transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard); }
+.service-row[data-picked] { border-color: var(--accent); background: var(--mint-soft, var(--surface-strong)); }
+.service-row[data-full] { opacity: 0.55; }
+/* `.app-frame label:has(> input)` makes a flex row of any label like this, and `.inline-form label` a caption over a field; a row is a box with a name beside it, and the facts under the name. */
+.app-frame .service-row > label:has(> input[type="checkbox"]) { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12rem; row-gap: 2rem; min-height: 40rem; color: var(--ink); font-size: 16rem; font-weight: 650; cursor: pointer; }
+.service-row[data-full] > label { cursor: default; }
+.service-row > label > input { grid-row: 1 / span 2; width: 22rem; height: 22rem; min-width: 0; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
+.service-row-name { grid-column: 2; grid-row: 1; line-height: 1.3; overflow-wrap: anywhere; }
+.service-row > label > small { grid-column: 2; grid-row: 2; color: var(--muted); font-size: 13rem; font-weight: 400; }
+.service-row-options { display: grid; gap: 4rem; min-width: 0; margin: 0; padding: 4rem 0 0 34rem; border: 0; }
+.service-row-options > legend { padding: 0; color: var(--muted); font-size: 12rem; font-weight: 600; }
+.app-frame .service-row-options label:has(> input[type="checkbox"]) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10rem; min-height: 40rem; color: var(--ink); font-size: 15rem; font-weight: 500; cursor: pointer; }
+.service-row-options input { width: 20rem; height: 20rem; min-width: 0; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent); }
+.service-row-options small { color: var(--muted); font-size: 13rem; }
+.service-rows-more { justify-self: start; min-height: 40rem; padding: 0 14rem; border: 0; border-radius: 999rem; background: transparent; color: var(--accent); font: inherit; font-size: 14rem; font-weight: 700; cursor: pointer; }
+.service-rows-more:hover { background: var(--leaf-100); }
+.service-rows-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4rem 14rem; margin: 4rem 0 0; padding: 12rem 16rem; border-radius: 14rem; background: var(--leaf-100); color: var(--ink); font-size: 14rem; }
+.service-rows-total strong { margin-left: auto; font-size: 18rem; }
+
+/*
+ * The month «Ещё» opens (`date-picker-dialog.tsx`): the project's own, in the
+ * middle of the screen, over everything — the bottom bar is at 90 and the round
+ * button at 95. The dim and the card are the appointment window's.
+ */
+.date-picker-layer { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 16rem; background: rgba(15, 42, 29, 0.45); }
+.date-picker { width: min(340rem, 100%); padding: 18rem 16rem 12rem; border-radius: 24rem; background: var(--surface); box-shadow: var(--mint-raise); color: var(--ink); }
+.date-picker:focus { outline: none; }
+.date-picker button { font: inherit; cursor: pointer; }
+.date-picker-head { display: grid; grid-template-columns: 44rem minmax(0, 1fr) 44rem; align-items: center; margin-bottom: 8rem; }
+.date-picker-head strong { text-align: center; font-size: 17rem; font-weight: 700; text-transform: capitalize; }
+.date-picker-step { display: grid; place-items: center; width: 44rem; height: 44rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--accent); }
+.date-picker-step:hover { background: var(--mint-soft-hover); }
+.date-picker-step svg { width: 22rem; height: 22rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.date-picker-week, .date-picker-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.date-picker-week span { padding: 4rem 0 8rem; text-align: center; color: var(--muted); font-size: 12rem; font-weight: 600; text-transform: capitalize; }
+.date-picker-days button { aspect-ratio: 1; min-width: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); font-size: 15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.date-picker-days button:hover { background: var(--mint-soft-hover); }
+.date-picker-days button[data-today] { box-shadow: inset 0 0 0 2rem var(--accent); }
+.date-picker-days button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.date-picker-days button:focus-visible, .date-picker-foot button:focus-visible, .date-picker-step:focus-visible { outline: 3rem solid var(--accent); outline-offset: 1rem; }
+.date-picker-foot { display: flex; justify-content: space-between; gap: 8rem; margin-top: 8rem; padding-top: 8rem; border-top: 1rem solid var(--line); }
+.date-picker-foot button { min-height: 44rem; padding: 0 16rem; border: 0; border-radius: 999rem; background: transparent; color: var(--accent); font-size: 14rem; font-weight: 700; }
+.date-picker-foot button:hover { background: var(--mint-soft-hover); }
