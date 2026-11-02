@@ -131,16 +131,14 @@ test.describe("confirming keeps the appointment visible", () => {
     );
     await expect(page.locator(".calendar-entry")).toHaveCount(1);
 
-    // The control is on the bar rather than behind a button, and it is showing
-    // the state the link put the reader in rather than a neutral default —
-    // which is what makes the filter visible at all.
-    // Scoped to the bar: «Мастер» also labels a select in each of the compose
-    // forms further down the page, and those are a different question.
-    const picker = page.locator(".calendar-specialist");
-    await expect(picker).toBeVisible();
-    await expect(picker).toHaveValue(studio.specialistId);
+    // The faces are on the bar rather than behind a button, and the master the
+    // link named is the one marked — the state the reader was put in rather than
+    // a neutral default, which is what makes the filter visible at all.
+    const faces = page.locator(".calendar-masters-row");
+    await expect(faces).toBeVisible();
+    await expect(faces.getByRole("link", { name: studio.specialistName })).toHaveAttribute("aria-current", "true");
 
-    await picker.selectOption("");
+    await faces.getByRole("link", { name: "All specialists" }).click();
 
     // Choosing is applying: there is no «Show» to press afterwards.
     await expect(page.locator(".calendar-entry")).toHaveCount(2);

@@ -7,8 +7,7 @@ import {
   type CalendarMonthDay,
   type CalendarVisit,
 } from "@/components/calendar-board";
-import { ToolIcon } from "@/components/icons";
-import { avatarUrl } from "@/domain/avatar-image";
+import { avatarUrl, organizationLogoUrl } from "@/domain/avatar-image";
 import { keepsManualVisit, manualVisitSpan } from "@/domain/calendar-visits";
 import {
   addOns,
@@ -45,6 +44,7 @@ import { getTranslator } from "@/i18n/t";
 import { registerOf } from "@/i18n/lexicon";
 import { localeTag } from "@/i18n/translate";
 import { scopedSpecialistId } from "@/lib/booking-access";
+import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { requireWorkspace } from "@/lib/workspace";
 import { serviceNamesOf } from "@/lib/service-names";
 
@@ -120,7 +120,7 @@ export default async function CalendarPage({
   }>;
 }) {
   const workspace = await requireWorkspace();
-  const { membership, bookingAccess, locale, currency, businessType } = workspace;
+  const { membership, bookingAccess, locale, currency, businessType, organizationName } = workspace;
   const register = registerOf(workspace);
   const t = getTranslator(locale, register);
 
@@ -142,6 +142,10 @@ export default async function CalendarPage({
    * calendar this is, and the lists the forms offer — is asked together; what
    * depends on the window those addresses fix is asked together after it.
    */
+  // Started with everything else and awaited after it: the logo is one more
+  // read, and not one the page's own reads have to wait behind.
+  const logoVersion = loadOrganizationLogoVersion(membership.organizationId);
+
   const data = await (async () => {
     const first = await readTogether(membership.organizationId, {
       where: async (tx) => {
@@ -631,31 +635,6 @@ export default async function CalendarPage({
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        {/*
-          The compose action, on a phone. It lives in the title row rather than
-          the toolbar because at 288 a full-width button pushed the month itself
-          further down, and it points at the same form the toolbar's button
-          does — one place a booking is made, shown in two shapes. Only ever one
-          of the two is displayed, so the anchor is not offered twice.
-
-          The condition mirrors the toolbar's: writable, and there is somewhere
-          and something to book.
-        */}
-        {canWrite && data.places.length > 0 && data.catalogue.length > 0 && (
-          <a
-            className="header-action"
-            href="#new-booking"
-            aria-label={t("calendar.newBooking")}
-            data-label-closed={t("calendar.newBooking")}
-            data-label-open={t("calendar.hideNewBooking")}
-          >
-            <ToolIcon name="plus" />
-            <ToolIcon name="minus" />
-          </a>
-        )}
-      </header>
-
       {moduleOff && <p className="warning-banner">{t("calendar.moduleOff")}</p>}
 
       <CalendarBoard
@@ -693,6 +672,7 @@ export default async function CalendarPage({
         buffers={data.buffers}
         canWrite={canWrite}
         canFilterBySpecialist={scopeFor(membership.role, "bookings") !== "own"}
+        studio={{ name: organizationName, logo: organizationLogoUrl(await logoVersion) }}
         businessType={businessType}
         currency={currency}
         localeTag={localeTag(locale)}

@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures";
+import { openBookingForm } from "../helpers/booking-form";
 import { daysFromToday, disposeStudio, isoDate, seedStudio, signedInContext, type Studio } from "../helpers/studio";
 
 /**
@@ -92,15 +93,12 @@ for (const width of [null, 375] as const) {
       const page = await context.newPage();
       await page.goto(`/app/calendar?date=${isoDate(day)}&specialist=${studio.specialistId}`);
 
-      const compose = page.locator("#new-booking");
-      if (!(await compose.evaluate((element) => (element as HTMLDetailsElement).open))) {
-        await compose.locator("summary").click();
-      }
+      const compose = await openBookingForm(page);
       await compose.getByLabel("Specialist").selectOption({ label: studio.specialistName });
       await compose.getByRole("button", { name: "+ Another service" }).click();
       await expect(compose.getByRole("combobox", { name: /^Service 2/ }).locator("option:checked")).toHaveText("Pedicure");
       await compose.getByLabel("Date").fill(isoDate(day));
-      await compose.getByLabel("Time").fill("10:00");
+      await compose.getByLabel("Time", { exact: true }).fill("10:00");
       await compose.getByLabel("New client's name").fill("Anna Two-Services");
 
       await noSidewaysScroll(page);

@@ -132,11 +132,12 @@ export function NavIcon({ name }: { name: IconName }) {
  * tracks the panel whether it was opened from that button, the toolbar's own
  * button, or the summary itself — no JS needed just to pick the glyph.
  */
-export function ToolIcon({ name }: { name: "filter" | "plus" | "minus" }) {
+export function ToolIcon({ name }: { name: "filter" | "plus" | "minus" | "close" }) {
   const paths: Record<typeof name, React.ReactNode> = {
     filter: <path d="M3 5h18l-7 8v6l-4 2v-8z" />,
     plus: <path d="M12 5v14M5 12h14" />,
     minus: <path d="M5 12h14" />,
+    close: <path d="M6 6l12 12M18 6L6 18" />,
   };
   return (
     <svg

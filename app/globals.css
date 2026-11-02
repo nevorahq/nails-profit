@@ -882,6 +882,9 @@ h1 { font-size: clamp(40rem, 7vw, 84rem); line-height: 0.98; letter-spacing: -0.
 
 .panel { background: var(--surface); border: 1rem solid var(--line); border-radius: 4rem; padding: 28rem 26rem; margin: 26rem 0; box-shadow: var(--shadow); }
 .panel h2 { font-size: 26rem; margin: 0; }
+@media (max-width: 680px) {
+  .panel { padding: 10rem; }
+}
 
 /*
  * The «Добавить …» compose panels on /clients, /services, /specialists
@@ -2516,6 +2519,9 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 
 .app-shell-previewing .app-topbar { position: static; }
 
+/* The top bar's height, written once: the appointment window keeps clear of it. */
+:root { --topbar-height: 64rem; }
+
 .app-topbar {
   position: sticky;
   z-index: 95;
@@ -2523,7 +2529,7 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
   display: flex;
   align-items: center;
   gap: 10rem;
-  height: 64rem;
+  height: var(--topbar-height);
   padding: 0 16rem;
   border-bottom: 1rem solid var(--line);
   background: var(--surface-strong);
@@ -2818,10 +2824,22 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 
 .app-sidebar { display: none; }
 
+/*
+ * The bar's own height, written down once because the round «+» is placed from
+ * it: its centre sits on the bar's top edge. Left to its content the bar was
+ * 65.4 units — close enough to a number that anything placed by it would drift
+ * the day a label or an icon changed size. 66 holds the content with a little
+ * to spare, and `tests/playwright/calendar/new-booking-dialog.spec.ts` measures
+ * that the button still lands on the edge.
+ */
+:root { --bottom-nav-height: 66rem; }
+
 .bottom-nav {
   position: fixed;
   z-index: 90;
   inset: auto 0 0;
+  box-sizing: border-box;
+  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
   border-top: 1rem solid var(--line);
   /* Opaque: content scrolls underneath it. */
   background: var(--surface-strong);
@@ -2917,9 +2935,11 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 }
 
 /*
- * The owner's «+», floating over the bar's right end — the corner the cookie
- * button above was moved out of for the same thumb. Phone only: on a wide
- * screen each of its three actions has its own button on its own page.
+ * The owner's «+», centred on the bar with its own centre on the bar's top edge:
+ * half of it stands on the bar, half above. The bar is four equal columns, so
+ * the middle of the screen is the seam between the second and third — the
+ * button sits over a gap, not over a tab. Phone only: on a wide screen each of
+ * its three actions has its own button on its own page.
  */
 .quick-actions { display: none; }
 
@@ -2931,8 +2951,10 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
     display: block;
     position: fixed;
     z-index: 95;
-    right: 16rem;
-    bottom: calc(81rem + env(safe-area-inset-bottom));
+    left: 50%;
+    /* The bar's top edge, less half the button: its centre lands on the edge. */
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) - 28rem);
+    transform: translateX(-50%);
   }
 
   .quick-actions-toggle {
@@ -2941,7 +2963,7 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
     justify-content: center;
     width: 56rem;
     height: 56rem;
-    margin-left: auto;
+    margin: 0 auto;
     border-radius: 50%;
     background: var(--accent);
     color: var(--on-accent);
@@ -2956,7 +2978,9 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 
   .quick-actions-menu {
     position: absolute;
-    right: 0;
+    /* Centred over the button, as the button is over the bar. */
+    left: 50%;
+    transform: translateX(-50%);
     bottom: calc(100% + 10rem);
     display: grid;
     gap: 8rem;
@@ -2977,9 +3001,33 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
     color: var(--ink);
     font-size: 16rem;
     font-weight: 700;
-    text-align: right;
+    text-align: center;
     text-decoration: none;
   }
+}
+
+/*
+ * Room for the round «+» in the middle of the bar.
+ *
+ * Four equal columns put the seam between the second and third tab exactly under
+ * the button, and each tab is wider than the gap the button leaves — the button
+ * touched both. Here the seam is a column of its own, as wide as the button and
+ * a little air either side, and the four tabs share what is left: the second and
+ * third move apart, and the first and second (and third and fourth) come closer.
+ * The inner two are the wider: they carry the long labels — «Online booking»,
+ * «Онлайн-запись» — which the outer two, «Report» and «More», never do.
+ *
+ * Only for a bar of four, which is the owner's and the master's. A bar of five
+ * has a tab in the middle, and no spacing makes room for a button over a tab.
+ * Only where the button is: elsewhere an empty seam in the bar is a hole.
+ */
+@media (max-width: 680px) {
+  body:has(.quick-actions, .calendar-fab) .bottom-nav ul:has(> li:nth-child(4):last-child) {
+    grid-template-columns: 0.8fr 1.2fr 64rem 1.2fr 0.8fr;
+  }
+
+  body:has(.quick-actions, .calendar-fab) .bottom-nav ul:has(> li:nth-child(4):last-child) > li:nth-child(3) { grid-column: 4; }
+  body:has(.quick-actions, .calendar-fab) .bottom-nav ul:has(> li:nth-child(4):last-child) > li:nth-child(4) { grid-column: 5; }
 }
 
 .more-nav { display: grid; gap: 26rem; margin-top: 22rem; }
@@ -3394,7 +3442,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
  * reference's magenta.
  */
 .calendar-toolbar { align-items: flex-start; gap: 12rem; }
-.calendar-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10rem; }
 
 /*
  * The folded filter panel, now serving `/app/expenses` alone.
@@ -3457,7 +3504,7 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
   align-items: center;
   gap: 10rem;
   min-height: 44rem;
-  margin: -6rem -4rem 4rem;
+  margin: 0;
   padding: 6rem 4rem;
   border-radius: 4rem;
   cursor: pointer;
@@ -3481,6 +3528,142 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .tool-icon { width: 16rem; height: 16rem; flex: none; }
 
 /*
+ * «Записать клиента»: the appointment form in the application's own window.
+ *
+ * `.modal-card` is the window `components/client-manager.tsx` and the setup
+ * guide already draw, so this one looks like theirs. It is a form rather than a
+ * question, so the card is wider and reads from the left: the centred text of
+ * the others would put every label in the middle of a 560-unit column.
+ */
+.modal-card.calendar-compose-dialog { width: min(560rem, 100%); text-align: left; }
+
+/*
+ * One scroll: the page's. The question windows cap their card at 90% of the
+ * screen and let it scroll inside — right for a window of two lines, wrong for a
+ * form of eleven fields, where it left the page moving behind the card and a
+ * second scroll inside it. A scroll box of its own between the bars fixed the
+ * overlap and made the next fault: it ran out of scroll before the form ran out
+ * of form, and the end of it could not be reached.
+ *
+ * So nothing here scrolls. `.calendar-compose-scroll` (named for what it was) is
+ * an ordinary block at the top of the page, as tall as its form, and the card in
+ * it as well; the page is what moves, and the end of the form is the end of the
+ * page, with the room the bottom bar needs already kept there. It sits under the
+ * top bar because the page does — the 16 above it is the only room it asks for.
+ *
+ * The page behind is dimmed by a fixed layer of its own, under the bars and under
+ * the form, which also stops it being pressed. It is not the form's parent: a
+ * fixed parent is exactly what would make the form a screen-sized thing again.
+ */
+.calendar-compose-dim { position: fixed; inset: 0; z-index: 80; background: rgba(15, 42, 29, 0.45); }
+.calendar-compose-scroll { position: relative; z-index: 81; }
+.modal-card.calendar-compose-dialog { position: relative; max-height: none; margin: 0 auto; overflow: visible; }
+
+/*
+ * The cross, in the card's top right corner. The icon is 22, the target 44, and it
+ * sits 8 in from both edges so its centre is where a thumb goes for it. The
+ * heading keeps clear of it, on the lines where the title is long enough to run
+ * that far.
+ */
+.calendar-compose-close {
+  position: absolute;
+  top: 8rem;
+  right: 8rem;
+  display: grid;
+  place-items: center;
+  width: 44rem;
+  height: 44rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.calendar-compose-close:hover { background: var(--leaf-100); }
+.calendar-compose-close .tool-icon { width: 22rem; height: 22rem; }
+.calendar-compose-dialog h2 { padding-right: 44rem; }
+
+/*
+ * And the page ends where the form does. With the calendar left under the dim,
+ * the form was followed by a screen and more of a page nobody could press, and
+ * the way to the bottom was a long scroll through it. While the form is open
+ * everything else in the page is out of the flow — the round «+» stays, being
+ * the one control that is not content — and the room under the form is what the
+ * bottom bar needs and no more.
+ */
+.app-shell:has(> .calendar-compose-scroll) > :not(.calendar-compose-scroll, .calendar-compose-dim, .calendar-fab) { display: none; }
+/* Doubled class: the button's own room-under-the-page rules come later in the
+   file and are as specific as one, and they would win. */
+body .app-main > .app-shell.app-shell:has(> .calendar-compose-scroll) { padding-bottom: 32rem; }
+@media (max-width: 680px) {
+  body .app-main > .app-shell.app-shell:has(> .calendar-compose-scroll) {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 16rem);
+  }
+}
+.modal-card.calendar-compose-dialog:focus { outline: none; }
+.calendar-compose-dialog h2 { margin: 0 0 8rem; }
+.modal-card.calendar-compose-dialog p.muted { margin: 0 0 18rem; font-size: 14rem; line-height: 1.5; }
+.calendar-compose-dialog .inline-form { margin-bottom: 0; }
+.calendar-compose-dialog .inline-form > .button-row { flex-basis: 100%; margin-top: 4rem; }
+
+/*
+ * The free times of the chosen day. Their own row in the form, taking the whole
+ * width the way the service lines do; the list scrolls instead of growing, since
+ * a shift on a quarter-hour grid is three dozen buttons.
+ */
+.slot-picker { flex: 1 1 100%; min-width: 0; margin: 0; padding: 0; border: 0; }
+.slot-picker legend { padding: 0; margin-bottom: 6rem; font-size: 13rem; font-weight: 600; color: var(--muted); }
+.modal-card .slot-picker p { margin: 0; font-size: 14rem; line-height: 1.5; text-align: left; }
+.slot-picker-list { display: flex; flex-wrap: wrap; gap: 8rem; max-height: 176rem; overflow-y: auto; }
+.slot-chip { min-width: 64rem; min-height: 44rem; padding: 0 12rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: 15rem; font-weight: 700; cursor: pointer; }
+.slot-chip:hover { border-color: var(--accent); }
+.slot-chip.is-on { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+
+/*
+ * The round «+» that opens that window from the calendar itself.
+ *
+ * On a phone the owner already has the shell's «+» (`.quick-actions`), whose
+ * first entry opens this same window, so this one stands down there rather than
+ * sitting on top of it. Everybody else on a phone — a manager, a master — has no
+ * shell button, and on a wide screen nobody does, so this is their way in.
+ */
+.calendar-fab {
+  position: fixed;
+  z-index: 95;
+  right: 32rem;
+  bottom: 32rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56rem;
+  height: 56rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.calendar-fab:hover { background: var(--accent-dark); }
+.calendar-fab .tool-icon { width: 26rem; height: 26rem; }
+/* Room under the last row, so the button never covers the last appointment. */
+body:has(.calendar-fab) .app-main > .app-shell { padding-bottom: 112rem; }
+
+@media (max-width: 680px) {
+  /* The owner's «+», in the same place: centred, its centre on the bar's edge. */
+  .calendar-fab {
+    right: auto;
+    left: 50%;
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) - 28rem);
+    transform: translateX(-50%);
+  }
+  body:has(.quick-actions) .calendar-fab { display: none; }
+  body:has(.calendar-fab) .app-main > .app-shell { padding-bottom: calc(160rem + env(safe-area-inset-bottom)); }
+}
+
+/*
  * The specialist filter, first in the bar.
  *
  * A caption on the wide screen and a heading on the narrow one: with a desktop
@@ -3493,6 +3676,42 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
  * row apart: the names are the studio's, not ours.
  */
 .calendar-specialist { max-width: 215rem; font-size: 14rem; font-weight: 650; }
+
+/*
+ * Whose calendar this is, as faces: the studio's own first — «все мастера» —
+ * and then each master. The row scrolls sideways rather than wrapping, so a
+ * studio of twelve is still one line high; the padding and the negative margin
+ * are room for the ring around the chosen face, which the scroll box would
+ * otherwise clip.
+ *
+ * The chosen face is the one at full strength with a ring; the others are
+ * quieter, not hidden — and the name of the chosen one is written under the row,
+ * so a state is never only a colour or only a picture.
+ */
+.calendar-masters { display: grid; flex: 1 1 100%; gap: 8rem; min-width: 0; max-width: 100%; }
+.calendar-masters-row { display: flex; gap: 32rem; max-width: 100%; margin: -4rem; padding: 4rem; overflow-x: auto; scrollbar-width: none; }
+.calendar-masters-row::-webkit-scrollbar { display: none; }
+.calendar-masters-caption { margin: 0; font-size: 13rem; font-weight: 650; line-height: 1.3; color: var(--muted); }
+
+/*
+ * The faces are the bar's second row and its main thing, so they are large: 80
+ * units of face in an 88 box, the 4 around it being room for the ring. The
+ * bar's own rows are 22 apart, a little more than the 10 a row of controls
+ * keeps between its own.
+ */
+.calendar-where-board { row-gap: 22rem; }
+.calendar-pick .avatar { width: 80rem; height: 80rem; font-size: 32rem; }
+.calendar-pick { display: grid; place-items: center; flex: none; width: 88rem; height: 88rem; border-radius: 50%; opacity: 0.75; text-decoration: none; transition: opacity var(--duration-fast) var(--ease-standard); }
+.calendar-pick:hover { opacity: 1; }
+.calendar-pick[aria-current="true"] { opacity: 1; box-shadow: 0 0 0 2rem var(--surface), 0 0 0 4rem var(--accent); }
+.calendar-pick:focus-visible { opacity: 1; outline: 3rem solid var(--accent); outline-offset: 2rem; }
+
+/* A logo is a mark on white, not a portrait: shown whole, not cropped to the circle. */
+.avatar-studio { background: var(--surface-strong); box-shadow: inset 0 0 0 1rem var(--line); color: var(--accent); }
+.avatar-studio img { object-fit: contain; padding: 10rem; box-sizing: border-box; }
+
+/* «Месяц год» is longer than the month alone was. */
+.calendar-where-board .calendar-period select { max-width: 260rem; }
 
 /*
  * The two dates, where the bar's period is a range rather than a month.
@@ -3759,8 +3978,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
      panel's own open state, so a summary click (not just this button) still
      leaves the icon correct. */
   .header-action .icon-minus { display: none; }
-  .app-shell:has(#new-booking[open]) .header-action .icon-plus { display: none; }
-  .app-shell:has(#new-booking[open]) .header-action .icon-minus { display: block; }
   /*
    * The other five compose panels (`.compose-wrap` below) aren't `<details>`
    * — there is no `[open]` to key off — so the open state is the absence of
@@ -3815,8 +4032,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
    */
   .app-header { margin-bottom: 0; }
 
-  .calendar-tools { width: 100%; }
-
   /* At 288 the row has about 261 units once the shell's padding is off, so it
      is spent on the controls rather than on the air between them. */
   .calendar-where { gap: 6rem; }
@@ -3858,6 +4073,21 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
   .calendar-where > .secondary-button:first-child { grid-area: 1 / 1; }
   .calendar-period > :first-child { grid-area: 2 / 1; max-width: none; }
   .calendar-period > :last-child { grid-area: 2 / 2; max-width: none; }
+
+  /*
+   * The calendar's own bar: the month — one list, month and year together —
+   * beside «Сегодня» on the first row, and under them the faces, across the
+   * whole width and spread over it, the gap between the rows a little wider
+   * than the one inside a row. With more faces than fit, the row scrolls
+   * sideways instead of squeezing them.
+   */
+  /* The whole width, so the faces have a width to spread over: the bar is sized
+     to its content on this screen, which is the two controls and no more. */
+  .calendar-where-board { width: 100%; row-gap: 22rem; }
+  .calendar-where-board .calendar-period > select { grid-area: 1 / 1; max-width: none; }
+  .calendar-where-board > .secondary-button { grid-area: 1 / 2; }
+  .calendar-where-board > .calendar-masters { grid-area: 2 / 1 / 3 / 3; }
+  .calendar-masters-row { justify-content: space-between; gap: 12rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
