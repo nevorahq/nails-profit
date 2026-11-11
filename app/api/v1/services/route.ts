@@ -1,7 +1,7 @@
-import { asc, eq, isNull } from "drizzle-orm";
+import { asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { organizations, services, specialists } from "@/db/schema";
+import { services, specialists } from "@/db/schema";
 import { currencies } from "@/domain/money";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
@@ -138,12 +138,6 @@ export async function POST(request: Request) {
   }
 
   const service = await withTenant(actor.organizationId, async (tx) => {
-    const [studio] = await tx
-      .select({ currency: organizations.currency })
-      .from(organizations)
-      .where(eq(organizations.id, actor.organizationId))
-      .limit(1);
-
     const [created] = await tx
       .insert(services)
       .values({
@@ -151,7 +145,9 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         priceMinor: parsed.data.price_minor ?? null,
         durationMinutes: parsed.data.duration_minutes ?? null,
-        currency: parsed.data.currency ?? studio.currency,
+        // The studio's currency came with the membership this request already
+        // read; asking for it again was a round trip to another region.
+        currency: parsed.data.currency ?? caller.organization?.currency ?? "MDL",
         materialsMinor: parsed.data.materials_minor ?? null,
         createdBy: actor.userId,
         updatedBy: actor.userId,

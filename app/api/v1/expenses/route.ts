@@ -1,7 +1,6 @@
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { expenses, organizations } from "@/db/schema";
+import { expenses } from "@/db/schema";
 import { withTenant } from "@/db/tenant";
 import { can, canManageCatalogue } from "@/domain/rbac";
 import { expenseCategories, isExpenseCategory } from "@/domain/expense-categories";
@@ -114,15 +113,6 @@ export async function POST(request: Request) {
   }
 
   const expense = await withTenant(actor.organizationId, async (tx) => {
-    // The organization's own currency, not a hardcoded "MDL": an organization on
-    // EUR would otherwise get its expenses stamped in a currency it never uses,
-    // and the amount would be silently wrong wherever the two are added up.
-    const [organization] = await tx
-      .select({ currency: organizations.currency })
-      .from(organizations)
-      .where(eq(organizations.id, actor.organizationId))
-      .limit(1);
-
     const [created] = await tx
       .insert(expenses)
       .values({
@@ -131,7 +121,12 @@ export async function POST(request: Request) {
         category: parsed.data.category,
         ...(parsed.data.spent_on ? { spentOn: parsed.data.spent_on } : {}),
         amountMinor: parsed.data.amount_minor,
-        currency: organization?.currency ?? "MDL",
+        // The organization's own currency, not a hardcoded "MDL": an organization
+        // on EUR would otherwise get its expenses stamped in a currency it never
+        // uses, and the amount would be silently wrong wherever the two are added
+        // up. Read by the membership lookup this request already made — asking
+        // again was a round trip to another region for the same column.
+        currency: caller.organization?.currency ?? "MDL",
         note: parsed.data.note ?? null,
         isRecurring: parsed.data.is_recurring ?? false,
         // Falls back to the day of the purchase: a recurring expense entered

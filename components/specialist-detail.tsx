@@ -362,7 +362,11 @@ export function SpecialistDetail({
    */
   async function remove() {
     const removed = await send(`/api/v1/specialists/${person.id}`, null, undefined, "DELETE");
-    if (removed) router.push("/app/specialists");
+    if (!removed) return;
+    router.push("/app/specialists");
+    // The list may be in the browser's cache from a moment ago, still holding
+    // this card; see `staleTimes` in next.config.ts.
+    router.refresh();
   }
 
   const rule = describeRule(person.default_rule, currency, t);

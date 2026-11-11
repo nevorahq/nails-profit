@@ -8,6 +8,18 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
     typedEnv: true,
+    /*
+     * How long a section the browser has already fetched is shown again
+     * without asking the server, in seconds. Next's default is none, so going
+     * back to the tab opened a moment ago cost a full render — one to three
+     * seconds with the database where it is — for a screen that had not
+     * changed. Thirty is short enough that what other people did reaches this
+     * screen on the next switch after it, and every save here calls
+     * `router.refresh()`, which empties this cache, so a person never sees
+     * their own change missing. `static` stays at Next's five minutes: it
+     * covers the loading skeletons, which never change.
+     */
+    staleTimes: { dynamic: 30 },
   },
   async headers() {
     const securityHeaders = [
