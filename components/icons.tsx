@@ -156,6 +156,30 @@ export function ToolIcon({ name }: { name: "filter" | "plus" | "minus" | "close"
   );
 }
 
+/**
+ * The visit's status as a mark, for the phone, where the word does not fit
+ * beside the time, the service and the client: a tick for a confirmed visit, an
+ * exclamation mark for one still waiting for the desk's answer.
+ */
+export function StatusIcon({ name }: { name: "confirmed" | "pending" }) {
+  return (
+    <svg
+      className={`status-icon icon-${name}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="12" cy="12" r="9.5" />
+      {name === "confirmed" ? <path d="M7.5 12.5l3 3 6-6.5" /> : <path d="M12 7.5v5.5M12 16.5v.01" />}
+    </svg>
+  );
+}
+
 /** The period-card glyphs on the reports page, one per figure. */
 export function MetricIcon({ name }: { name: "revenue" | "expenses" | "profit" | "rebook" }) {
   const paths: Record<typeof name, React.ReactNode> = {

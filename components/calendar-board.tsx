@@ -31,7 +31,7 @@ import { NextVisit } from "@/components/next-visit";
 import { SlotFillPanel } from "@/components/slot-fill-panel";
 import { PaidField, TipField, tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
-import { ToolIcon } from "@/components/icons";
+import { StatusIcon, ToolIcon } from "@/components/icons";
 import {
   formatLocalDate,
   formatLocalTime,
@@ -1666,9 +1666,25 @@ export function CalendarBoard({
                           </span>
                         )}
                       </span>
-                      {/* Never colour alone (section 7.8): the status is words. */}
-                      <span className="calendar-status">
-                        {t(`bookingStatus.${booking.status}` as MessageKey)}
+                      {/*
+                        Never colour alone (section 7.8): the status is words.
+                        On a phone the two live statuses become a tick and an
+                        exclamation mark; the words stay in the DOM, hidden
+                        visually, so the mark is still read out.
+                      */}
+                      <span
+                        className={`calendar-status${
+                          booking.status === "confirmed" || booking.status === "pending_confirmation"
+                            ? ` has-icon status-${booking.status}`
+                            : ""
+                        }`}
+                      >
+                        {(booking.status === "confirmed" || booking.status === "pending_confirmation") && (
+                          <StatusIcon name={booking.status === "confirmed" ? "confirmed" : "pending"} />
+                        )}
+                        <span className="calendar-status-word">
+                          {t(`bookingStatus.${booking.status}` as MessageKey)}
+                        </span>
                       </span>
                     </summary>
 
