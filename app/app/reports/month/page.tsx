@@ -83,7 +83,7 @@ export default async function MonthReportPage({
    */
   const { statement, around } = await readTogether(membership.organizationId, {
     statement: (tx) =>
-      loadPeriodPL(tx, { month, currency, organizationId: membership.organizationId }, locale),
+      loadPeriodPL(tx, { month, currency, organizationId: membership.organizationId, timezone: workspace.timezone }, locale),
     around: async (tx) => {
       const people = await tx
         .select({ isPrincipal: specialists.isPrincipal })

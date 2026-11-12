@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { ClientNotes } from "@/components/client-notes";
 import { clients, financialSnapshots, specialists, visitLines, visitPhotos, visits } from "@/db/schema";
+import { isUuid, uuidListLiteral, uuidLiteral } from "@/db/literal";
 import { withTenant } from "@/db/tenant";
 import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import { getTranslator } from "@/i18n/t";
@@ -44,17 +45,12 @@ export default async function ClientCardPage({
 
   const showsPhotos = mayHandlePhotos(membership.role, "read") && getPhotoStorage() !== null;
 
+  // An address that is not an id names no client. Said here, before the id is
+  // written into a statement (see `db/literal.ts`), rather than left for the
+  // database to refuse as a server error.
+  if (!isUuid(clientId)) notFound();
+
   const data = await withTenant(membership.organizationId, async (tx) => {
-    const [client] = await tx
-      .select()
-      .from(clients)
-      // Archived clients open too: hidden from the list is not hidden from the
-      // studio, and this page is where their data can be erased for good.
-      .where(and(eq(clients.id, clientId), isNull(clients.anonymizedAt)))
-      .limit(1);
-
-    if (!client) return null;
-
     // Master scope: resolve their specialist row.
     let ownSpecialistId: string | null = null;
     if (scopeFor(membership.role, "clients") === "own") {
@@ -66,7 +62,20 @@ export default async function ClientCardPage({
       ownSpecialistId = own?.id ?? "00000000-0000-0000-0000-000000000000";
     }
 
-    const visitRows = await tx
+    /*
+     * The card and its visits, asked together: the visits need only the id
+     * from the address, not the card. With the ids written into the text they
+     * carry no parameters and go to the database as one flight.
+     */
+    const clientRead = tx
+      .select()
+      .from(clients)
+      // Archived clients open too: hidden from the list is not hidden from the
+      // studio, and this page is where their data can be erased for good.
+      .where(and(eq(clients.id, uuidLiteral(clientId)), isNull(clients.anonymizedAt)))
+      .execute();
+
+    const visitRowsRead = tx
       .select({
         id: visits.id,
         completedAt: visits.completedAt,
@@ -77,37 +86,58 @@ export default async function ClientCardPage({
       .from(visits)
       .where(
         ownSpecialistId
-          ? and(eq(visits.clientId, clientId), eq(visits.specialistId, ownSpecialistId))
-          : eq(visits.clientId, clientId),
+          ? and(eq(visits.clientId, uuidLiteral(clientId)), eq(visits.specialistId, uuidLiteral(ownSpecialistId)))
+          : eq(visits.clientId, uuidLiteral(clientId)),
       )
-      .orderBy(desc(visits.completedAt));
+      .orderBy(desc(visits.completedAt))
+      .execute();
+
+    const [[client], visitRows] = await Promise.all([clientRead, visitRowsRead]);
+    if (!client) return null;
 
     // For master scope, 404 if they haven't worked with this client.
     if (ownSpecialistId && visitRows.length === 0) return null;
 
     const visitIds = visitRows.map((v) => v.id);
+    const ofTheseVisits = visitIds.length > 0 ? uuidListLiteral(visitIds) : null;
 
-    const [specialistRows, lineRows, snapshotRows] = await Promise.all([
-      tx
-        .select({ id: specialists.id, name: specialists.name })
-        .from(specialists)
-        .where(
-          inArray(
-            specialists.id,
-            [...new Set(visitRows.map((v) => v.specialistId))],
-          ),
-        ),
-      visitIds.length > 0
-        ? tx.select().from(visitLines).where(inArray(visitLines.visitId, visitIds))
-        : Promise.resolve([]),
-      visitIds.length > 0
-        ? tx
+    /*
+     * The latest work, for the master about to do the next: what this client
+     * had last time is the first thing asked. From the visits this reader may
+     * see — a Master their own — and not at all for a role that sees no photos.
+     * Last in the list, because its `limit` is a parameter and a parameter holds
+     * up whatever is queued behind it.
+     */
+    const [specialistRows, lineRows, snapshotRows, recentPhotos] = ofTheseVisits
+      ? await Promise.all([
+          tx
+            .select({ id: specialists.id, name: specialists.name })
+            .from(specialists)
+            .where(inArray(specialists.id, uuidListLiteral([...new Set(visitRows.map((v) => v.specialistId))])))
+            .execute(),
+          tx.select().from(visitLines).where(inArray(visitLines.visitId, ofTheseVisits)).execute(),
+          tx
             .select()
             .from(financialSnapshots)
-            .where(inArray(financialSnapshots.visitId, visitIds))
+            .where(inArray(financialSnapshots.visitId, ofTheseVisits))
             .orderBy(desc(financialSnapshots.snapshotVersion))
-        : Promise.resolve([]),
-    ]);
+            .execute(),
+          showsPhotos
+            ? tx
+                .select({
+                  id: visitPhotos.id,
+                  visitId: visitPhotos.visitId,
+                  width: visitPhotos.width,
+                  height: visitPhotos.height,
+                })
+                .from(visitPhotos)
+                .where(inArray(visitPhotos.visitId, ofTheseVisits))
+                .orderBy(desc(visitPhotos.createdAt))
+                .limit(RECENT_PHOTOS)
+                .execute()
+            : [],
+        ])
+      : [[], [], [], []];
 
     const specialistMap = new Map(specialistRows.map((s) => [s.id, s.name]));
 
@@ -122,26 +152,6 @@ export default async function ClientCardPage({
     for (const line of lineRows) {
       linesByVisit.set(line.visitId, [...(linesByVisit.get(line.visitId) ?? []), line]);
     }
-
-    /*
-     * The latest work, for the master about to do the next: what this client
-     * had last time is the first thing asked. From the visits this reader may
-     * see — a Master their own — and not at all for a role that sees no photos.
-     */
-    const recentPhotos =
-      showsPhotos && visitIds.length > 0
-        ? await tx
-            .select({
-              id: visitPhotos.id,
-              visitId: visitPhotos.visitId,
-              width: visitPhotos.width,
-              height: visitPhotos.height,
-            })
-            .from(visitPhotos)
-            .where(inArray(visitPhotos.visitId, visitIds))
-            .orderBy(desc(visitPhotos.createdAt))
-            .limit(RECENT_PHOTOS)
-        : [];
 
     return { client, visitRows, specialistMap, latestSnapshot, linesByVisit, recentPhotos };
   });

@@ -1,5 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 
+import { uuidLiteral } from "@/db/literal";
 import { materialsCostingPeriods, organizations } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import {
@@ -46,21 +47,26 @@ export async function loadMaterialsModes(
    */
   knownTimezone?: string,
 ): Promise<MaterialsModes> {
-  const timezone =
-    knownTimezone ??
-    (
-      await tx
+  /*
+   * Both started before either is awaited, and neither carries a parameter —
+   * the id is written into the text (see `db/literal.ts`), and the row is the
+   * primary key's, so no `limit` is needed to say there is one. Inside the
+   * caller's transaction they go to the database as one flight.
+   */
+  const zoneRead = knownTimezone
+    ? Promise.resolve([{ timezone: knownTimezone }])
+    : tx
         .select({ timezone: organizations.timezone })
         .from(organizations)
-        .where(eq(organizations.id, organizationId))
-        .limit(1)
-    )[0]?.timezone ??
-    "UTC";
-  const periods = await tx
+        .where(eq(organizations.id, uuidLiteral(organizationId)))
+        .execute();
+  const periodsRead = tx
     .select({ mode: materialsCostingPeriods.mode, effectiveFrom: materialsCostingPeriods.effectiveFrom })
     .from(materialsCostingPeriods)
-    .orderBy(asc(materialsCostingPeriods.effectiveFrom));
-  return { periods, timezone };
+    .orderBy(asc(materialsCostingPeriods.effectiveFrom))
+    .execute();
+  const [zone, periods] = await Promise.all([zoneRead, periodsRead]);
+  return { periods, timezone: zone[0]?.timezone ?? "UTC" };
 }
 
 /** The mode the month of `at` is counted in. */

@@ -1,5 +1,6 @@
 import { and, count, eq, exists, gt, isNotNull, isNull, lte, notExists, or, sql } from "drizzle-orm";
 
+import { instantLiteral } from "@/db/literal";
 import {
   commissionRuleServices,
   commissionRules,
@@ -156,22 +157,28 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
     ),
   );
 
-  const [withRule] = await tx
+  /*
+   * Both counts started together and written without parameters — `now` goes
+   * into the text (see `db/literal.ts`) — so they reach the database as one
+   * flight inside the caller's transaction.
+   */
+  const withRuleRead = tx
     .select({ value: count() })
     .from(specialists)
     .innerJoin(
       commissionRules,
       and(
         eq(commissionRules.specialistId, specialists.id),
-        lte(commissionRules.activeFrom, now),
-        or(isNull(commissionRules.activeTo), gt(commissionRules.activeTo, now)),
+        lte(commissionRules.activeFrom, instantLiteral(now)),
+        or(isNull(commissionRules.activeTo), gt(commissionRules.activeTo, instantLiteral(now))),
         ruleTargetsLiveService,
         ruleCoversLiveService,
       ),
     )
-    .where(isNull(specialists.archivedAt));
+    .where(isNull(specialists.archivedAt))
+    .execute();
 
-  const [usableServices] = await tx
+  const usableServicesRead = tx
     .select({ value: count() })
     .from(services)
     .where(
@@ -180,7 +187,9 @@ export async function loadOnboarding(tx: TenantTransaction): Promise<OnboardingP
         isNotNull(services.priceMinor),
         isNotNull(services.durationMinutes),
       ),
-    );
+    )
+    .execute();
+  const [[withRule], [usableServices]] = await Promise.all([withRuleRead, usableServicesRead]);
 
   /*
    * Where this step is actually finished, which is not one address.
@@ -309,7 +318,11 @@ export async function loadMonthSetup(
    * subtracts: a payroll row is money leaving the account, but the master's
    * work already reached the report through the visit's snapshot.
    */
-  const ledger = await tx
+  /*
+   * The four reads started together; with no parameters among them they go to
+   * the database as one flight inside the caller's transaction.
+   */
+  const ledgerRead = tx
     .select({
       id: expenses.id,
       name: expenses.name,
@@ -322,25 +335,30 @@ export async function loadMonthSetup(
       recurringTo: expenses.recurringTo,
     })
     .from(expenses)
-    .where(isNull(expenses.archivedAt));
+    .where(isNull(expenses.archivedAt))
+    .execute();
 
   // The month's materials mode, as the report reads it: counted per service,
   // a purchase of gel is not the month's overhead.
-  const periods = await tx
+  const periodsRead = tx
     .select({ mode: materialsCostingPeriods.mode, effectiveFrom: materialsCostingPeriods.effectiveFrom })
-    .from(materialsCostingPeriods);
+    .from(materialsCostingPeriods)
+    .execute();
+
+  // The same rota the capacity block reads, so the step cannot claim hours the
+  // report does not see.
+  const [ledger, periods, { scheduledMinutes }, answers] = await Promise.all([
+    ledgerRead,
+    periodsRead,
+    loadMonthRota(tx, options.month),
+    loadMoneyAnswers(tx, options.organizationId),
+  ]);
   const thisMonth = expensesForMonth(
     ledger.filter((row) => row.currency === options.currency),
     options.month,
     materialsModeFor(periods, options.month),
   );
   const hasOverhead = thisMonth.some((row) => row.class === "overhead");
-
-  // The same rota the capacity block reads, so the step cannot claim hours the
-  // report does not see.
-  const { scheduledMinutes } = await loadMonthRota(tx, options.month);
-
-  const answers = await loadMoneyAnswers(tx, options.organizationId);
 
   return summarize<MonthSetupKey>([
     { key: "overhead", done: hasOverhead, href: "/app/expenses" },

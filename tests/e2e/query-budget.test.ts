@@ -3,7 +3,10 @@ import { sql } from "drizzle-orm";
 
 import { measureStatements } from "@/db/query-meter";
 import { readTogether, withTenant } from "@/db/tenant";
+import { loadDashboard } from "@/lib/dashboard";
 import { resolveLocale } from "@/lib/locale";
+import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
+import { loadPeriodPL, monthOf } from "@/lib/period";
 import { getActiveMembership } from "@/lib/membership";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
 import { setSessionHeaders } from "../helpers/session";
@@ -50,10 +53,14 @@ describe("identifying the caller", () => {
   test("a signed-in owner is found in two statements: the session with its user, then the membership with its organization", async () => {
     asVisitor(studio.owner.cookie);
 
-    const { result, statements } = await measureStatements(() => getActiveMembership());
+    const { result, statements, parameterised } = await measureStatements(() => getActiveMembership());
 
     expect(result.session).toBe(true);
     if (!result.session) return;
+    // Only the session lookup, which is Better Auth's, carries a parameter;
+    // the membership is written with the user id in its text, one round trip.
+    expect(parameterised).toHaveLength(1);
+    expect(parameterised[0]).toMatch(/from "session"/);
     expect(result.membership?.organizationId).toBe(studio.organizationId);
     expect(result.membership?.role).toBe("owner");
     // The organization rides on the membership query, so the shell, the
@@ -157,3 +164,59 @@ describe("independent reads", () => {
     expect(seen).toBe(studio.organizationId);
   });
 });
+
+/*
+ * The reads a page waits on, as one flight each.
+ *
+ * Inside one transaction the driver sends statements back to back only while
+ * none of them carries a parameter: the first one that does costs a second
+ * round trip and holds up the rest. The month report and the shell's logo are
+ * written with their values in the text (`db/literal.ts`) so that they travel
+ * together. A parameter creeping back in is invisible on a laptop and costs
+ * production a round trip to another region per statement, so it is asserted.
+ */
+describe("reads that travel in one flight", () => {
+  test("the month report sends no statement with a parameter", async () => {
+    const { result, parameterised, transactions } = await measureStatements(() =>
+      withTenant(studio.organizationId, (tx) =>
+        loadPeriodPL(
+          tx,
+          { month: monthOf(new Date()), currency: "MDL", organizationId: studio.organizationId, timezone: "UTC" },
+          "ru",
+        ),
+      ),
+    );
+
+    expect(result.currency).toBe("MDL");
+    expect(transactions).toBe(1);
+    expect(parameterised).toEqual([]);
+  });
+
+  test("so does the report's visit read, filtered by period and by one master", async () => {
+    const { parameterised } = await measureStatements(() =>
+      withTenant(studio.organizationId, (tx) =>
+        loadDashboard(
+          tx,
+          {
+            from: new Date("2026-01-01T00:00:00.000Z"),
+            to: new Date("2026-01-31T23:59:59.999Z"),
+            specialistId: "00000000-0000-0000-0000-000000000000",
+          },
+          "ru",
+        ),
+      ),
+    );
+
+    expect(parameterised).toEqual([]);
+  });
+
+  test("and the logo every signed-in page reads", async () => {
+    const { parameterised, statements } = await measureStatements(() =>
+      loadOrganizationLogoVersion(studio.organizationId),
+    );
+
+    expect(statements).toHaveLength(2);
+    expect(parameterised).toEqual([]);
+  });
+});
+

@@ -28,6 +28,7 @@ import {
   visitLines,
   visits,
 } from "@/db/schema";
+import { constantListLiteral, instantLiteral, uuidListLiteral, uuidLiteral } from "@/db/literal";
 import { readTogether } from "@/db/tenant";
 import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
 import {
@@ -149,8 +150,15 @@ export default async function CalendarPage({
 
   const data = await (async () => {
     const first = await readTogether(membership.organizationId, {
+      /*
+       * Inside each read below, the statements are started together and carry
+       * no parameters where the value is the code's own (see `db/literal.ts`),
+       * so a read's statements reach the database as one flight rather than
+       * one after another. The reads themselves still run in transactions of
+       * their own, side by side.
+       */
       where: async (tx) => {
-        const places = await tx
+        const placesRead = tx
           .select({
             id: locations.id,
             name: locations.name,
@@ -158,33 +166,29 @@ export default async function CalendarPage({
             status: locations.status,
           })
           .from(locations)
-          .orderBy(asc(locations.sortOrder), asc(locations.name));
+          .orderBy(asc(locations.sortOrder), asc(locations.name))
+          .execute();
 
-        const ownSpecialistId = await scopedSpecialistId(tx, membership);
+        const [places, ownSpecialistId] = await Promise.all([placesRead, scopedSpecialistId(tx, membership)]);
         return { places, ownSpecialistId };
       },
       lists: async (tx) => {
         // The photo comes from the card, the way `app/app/visits/page.tsx` reads
         // it: a card nobody has given one has none, and the list falls back to the
         // initial.
-        const people = (
-          await tx
-            .select({
-              id: specialists.id,
-              name: specialists.name,
-              avatarVersion: specialistAvatars.version,
-            })
-            .from(specialists)
-            .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
-            .where(isNull(specialists.archivedAt))
-            .orderBy(asc(specialists.name))
-        ).map((person) => ({
-          id: person.id,
-          name: person.name,
-          avatar: avatarUrl(person.id, person.avatarVersion),
-        }));
+        const peopleRead = tx
+          .select({
+            id: specialists.id,
+            name: specialists.name,
+            avatarVersion: specialistAvatars.version,
+          })
+          .from(specialists)
+          .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
+          .where(isNull(specialists.archivedAt))
+          .orderBy(asc(specialists.name))
+          .execute();
 
-        const catalogue = await tx
+        const catalogueRead = tx
           .select({
             id: services.id,
             name: services.name,
@@ -193,9 +197,10 @@ export default async function CalendarPage({
           })
           .from(services)
           .where(isNull(services.archivedAt))
-          .orderBy(asc(services.createdAt));
+          .orderBy(asc(services.createdAt))
+          .execute();
 
-        const extras = await tx
+        const extrasRead = tx
           .select({
             id: addOns.id,
             name: addOns.name,
@@ -204,56 +209,82 @@ export default async function CalendarPage({
           })
           .from(addOns)
           .where(isNull(addOns.archivedAt))
-          .orderBy(asc(addOns.createdAt));
+          .orderBy(asc(addOns.createdAt))
+          .execute();
         // Which services each add-on goes with, so an appointment of two services
         // pairs each add-on with its own. One linked to none stays on offer with
         // any service, which is how this screen always offered it.
-        const addOnLinks = await tx
+        const addOnLinksRead = tx
           .select({ addOnId: serviceAddOns.addOnId, serviceId: serviceAddOns.serviceId })
-          .from(serviceAddOns);
+          .from(serviceAddOns)
+          .execute();
+
+        const [peopleRows, catalogue, extras, addOnLinks] = await Promise.all([
+          peopleRead,
+          catalogueRead,
+          extrasRead,
+          addOnLinksRead,
+        ]);
+        const people = peopleRows.map((person) => ({
+          id: person.id,
+          name: person.name,
+          avatar: avatarUrl(person.id, person.avatarVersion),
+        }));
 
         return { people, catalogue, extras, addOnLinks };
       },
       links: async (tx) => {
-        const assignments = await tx
+        const assignmentsRead = tx
           .select({
             specialistId: specialistLocations.specialistId,
             locationId: specialistLocations.locationId,
           })
-          .from(specialistLocations);
+          .from(specialistLocations)
+          .execute();
 
         // Who does which service, with their own price and length where they have
         // one. A master with no rows here does everything, so the form must be
         // told the rows and not only «which services exist».
-        const offers = await tx
+        const offersRead = tx
           .select({
             specialistId: specialistServices.specialistId,
             serviceId: specialistServices.serviceId,
             priceMinor: specialistServices.priceOverrideMinor,
             durationMinutes: specialistServices.durationOverrideMinutes,
           })
-          .from(specialistServices);
-
-        const roster = await tx
-          .select({ id: clients.id, name: clients.name, phone: clients.normalizedPhone })
-          .from(clients)
-          .where(isNull(clients.archivedAt))
-          .orderBy(asc(clients.name))
-          .limit(500);
+          .from(specialistServices)
+          .execute();
 
         /*
          * And the gap a studio keeps after each appointment. It is not free time —
          * nothing can be booked into it — so counting it as free would offer the
          * desk a ten-minute opening that the booking engine itself refuses.
          */
-        const buffers = await tx
+        const buffersRead = tx
           .select({
             locationId: bookingSettings.locationId,
             before: bookingSettings.bufferBeforeMinutes,
             after: bookingSettings.bufferAfterMinutes,
           })
-          .from(bookingSettings);
+          .from(bookingSettings)
+          .execute();
 
+        // Last, because `limit` is sent as a parameter and a parameter holds up
+        // whatever is queued behind it; the three above go out first, together.
+        const rosterRead = tx
+          .select({ id: clients.id, name: clients.name, phone: clients.normalizedPhone })
+          .from(clients)
+          .where(isNull(clients.archivedAt))
+          .orderBy(asc(clients.name))
+          .limit(500)
+          .execute();
+
+        const [assignments, offers, buffers, roster] = await Promise.all([
+          assignmentsRead,
+          offersRead,
+          buffersRead,
+          rosterRead,
+        ]);
         return { assignments, roster, buffers, offers };
       },
     });
@@ -281,6 +312,14 @@ export default async function CalendarPage({
     );
 
     const requestedStatuses = (filters.status?.split(",") ?? []).filter(Boolean);
+    /*
+     * Whose rows the calendar is narrowed to: a master's own always, else the
+     * one picked in the filter. Both are ids, and like the window's bounds they
+     * are written into the statements rather than sent beside them — see
+     * `db/literal.ts`. A filter that is not an id was an error from the
+     * database before and is refused before it reaches it now.
+     */
+    const shownSpecialist = ownSpecialistId ?? filters.specialist ?? null;
 
     const second = await readTogether(membership.organizationId, {
       appointments: async (tx) => {
@@ -301,17 +340,11 @@ export default async function CalendarPage({
           .leftJoin(clients, eq(bookings.clientId, clients.id))
           .where(
             and(
-              gte(bookings.startsAt, windowStart),
-              lt(bookings.startsAt, windowEnd),
-              ownSpecialistId
-                ? eq(bookings.specialistId, ownSpecialistId)
-                : filters.specialist
-                  ? eq(bookings.specialistId, filters.specialist)
-                  : undefined,
-              filters.location ? eq(bookings.locationId, filters.location) : undefined,
-              requestedStatuses.length > 0
-                ? inArray(bookings.status, requestedStatuses as (typeof bookings.$inferSelect)["status"][])
-                : undefined,
+              gte(bookings.startsAt, instantLiteral(windowStart)),
+              lt(bookings.startsAt, instantLiteral(windowEnd)),
+              shownSpecialist ? eq(bookings.specialistId, uuidLiteral(shownSpecialist)) : undefined,
+              filters.location ? eq(bookings.locationId, uuidLiteral(filters.location)) : undefined,
+              requestedStatuses.length > 0 ? inArray(bookings.status, constantListLiteral(requestedStatuses)) : undefined,
             ),
           )
           .orderBy(asc(bookings.startsAt));
@@ -342,7 +375,7 @@ export default async function CalendarPage({
                 .where(
                   inArray(
                     bookingLines.bookingId,
-                    onDay.map((row) => row.booking.id),
+                    uuidListLiteral(onDay.map((row) => row.booking.id)),
                   ),
                 );
 
@@ -379,13 +412,9 @@ export default async function CalendarPage({
           .where(
             and(
               isNull(visits.bookingId),
-              gte(visits.completedAt, windowStart),
-              lt(visits.completedAt, new Date(windowEnd.getTime() + 24 * 60 * 60_000)),
-              ownSpecialistId
-                ? eq(visits.specialistId, ownSpecialistId)
-                : filters.specialist
-                  ? eq(visits.specialistId, filters.specialist)
-                  : undefined,
+              gte(visits.completedAt, instantLiteral(windowStart)),
+              lt(visits.completedAt, instantLiteral(new Date(windowEnd.getTime() + 24 * 60 * 60_000))),
+              shownSpecialist ? eq(visits.specialistId, uuidLiteral(shownSpecialist)) : undefined,
             ),
           )
           .orderBy(asc(visits.completedAt));
@@ -408,31 +437,33 @@ export default async function CalendarPage({
         const visitsOnDay = handVisits.filter((row) => row.localDate === selected);
         const visitIds = visitsOnDay.map((row) => row.id);
 
-        // Names and money for the listed day alone, as with the appointments.
-        const handLines =
+        // Names and money for the listed day alone, as with the appointments —
+        // and the newest version of each visit's figures, as `/app/visits` reads
+        // it. Asked together: one flight.
+        const [handLines, handRevenue] =
           visitIds.length === 0
-            ? []
-            : await tx
-                .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
-                .from(visitLines)
-                .where(inArray(visitLines.visitId, visitIds));
-        // The newest version of each visit's figures, as `/app/visits` reads it.
-        const handRevenue =
-          visitIds.length === 0
-            ? []
-            : await tx
-                .selectDistinctOn([financialSnapshots.visitId], {
-                  visitId: financialSnapshots.visitId,
-                  revenueMinor: financialSnapshots.revenueMinor,
-                })
-                .from(financialSnapshots)
-                .where(inArray(financialSnapshots.visitId, visitIds))
-                .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
+            ? [[], []]
+            : await Promise.all([
+                tx
+                  .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
+                  .from(visitLines)
+                  .where(inArray(visitLines.visitId, uuidListLiteral(visitIds)))
+                  .execute(),
+                tx
+                  .selectDistinctOn([financialSnapshots.visitId], {
+                    visitId: financialSnapshots.visitId,
+                    revenueMinor: financialSnapshots.revenueMinor,
+                  })
+                  .from(financialSnapshots)
+                  .where(inArray(financialSnapshots.visitId, uuidListLiteral(visitIds)))
+                  .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion))
+                  .execute(),
+              ]);
 
         return { handVisits, visitsOnDay, handLines, handRevenue };
       },
       availability: async (tx) => {
-        const exceptionsRaw = await tx
+        const exceptionsRead = tx
           .select({
             id: availabilityExceptions.id,
             specialistId: availabilityExceptions.specialistId,
@@ -444,16 +475,13 @@ export default async function CalendarPage({
           .from(availabilityExceptions)
           .where(
             and(
-              ownSpecialistId
-                ? eq(availabilityExceptions.specialistId, ownSpecialistId)
-                : filters.specialist
-                  ? eq(availabilityExceptions.specialistId, filters.specialist)
-                  : undefined,
-              gte(availabilityExceptions.endsAt, windowStart),
-              lt(availabilityExceptions.startsAt, windowEnd),
+              shownSpecialist ? eq(availabilityExceptions.specialistId, uuidLiteral(shownSpecialist)) : undefined,
+              gte(availabilityExceptions.endsAt, instantLiteral(windowStart)),
+              lt(availabilityExceptions.startsAt, instantLiteral(windowEnd)),
             ),
           )
-          .orderBy(asc(availabilityExceptions.startsAt));
+          .orderBy(asc(availabilityExceptions.startsAt))
+          .execute();
 
         /*
          * The shifts the day's tally measures its free time against.
@@ -466,7 +494,7 @@ export default async function CalendarPage({
          * carries a weekday and a range of dates it applies over, and which of them
          * covers Thursday is a question about the day being listed.
          */
-        const shifts = await tx
+        const shiftsRead = tx
           .select({
             specialistId: scheduleRules.specialistId,
             locationId: scheduleRules.locationId,
@@ -477,14 +505,10 @@ export default async function CalendarPage({
             effectiveTo: scheduleRules.effectiveTo,
           })
           .from(scheduleRules)
-          .where(
-            ownSpecialistId
-              ? eq(scheduleRules.specialistId, ownSpecialistId)
-              : filters.specialist
-                ? eq(scheduleRules.specialistId, filters.specialist)
-                : undefined,
-          );
+          .where(shownSpecialist ? eq(scheduleRules.specialistId, uuidLiteral(shownSpecialist)) : undefined)
+          .execute();
 
+        const [exceptionsRaw, shifts] = await Promise.all([exceptionsRead, shiftsRead]);
         return { exceptionsRaw, shifts };
       },
     });

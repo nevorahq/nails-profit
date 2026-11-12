@@ -1,5 +1,6 @@
 import { and, eq, gte, isNull, lte } from "drizzle-orm";
 
+import { dayLiteral, uuidLiteral } from "@/db/literal";
 import { chairRents, expenses, laborCostRules, organizations, ownerDraws, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { buildCapacityView, type CapacityView } from "@/domain/capacity";
@@ -146,26 +147,32 @@ export function monthOf(date: Date): string {
 
 export async function loadPeriodPL(
   tx: TenantTransaction,
-  options: { month: string; currency: string; organizationId: string },
+  options: {
+    month: string;
+    currency: string;
+    organizationId: string;
+    /** The studio's zone, when the caller holds it already; read otherwise. */
+    timezone?: string;
+  },
   locale: AppLocale,
 ): Promise<PeriodReport> {
   const { from, to } = monthBounds(options.month);
-  const dashboard = await loadDashboard(tx, { from, to }, locale);
+
   /*
-   * The whole live ledger, not the month's rows.
+   * Everything the month is built from, asked for at once.
    *
-   * A recurring row is stored once with an interval, so the row that pays
-   * March's rent may have been written in January and carry a January
-   * `spent_on`. Filtering by period in SQL would drop exactly the rows the
-   * month depends on; `expensesForMonth` is what decides what belongs.
+   * One transaction still, because these figures have to agree with each
+   * other to the row — the month's profit is visits minus expenses minus
+   * labour, and a visit closed between two of the reads must not land in one
+   * and miss the other. One transaction is one connection, so the reads are not
+   * parallel on the server; what starting them together buys is the wire.
+   * None of them carries a parameter (see `db/literal.ts`), and the driver
+   * sends parameterless statements queued on a connection as one flight, so
+   * the whole month is a few round trips to the database instead of seventeen
+   * in a row. The ones that read without any filter go first, so they share
+   * the first flight.
    */
-  /*
-   * The same reasoning for the labour rules: they are versioned by
-   * `activeFrom`, so the rule that pays March's salary may have been written a
-   * year earlier. `selectLaborRules` decides which one this month is on, and
-   * takes one per person so that a raise does not pay two.
-   */
-  const laborRows = await tx
+  const laborRead = tx
     .select({
       id: laborCostRules.id,
       recipient: laborCostRules.recipient,
@@ -178,13 +185,14 @@ export async function loadPeriodPL(
       activeFrom: laborCostRules.activeFrom,
       activeTo: laborCostRules.activeTo,
     })
-    .from(laborCostRules);
+    .from(laborCostRules)
+    .execute();
 
   /*
    * The rents, versioned like the labour rules and read the same way — the
    * row that charges March may have been written a year before it.
    */
-  const rentRows = await tx
+  const rentRead = tx
     .select({
       id: chairRents.id,
       specialistId: chairRents.specialistId,
@@ -194,29 +202,10 @@ export async function loadPeriodPL(
       name: specialists.name,
     })
     .from(chairRents)
-    .innerJoin(specialists, eq(specialists.id, chairRents.specialistId));
-  const monthRents = selectChairRents(rentRows, options.month);
-  const chairRentMinor = chairRentTotalMinor(monthRents);
+    .innerJoin(specialists, eq(specialists.id, chairRents.specialistId))
+    .execute();
 
-  /*
-   * Filtered by id, unlike everything else read here.
-   *
-   * `organization` is the one table whose policy is `true` — it has no
-   * `organization_id` to scope by, it *is* the organization — so the tenant
-   * transaction does not narrow it and an unfiltered read would answer with
-   * whichever row came first. Every other select on this page relies on RLS
-   * and correctly says nothing about the tenant; this one has to say it.
-   */
-  const [organization] = await tx
-    .select({
-      withdrawalReserveMinor: organizations.withdrawalReserveMinor,
-      practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
-    })
-    .from(organizations)
-    .where(eq(organizations.id, options.organizationId))
-    .limit(1);
-
-  const rows = await tx
+  const expensesRead = tx
     .select({
       id: expenses.id,
       name: expenses.name,
@@ -231,7 +220,76 @@ export async function loadPeriodPL(
     .from(expenses)
     // No organization filter: the transaction is already the tenant's, and RLS
     // is what scopes it — the same contract `lib/expenses.ts` reads under.
-    .where(isNull(expenses.archivedAt));
+    .where(isNull(expenses.archivedAt))
+    .execute();
+
+  /*
+   * Filtered by id, unlike everything else read here.
+   *
+   * `organization` is the one table whose policy is `true` — it has no
+   * `organization_id` to scope by, it *is* the organization — so the tenant
+   * transaction does not narrow it and an unfiltered read would answer with
+   * whichever row came first. Every other select on this page relies on RLS
+   * and correctly says nothing about the tenant; this one has to say it. The
+   * id is the primary key, so there is one row and no `limit` to send.
+   */
+  const organizationRead = tx
+    .select({
+      withdrawalReserveMinor: organizations.withdrawalReserveMinor,
+      practicalCapacityBasisPoints: organizations.practicalCapacityBasisPoints,
+    })
+    .from(organizations)
+    .where(eq(organizations.id, uuidLiteral(options.organizationId)))
+    .execute();
+
+  /*
+   * Draws are filtered by day in SQL, unlike the ledger: they carry no
+   * recurrence, so the day they happened is the whole answer.
+   */
+  const drawsRead = tx
+    .select({ amountMinor: ownerDraws.amountMinor, currency: ownerDraws.currency })
+    .from(ownerDraws)
+    .where(
+      and(
+        gte(ownerDraws.occurredOn, dayLiteral(from.toISOString().slice(0, 10))),
+        lte(ownerDraws.occurredOn, dayLiteral(to.toISOString().slice(0, 10))),
+      ),
+    )
+    .execute();
+
+  const [laborRows, rentRows, rows, [organization], draws, dashboard, modes, rota, payouts] = await Promise.all([
+    laborRead,
+    rentRead,
+    expensesRead,
+    organizationRead,
+    drawsRead,
+    loadDashboard(tx, { from, to }, locale),
+    // The month's own mode, never today's: a month already reported keeps it.
+    loadMaterialsModes(tx, options.organizationId, options.timezone),
+    loadMonthRota(tx, options.month),
+    /*
+     * What hired masters were actually handed, for a month inside the span the
+     * studio keeps track of — null for every other month, which leaves the cash
+     * flow reading their pay as gone the month it was earned.
+     */
+    loadPayoutReport(tx, { month: options.month, currency: options.currency, whenTracked: true }, locale),
+  ]);
+
+  /*
+   * The whole live ledger, not the month's rows.
+   *
+   * A recurring row is stored once with an interval, so the row that pays
+   * March's rent may have been written in January and carry a January
+   * `spent_on`. Filtering by period in SQL would drop exactly the rows the
+   * month depends on; `expensesForMonth` is what decides what belongs.
+   *
+   * The same reasoning for the labour rules: they are versioned by
+   * `activeFrom`, so the rule that pays March's salary may have been written a
+   * year earlier. `selectLaborRules` decides which one this month is on, and
+   * takes one per person so that a raise does not pay two.
+   */
+  const monthRents = selectChairRents(rentRows, options.month);
+  const chairRentMinor = chairRentTotalMinor(monthRents);
 
   // One currency per report. The organization's currency can be changed and
   // nothing already recorded is converted, so rows in the old one are counted
@@ -250,11 +308,7 @@ export async function loadPeriodPL(
       recurringTo: row.recurringTo,
     }));
 
-  // The month's own mode, never today's: a month already reported keeps it.
-  const materialsMode = materialsModeFor(
-    (await loadMaterialsModes(tx, options.organizationId)).periods,
-    options.month,
-  );
+  const materialsMode = materialsModeFor(modes.periods, options.month);
   const monthExpenses = expensesForMonth(inCurrency, options.month, materialsMode);
 
   const pl = buildPeriodPL({
@@ -266,27 +320,6 @@ export async function loadPeriodPL(
     chairRentMinor,
   });
 
-  const rota = await loadMonthRota(tx, options.month);
-
-  /*
-   * Draws are filtered by day in SQL, unlike the ledger above: they carry no
-   * recurrence, so the day they happened is the whole answer.
-   */
-  const draws = await tx
-    .select({ amountMinor: ownerDraws.amountMinor, currency: ownerDraws.currency })
-    .from(ownerDraws)
-    .where(
-      and(
-        gte(ownerDraws.occurredOn, from.toISOString().slice(0, 10)),
-        lte(ownerDraws.occurredOn, to.toISOString().slice(0, 10)),
-      ),
-    );
-  /*
-   * What hired masters were actually handed, for a month inside the span the
-   * studio keeps track of — null for every other month, which leaves the cash
-   * flow reading their pay as gone the month it was earned.
-   */
-  const payouts = await loadPayoutReport(tx, { month: options.month, currency: options.currency, whenTracked: true }, locale);
   const payoutRows = payouts?.ledger.rows ?? [];
 
   const ownerDrawsMinor = draws

@@ -2,6 +2,7 @@ import { cache } from "react";
 import { eq } from "drizzle-orm";
 
 import { organizationLogos } from "@/db/schema";
+import { uuidLiteral } from "@/db/literal";
 import { withTenant } from "@/db/tenant";
 
 /**
@@ -25,8 +26,10 @@ export const loadOrganizationLogoVersion = cache(
       tx
         .select({ version: organizationLogos.version })
         .from(organizationLogos)
-        .where(eq(organizationLogos.organizationId, organizationId))
-        .limit(1),
+        // One row per studio, so no `limit`; and the id written into the text,
+        // so the statement has no parameter and costs one round trip rather
+        // than two. Every signed-in page reads this. See `db/literal.ts`.
+        .where(eq(organizationLogos.organizationId, uuidLiteral(organizationId))),
     );
     return row?.version ?? null;
   },

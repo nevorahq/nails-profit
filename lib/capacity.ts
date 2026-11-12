@@ -1,5 +1,6 @@
 import { and, eq, gte, isNull, lt, ne, or } from "drizzle-orm";
 
+import { constantLiteral, dayLiteral, instantLiteral } from "@/db/literal";
 import { availabilityExceptions, locations, scheduleRules, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import {
@@ -41,7 +42,9 @@ export async function loadMonthRota(
   const from = new Date(bounds.start.getTime() - 86_400_000);
   const to = new Date(bounds.end.getTime() + 86_400_000);
 
-  const rules = await tx
+  // Both reads start together and carry no parameters (see `db/literal.ts`),
+  // so they travel as one flight inside the caller's transaction.
+  const rulesRead = tx
     .select({
       specialistId: scheduleRules.specialistId,
       timezone: locations.timezone,
@@ -57,15 +60,19 @@ export async function loadMonthRota(
     .where(
       and(
         isNull(specialists.archivedAt),
-        ne(specialists.cooperationType, "rent"),
+        ne(specialists.cooperationType, constantLiteral("rent")),
         // A rule that ended before this month, or starts after it, cannot put an
         // hour in it. The rest is decided by `ruleAppliesOn`, day by day.
-        or(isNull(scheduleRules.effectiveTo), gte(scheduleRules.effectiveTo, from.toISOString().slice(0, 10))),
-        lt(scheduleRules.effectiveFrom, to.toISOString().slice(0, 10)),
+        or(
+          isNull(scheduleRules.effectiveTo),
+          gte(scheduleRules.effectiveTo, dayLiteral(from.toISOString().slice(0, 10))),
+        ),
+        lt(scheduleRules.effectiveFrom, dayLiteral(to.toISOString().slice(0, 10))),
       ),
-    );
+    )
+    .execute();
 
-  const exceptions = await tx
+  const exceptionsRead = tx
     .select({
       specialistId: availabilityExceptions.specialistId,
       kind: availabilityExceptions.kind,
@@ -77,11 +84,13 @@ export async function loadMonthRota(
     .where(
       and(
         isNull(specialists.archivedAt),
-        ne(specialists.cooperationType, "rent"),
-        lt(availabilityExceptions.startsAt, to),
-        gte(availabilityExceptions.endsAt, from),
+        ne(specialists.cooperationType, constantLiteral("rent")),
+        lt(availabilityExceptions.startsAt, instantLiteral(to)),
+        gte(availabilityExceptions.endsAt, instantLiteral(from)),
       ),
-    );
+    )
+    .execute();
+  const [rules, exceptions] = await Promise.all([rulesRead, exceptionsRead]);
 
   const ruleInputs: CapacityRuleInput[] = rules.map((rule) => ({
     ...rule,

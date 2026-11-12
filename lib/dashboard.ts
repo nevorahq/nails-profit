@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, isNull, lte, ne, or, type SQL } from "drizzle-orm";
 
+import { constantLiteral, instantLiteral, uuidLiteral } from "@/db/literal";
 import { financialSnapshots, specialists, visitLines, visits } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { toCommission } from "@/domain/commission";
@@ -30,7 +31,7 @@ export type DashboardFilters = Readonly<{
  */
 export function studioVisitsOnly(filters: DashboardFilters): SQL | undefined {
   if (filters.specialistId) return undefined;
-  return or(isNull(visits.masterCooperation), ne(visits.masterCooperation, "rent"));
+  return or(isNull(visits.masterCooperation), ne(visits.masterCooperation, constantLiteral("rent")));
 }
 
 /**
@@ -47,10 +48,16 @@ export async function loadDashboard(
   filters: DashboardFilters,
   locale: AppLocale,
 ): Promise<{ metrics: DashboardMetrics; rows: VisitMetricRow[] }> {
+  /*
+   * Written into the text rather than sent as parameters — see
+   * `db/literal.ts`. Every report reads through here, and with a parameter
+   * each of its two statements cost a second round trip and held up whatever
+   * the transaction had queued behind it.
+   */
   const conditions = [
-    filters.from ? gte(visits.completedAt, filters.from) : undefined,
-    filters.to ? lte(visits.completedAt, filters.to) : undefined,
-    filters.specialistId ? eq(visits.specialistId, filters.specialistId) : undefined,
+    filters.from ? gte(visits.completedAt, instantLiteral(filters.from)) : undefined,
+    filters.to ? lte(visits.completedAt, instantLiteral(filters.to)) : undefined,
+    filters.specialistId ? eq(visits.specialistId, uuidLiteral(filters.specialistId)) : undefined,
     studioVisitsOnly(filters),
   ].filter(Boolean);
 
@@ -66,7 +73,13 @@ export async function loadDashboard(
    * single reason a twelve-month dashboard took seconds rather than
    * milliseconds — section 15.1 allows two.
    */
-  const snapshots = await tx
+  /*
+   * Both reads are started before either is awaited. They share one
+   * transaction, so they are not parallel on the server, but with no
+   * parameters the driver sends them as one flight: one round trip instead of
+   * two.
+   */
+  const snapshotsRead = tx
     .selectDistinctOn([financialSnapshots.visitId], {
       visitId: financialSnapshots.visitId,
       serviceId: visits.serviceId,
@@ -99,7 +112,8 @@ export async function loadDashboard(
     .innerJoin(visits, eq(visits.id, financialSnapshots.visitId))
     .innerJoin(specialists, eq(specialists.id, visits.specialistId))
     .where(where)
-    .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion));
+    .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion))
+    .execute();
 
   /*
    * Every line, not one per visit: a visit of several services is split
@@ -107,7 +121,7 @@ export async function loadDashboard(
    * which rule it was paid under and how long it was planned to take. Still
    * one query for the whole period.
    */
-  const lines = await tx
+  const linesRead = tx
     .select({
       visitId: visitLines.visitId,
       kind: visitLines.kind,
@@ -128,7 +142,9 @@ export async function loadDashboard(
     .from(visitLines)
     .innerJoin(visits, eq(visits.id, visitLines.visitId))
     .where(where)
-    .orderBy(visitLines.visitId, visitLines.createdAt, visitLines.id);
+    .orderBy(visitLines.visitId, visitLines.createdAt, visitLines.id)
+    .execute();
+  const [snapshots, lines] = await Promise.all([snapshotsRead, linesRead]);
 
   const linesByVisit = new Map<string, typeof lines>();
   for (const line of lines) {
