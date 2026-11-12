@@ -122,7 +122,7 @@ test.describe("a master's photo", () => {
     const address = await photo.getAttribute("src");
 
     await page.goto(`/app/calendar?date=${isoDate(day)}`);
-    const named = page.locator(".calendar-entry .calendar-master");
+    const named = page.locator(".calendar-group-head", { hasText: studio.specialistName });
     await expect(named).toContainText(studio.specialistName);
     // The same address, so the calendar is reading the card rather than the
     // account behind it — and the browser has it cached already.
@@ -133,9 +133,9 @@ test.describe("a master's photo", () => {
     await expect(circle).toHaveText(studio.specialistName.slice(0, 1).toUpperCase());
 
     await page.goto(`/app/calendar?date=${isoDate(day)}`);
-    await expect(page.locator(".calendar-entry .calendar-master .avatar img")).toHaveCount(0);
+    await expect(page.locator(".calendar-group-head", { hasText: studio.specialistName }).locator(".avatar img")).toHaveCount(0);
     // The initial takes its place rather than the circle going empty.
-    await expect(page.locator(".calendar-entry .calendar-master .avatar")).toHaveText(
+    await expect(page.locator(".calendar-group-head", { hasText: studio.specialistName }).locator(".avatar")).toHaveText(
       studio.specialistName.slice(0, 1).toUpperCase(),
     );
 

@@ -1446,6 +1446,11 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .calendar-toolbar { display: flex; flex-wrap: wrap; gap: 16rem; align-items: center; justify-content: space-between; margin: 18rem 0 4rem; }
 
 .calendar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10rem; }
+/* A studio's day, one run per master: the name heads the run once instead of riding on every card. */
+.calendar-group + .calendar-group { margin-top: 22rem; }
+.calendar-group-head { margin: 0 0 10rem; font-size: 15rem; font-weight: 700; }
+.calendar-group-head.calendar-master { display: flex; gap: 8rem; }
+.calendar-group-head.calendar-master .avatar { width: 26rem; height: 26rem; font-size: 12rem; }
 .calendar-entry { border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface); }
 /* The stripe repeats what the status text already says; it is a second signal,
    never the only one (section 7.8). */

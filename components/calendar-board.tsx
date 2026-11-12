@@ -17,6 +17,7 @@ import {
   type ShiftRule,
   type Span,
 } from "@/components/calendar-free-time";
+import { groupDayByMaster } from "@/components/calendar-day-groups";
 import { BookingSlotPicker } from "@/components/booking-slot-picker";
 import { ClientPicker, type PickableClient } from "@/components/client-picker";
 import { DayMoreTile } from "@/components/day-more-tile";
@@ -520,24 +521,23 @@ export function CalendarBoard({
   }
 
   /*
-   * Whose appointment this is, on the card itself.
+   * Whose hours these are: the day cut into one run per master, each headed by
+   * their face and name.
    *
-   * The day used to stand in a column headed by its master's name and face, so
-   * naming them on every card would have been a line of noise per appointment.
-   * A flat list has no column to inherit it from: without this, a studio of
-   * four reads as one queue belonging to nobody.
+   * The name used to ride on every card of a flat list, free ones included, so
+   * a master with three open hours had it three times in a row. Under a heading
+   * it is said once, and the cards say only what is booked or open.
    *
-   * Still withheld wherever the reader already knows whose day this is: a
-   * studio of one, a Master looking at their own calendar, and anyone who has
-   * narrowed the filter to a single master. In all three every card would carry
-   * the same name, which is a line of noise per appointment.
+   * Not done wherever the reader already knows whose day this is: a studio of
+   * one, a Master looking at their own calendar, and anyone who has narrowed
+   * the filter to a single master. A heading over the only run there is would
+   * be a line of noise.
    *
-   * Offered the moment something on the day belongs to somebody no longer on
-   * the roster, since that is the one name the reader cannot infer — the
-   * roster is the live one and has to be, while the appointments deliberately
-   * are not.
+   * Done the moment something on the day belongs to somebody no longer on the
+   * roster, since that is the one name the reader cannot infer — the roster is
+   * the live one and has to be, while the appointments deliberately are not.
    */
-  const namesMasters =
+  const byMaster =
     ownSpecialistId === null &&
     !filters.specialist &&
     (specialists.length > 1 ||
@@ -961,14 +961,13 @@ export function CalendarBoard({
   })();
 
   /*
-   * The listed day, as one run in time order.
+   * The listed day, in time order.
    *
    * Appointments, blocked time and the openings between them in the same list,
    * because to whoever is reading it they are the same statement about an hour:
-   * either it is spoken for, or it is there to be sold. Sorted by the clock
-   * rather than grouped under each master, which is the trade this layout makes
-   * — a column per person was fifty pixels wide on a phone, and a flat list is
-   * not, so the name rides on the card instead of heading a column of them.
+   * either it is spoken for, or it is there to be sold. Rows rather than a
+   * column per person, which was fifty pixels wide on a phone; in a studio the
+   * rows are then cut into one run per master (`byMaster`).
    *
    * An opening sorts after whatever begins at the same minute: two masters, one
    * with a client at 12:00 and the other free from 12:00, read in that order.
@@ -988,6 +987,34 @@ export function CalendarBoard({
     (left, right) =>
       left.at.localeCompare(right.at) || Number(left.kind === "free") - Number(right.kind === "free"),
   );
+
+  /*
+   * One run per master in a studio; the whole day, unheaded, everywhere else.
+   *
+   * Each run keyed by whose it is, the unheaded one included: narrowing «all
+   * masters» to one of them — which is what opening a request from the bell
+   * does — then keeps that master's list, and the card already open in it,
+   * instead of drawing a new one with every card shut.
+   */
+  const dayGroups: { key: string; specialistId: string | null; items: DayItem[] }[] = byMaster
+    ? groupDayByMaster(
+        dayItems,
+        (item) => item.data.specialistId,
+        specialists.map((person) => person.id),
+      ).map((group) => ({ key: group.specialistId, ...group }))
+    : dayItems.length > 0
+      ? [{ key: ownSpecialistId ?? (filters.specialist || specialists[0]?.id) ?? "day", specialistId: null, items: dayItems }]
+      : [];
+
+  /**
+   * The heading's name: the roster's, or for somebody no longer on it the name
+   * their own entries carry. An opening is only ever offered for somebody on
+   * the roster, so one of the two always answers.
+   */
+  const masterNameOf = (specialistId: string, items: readonly DayItem[]) =>
+    specialists.find((person) => person.id === specialistId)?.name ??
+    items.flatMap((item) => (item.kind === "free" ? [] : [item.data.specialistName]))[0] ??
+    "";
 
   /*
    * The month and its year, in one list.
@@ -1499,518 +1526,502 @@ export function CalendarBoard({
           find out.
         */}
         {dayItems.every((item) => item.kind === "free") && <p className="muted">{t("calendar.emptyDay")}</p>}
-        {dayItems.length > 0 && (
-          <ul className="calendar-list">
-            {dayItems.map((item) => {
-              if (item.kind === "free") {
-                const slot = item.data;
-                const from = formatLocalTime(slot.start);
-                const to = formatLocalTime(slot.end);
-                return (
-                  <li key={`free-${slot.specialistId}-${slot.locationId}-${slot.start}`} className="calendar-free">
-                    {/*
-                      A button, not a card that opens: there is nothing inside
-                      an opening to read, only a window to open on it. The label
-                      says what pressing does, because «10:00–12:00 Свободно»
-                      alone is a statement and this is a control.
-                    */}
-                    <button
-                      type="button"
-                      className="calendar-free-slot"
-                      aria-label={t("calendar.freeSlotBook", { from, to })}
-                      onClick={() =>
-                        openCompose({ locationId: slot.locationId, specialistId: slot.specialistId, time: from })
-                      }
-                    >
-                      <span className="calendar-time">
-                        {from}–{to}
-                      </span>
-                      <span className="calendar-what">{t("calendar.freeSlot")}</span>
-                      {namesMasters && (
-                        <span className="calendar-who calendar-master">
-                          {faceOf(slot.specialistId)}
-                          {specialists.find((person) => person.id === slot.specialistId)?.name}
-                        </span>
-                      )}
-                      {/* The address, where there is more than one: the same hours at two of them are two openings. */}
-                      {locations.length > 1 && (
-                        <span className="unit-hint">
-                          {locations.find((place) => place.id === slot.locationId)?.name}
-                        </span>
-                      )}
-                      <span className="calendar-free-plus" aria-hidden="true">
-                        <ToolIcon name="plus" />
-                      </span>
-                    </button>
-                  </li>
-                );
-              }
-              if (item.kind === "exception") {
-                const exc = item.data;
-                return (
-                    <li key={exc.id} className="calendar-entry status-blocked">
-                      <details>
-                        <summary>
+        {dayGroups.map((group) => (
+          <div key={group.key} className="calendar-group">
+            {group.specialistId !== null && (
+              <h3 className="calendar-group-head calendar-master">
+                {faceOf(group.specialistId)}
+                {masterNameOf(group.specialistId, group.items)}
+              </h3>
+            )}
+            <ul className="calendar-list">
+              {group.items.map((item) => {
+                  if (item.kind === "free") {
+                    const slot = item.data;
+                    const from = formatLocalTime(slot.start);
+                    const to = formatLocalTime(slot.end);
+                    return (
+                      <li key={`free-${slot.specialistId}-${slot.locationId}-${slot.start}`} className="calendar-free">
+                        {/*
+                          A button, not a card that opens: there is nothing inside
+                          an opening to read, only a window to open on it. The label
+                          says what pressing does, because «10:00–12:00 Свободно»
+                          alone is a statement and this is a control.
+                        */}
+                        <button
+                          type="button"
+                          className="calendar-free-slot"
+                          aria-label={t("calendar.freeSlotBook", { from, to })}
+                          onClick={() =>
+                            openCompose({ locationId: slot.locationId, specialistId: slot.specialistId, time: from })
+                          }
+                        >
                           <span className="calendar-time">
-                            {exc.localStart}–{exc.localEnd}
+                            {from}–{to}
                           </span>
-                          <span className="calendar-what">
-                            {t("calendar.blockedLabel")}
-                            {exc.reason && <span className="unit-hint">{exc.reason}</span>}
-                          </span>
-                          {namesMasters && (
-                            <span className="calendar-who calendar-master">
-                              {faceOf(exc.specialistId)}
-                              {exc.specialistName}
+                          <span className="calendar-what">{t("calendar.freeSlot")}</span>
+                          {/* The address, where there is more than one: the same hours at two of them are two openings. */}
+                          {locations.length > 1 && (
+                            <span className="unit-hint">
+                              {locations.find((place) => place.id === slot.locationId)?.name}
                             </span>
                           )}
-                        </summary>
-                        <div className="calendar-detail">
-                          <p className="muted">
-                            {exc.locationName ?? t("calendar.allLocations")}
-                            {" · "}
-                            {exc.specialistName}
-                          </p>
-                          {canWrite && (
-                            <button
-                              className="danger-button"
-                              type="button"
-                              disabled={pending}
-                              onClick={() =>
-                                send(
-                                  `/api/v1/availability/exceptions?id=${exc.id}`,
-                                  undefined,
-                                  { method: "DELETE" },
-                                )
-                              }
-                            >
-                              {pending ? t("common.saving") : t("calendar.unblock")}
-                            </button>
-                          )}
-                        </div>
-                      </details>
-                    </li>
-                  );
-                }
-                if (item.kind === "visit") {
-                  const visit = item.data;
-                  return (
-                    <li key={visit.id} id={`visit-${visit.id}`} className="calendar-entry is-visit">
-                      <details>
+                          <span className="calendar-free-plus" aria-hidden="true">
+                            <ToolIcon name="plus" />
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  }
+                  if (item.kind === "exception") {
+                    const exc = item.data;
+                    return (
+                        <li key={exc.id} className="calendar-entry status-blocked">
+                          <details>
+                            <summary>
+                              <span className="calendar-time">
+                                {exc.localStart}–{exc.localEnd}
+                              </span>
+                              <span className="calendar-what">
+                                {t("calendar.blockedLabel")}
+                                {exc.reason && <span className="unit-hint">{exc.reason}</span>}
+                              </span>
+                            </summary>
+                            <div className="calendar-detail">
+                              <p className="muted">
+                                {exc.locationName ?? t("calendar.allLocations")}
+                                {" · "}
+                                {exc.specialistName}
+                              </p>
+                              {canWrite && (
+                                <button
+                                  className="danger-button"
+                                  type="button"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    send(
+                                      `/api/v1/availability/exceptions?id=${exc.id}`,
+                                      undefined,
+                                      { method: "DELETE" },
+                                    )
+                                  }
+                                >
+                                  {pending ? t("common.saving") : t("calendar.unblock")}
+                                </button>
+                              )}
+                            </div>
+                          </details>
+                        </li>
+                      );
+                    }
+                    if (item.kind === "visit") {
+                      const visit = item.data;
+                      return (
+                        <li key={visit.id} id={`visit-${visit.id}`} className="calendar-entry is-visit">
+                          <details>
+                            <summary>
+                              <span className="calendar-time">
+                                {visit.localStart}–{visit.localEnd}
+                              </span>
+                              <span className="calendar-what">
+                                {visit.serviceName}
+                                {visit.extraLines > 0 && <span className="unit-hint">+{visit.extraLines}</span>}
+                              </span>
+                              <span className="calendar-who">
+                                {visit.clientName ?? t("calendar.noClient")}
+                              </span>
+                              {/* Grey says it is done; the words say it to a reader who cannot see grey. */}
+                              <span className="sr-only">{t("calendar.visitClosed")}</span>
+                            </summary>
+                            <div className="calendar-detail">
+                              <p className="muted">
+                                {visit.specialistName}
+                                {visit.revenueMinor !== null && <> · {money(visit.revenueMinor)}</>}
+                              </p>
+                              <p>
+                                <Link className="text-link" href={`/app/visits?visit=${visit.id}`}>
+                                  {t("calendar.openVisit")}
+                                </Link>
+                              </p>
+                            </div>
+                          </details>
+                        </li>
+                      );
+                    }
+                    const booking = item.data;
+                    return (
+                    <li
+                      key={booking.id}
+                      id={`booking-${booking.id}`}
+                      className={`calendar-entry status-${booking.status}`}
+                    >
+                      <details
+                        onToggle={(event) => {
+                          if (
+                            event.currentTarget.open &&
+                            booking.status === "confirmed"
+                          ) {
+                            loadPreview(booking.id);
+                          }
+                        }}
+                      >
                         <summary>
                           <span className="calendar-time">
-                            {visit.localStart}–{visit.localEnd}
+                            {booking.localStart}–{booking.localEnd}
                           </span>
                           <span className="calendar-what">
-                            {visit.serviceName}
-                            {visit.extraLines > 0 && <span className="unit-hint">+{visit.extraLines}</span>}
+                            {booking.serviceName}
+                            {booking.extraLines > 0 && <span className="unit-hint">+{booking.extraLines}</span>}
                           </span>
                           <span className="calendar-who">
-                            {visit.clientName ?? t("calendar.noClient")}
-                            {namesMasters && (
-                              <span className="unit-hint calendar-master">
-                                {faceOf(visit.specialistId)}
-                                {visit.specialistName}
-                              </span>
-                            )}
+                            {booking.clientName ?? t("calendar.noClient")}
                           </span>
-                          {/* Grey says it is done; the words say it to a reader who cannot see grey. */}
-                          <span className="sr-only">{t("calendar.visitClosed")}</span>
+                          {/*
+                            Never colour alone (section 7.8): the status is words.
+                            On a phone the two live statuses become a tick and an
+                            exclamation mark; the words stay in the DOM, hidden
+                            visually, so the mark is still read out.
+                          */}
+                          <span
+                            className={`calendar-status${
+                              booking.status === "confirmed" || booking.status === "pending_confirmation"
+                                ? ` has-icon status-${booking.status}`
+                                : ""
+                            }`}
+                          >
+                            {(booking.status === "confirmed" || booking.status === "pending_confirmation") && (
+                              <StatusIcon name={booking.status === "confirmed" ? "confirmed" : "pending"} />
+                            )}
+                            <span className="calendar-status-word">
+                              {t(`bookingStatus.${booking.status}` as MessageKey)}
+                            </span>
+                          </span>
                         </summary>
+
                         <div className="calendar-detail">
+                          {/*
+                            Which card this visit joins, when it is not the name
+                            above. A public request keeps the client's record as the
+                            studio wrote it and carries its own name instead, so the
+                            two can differ — one number, a household — and the desk
+                            has to be able to see both: who is coming, and whose
+                            history this visit will be filed under.
+                          */}
+                          {booking.clientCardName && (
+                            <p className="muted">
+                              {t("calendar.clientCard", { name: booking.clientCardName })}
+                            </p>
+                          )}
+                          {booking.clientNotes && (
+                            <div className="calendar-client-notes">
+                              <strong>{t("calendar.clientNotes")}</strong>
+                              <p className="client-notes-text">{booking.clientNotes}</p>
+                            </div>
+                          )}
                           <p className="muted">
-                            {visit.specialistName}
-                            {visit.revenueMinor !== null && <> · {money(visit.revenueMinor)}</>}
+                            {booking.locationName} · {booking.specialistName} · {money(booking.priceMinor)}
+                            {/*
+                              The number, as something to press rather than to read
+                              out to yourself and type into a phone. «Клиент
+                              опаздывает» and «клиент не отвечает» are both answered
+                              by reaching the client, and this card is where the desk
+                              is standing when either happens — by calling, or by
+                              writing where somebody who does not pick up will read
+                              it. See `ClientContact`.
+
+                              `normalizedPhone` is safe in the href as it stands:
+                              `normalizePhone` in `domain/phone` strips every space,
+                              dash and bracket a human might type and returns
+                              `+<код><номер>`, which is what `tel:` wants.
+
+                              Absent for an Analyst — the column arrives null under
+                              `exclude_pii`, so the link cannot be built from data
+                              that is not there.
+                            */}
+                            {booking.clientPhone && (
+                              <>
+                                {" · "}
+                                <ClientContact
+                                  phone={booking.clientPhone}
+                                  locale={locale}
+                                  marks={booking.clientChannels}
+                                />
+                              </>
+                            )}
                           </p>
+                          {/*
+                            The zone used to head this line — «Время локации
+                            (Europe/Chisinau)» over every card, on a screen where
+                            every time already is that location's. It named the
+                            address it belongs to two lines up, so the paragraph is
+                            now the deadline alone, and goes when there is none.
+                          */}
+                          {booking.confirmationDueAt && (
+                            <p className="muted">
+                              {t("calendar.answerBy", {
+                                when: new Date(booking.confirmationDueAt).toLocaleString(localeTag, {
+                                  timeZone: booking.timezone,
+                                }),
+                              })}
+                            </p>
+                          )}
+
                           <p>
-                            <Link className="text-link" href={`/app/visits?visit=${visit.id}`}>
-                              {t("calendar.openVisit")}
+                            <Link className="text-link" href={`/app/calendar/${booking.id}`}>
+                              {t("calendar.openCard")}
                             </Link>
                           </p>
-                        </div>
-                      </details>
-                    </li>
-                  );
-                }
-                const booking = item.data;
-                return (
-                <li
-                  key={booking.id}
-                  id={`booking-${booking.id}`}
-                  className={`calendar-entry status-${booking.status}`}
-                >
-                  <details
-                    onToggle={(event) => {
-                      if (
-                        event.currentTarget.open &&
-                        booking.status === "confirmed"
-                      ) {
-                        loadPreview(booking.id);
-                      }
-                    }}
-                  >
-                    <summary>
-                      <span className="calendar-time">
-                        {booking.localStart}–{booking.localEnd}
-                      </span>
-                      <span className="calendar-what">
-                        {booking.serviceName}
-                        {booking.extraLines > 0 && <span className="unit-hint">+{booking.extraLines}</span>}
-                      </span>
-                      <span className="calendar-who">
-                        {booking.clientName ?? t("calendar.noClient")}
-                        {namesMasters && (
-                          <span className="unit-hint calendar-master">
-                            {faceOf(booking.specialistId)}
-                            {booking.specialistName}
-                          </span>
-                        )}
-                      </span>
-                      {/*
-                        Never colour alone (section 7.8): the status is words.
-                        On a phone the two live statuses become a tick and an
-                        exclamation mark; the words stay in the DOM, hidden
-                        visually, so the mark is still read out.
-                      */}
-                      <span
-                        className={`calendar-status${
-                          booking.status === "confirmed" || booking.status === "pending_confirmation"
-                            ? ` has-icon status-${booking.status}`
-                            : ""
-                        }`}
-                      >
-                        {(booking.status === "confirmed" || booking.status === "pending_confirmation") && (
-                          <StatusIcon name={booking.status === "confirmed" ? "confirmed" : "pending"} />
-                        )}
-                        <span className="calendar-status-word">
-                          {t(`bookingStatus.${booking.status}` as MessageKey)}
-                        </span>
-                      </span>
-                    </summary>
 
-                    <div className="calendar-detail">
-                      {/*
-                        Which card this visit joins, when it is not the name
-                        above. A public request keeps the client's record as the
-                        studio wrote it and carries its own name instead, so the
-                        two can differ — one number, a household — and the desk
-                        has to be able to see both: who is coming, and whose
-                        history this visit will be filed under.
-                      */}
-                      {booking.clientCardName && (
-                        <p className="muted">
-                          {t("calendar.clientCard", { name: booking.clientCardName })}
-                        </p>
-                      )}
-                      {booking.clientNotes && (
-                        <div className="calendar-client-notes">
-                          <strong>{t("calendar.clientNotes")}</strong>
-                          <p className="client-notes-text">{booking.clientNotes}</p>
-                        </div>
-                      )}
-                      <p className="muted">
-                        {booking.locationName} · {booking.specialistName} · {money(booking.priceMinor)}
-                        {/*
-                          The number, as something to press rather than to read
-                          out to yourself and type into a phone. «Клиент
-                          опаздывает» and «клиент не отвечает» are both answered
-                          by reaching the client, and this card is where the desk
-                          is standing when either happens — by calling, or by
-                          writing where somebody who does not pick up will read
-                          it. See `ClientContact`.
-
-                          `normalizedPhone` is safe in the href as it stands:
-                          `normalizePhone` in `domain/phone` strips every space,
-                          dash and bracket a human might type and returns
-                          `+<код><номер>`, which is what `tel:` wants.
-
-                          Absent for an Analyst — the column arrives null under
-                          `exclude_pii`, so the link cannot be built from data
-                          that is not there.
-                        */}
-                        {booking.clientPhone && (
-                          <>
-                            {" · "}
-                            <ClientContact
-                              phone={booking.clientPhone}
-                              locale={locale}
-                              marks={booking.clientChannels}
-                            />
-                          </>
-                        )}
-                      </p>
-                      {/*
-                        The zone used to head this line — «Время локации
-                        (Europe/Chisinau)» over every card, on a screen where
-                        every time already is that location's. It named the
-                        address it belongs to two lines up, so the paragraph is
-                        now the deadline alone, and goes when there is none.
-                      */}
-                      {booking.confirmationDueAt && (
-                        <p className="muted">
-                          {t("calendar.answerBy", {
-                            when: new Date(booking.confirmationDueAt).toLocaleString(localeTag, {
-                              timeZone: booking.timezone,
-                            }),
-                          })}
-                        </p>
-                      )}
-
-                      <p>
-                        <Link className="text-link" href={`/app/calendar/${booking.id}`}>
-                          {t("calendar.openCard")}
-                        </Link>
-                      </p>
-
-                      {/*
-                        Asked the moment the visit is closed, on the card that
-                        has just turned grey: the client is still at the desk,
-                        and the next visit is one question away.
-                      */}
-                      {canWrite && booking.status === "completed" && booking.clientId && (
-                        <NextVisit bookingId={booking.id} locale={locale} localeTag={localeTag} />
-                      )}
-
-                      {/*
-                        A cancelled hour still to come is a gap somebody can fill:
-                        offered here to the clients who are due back, as a message
-                        the studio edits and sends itself.
-                      */}
-                      {canWrite && booking.status === "cancelled" && booking.localDate >= today && (
-                        <SlotFillPanel
-                          bookingId={booking.id}
-                          locale={locale}
-                          localeTag={localeTag}
-                          autoOpen={justCancelled === booking.id}
-                        />
-                      )}
-
-                      {canWrite && LIVE_STATUSES.has(booking.status) && (
-                        <div className="calendar-actions">
-                          {booking.status === "pending_confirmation" && (
-                            <button
-                              type="button"
-                              className="primary-button"
-                              disabled={pending}
-                              onClick={() =>
-                                send(`/api/v1/bookings/${booking.id}/confirm`, { version: booking.version })
-                              }
-                            >
-                              {t("calendar.confirm")}
-                            </button>
+                          {/*
+                            Asked the moment the visit is closed, on the card that
+                            has just turned grey: the client is still at the desk,
+                            and the next visit is one question away.
+                          */}
+                          {canWrite && booking.status === "completed" && booking.clientId && (
+                            <NextVisit bookingId={booking.id} locale={locale} localeTag={localeTag} />
                           )}
-                          {booking.status === "confirmed" && (
-                            <>
-                              {previews[booking.id] === "loading" && (
-                                <p className="muted">{t("calendar.loadingPreview")}</p>
+
+                          {/*
+                            A cancelled hour still to come is a gap somebody can fill:
+                            offered here to the clients who are due back, as a message
+                            the studio edits and sends itself.
+                          */}
+                          {canWrite && booking.status === "cancelled" && booking.localDate >= today && (
+                            <SlotFillPanel
+                              bookingId={booking.id}
+                              locale={locale}
+                              localeTag={localeTag}
+                              autoOpen={justCancelled === booking.id}
+                            />
+                          )}
+
+                          {canWrite && LIVE_STATUSES.has(booking.status) && (
+                            <div className="calendar-actions">
+                              {booking.status === "pending_confirmation" && (
+                                <button
+                                  type="button"
+                                  className="primary-button"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    send(`/api/v1/bookings/${booking.id}/confirm`, { version: booking.version })
+                                  }
+                                >
+                                  {t("calendar.confirm")}
+                                </button>
                               )}
-                              {typeof previews[booking.id] === "object" && previews[booking.id] !== null && (
-                                (() => {
-                                  const preview = (previews[booking.id] as BookingPreview).preview;
-                                  return (
-                                    <div className="visit-card-metrics calendar-completion-preview">
-                                      {preview.status === "complete" ? (
-                                        <>
-                                          <div>
-                                            <span>{t(businessLabel.visitEarnings[businessType])}</span>
-                                            <strong>−{money(preview.commission_minor)}</strong>
-                                          </div>
-                                          <div>
-                                            <span>{t("visits.keeps")}</span>
-                                            <strong>{money(preview.contribution_margin_minor)}</strong>
-                                          </div>
-                                        </>
-                                      ) : (
-                                        <p className="warning-banner">
-                                          {preview.reasons
-                                            .map((reason) => t(`reason.${reason}` as MessageKey))
-                                            .join("; ")}
-                                        </p>
-                                      )}
-                                    </div>
-                                  );
-                                })()
-                              )}
-                              <button
-                                type="button"
-                                className="primary-button"
-                                disabled={pending}
-                                onClick={() => completeNow(booking)}
-                              >
-                                {pending ? t("common.saving") : t("calendar.complete")}
-                              </button>
-                              <details
-                                className="calendar-subform"
-                              >
-                                <summary>{t("calendar.modifyClose")}</summary>
-                                <form className="inline-form" onSubmit={(e) => complete(booking, e)}>
-                                  <PaidField
-                                    id={`paid-${booking.id}`}
-                                    value={paidInputs[booking.id] ?? toMajorUnits(booking.priceMinor)}
-                                    priceMinor={booking.priceMinor}
-                                    paidMinor={
-                                      paidInputs[booking.id] === undefined
-                                        ? null
-                                        : toMinorUnits(paidInputs[booking.id])
-                                    }
-                                    currency={currency}
-                                    locale={locale}
-                                    onChange={(value) =>
-                                      setPaidInputs((previous) => ({ ...previous, [booking.id]: value }))
-                                    }
-                                  />
-                                  <TipField
-                                    id={`tip-${booking.id}`}
-                                    value={tipInputs[booking.id] ?? ""}
-                                    currency={currency}
-                                    locale={locale}
-                                    onChange={(value) =>
-                                      setTipInputs((previous) => ({ ...previous, [booking.id]: value }))
-                                    }
-                                  />
-                                  {(() => {
-                                    const r = previews[booking.id];
-                                    const dur = typeof r === "object" && r !== null ? r.durationMinutes : undefined;
-                                    return (
-                                      <label>
-                                        {t("closeVisit.actualMinutes")}
-                                        <input
-                                          key={dur ?? "pending"}
-                                          name="actual_duration"
-                                          type="number"
-                                          min="1"
-                                          step="1"
-                                          placeholder={dur === undefined ? undefined : String(dur)}
-                                        />
-                                      </label>
-                                    );
-                                  })()}
+                              {booking.status === "confirmed" && (
+                                <>
+                                  {previews[booking.id] === "loading" && (
+                                    <p className="muted">{t("calendar.loadingPreview")}</p>
+                                  )}
+                                  {typeof previews[booking.id] === "object" && previews[booking.id] !== null && (
+                                    (() => {
+                                      const preview = (previews[booking.id] as BookingPreview).preview;
+                                      return (
+                                        <div className="visit-card-metrics calendar-completion-preview">
+                                          {preview.status === "complete" ? (
+                                            <>
+                                              <div>
+                                                <span>{t(businessLabel.visitEarnings[businessType])}</span>
+                                                <strong>−{money(preview.commission_minor)}</strong>
+                                              </div>
+                                              <div>
+                                                <span>{t("visits.keeps")}</span>
+                                                <strong>{money(preview.contribution_margin_minor)}</strong>
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <p className="warning-banner">
+                                              {preview.reasons
+                                                .map((reason) => t(`reason.${reason}` as MessageKey))
+                                                .join("; ")}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })()
+                                  )}
                                   <button
+                                    type="button"
                                     className="primary-button"
-                                    type="submit"
-                                    disabled={
-                                      pending ||
-                                      (paidInputs[booking.id] !== undefined &&
-                                        toMinorUnits(paidInputs[booking.id]) === null) ||
-                                      tipMinorOf(tipInputs[booking.id] ?? "") === null
-                                    }
+                                    disabled={pending}
+                                    onClick={() => completeNow(booking)}
                                   >
                                     {pending ? t("common.saving") : t("calendar.complete")}
                                   </button>
+                                  <details
+                                    className="calendar-subform"
+                                  >
+                                    <summary>{t("calendar.modifyClose")}</summary>
+                                    <form className="inline-form" onSubmit={(e) => complete(booking, e)}>
+                                      <PaidField
+                                        id={`paid-${booking.id}`}
+                                        value={paidInputs[booking.id] ?? toMajorUnits(booking.priceMinor)}
+                                        priceMinor={booking.priceMinor}
+                                        paidMinor={
+                                          paidInputs[booking.id] === undefined
+                                            ? null
+                                            : toMinorUnits(paidInputs[booking.id])
+                                        }
+                                        currency={currency}
+                                        locale={locale}
+                                        onChange={(value) =>
+                                          setPaidInputs((previous) => ({ ...previous, [booking.id]: value }))
+                                        }
+                                      />
+                                      <TipField
+                                        id={`tip-${booking.id}`}
+                                        value={tipInputs[booking.id] ?? ""}
+                                        currency={currency}
+                                        locale={locale}
+                                        onChange={(value) =>
+                                          setTipInputs((previous) => ({ ...previous, [booking.id]: value }))
+                                        }
+                                      />
+                                      {(() => {
+                                        const r = previews[booking.id];
+                                        const dur = typeof r === "object" && r !== null ? r.durationMinutes : undefined;
+                                        return (
+                                          <label>
+                                            {t("closeVisit.actualMinutes")}
+                                            <input
+                                              key={dur ?? "pending"}
+                                              name="actual_duration"
+                                              type="number"
+                                              min="1"
+                                              step="1"
+                                              placeholder={dur === undefined ? undefined : String(dur)}
+                                            />
+                                          </label>
+                                        );
+                                      })()}
+                                      <button
+                                        className="primary-button"
+                                        type="submit"
+                                        disabled={
+                                          pending ||
+                                          (paidInputs[booking.id] !== undefined &&
+                                            toMinorUnits(paidInputs[booking.id]) === null) ||
+                                          tipMinorOf(tipInputs[booking.id] ?? "") === null
+                                        }
+                                      >
+                                        {pending ? t("common.saving") : t("calendar.complete")}
+                                      </button>
+                                    </form>
+                                  </details>
+                                  <button
+                                    type="button"
+                                    className="secondary-button"
+                                    disabled={pending}
+                                    onClick={() =>
+                                      send(`/api/v1/bookings/${booking.id}/no-show`, {
+                                        version: booking.version,
+                                      })
+                                    }
+                                  >
+                                    {t("calendar.noShow")}
+                                  </button>
+                                </>
+                              )}
+
+                              {booking.clientId && (
+                                <details className="calendar-subform">
+                                  <summary>{t("calendar.resendManageLink")}</summary>
+                                  <p className="muted">{t("calendar.resendManageLinkHint")}</p>
+                                  <button
+                                    className="secondary-button"
+                                    type="button"
+                                    disabled={pending}
+                                    onClick={() => resendManageLink(booking.id)}
+                                  >
+                                    {pending ? t("common.saving") : t("calendar.resendManageLinkConfirm")}
+                                  </button>
+                                </details>
+                              )}
+
+                              <details className="calendar-subform">
+                                <summary>{t("calendar.move")}</summary>
+                                <form className="inline-form" onSubmit={(event) => reschedule(booking, event)}>
+                                  <label>
+                                    {t("calendar.date")}
+                                    <input type="date" name="date" defaultValue={booking.localDate} required />
+                                  </label>
+                                  <label>
+                                    {t("calendar.time")}
+                                    <input type="time" name="time" defaultValue={booking.localStart} required />
+                                  </label>
+                                  <label>
+                                    {t("calendar.specialist")}
+                                    {/*
+                                      The person this appointment is already with,
+                                      even when they no longer work here.
+
+                                      The list is live masters; the appointments
+                                      above are not filtered by the archive, and
+                                      they must not be — a client's Tuesday does
+                                      not disappear because the studio parted with
+                                      somebody. So a booking whose master was
+                                      archived had a `defaultValue` matching no
+                                      option, and a browser answers that by
+                                      selecting the first one: moving the time
+                                      moved the appointment to whoever happened to
+                                      head the list. Naming them keeps «не трогал
+                                      это поле» meaning «ничего не поменялось».
+                                    */}
+                                    <select name="specialist_id" defaultValue={booking.specialistId}>
+                                      {specialistOptions(reassignable, {
+                                        id: booking.specialistId,
+                                        name: booking.specialistName,
+                                      }).map((person) => (
+                                        <option key={person.id} value={person.id}>
+                                          {person.archived
+                                            ? t("specialists.archivedOption", { name: person.name })
+                                            : person.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <button className="primary-button" type="submit" disabled={pending}>
+                                    {pending ? t("common.saving") : t("calendar.move")}
+                                  </button>
                                 </form>
                               </details>
-                              <button
-                                type="button"
-                                className="secondary-button"
-                                disabled={pending}
-                                onClick={() =>
-                                  send(`/api/v1/bookings/${booking.id}/no-show`, {
-                                    version: booking.version,
-                                  })
-                                }
-                              >
-                                {t("calendar.noShow")}
-                              </button>
-                            </>
+
+                              <details className="calendar-subform">
+                                <summary>{t("calendar.cancel")}</summary>
+                                <form className="inline-form" onSubmit={(event) => cancel(booking, event)}>
+                                  <label>
+                                    {t("calendar.reason")}
+                                    <select name="reason" defaultValue="client_request">
+                                      {CANCELLATION_REASONS.map((reason) => (
+                                        <option key={reason} value={reason}>
+                                          {t(`cancelReason.${reason}` as MessageKey)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label>
+                                    {t("calendar.cancelledBy")}
+                                    <select name="cancelled_by" defaultValue="client">
+                                      <option value="client">{t("calendar.byClient")}</option>
+                                      <option value="staff">{t("calendar.byStudio")}</option>
+                                    </select>
+                                  </label>
+                                  <button className="danger-button" type="submit" disabled={pending}>
+                                    {t("calendar.cancel")}
+                                  </button>
+                                </form>
+                              </details>
+                            </div>
                           )}
-
-                          {booking.clientId && (
-                            <details className="calendar-subform">
-                              <summary>{t("calendar.resendManageLink")}</summary>
-                              <p className="muted">{t("calendar.resendManageLinkHint")}</p>
-                              <button
-                                className="secondary-button"
-                                type="button"
-                                disabled={pending}
-                                onClick={() => resendManageLink(booking.id)}
-                              >
-                                {pending ? t("common.saving") : t("calendar.resendManageLinkConfirm")}
-                              </button>
-                            </details>
-                          )}
-
-                          <details className="calendar-subform">
-                            <summary>{t("calendar.move")}</summary>
-                            <form className="inline-form" onSubmit={(event) => reschedule(booking, event)}>
-                              <label>
-                                {t("calendar.date")}
-                                <input type="date" name="date" defaultValue={booking.localDate} required />
-                              </label>
-                              <label>
-                                {t("calendar.time")}
-                                <input type="time" name="time" defaultValue={booking.localStart} required />
-                              </label>
-                              <label>
-                                {t("calendar.specialist")}
-                                {/*
-                                  The person this appointment is already with,
-                                  even when they no longer work here.
-
-                                  The list is live masters; the appointments
-                                  above are not filtered by the archive, and
-                                  they must not be — a client's Tuesday does
-                                  not disappear because the studio parted with
-                                  somebody. So a booking whose master was
-                                  archived had a `defaultValue` matching no
-                                  option, and a browser answers that by
-                                  selecting the first one: moving the time
-                                  moved the appointment to whoever happened to
-                                  head the list. Naming them keeps «не трогал
-                                  это поле» meaning «ничего не поменялось».
-                                */}
-                                <select name="specialist_id" defaultValue={booking.specialistId}>
-                                  {specialistOptions(reassignable, {
-                                    id: booking.specialistId,
-                                    name: booking.specialistName,
-                                  }).map((person) => (
-                                    <option key={person.id} value={person.id}>
-                                      {person.archived
-                                        ? t("specialists.archivedOption", { name: person.name })
-                                        : person.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <button className="primary-button" type="submit" disabled={pending}>
-                                {pending ? t("common.saving") : t("calendar.move")}
-                              </button>
-                            </form>
-                          </details>
-
-                          <details className="calendar-subform">
-                            <summary>{t("calendar.cancel")}</summary>
-                            <form className="inline-form" onSubmit={(event) => cancel(booking, event)}>
-                              <label>
-                                {t("calendar.reason")}
-                                <select name="reason" defaultValue="client_request">
-                                  {CANCELLATION_REASONS.map((reason) => (
-                                    <option key={reason} value={reason}>
-                                      {t(`cancelReason.${reason}` as MessageKey)}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label>
-                                {t("calendar.cancelledBy")}
-                                <select name="cancelled_by" defaultValue="client">
-                                  <option value="client">{t("calendar.byClient")}</option>
-                                  <option value="staff">{t("calendar.byStudio")}</option>
-                                </select>
-                              </label>
-                              <button className="danger-button" type="submit" disabled={pending}>
-                                {t("calendar.cancel")}
-                              </button>
-                            </form>
-                          </details>
                         </div>
-                      )}
-                    </div>
-                  </details>
-                </li>
-                );
+                      </details>
+                    </li>
+                    );
               })}
-          </ul>
-        )}
+            </ul>
+          </div>
+        ))}
       </section>
 
       {canWrite && bookable.length > 0 && locations.length > 0 && services.length > 0 && (
