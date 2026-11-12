@@ -417,7 +417,10 @@
   background: var(--accent);
 }
 
-.app-shell-root .calendar-entry { border-radius: 16rem; }
+/* An opening is rounded exactly as the appointment beside it: the two are read
+   in one list, and a 4rem corner next to a 16rem one looks like a mistake. */
+.app-shell-root .calendar-entry,
+.app-shell-root .calendar-free-slot { border-radius: 16rem; }
 
 .cookie-consent-banner { border: 0; border-radius: 20rem; box-shadow: var(--mint-raise-high); }
 .cookie-consent-decline, .cookie-consent-accept { border-radius: 999rem; }

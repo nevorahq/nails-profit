@@ -17,6 +17,7 @@ import type { BusinessType } from "@/i18n/business-labels";
 import { bookabilityOf, unbookableAmong } from "@/domain/bookability";
 import { type MessageKey, type Translate } from "@/i18n/t";
 import { useRegister, useTranslator } from "@/components/lexicon-provider";
+import { BlockTimePanel } from "@/components/block-time-panel";
 import { PlanNotice } from "@/components/plan-notice";
 import { PublicAddressEditor } from "@/components/public-address-editor";
 import { localeTag } from "@/i18n/translate";
@@ -147,6 +148,7 @@ export function BookingSetup({
   canManage,
   canPublish,
   canSaveRota,
+  canBlockTime = false,
   slotsChecked = false,
   nearestSlotDate = null,
   role,
@@ -183,6 +185,11 @@ export function BookingSetup({
   canManage: boolean;
   canPublish: boolean;
   canSaveRota?: boolean;
+  /**
+   * Whether this screen may block out a master's time — the `bookings` write
+   * scope, and not while the booking module is switched off.
+   */
+  canBlockTime?: boolean;
   /**
    * Whether the availability engine was asked at all. False before there is a
    * published address and a rota to ask about — the blockers already say what
@@ -1358,6 +1365,20 @@ export function BookingSetup({
             </button>
           </form>
         </section>
+      )}
+
+      {/*
+        Beside the hours, as an exception to them. A master blocks only their
+        own time; for everybody else it is the whole roster. An address with
+        no rota is not offered: there is no day yet to take an hour out of.
+      */}
+      {canBlockTime && specialists.length > 0 && active.length > 0 && !guided && (
+        <BlockTimePanel
+          locations={active}
+          specialists={isMaster ? specialists.filter((person) => person.id === ownSpecialistId) : specialists}
+          today={today}
+          locale={locale}
+        />
       )}
     </>
   );

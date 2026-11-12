@@ -6,10 +6,14 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   clockAt,
+  freeSlotsOfDay,
   freeWindows,
   rotaFor,
+  splitIntoSlots,
   toHalfHours,
   totalMinutes,
+  type BusySpan,
+  type FreeSlot,
   type ShiftRule,
   type Span,
 } from "@/components/calendar-free-time";
@@ -30,11 +34,13 @@ import type { ContactChannelMarks } from "@/domain/contact-channels";
 import { ToolIcon } from "@/components/icons";
 import {
   formatLocalDate,
+  formatLocalTime,
   localDateWeekday,
   localToUtc,
   parseLocalDate,
   parseLocalTime,
   resolveLocal,
+  toZonedParts,
 } from "@/domain/timezone";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { businessLabel, type BusinessType } from "@/i18n/business-labels";
@@ -176,6 +182,7 @@ export function CalendarBoard({
   monthDays,
   selected,
   today,
+  now,
   bookings,
   visits = [],
   locations,
@@ -204,6 +211,13 @@ export function CalendarBoard({
   /** The date the list below the month is showing. */
   selected: string;
   today: string;
+  /**
+   * The instant the page was drawn at, as a string. Read from the server rather
+   * than from the browser's clock so the render and the hydration agree: a
+   * free window that begins in the past would otherwise flicker out a moment
+   * after it appeared.
+   */
+  now: string;
   bookings: CalendarBooking[];
   /** Visits of the listed day closed without an appointment. */
   visits?: readonly CalendarVisit[];
@@ -242,8 +256,11 @@ export function CalendarBoard({
   exceptions: readonly CalendarException[];
   /** The rota the day's tally measures its free time against. */
   shifts: readonly (ShiftRule & Readonly<{ locationId: string }>)[];
-  /** Per location, the gap a studio keeps around each appointment. */
-  buffers: readonly Readonly<{ locationId: string; before: number; after: number }>[];
+  /**
+   * Per location, the gap a studio keeps around each appointment, and the step
+   * its openings are cut into slots by — the address's «Шаг слотов».
+   */
+  buffers: readonly Readonly<{ locationId: string; before: number; after: number; step: number }>[];
   canWrite: boolean;
   canFilterBySpecialist: boolean;
   /** The studio's own face, which is the «all masters» button of the filter. */
@@ -416,33 +433,6 @@ export function CalendarBoard({
     }
   }
 
-  async function blockTime(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const locationId = String(data.get("location_id") ?? "");
-    const timezone = locationId ? timezoneOf(locationId) : (locations[0]?.timezone ?? "UTC");
-
-    const date = String(data.get("date"));
-    const from = instantAt(timezone, date, String(data.get("from")));
-    const to = instantAt(timezone, date, String(data.get("to")));
-    if (from === "invalid" || to === "invalid") return setError(t("calendar.timeInvalid"));
-    if (from === "gap" || to === "gap") return setError(t("calendar.timeDoesNotExist"));
-    if (to <= from) return setError(t("calendar.blockOrder"));
-
-    if (
-      await send("/api/v1/availability/exceptions", {
-        specialist_id: String(data.get("specialist_id")),
-        ...(locationId ? { location_id: locationId } : {}),
-        kind: "unavailable",
-        starts_at: from.toISOString(),
-        ends_at: to.toISOString(),
-      })
-    ) {
-      form.reset();
-    }
-  }
-
   async function reschedule(booking: CalendarBooking, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -530,27 +520,6 @@ export function CalendarBoard({
   }
 
   /*
-   * The listed day, as one run in time order.
-   *
-   * Appointments and blocked time in the same list, because to whoever is
-   * reading it they are the same statement: this hour is spoken for. Sorted by
-   * the clock rather than grouped under each master, which is the trade this
-   * layout makes — a column per person was fifty pixels wide on a phone, and a
-   * flat list is not, so the name rides on the card instead of heading a column
-   * of them.
-   */
-  type DayItem =
-    | { kind: "booking"; at: string; data: CalendarBooking }
-    | { kind: "visit"; at: string; data: CalendarVisit }
-    | { kind: "exception"; at: string; data: CalendarException };
-
-  const dayItems: DayItem[] = [
-    ...bookings.map((data) => ({ kind: "booking" as const, at: data.localStart, data })),
-    ...visits.map((data) => ({ kind: "visit" as const, at: data.localStart, data })),
-    ...exceptions.map((data) => ({ kind: "exception" as const, at: data.localStart, data })),
-  ].sort((left, right) => left.at.localeCompare(right.at));
-
-  /*
    * Whose appointment this is, on the card itself.
    *
    * The day used to stand in a column headed by its master's name and face, so
@@ -634,14 +603,20 @@ export function CalendarBoard({
    * Opens the window on the day the calendar is showing: the desk is looking at
    * a date because that is the one it is about to book, so asking for it again
    * would be the first thing the form made it do.
+   *
+   * With a `preset` — an opening on the list the desk pressed — the master, the
+   * address and the time are the opening's too: pressing «12:00–14:00, Анна»
+   * has already answered all three, and the form asking them again would be the
+   * second thing it made the desk do.
    */
-  function openCompose() {
+  function openCompose(preset?: Readonly<{ locationId: string; specialistId: string; time: string }>) {
     setError(null);
     setNotice(null);
     setAlternatives({ zone: "UTC", entries: [] });
     setComposeDate(selected);
-    setComposeTime("");
-    setComposeSpecialist(null);
+    setComposeTime(preset?.time ?? "");
+    setComposeSpecialist(preset?.specialistId ?? null);
+    if (preset) setComposeLocation(preset.locationId);
     setComposeOpen(true);
     // The form is the first thing on the page, so the page is taken to it: from
     // further down it would open above the screen, with nothing to say so.
@@ -728,10 +703,10 @@ export function CalendarBoard({
   }, [focusBookingId]);
 
   /**
-   * Whose time this screen may block out. A master blocks only their own; for
-   * everybody else it is the whole catalogue.
+   * Whose appointments this screen may move work between. A master moves only
+   * their own; for everybody else it is the whole catalogue.
    */
-  const blockable = specialists.filter(
+  const reassignable = specialists.filter(
     (person) => ownSpecialistId === null || person.id === ownSpecialistId,
   );
 
@@ -894,6 +869,125 @@ export function CalendarBoard({
 
     return { shift, free };
   })();
+
+  /**
+   * What is still open on the listed day: each gap in a master's day cut into
+   * slots of the address's step, one card per slot.
+   *
+   * Shown to whoever can write an appointment into it, and only on a calendar
+   * that shows everything: under a status filter the appointments that stand in
+   * a gap may be the ones filtered out, and a card offering an hour somebody is
+   * already sitting in is worse than no card.
+   *
+   * The same busy hours the tally above counts, so the cards add up to «свободно
+   * N ч»: an appointment and the buffer round it, a visit closed by hand, and a
+   * block — which takes the hour from one address, or from all of them.
+   */
+  const freeSlots: FreeSlot[] = (() => {
+    if (!canWrite || filters.status || weekdayOfDay === null) return [];
+
+    const roster =
+      ownSpecialistId !== null
+        ? [ownSpecialistId]
+        : filters.specialist
+          ? [filters.specialist]
+          : specialists.map((person) => person.id);
+    const people = roster.filter((id) => specialists.some((person) => person.id === id));
+
+    const busy: BusySpan[] = [
+      ...bookings
+        .filter((booking) => OCCUPYING.has(booking.status))
+        .map((booking) => ({
+          specialistId: booking.specialistId,
+          locationId: null,
+          span: withBuffer(minutesOf(booking.localStart), minutesOf(booking.localEnd), booking.locationId),
+        })),
+      ...visits.map((visit) => {
+        const start = minutesOf(visit.localStart);
+        const end = minutesOf(visit.localEnd);
+        return {
+          specialistId: visit.specialistId,
+          locationId: null,
+          span: { start, end: end < start ? 24 * 60 : end },
+        };
+      }),
+      ...exceptions.map((exception) => ({
+        specialistId: exception.specialistId,
+        locationId: exception.locationId,
+        span: { start: minutesOf(exception.localStart), end: minutesOf(exception.localEnd) },
+      })),
+    ];
+
+    // «Now» is a different wall-clock time at each address, and a day is over at
+    // one while it is still going at another.
+    const instant = new Date(now);
+    const notBefore = (locationId: string) => {
+      const place = toZonedParts(instant, timezoneOf(locationId));
+      const date = formatLocalDate({ year: place.year, month: place.month, day: place.day });
+      if (selected < date) return 24 * 60;
+      return selected === date ? place.minutes : 0;
+    };
+
+    /*
+     * Only where the master is actually placed. A new card is written with a
+     * default week at every address the studio has, before anybody has said
+     * where they work, so the rota alone offers a master at an address they are
+     * not at — the same reading `bookable` gives the form: no assignments at all
+     * is a studio that has not filled them in, and means everywhere. And only
+     * the addresses still open, for the same reason an archived master is not
+     * offered.
+     */
+    const placed = shifts.filter((rule) => {
+      if (!locations.some((place) => place.id === rule.locationId)) return false;
+      const theirs = assignments.filter((link) => link.specialistId === rule.specialistId);
+      return theirs.length === 0 || theirs.some((link) => link.locationId === rule.locationId);
+    });
+
+    const openings = freeSlotsOfDay({
+      shifts: placed,
+      specialistIds: people,
+      locationId: filters.location || null,
+      date: selected,
+      weekday: weekdayOfDay,
+      busy,
+      minMinutes: shortestService,
+      notBefore,
+    });
+
+    // Cut by each address's own step, so the list offers as many places as the
+    // public page does for the same time. An address with no settings row keeps
+    // the column's default of an hour.
+    return splitIntoSlots(openings, (locationId) => buffers.find((entry) => entry.locationId === locationId)?.step ?? 60);
+  })();
+
+  /*
+   * The listed day, as one run in time order.
+   *
+   * Appointments, blocked time and the openings between them in the same list,
+   * because to whoever is reading it they are the same statement about an hour:
+   * either it is spoken for, or it is there to be sold. Sorted by the clock
+   * rather than grouped under each master, which is the trade this layout makes
+   * — a column per person was fifty pixels wide on a phone, and a flat list is
+   * not, so the name rides on the card instead of heading a column of them.
+   *
+   * An opening sorts after whatever begins at the same minute: two masters, one
+   * with a client at 12:00 and the other free from 12:00, read in that order.
+   */
+  type DayItem =
+    | { kind: "booking"; at: string; data: CalendarBooking }
+    | { kind: "visit"; at: string; data: CalendarVisit }
+    | { kind: "exception"; at: string; data: CalendarException }
+    | { kind: "free"; at: string; data: FreeSlot };
+
+  const dayItems: DayItem[] = [
+    ...bookings.map((data) => ({ kind: "booking" as const, at: data.localStart, data })),
+    ...visits.map((data) => ({ kind: "visit" as const, at: data.localStart, data })),
+    ...exceptions.map((data) => ({ kind: "exception" as const, at: data.localStart, data })),
+    ...freeSlots.map((data) => ({ kind: "free" as const, at: formatLocalTime(data.start), data })),
+  ].sort(
+    (left, right) =>
+      left.at.localeCompare(right.at) || Number(left.kind === "free") - Number(right.kind === "free"),
+  );
 
   /*
    * The month and its year, in one list.
@@ -1399,11 +1493,58 @@ export function CalendarBoard({
           </p>
         )}
 
-        {dayItems.length === 0 ? (
-          <p className="muted">{t("calendar.emptyDay")}</p>
-        ) : (
+        {/*
+          Said even when the openings follow: a day drawn in dashes alone does
+          not say that nobody is booked, and that is what the reader came to
+          find out.
+        */}
+        {dayItems.every((item) => item.kind === "free") && <p className="muted">{t("calendar.emptyDay")}</p>}
+        {dayItems.length > 0 && (
           <ul className="calendar-list">
             {dayItems.map((item) => {
+              if (item.kind === "free") {
+                const slot = item.data;
+                const from = formatLocalTime(slot.start);
+                const to = formatLocalTime(slot.end);
+                return (
+                  <li key={`free-${slot.specialistId}-${slot.locationId}-${slot.start}`} className="calendar-free">
+                    {/*
+                      A button, not a card that opens: there is nothing inside
+                      an opening to read, only a window to open on it. The label
+                      says what pressing does, because «10:00–12:00 Свободно»
+                      alone is a statement and this is a control.
+                    */}
+                    <button
+                      type="button"
+                      className="calendar-free-slot"
+                      aria-label={t("calendar.freeSlotBook", { from, to })}
+                      onClick={() =>
+                        openCompose({ locationId: slot.locationId, specialistId: slot.specialistId, time: from })
+                      }
+                    >
+                      <span className="calendar-time">
+                        {from}–{to}
+                      </span>
+                      <span className="calendar-what">{t("calendar.freeSlot")}</span>
+                      {namesMasters && (
+                        <span className="calendar-who calendar-master">
+                          {faceOf(slot.specialistId)}
+                          {specialists.find((person) => person.id === slot.specialistId)?.name}
+                        </span>
+                      )}
+                      {/* The address, where there is more than one: the same hours at two of them are two openings. */}
+                      {locations.length > 1 && (
+                        <span className="unit-hint">
+                          {locations.find((place) => place.id === slot.locationId)?.name}
+                        </span>
+                      )}
+                      <span className="calendar-free-plus" aria-hidden="true">
+                        <ToolIcon name="plus" />
+                      </span>
+                    </button>
+                  </li>
+                );
+              }
               if (item.kind === "exception") {
                 const exc = item.data;
                 return (
@@ -1802,7 +1943,7 @@ export function CalendarBoard({
                                   это поле» meaning «ничего не поменялось».
                                 */}
                                 <select name="specialist_id" defaultValue={booking.specialistId}>
-                                  {specialistOptions(blockable, {
+                                  {specialistOptions(reassignable, {
                                     id: booking.specialistId,
                                     name: booking.specialistName,
                                   }).map((person) => (
@@ -1862,84 +2003,10 @@ export function CalendarBoard({
           type="button"
           aria-label={t("quick.booking")}
           title={t("quick.booking")}
-          onClick={openCompose}
+          onClick={() => openCompose()}
         >
           <ToolIcon name="plus" />
         </button>
-      )}
-
-      {/*
-        `blockable`, not the whole catalogue. They differ for exactly one
-        person: a master whose account has no specialist card — a studio-only
-        state, since a solo workspace is created with its owner's card. Gated
-        on the roster, this drew a form whose only field had nothing to put in
-        it, and the visible-but-dead select that used to make that obvious is
-        now a hidden input that would post an empty id.
-      */}
-      {canWrite && blockable.length > 0 && (
-        <details className="panel calendar-compose calendar-block-time">
-          <summary>
-            <h2>{t("calendar.blockTime")}</h2>
-          </summary>
-          <p className="muted">{t("calendar.blockHint")}</p>
-          <form className="inline-form" onSubmit={blockTime}>
-            {/*
-              The same rule as the appointment form above. A master's list is
-              already narrowed to themselves, so for them there was never a
-              choice here either — one branch covers both.
-            */}
-            {blockable.length > 1 ? (
-              <label>
-                {t("calendar.specialist")}
-                <select name="specialist_id" required defaultValue={ownSpecialistId ?? undefined}>
-                  {blockable.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <input type="hidden" name="specialist_id" value={blockable[0]?.id ?? ""} />
-            )}
-            {/*
-              «Все адреса» and the only address are the same block written two
-              ways, so with one address the choice is offered as two answers to
-              one question. The wider of the two is what an empty value means,
-              and it is what a studio of one wants either way.
-            */}
-            {locations.length > 1 ? (
-              <label>
-                {t("calendar.location")}
-                <select name="location_id" defaultValue="">
-                  <option value="">{t("calendar.everyLocation")}</option>
-                  {locations.map((place) => (
-                    <option key={place.id} value={place.id}>
-                      {place.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <input type="hidden" name="location_id" value="" />
-            )}
-            <label>
-              {t("calendar.date")}
-              <input type="date" name="date" defaultValue={selected} required />
-            </label>
-            <label>
-              {t("calendar.from")}
-              <input type="time" name="from" required />
-            </label>
-            <label>
-              {t("calendar.to")}
-              <input type="time" name="to" required />
-            </label>
-            <button className="secondary-button" type="submit" disabled={pending}>
-              {t("calendar.block")}
-            </button>
-          </form>
-        </details>
       )}
     </>
   );

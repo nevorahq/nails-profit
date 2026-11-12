@@ -1473,6 +1473,40 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .calendar-who { color: var(--muted); font-size: 14rem; }
 .calendar-status { margin-left: auto; font-size: 12rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 
+/*
+ * An opening in the day's list: an hour nobody has taken, between the hours
+ * somebody has.
+ *
+ * Dashed and yellow where an appointment is solid and striped, because the two
+ * are read side by side and the difference is the whole point — one is a
+ * statement, the other an offer. The edge is `--free-hour-edge`, the same
+ * yellow the month cell's mark for blocked time borrows its tone from; the fill
+ * is that yellow thinned into the surface, which keeps it quieter than the
+ * cards around it (the note on the token says why). The plus says what a press
+ * does, and is drawn at once rather than on hover: on a phone there is no hover
+ * to find it with.
+ */
+.calendar-free { margin: 0; padding: 0; }
+.calendar-free-slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6rem 14rem;
+  width: 100%;
+  min-height: 44rem;
+  padding: 14rem 16rem;
+  border: 2rem dashed var(--free-hour-edge);
+  border-radius: 4rem;
+  background: color-mix(in srgb, var(--free-hour-edge) 14%, var(--surface));
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.calendar-free-slot:hover { background: color-mix(in srgb, var(--free-hour-edge) 28%, var(--surface)); }
+.calendar-free-slot .calendar-what { color: var(--muted); }
+.calendar-free-plus { display: inline-flex; align-self: center; margin-left: auto; color: var(--warning); }
+.calendar-free-plus .tool-icon { width: 18rem; height: 18rem; }
+
 .calendar-detail { padding: 14rem 16rem 18rem; border-top: 1rem solid var(--line); }
 .calendar-detail p { margin: 12rem 0; }
 .calendar-actions { display: flex; flex-wrap: wrap; gap: 10rem; align-items: flex-start; }
@@ -3565,14 +3599,6 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .calendar-compose[open] > summary::before { transform: rotate(90deg); }
 .calendar-compose > summary:hover { background: var(--leaf-100); }
 .calendar-compose > summary h2 { margin: 0; }
-
-/* «Заблокировать время» is long enough to wrap at phone widths under the
-   panel-heading size everything else here uses; shrunk just on this heading
-   rather than the whole `.calendar-compose` heading size, since «Новая
-   запись» already fits at 26rem. */
-@media (max-width: 680px) {
-  .calendar-block-time > summary h2 { font-size: 18rem; white-space: nowrap; }
-}
 
 .tool-icon { width: 16rem; height: 16rem; flex: none; }
 

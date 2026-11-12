@@ -231,6 +231,7 @@ export default async function CalendarPage({
             locationId: bookingSettings.locationId,
             before: bookingSettings.bufferBeforeMinutes,
             after: bookingSettings.bufferAfterMinutes,
+            step: bookingSettings.slotStepMinutes,
           })
           .from(bookingSettings)
           .execute();
@@ -695,6 +696,7 @@ export default async function CalendarPage({
         monthDays={monthDays}
         selected={data.selected}
         today={data.today}
+        now={now.toISOString()}
         bookings={calendar}
         visits={dayVisits}
         locations={data.places}
