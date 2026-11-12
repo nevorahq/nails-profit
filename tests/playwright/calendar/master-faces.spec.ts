@@ -7,6 +7,7 @@ import {
   seedStudio,
   signedInContext,
   type Studio,
+  untilRevealed,
 } from "../helpers/studio";
 
 /**
@@ -36,6 +37,9 @@ test.describe("the master faces on the calendar bar", () => {
     const context = await signedInContext(browser, studio.owner, baseURL);
     const page = await context.newPage();
     await page.goto(`/app/calendar?date=${isoDate(day)}${query}`);
+    // The tests measure boxes, and a box is null while the page is still
+    // behind its skeleton.
+    await untilRevealed(page);
     return { context, page, faces: page.locator(".calendar-masters-row") };
   };
 

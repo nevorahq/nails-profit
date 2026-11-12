@@ -1,4 +1,5 @@
 import {
+  expect,
   request as newRequest,
   type APIRequestContext,
   type Browser,
@@ -556,4 +557,19 @@ export async function chooseMaster(page: Page, name: string) {
  */
 export async function chooseRibbonDay(page: Page, date: Date) {
   await page.locator(`.day-strip button[data-date="${isoDate(date)}"]`).click();
+}
+
+/**
+ * Waits until a page under /app has replaced its loading skeleton.
+ *
+ * Every section streams: the shell and `app/app/loading.tsx` arrive first, the
+ * page after them, and React reveals what streamed in batches a few hundred
+ * milliseconds apart. So the browser's `load` can fire with the skeleton still
+ * on screen and the page sitting in a hidden block behind it — present to a
+ * locator, absent to `isVisible()` and `boundingBox()`, which do not wait. A
+ * person sees the skeleton for a moment and then the page; a test reading the
+ * screen at once has to wait for the same thing.
+ */
+export async function untilRevealed(page: Page) {
+  await expect(page.locator(".route-loading")).toHaveCount(0);
 }

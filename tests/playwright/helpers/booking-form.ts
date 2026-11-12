@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+import { untilRevealed } from "./studio";
+
 /**
  * Opens the appointment window the way the screen in front of it offers.
  *
@@ -9,6 +11,9 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * stands down there so the two are never on screen together.
  */
 export async function openBookingForm(page: Page): Promise<Locator> {
+  // `isVisible` below does not wait, and a calendar just opened may still be
+  // behind its loading skeleton.
+  await untilRevealed(page);
   const own = page.getByRole("button", { name: "Book a client" });
   if (await own.isVisible()) {
     await own.click();

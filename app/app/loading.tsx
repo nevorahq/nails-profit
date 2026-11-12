@@ -23,8 +23,14 @@ import { RouteLoadingLabel } from "@/components/route-loading-label";
  * browser from the page's own language — see `RouteLoadingLabel`.
  */
 export default function AppLoading() {
+  /*
+   * A `div`, not a `main`: while a full page load streams, the skeleton and the
+   * page that replaces it are in the document together for a moment, and two
+   * `main` landmarks would tell a screen reader there are two pages — and
+   * make every `getByRole("main")` ambiguous.
+   */
   return (
-    <main className="app-shell route-loading" aria-busy="true">
+    <div className="app-shell route-loading" aria-busy="true">
       <RouteLoadingLabel />
       <span className="route-loading-bar route-loading-title" aria-hidden="true" />
       <div className="route-loading-cards" aria-hidden="true">
@@ -33,6 +39,6 @@ export default function AppLoading() {
         <span className="route-loading-bar" />
       </div>
       <span className="route-loading-bar route-loading-panel" aria-hidden="true" />
-    </main>
+    </div>
   );
 }
