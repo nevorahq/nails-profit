@@ -33,7 +33,7 @@ import type { Logger } from "drizzle-orm/logger";
  * transaction through `recordTransaction`, and a caller reading the total adds
  * two round trips for each.
  */
-type Meter = { statements: string[]; transactions: number };
+type Meter = { statements: string[]; parameterised: string[]; transactions: number };
 
 const meters = new AsyncLocalStorage<Meter>();
 
@@ -46,8 +46,12 @@ function append(kind: "q" | "tx", text: string) {
 
 /** Passed to Drizzle as its `logger`. Does nothing unless a meter is listening. */
 export const queryMeterLogger: Logger = {
-  logQuery(query) {
-    meters.getStore()?.statements.push(query);
+  logQuery(query, params) {
+    const meter = meters.getStore();
+    if (meter) {
+      meter.statements.push(query);
+      if (params.length > 0) meter.parameterised.push(query);
+    }
     append("q", query);
   },
 };
@@ -62,6 +66,13 @@ export function recordTransaction() {
 export type Measured<T> = Readonly<{
   result: T;
   statements: readonly string[];
+  /**
+   * The statements that carried a parameter. Each costs a second round trip
+   * and stops the driver pipelining what is queued behind it — see
+   * `db/literal.ts` — so a read meant to travel in one flight asserts this is
+   * empty.
+   */
+  parameterised: readonly string[];
   transactions: number;
   /** What the work cost in round trips if no statement carried a parameter: the floor. */
   minimumRoundTrips: number;
@@ -69,11 +80,12 @@ export type Measured<T> = Readonly<{
 
 /** Runs `work` and reports every statement it sent, including those it started and did not await. */
 export async function measureStatements<T>(work: () => Promise<T>): Promise<Measured<T>> {
-  const meter: Meter = { statements: [], transactions: 0 };
+  const meter: Meter = { statements: [], parameterised: [], transactions: 0 };
   const result = await meters.run(meter, work);
   return {
     result,
     statements: meter.statements,
+    parameterised: meter.parameterised,
     transactions: meter.transactions,
     minimumRoundTrips: meter.statements.length + meter.transactions * 2,
   };

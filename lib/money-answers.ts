@@ -1,5 +1,6 @@
 import { and, eq, exists, inArray, isNull, sql } from "drizzle-orm";
 
+import { constantListLiteral, uuidLiteral } from "@/db/literal";
 import { organizations, paymentMethods, taxRules } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import type { RuleChangeRefusal } from "@/domain/rule-change";
@@ -36,15 +37,17 @@ export async function loadMoneyAnswers(tx: TenantTransaction, organizationId: st
         tx
           .select({ one: sql`1` })
           .from(taxRules)
-          .where(inArray(taxRules.kind, [...visitTaxKinds])),
+          .where(inArray(taxRules.kind, constantListLiteral(visitTaxKinds))),
       )}`,
       payments: sql<boolean>`${organizations.paymentsAnsweredAt} is not null or ${exists(
         tx.select({ one: sql`1` }).from(paymentMethods),
       )}`,
     })
     .from(organizations)
-    .where(eq(organizations.id, organizationId))
-    .limit(1);
+    // Written into the text and without a `limit` — the id is the primary key —
+    // so the statement carries no parameter and costs one round trip, not two.
+    // See `db/literal.ts`.
+    .where(eq(organizations.id, uuidLiteral(organizationId)));
 
   return { taxes: row?.taxes ?? false, payments: row?.payments ?? false };
 }

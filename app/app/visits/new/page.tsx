@@ -11,6 +11,7 @@ import {
   specialistServices,
   specialists,
 } from "@/db/schema";
+import { instantLiteral } from "@/db/literal";
 import { withTenant } from "@/db/tenant";
 import { can } from "@/domain/rbac";
 import { VisitCloseForm, type CloseFormAddOn, type CloseFormService } from "@/components/visit-close-form";
@@ -35,11 +36,12 @@ async function loadCatalogue(
    * left out is counted, because a service that has quietly vanished from the
    * list is its own kind of confusing.
    */
-  const allServices = await tx
-    .select()
-    .from(services)
-    .where(isNull(services.archivedAt))
-    .orderBy(asc(services.createdAt));
+  // The three catalogue reads go to the database together, as one flight.
+  const [allServices, addOnRows, links] = await Promise.all([
+    tx.select().from(services).where(isNull(services.archivedAt)).orderBy(asc(services.createdAt)).execute(),
+    tx.select().from(addOns).where(isNull(addOns.archivedAt)).execute(),
+    tx.select().from(serviceAddOns).execute(),
+  ]);
 
   const serviceRows = allServices.filter(
     (service): service is typeof service & { priceMinor: number; durationMinutes: number } =>
@@ -47,8 +49,6 @@ async function loadCatalogue(
   );
   const unusableServices = allServices.length - serviceRows.length;
 
-  const addOnRows = await tx.select().from(addOns).where(isNull(addOns.archivedAt));
-  const links = await tx.select().from(serviceAddOns);
 
   const catalogue: CloseFormService[] = serviceRows.map((service) => ({
     id: service.id,
@@ -83,7 +83,14 @@ export default async function NewVisitPage() {
   }
 
   const data = await withTenant(membership.organizationId, async (tx) => {
-    const { catalogue, options, unusableServices } = await loadCatalogue(tx, locale, t);
+    /*
+     * Everything the form needs is started at once and awaited together. The
+     * reads share this transaction, so the server answers them in turn, but
+     * none carries a parameter — `now` is written into the text, see
+     * `db/literal.ts` — and the driver sends them as one flight rather than
+     * waiting a round trip between each.
+     */
+    const catalogueRead = loadCatalogue(tx, locale, t);
 
     /*
      * Who can be paid for what, which is the other half of the same problem.
@@ -100,7 +107,7 @@ export default async function NewVisitPage() {
      * exceptions; an empty list means no rule at all.
      */
     const now = new Date();
-    const ruleRows = await tx
+    const ruleRowsRead = tx
       .select({
         specialistId: commissionRules.specialistId,
         serviceId: commissionRules.serviceId,
@@ -108,26 +115,50 @@ export default async function NewVisitPage() {
       .from(commissionRules)
       .where(
         and(
-          lte(commissionRules.activeFrom, now),
-          or(isNull(commissionRules.activeTo), gt(commissionRules.activeTo, now)),
+          lte(commissionRules.activeFrom, instantLiteral(now)),
+          or(isNull(commissionRules.activeTo), gt(commissionRules.activeTo, instantLiteral(now))),
         ),
-      );
+      )
+      .execute();
 
-    const rows = await tx
+    const rowsRead = tx
       .select({ id: specialists.id, name: specialists.name })
       .from(specialists)
       .where(isNull(specialists.archivedAt))
-      .orderBy(asc(specialists.createdAt));
+      .orderBy(asc(specialists.createdAt))
+      .execute();
 
     // Each master's own prices, so the total the form shows is what will be recorded.
-    const ownPrices = await tx
+    const ownPricesRead = tx
       .select({
         specialistId: specialistServices.specialistId,
         serviceId: specialistServices.serviceId,
         priceMinor: specialistServices.priceOverrideMinor,
       })
       .from(specialistServices)
-      .where(isNotNull(specialistServices.priceOverrideMinor));
+      .where(isNotNull(specialistServices.priceOverrideMinor))
+      .execute();
+
+    const clientRowsRead = tx
+      .select({ id: clients.id, name: clients.name })
+      .from(clients)
+      .where(isNull(clients.archivedAt))
+      .orderBy(asc(clients.name))
+      .execute();
+
+    const methodsRead = tx
+      .select({
+        id: paymentMethods.id,
+        name: paymentMethods.name,
+        is_default: paymentMethods.isDefault,
+      })
+      .from(paymentMethods)
+      .where(isNull(paymentMethods.archivedAt))
+      .orderBy(asc(paymentMethods.createdAt))
+      .execute();
+
+    const [{ catalogue, options, unusableServices }, ruleRows, rows, ownPrices, clientRows, methods] =
+      await Promise.all([catalogueRead, ruleRowsRead, rowsRead, ownPricesRead, clientRowsRead, methodsRead]);
 
     const people = rows.map((person) => {
       const mine = ruleRows.filter((rule) => rule.specialistId === person.id);
@@ -146,22 +177,6 @@ export default async function NewVisitPage() {
               .filter((id): id is string => id !== null),
       };
     });
-    const clientRows = await tx
-      .select({ id: clients.id, name: clients.name })
-      .from(clients)
-      .where(isNull(clients.archivedAt))
-      .orderBy(asc(clients.name));
-
-    const methods = await tx
-      .select({
-        id: paymentMethods.id,
-        name: paymentMethods.name,
-        is_default: paymentMethods.isDefault,
-      })
-      .from(paymentMethods)
-      .where(isNull(paymentMethods.archivedAt))
-      .orderBy(asc(paymentMethods.createdAt));
-
     return { catalogue, options, unusableServices, people, clientRows, methods };
   });
 

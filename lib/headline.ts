@@ -28,6 +28,8 @@ export async function loadHeadline(
     currency: string;
     organizationId: string;
     ownSpecialistId: string | null;
+    /** The studio's zone, which the page holds; saves the report reading it again. */
+    timezone?: string;
   }>,
   locale: AppLocale,
 ): Promise<Headline> {
@@ -36,7 +38,12 @@ export async function loadHeadline(
   if (kind === "operating") {
     const report = await loadPeriodPL(
       tx,
-      { month: options.month, currency: options.currency, organizationId: options.organizationId },
+      {
+        month: options.month,
+        currency: options.currency,
+        organizationId: options.organizationId,
+        timezone: options.timezone,
+      },
       locale,
     );
     return ownerHeadline(report.pl, report.capacity);

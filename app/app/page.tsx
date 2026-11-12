@@ -149,6 +149,17 @@ export default async function AppPage({
   }
 
   const filters = await searchParams;
+  /*
+   * A studio that has not yet confirmed the prices and week it opens with is
+   * asked that before anything else — before the numbers, because the numbers
+   * are computed from those prices. The owner's question alone: the endpoint
+   * that answers it is theirs, and a master opening the app meanwhile gets the
+   * dashboard as always. Asked before anything is read, since nothing read
+   * below would be shown.
+   */
+  if (membership.organization.setupConfirmedAt === null && can(membership.role, "organization_settings", "write")) {
+    redirect("/app/setup");
+  }
 
   /*
    * Appointments that happened and were never closed into a visit — money no
@@ -156,114 +167,24 @@ export default async function AppPage({
    * whose only work so far is unclosed bookings is still on that screen. Read
    * as the person being viewed, so a preview shows their own list.
    *
-   * Read together with the start screen and the tier: none of the three needs
-   * another's answer, and they used to be asked one after the other.
+   * Started here and awaited further down, together with the report's own
+   * reads: see the note where they meet.
    */
-  const [unclosed, start, fullReports] = await Promise.all([
-    can(membership.role, "bookings", "write")
-      ? withTenant(membership.organization.id, (tx) =>
-          loadUnclosedBookings(
-            tx,
-            { userId: effectiveUserId, role: membership.role },
-            { now: new Date(), locale, limit: 5 },
-          ),
-        )
-      : null,
-    canManageCatalogue(membership.role, "services")
-      ? withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale, membership.organization.id))
-      : null,
-    // «Старт» reads this month only: any other period is the first thing «Соло» opens.
-    organizationAllows(membership.organization.id, "full_reports"),
-  ]);
-  const closeDay =
-    unclosed && unclosed.count > 0 ? (
-      <CloseDayPanel
-        items={unclosed.items}
-        count={unclosed.count}
-        totalMinor={unclosed.totalMinor}
-        currency={membership.organization.currency}
-        locale={locale}
-        showSpecialist={businessType === "studio" && membership.role !== "master"}
-      />
-    ) : null;
-
-  /*
-   * What a studio sees before it has sold anything, which replaces this page
-   * rather than being drawn on top of it: with no closed visit there is no
-   * revenue, no margin and no profit per hour, and every card below would be a
-   * zero.
-   *
-   * Two answers, decided by `loadStartScreen`. A studio that is still missing a
-   * rate or a priced service gets the one goal that would fix it. A studio that
-   * has both — which, since the setup screen started collecting them, is most
-   * studios on their first day — gets what its catalogue is already worth per
-   * service. Neither is a checklist: the first is one step, and the second is
-   * the product's own answer, arriving before the first client rather than
-   * after a week of typing visits in.
-   *
-   * Placed before `loadDashboard` on purpose. Those queries would compute a
-   * screenful of zeroes at full price; this is one `count` for a studio that
-   * has long since started, and answers null for it.
-   *
-   * Only for a role that can advance a step — both steps are catalogue work, so
-   * for a master this would be a door they cannot open, and they get the
-   * dashboard as before.
-   */
-  /*
-   * A studio that has not yet confirmed the prices and week it opens with is
-   * asked that before anything else — before the numbers, because the numbers
-   * are computed from those prices. The owner's question alone: the endpoint
-   * that answers it is theirs, and a master opening the app meanwhile gets the
-   * dashboard as always.
-   */
-  if (membership.organization.setupConfirmedAt === null && can(membership.role, "organization_settings", "write")) {
-    redirect("/app/setup");
-  }
-
-  if (start) {
-    if (start?.kind === "goal" && start.progress.next) {
-      return (
-        <FirstRun
-          register={register}
-          progress={start.progress}
-          next={start.progress.next}
-          locale={locale}
-          businessType={businessType}
-        />
-      );
-    }
-    if (start?.kind === "numbers") {
-      return (
-        <FirstNumbers
-          register={register}
-          rows={start.rows}
-          locale={locale}
-          businessType={businessType}
-          currency={membership.organization.currency}
-          closeDay={closeDay}
-          /*
-           * Three conditions have to hold before an address can be handed to
-           * clients, and they live in three places: the deployment's own flag,
-           * the organization's rung on the rollout ladder, and the address's
-           * own settings. Any one of them saying no makes `/book/<slug>` a 404,
-           * and a link to that is worse than no link.
-           */
-          bookingSlug={
-            isPublicBookingEnabled() &&
-            membership.organization.bookingAccess === "public" &&
-            start.bookingPublished
-              ? membership.organization.slug
-              : null
-          }
-          bookingClosed={
-            isPublicBookingEnabled() &&
-            membership.organization.bookingAccess !== "off" &&
-            !(membership.organization.bookingAccess === "public" && start.bookingPublished)
-          }
-        />
-      );
-    }
-  }
+  const unclosedRead = can(membership.role, "bookings", "write")
+    ? withTenant(membership.organization.id, (tx) =>
+        loadUnclosedBookings(
+          tx,
+          { userId: effectiveUserId, role: membership.role },
+          { now: new Date(), locale, limit: 5 },
+        ),
+      )
+    : null;
+  const startRead = canManageCatalogue(membership.role, "services")
+    ? withTenant(membership.organization.id, (tx) => loadStartScreen(tx, locale, membership.organization.id))
+    : null;
+  // «Старт» reads this month only: any other period is the first thing «Соло» opens.
+  // No query while plan limits are off, which is how production runs today.
+  const fullReports = await organizationAllows(membership.organization.id, "full_reports");
 
   /*
    * The period, taken from the query string and checked before anything reads
@@ -373,7 +294,7 @@ export default async function AppPage({
     from: from ? new Date(`${from}T00:00:00.000Z`) : undefined,
     to: to ? new Date(`${to}T23:59:59.999Z`) : undefined,
   };
-  const reads = await readTogether(organizationId, {
+  const readsPending = readTogether(organizationId, {
     current: async (tx) => {
       const dashboard = await loadDashboard(tx, { ...readPeriod, specialistId: effectiveSpecialist }, locale);
       /*
@@ -424,7 +345,14 @@ export default async function AppPage({
     headline: async (tx) => ({
       card: await loadHeadline(
         tx,
-        { role: membership.role, month: headlineMonth, currency, organizationId, ownSpecialistId },
+        {
+          role: membership.role,
+          month: headlineMonth,
+          currency,
+          organizationId,
+          ownSpecialistId,
+          timezone: membership.organization.timezone,
+        },
         locale,
       ),
       /*
@@ -437,7 +365,8 @@ export default async function AppPage({
         : null,
     }),
     setup: async (tx) => {
-      const people = await loadSpecialistOptions(tx);
+      // Started now, awaited with the progress below: one flight, not two.
+      const peopleRead = loadSpecialistOptions(tx);
       /*
        * «Первый расчёт» is a setup checklist, and all three of its steps are
        * catalogue work: a specialist with a commission rule, a priced service, a
@@ -450,7 +379,10 @@ export default async function AppPage({
        * queries, and nobody should pay for them to produce something the page
        * then drops.
        */
-      const onboarding = canManageCatalogue(membership.role, "services") ? await loadOnboarding(tx) : null;
+      const [people, onboarding] = await Promise.all([
+        peopleRead,
+        canManageCatalogue(membership.role, "services") ? loadOnboarding(tx) : null,
+      ]);
 
       /*
        * The second checklist, and the two conditions it waits for.
@@ -472,6 +404,104 @@ export default async function AppPage({
       return { people, onboarding, monthSetup };
     },
   });
+
+  /*
+   * Where the report's reads meet the start screen's.
+   *
+   * They used to be two rounds: the start screen first, alone, so that a studio
+   * with nothing sold yet would not pay for a screenful of zeroes — and every
+   * other studio waited for that one count before its report was even asked
+   * for, about half a second with the database in another region. Now both are
+   * in flight together and the page waits for the slower. A new studio's
+   * report reads are thrown away, but over empty tables they are cheap; the
+   * studios that open this page every day no longer queue behind a question
+   * whose answer is always «no».
+   *
+   * A thrown-away read must not surface as an unhandled rejection, hence the
+   * empty `catch` — the same promise is awaited, errors and all, below.
+   */
+  readsPending.catch(() => {});
+  const [unclosed, start] = await Promise.all([unclosedRead, startRead]);
+  const closeDay =
+    unclosed && unclosed.count > 0 ? (
+      <CloseDayPanel
+        items={unclosed.items}
+        count={unclosed.count}
+        totalMinor={unclosed.totalMinor}
+        currency={membership.organization.currency}
+        locale={locale}
+        showSpecialist={businessType === "studio" && membership.role !== "master"}
+      />
+    ) : null;
+
+  /*
+   * What a studio sees before it has sold anything, which replaces this page
+   * rather than being drawn on top of it: with no closed visit there is no
+   * revenue, no margin and no profit per hour, and every card below would be a
+   * zero.
+   *
+   * Two answers, decided by `loadStartScreen`. A studio that is still missing a
+   * rate or a priced service gets the one goal that would fix it. A studio that
+   * has both — which, since the setup screen started collecting them, is most
+   * studios on their first day — gets what its catalogue is already worth per
+   * service. Neither is a checklist: the first is one step, and the second is
+   * the product's own answer, arriving before the first client rather than
+   * after a week of typing visits in.
+   *
+   * Answered alongside the report rather than ahead of it — see the note
+   * above. For a studio that has long since started it is one `count`, and
+   * answers null.
+   *
+   * Only for a role that can advance a step — both steps are catalogue work, so
+   * for a master this would be a door they cannot open, and they get the
+   * dashboard as before.
+   */
+  if (start) {
+    if (start?.kind === "goal" && start.progress.next) {
+      return (
+        <FirstRun
+          register={register}
+          progress={start.progress}
+          next={start.progress.next}
+          locale={locale}
+          businessType={businessType}
+        />
+      );
+    }
+    if (start?.kind === "numbers") {
+      return (
+        <FirstNumbers
+          register={register}
+          rows={start.rows}
+          locale={locale}
+          businessType={businessType}
+          currency={membership.organization.currency}
+          closeDay={closeDay}
+          /*
+           * Three conditions have to hold before an address can be handed to
+           * clients, and they live in three places: the deployment's own flag,
+           * the organization's rung on the rollout ladder, and the address's
+           * own settings. Any one of them saying no makes `/book/<slug>` a 404,
+           * and a link to that is worse than no link.
+           */
+          bookingSlug={
+            isPublicBookingEnabled() &&
+            membership.organization.bookingAccess === "public" &&
+            start.bookingPublished
+              ? membership.organization.slug
+              : null
+          }
+          bookingClosed={
+            isPublicBookingEnabled() &&
+            membership.organization.bookingAccess !== "off" &&
+            !(membership.organization.bookingAccess === "public" && start.bookingPublished)
+          }
+        />
+      );
+    }
+  }
+
+  const reads = await readsPending;
 
   const data = {
     ...reads.current.dashboard,

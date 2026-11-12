@@ -9,6 +9,7 @@ import {
   visitPhotos,
   visits,
 } from "@/db/schema";
+import { instantLiteral, uuidListLiteral, uuidLiteral } from "@/db/literal";
 import type { TenantTransaction } from "@/db/tenant";
 import { scopeFor, type MemberRole } from "@/domain/rbac";
 
@@ -52,30 +53,34 @@ export async function loadVisitList(
   // Whose visits, and which one — kept apart from the days, because an empty
   // list means something different depending on whether the days or the scope
   // emptied it.
+  //
+  // Ids and moments are written into the statements rather than sent beside
+  // them, so the reads below carry no parameters and travel in one flight each
+  // — see `db/literal.ts`. A filter that is not an id was refused by the
+  // database before and is refused before it reaches it now.
   const scope = [
-    filters.onlyVisit ? eq(visits.id, filters.onlyVisit) : undefined,
+    filters.onlyVisit ? eq(visits.id, uuidLiteral(filters.onlyVisit)) : undefined,
     ownSpecialistId
-      ? eq(visits.specialistId, ownSpecialistId)
+      ? eq(visits.specialistId, uuidLiteral(ownSpecialistId))
       : filters.specialist
-        ? eq(visits.specialistId, filters.specialist)
+        ? eq(visits.specialistId, uuidLiteral(filters.specialist))
         : undefined,
   ].filter(Boolean);
   const days = [
-    filters.from ? gte(visits.completedAt, new Date(filters.from)) : undefined,
-    filters.to ? lte(visits.completedAt, new Date(`${filters.to}T23:59:59.999Z`)) : undefined,
+    filters.from ? gte(visits.completedAt, instantLiteral(new Date(filters.from))) : undefined,
+    filters.to ? lte(visits.completedAt, instantLiteral(new Date(`${filters.to}T23:59:59.999Z`))) : undefined,
   ].filter(Boolean);
   const conditions = [...scope, ...days];
 
   // The client's name comes with the visit: a left join, because a visit may
   // have none, and it is the same tenant on both sides.
-  const visitRows = await tx
+  const visitRowsRead = tx
     .select({ visit: visits, clientName: clients.name })
     .from(visits)
     .leftJoin(clients, eq(visits.clientId, clients.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(visits.completedAt));
-  const rows = visitRows.map((row) => row.visit);
-  const visitIds = rows.map((visit) => visit.id);
+    .orderBy(desc(visits.completedAt))
+    .execute();
 
   /*
    * The photo comes from the card, which is where a studio sets it.
@@ -85,7 +90,7 @@ export async function loadVisitList(
    * built, and would have gone on drawing them for the masters who have no
    * account to hang a picture off at all.
    */
-  const people = await tx
+  const peopleRead = tx
     .select({
       id: specialists.id,
       name: specialists.name,
@@ -94,24 +99,49 @@ export async function loadVisitList(
     .from(specialists)
     .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
     .where(isNull(specialists.archivedAt))
-    .orderBy(asc(specialists.name));
+    .orderBy(asc(specialists.name))
+    .execute();
 
-  const [snapshots, lines] =
-    visitIds.length === 0
-      ? [[], []]
-      : [
-          /*
-           * `DISTINCT ON (visit_id) ... ORDER BY visit_id, snapshot_version
-           * DESC` is the newest-version rule written once, in the place that
-           * can use the unique index on (visit_id, snapshot_version).
-           */
-          await tx
-            .selectDistinctOn([financialSnapshots.visitId])
-            .from(financialSnapshots)
-            .where(inArray(financialSnapshots.visitId, visitIds))
-            .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion)),
-          await tx.select().from(visitLines).where(inArray(visitLines.visitId, visitIds)),
-        ];
+  const [visitRows, people] = await Promise.all([visitRowsRead, peopleRead]);
+  const rows = visitRows.map((row) => row.visit);
+  const visitIds = rows.map((visit) => visit.id);
+  const ofTheseVisits = visitIds.length > 0 ? uuidListLiteral(visitIds) : null;
+
+  /*
+   * What each visit carries, asked together once the visits are known.
+   *
+   * Photos of work only for whoever may see them — an Analyst reads visits but
+   * not pictures of clients' hands, and the rows are not even fetched for them.
+   */
+  const [snapshots, lines, photoRows] = ofTheseVisits
+    ? await Promise.all([
+        /*
+         * `DISTINCT ON (visit_id) ... ORDER BY visit_id, snapshot_version
+         * DESC` is the newest-version rule written once, in the place that
+         * can use the unique index on (visit_id, snapshot_version).
+         */
+        tx
+          .selectDistinctOn([financialSnapshots.visitId])
+          .from(financialSnapshots)
+          .where(inArray(financialSnapshots.visitId, ofTheseVisits))
+          .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion))
+          .execute(),
+        tx.select().from(visitLines).where(inArray(visitLines.visitId, ofTheseVisits)).execute(),
+        showsPhotos
+          ? tx
+              .select({
+                id: visitPhotos.id,
+                visitId: visitPhotos.visitId,
+                width: visitPhotos.width,
+                height: visitPhotos.height,
+              })
+              .from(visitPhotos)
+              .where(inArray(visitPhotos.visitId, ofTheseVisits))
+              .orderBy(asc(visitPhotos.createdAt))
+              .execute()
+          : [],
+      ])
+    : [[], [], []];
 
   const snapshotOf = new Map(snapshots.map((snapshot) => [snapshot.visitId, snapshot]));
   const linesOf = new Map<string, typeof lines>();
@@ -123,25 +153,6 @@ export async function loadVisitList(
     lines: linesOf.get(visit.id) ?? [],
     clientName: clientName ?? null,
   }));
-
-  /*
-   * Photos of work, one query for the whole page and only for whoever may
-   * see them — an Analyst reads visits but not pictures of clients' hands,
-   * and the rows are not even fetched for them.
-   */
-  const photoRows =
-    showsPhotos && visitIds.length > 0
-      ? await tx
-          .select({
-            id: visitPhotos.id,
-            visitId: visitPhotos.visitId,
-            width: visitPhotos.width,
-            height: visitPhotos.height,
-          })
-          .from(visitPhotos)
-          .where(inArray(visitPhotos.visitId, visitIds))
-          .orderBy(asc(visitPhotos.createdAt))
-      : [];
 
   /*
    * Whether an empty list is the period's doing. «Визитов пока нет» invites the

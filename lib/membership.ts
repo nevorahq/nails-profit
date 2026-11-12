@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { db } from "@/db";
 import { memberships, organizations, pilotEnrollments, users } from "@/db/schema";
+import { opaqueIdLiteral } from "@/db/literal";
 import { withTenant } from "@/db/tenant";
 import type { MemberRole } from "@/domain/rbac";
 import { getPublicAppUrl, isPilotAccessEnforced } from "@/env";
@@ -147,9 +148,15 @@ async function loadAuthenticatedMembership(): Promise<CallerResult> {
     .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
     // Deletion removes memberships, so this join is belt and braces: a row left
     // behind by a partial failure must not grant access to a deleted workspace.
-    .where(and(eq(memberships.userId, session.user.id), isNull(organizations.deletedAt)))
-    .orderBy(asc(memberships.createdAt), asc(memberships.id))
-    .limit(1);
+    .where(and(eq(memberships.userId, opaqueIdLiteral(session.user.id)), isNull(organizations.deletedAt)))
+    /*
+     * The user id written into the text and the first row taken here rather
+     * than with `limit`: with no parameter the statement is one round trip to
+     * the database instead of two, and every signed-in request makes it. An
+     * account belongs to one or two studios, so reading them all costs nothing.
+     * See `db/literal.ts`.
+     */
+    .orderBy(asc(memberships.createdAt), asc(memberships.id));
 
   const pilotStatus =
     row && isPilotAccessEnforced()

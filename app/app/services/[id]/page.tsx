@@ -132,7 +132,7 @@ export default async function ServicePage({
     const month = monthOf(new Date());
     const report = await loadPeriodPL(
       tx,
-      { month, currency, organizationId: membership.organizationId },
+      { month, currency, organizationId: membership.organizationId, timezone: workspace.timezone },
       locale,
     );
     const allocated = allocatedFixedCostMinor(
