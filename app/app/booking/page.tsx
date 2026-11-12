@@ -246,6 +246,7 @@ export default async function BookingSetupPage() {
         canManage={canManageCatalogue(membership.role, "bookings")}
         canPublish={can(membership.role, "organization_settings", "write")}
         canSaveRota={can(membership.role, "bookings", "write")}
+        canBlockTime={can(membership.role, "bookings", "write") && bookingAccess !== "off"}
         slotsChecked={data.slotsChecked}
         nearestSlotDate={data.nearestSlotDate}
         role={membership.role as MemberRole}
