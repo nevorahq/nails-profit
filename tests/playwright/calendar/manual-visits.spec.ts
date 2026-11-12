@@ -79,11 +79,14 @@ test.describe("a visit closed without an appointment", () => {
     const entries = page.locator(".calendar-daylist .calendar-entry.is-visit");
     await expect(entries).toHaveCount(together ? 2 : 1);
     await expect(page.locator(".calendar-daylist")).not.toContainText("Nothing booked.");
-    // Ended when it was closed, began its length before; first in the day.
+    // Ended when it was closed, began its length before; in its master's run,
+    // under the heading that names them.
     const entry = page.locator(`#visit-${own.id}`);
-    await expect(entries.first()).toHaveAttribute("id", `visit-${own.id}`);
     await expect(entry.locator(".calendar-time")).toHaveText(own.hours);
-    await expect(entry).toContainText(studio.specialistName);
+    const run = page
+      .locator(".calendar-group")
+      .filter({ has: page.locator(".calendar-group-head", { hasText: studio.specialistName }) });
+    await expect(run.locator(".calendar-entry.is-visit").first()).toHaveAttribute("id", `visit-${own.id}`);
 
     // The hours it took are not offered as free ones — which can only show
     // when the visit fell inside the rota. Closed «now», it does only while

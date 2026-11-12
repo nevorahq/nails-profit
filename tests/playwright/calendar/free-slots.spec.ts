@@ -128,22 +128,29 @@ test.describe("openings in the day's list", () => {
     await context.close();
   });
 
-  test("are drawn per master on the studio's day, each naming whose it is", async ({
+  test("are drawn per master on the studio's day, under a heading naming whose they are", async ({
     baseURL,
     browser,
     browserErrors,
   }) => {
     void browserErrors;
     const { context, page } = await openDay(browser, baseURL!, "");
+    const runOf = (name: string) =>
+      page.locator(".calendar-group").filter({ has: page.locator(".calendar-group-head", { hasText: name }) });
 
     // Ten for the master with an appointment, twelve — the whole day — for the other.
     await expect(page.locator(".calendar-free-slot")).toHaveCount(22);
-    await expect(page.locator(".calendar-free-slot", { hasText: studio.colleagueName })).toHaveCount(12);
-    await expect(page.locator(".calendar-free-slot", { hasText: studio.specialistName })).toHaveCount(10);
-    await expect(page.locator(".calendar-free-slot", { hasText: "10:40–11:40" })).toContainText(studio.specialistName);
+    await expect(page.locator(".calendar-group-head")).toHaveCount(2);
+    await expect(runOf(studio.colleagueName).locator(".calendar-free-slot")).toHaveCount(12);
+    await expect(runOf(studio.specialistName).locator(".calendar-free-slot")).toHaveCount(10);
+    await expect(runOf(studio.specialistName).locator(".calendar-free-slot", { hasText: "10:40–11:40" })).toBeVisible();
+    // The appointment sits in its master's run, too.
+    await expect(runOf(studio.specialistName).locator(".calendar-entry")).toHaveCount(1);
+    // The heading says whose they are, so the cards no longer do.
+    await expect(page.locator(".calendar-list .calendar-master")).toHaveCount(0);
 
     // Pressing the other master's opening books the other master.
-    await page.locator(".calendar-free-slot", { hasText: studio.colleagueName }).first().click();
+    await runOf(studio.colleagueName).locator(".calendar-free-slot").first().click();
     const dialog = page.getByRole("dialog", { name: "New appointment" });
     await expect(dialog).toContainText(studio.colleagueName);
 
@@ -207,6 +214,8 @@ test.describe("openings in the day's list", () => {
 
     await expect(page.locator(".calendar-free-slot")).toHaveCount(10);
     await expect(page.locator(".calendar-free-slot .calendar-master")).toHaveCount(0);
+    // Their own calendar is one run, so nothing heads it.
+    await expect(page.locator(".calendar-group-head")).toHaveCount(0);
 
     await context.close();
   });

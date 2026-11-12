@@ -151,7 +151,9 @@ export default async function CalendarPage({
           .from(specialists)
           .leftJoin(specialistAvatars, eq(specialists.id, specialistAvatars.specialistId))
           .where(isNull(specialists.archivedAt))
-          .orderBy(asc(specialists.name))
+          // The studio's own order of its masters, the one `/book` offers them
+          // in, so the day's runs and the filter's faces read the same way.
+          .orderBy(asc(specialists.sortOrder), asc(specialists.name))
           .execute();
 
         const catalogueRead = tx
