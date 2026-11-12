@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 
+import { opaqueIdLiteral, uuidListLiteral, uuidLiteral } from "@/db/literal";
 import { commissionRules, specialistAvatars, specialistServices, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { selectCommissionRule } from "@/domain/commission";
@@ -80,10 +81,13 @@ export async function loadSpecialistCards(
   }> = {},
 ): Promise<SpecialistRow[]> {
   const conditions: SQL[] = [isNull(specialists.archivedAt)];
-  if (filter.id) conditions.push(eq(specialists.id, filter.id));
+  // Ids written into the text rather than sent as parameters, so every read
+  // here is one round trip and the three below travel as one flight — see
+  // `db/literal.ts`.
+  if (filter.id) conditions.push(eq(specialists.id, uuidLiteral(filter.id)));
   // Section 6.1 limits a Master to their own card. The row carries the user it
   // belongs to, so the scope is enforced in the query rather than declared.
-  if (filter.ownedBy) conditions.push(eq(specialists.userId, filter.ownedBy));
+  if (filter.ownedBy) conditions.push(eq(specialists.userId, opaqueIdLiteral(filter.ownedBy)));
 
   const rows = await tx
     .select()
@@ -96,9 +100,9 @@ export async function loadSpecialistCards(
     .orderBy(asc(specialists.sortOrder), asc(specialists.createdAt));
 
   if (rows.length === 0) return [];
-  const ids = rows.map((person) => person.id);
+  const ids = uuidListLiteral(rows.map((person) => person.id));
 
-  const assignments = await tx
+  const assignmentsRead = tx
     .select({
       specialistId: specialistServices.specialistId,
       serviceId: specialistServices.serviceId,
@@ -106,9 +110,10 @@ export async function loadSpecialistCards(
       priceMinor: specialistServices.priceOverrideMinor,
     })
     .from(specialistServices)
-    .where(inArray(specialistServices.specialistId, ids));
+    .where(inArray(specialistServices.specialistId, ids))
+    .execute();
 
-  const rules = await tx
+  const rulesRead = tx
     .select({
       specialistId: commissionRules.specialistId,
       id: commissionRules.id,
@@ -121,7 +126,8 @@ export async function loadSpecialistCards(
       activeTo: commissionRules.activeTo,
     })
     .from(commissionRules)
-    .where(inArray(commissionRules.specialistId, ids));
+    .where(inArray(commissionRules.specialistId, ids))
+    .execute();
 
   /*
    * The version of each photo, and never the photo. One row of metadata per
@@ -129,10 +135,13 @@ export async function loadSpecialistCards(
    * a megabyte per master into a page that draws each of them as a circle it
    * fetches separately anyway.
    */
-  const avatars = await tx
+  const avatarsRead = tx
     .select({ specialistId: specialistAvatars.specialistId, version: specialistAvatars.version })
     .from(specialistAvatars)
-    .where(inArray(specialistAvatars.specialistId, ids));
+    .where(inArray(specialistAvatars.specialistId, ids))
+    .execute();
+
+  const [assignments, rules, avatars] = await Promise.all([assignmentsRead, rulesRead, avatarsRead]);
   const avatarVersions = new Map(avatars.map((row) => [row.specialistId, row.version]));
 
   const now = new Date();

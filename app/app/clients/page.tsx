@@ -5,6 +5,7 @@ import { ClientReturnPanel, type ReturnPanelRow } from "@/components/client-retu
 import { ClientsStartPanel } from "@/components/clients-start";
 import { ToolIcon } from "@/components/icons";
 import { clients, specialists, visits } from "@/db/schema";
+import { uuidLiteral } from "@/db/literal";
 import { withTenant } from "@/db/tenant";
 import { BOOKING_LINK_TOKEN } from "@/domain/client-return";
 import { can, scopeFor } from "@/domain/rbac";
@@ -52,9 +53,15 @@ export default async function ClientsPage() {
       ownSpecialistId = own?.id ?? "00000000-0000-0000-0000-000000000000";
     }
 
+    /*
+     * The cards and the two figures beside each, started together: the
+     * figures are per client across the studio and do not wait for the list.
+     * None carries a parameter, so the three go to the database as one flight
+     * — see `db/literal.ts`.
+     */
     // Load all active clients, scoped if needed.
-    const clientRows = ownSpecialistId
-      ? await tx
+    const clientRowsRead = ownSpecialistId
+      ? tx
           .selectDistinct({
             id: clients.id,
             name: clients.name,
@@ -67,9 +74,10 @@ export default async function ClientsPage() {
           .innerJoin(visits, eq(visits.clientId, clients.id))
           // Archived clients travel with the rest and are filtered in the
           // component, behind a toggle: hidden by default, reachable on ask.
-          .where(sql`${visits.specialistId} = ${ownSpecialistId}`)
+          .where(eq(visits.specialistId, uuidLiteral(ownSpecialistId)))
           .orderBy(asc(clients.name))
-      : await tx
+          .execute()
+      : tx
           .select({
             id: clients.id,
             name: clients.name,
@@ -79,12 +87,11 @@ export default async function ClientsPage() {
             archivedAt: clients.archivedAt,
           })
           .from(clients)
-          .orderBy(asc(clients.name));
-
-    if (clientRows.length === 0) return [];
+          .orderBy(asc(clients.name))
+          .execute();
 
     // Visit stats per client: count and last visit date.
-    const statsRows = await tx
+    const statsRowsRead = tx
       .select({
         clientId: visits.clientId,
         visitCount: sql<number>`cast(count(*) as int)`,
@@ -94,13 +101,13 @@ export default async function ClientsPage() {
       .where(
         isNotNull(visits.clientId),
       )
-      .groupBy(visits.clientId);
+      .groupBy(visits.clientId)
+      .execute();
 
-    const statsMap = new Map(statsRows.map((s) => [s.clientId, s]));
 
     // Revenue per client: sum the latest snapshot per visit.
     // DISTINCT ON picks the highest snapshot_version for each visit_id.
-    const revenueRows = await tx.execute<{ client_id: string; total_revenue: string }>(
+    const revenueRowsRead = tx.execute<{ client_id: string; total_revenue: string }>(
       sql`
         SELECT v.client_id, coalesce(sum(fs.revenue_minor), 0)::text AS total_revenue
         FROM visit v
@@ -114,6 +121,10 @@ export default async function ClientsPage() {
       `,
     );
 
+    const [clientRows, statsRows, revenueRows] = await Promise.all([clientRowsRead, statsRowsRead, revenueRowsRead]);
+    if (clientRows.length === 0) return [];
+
+    const statsMap = new Map(statsRows.map((s) => [s.clientId, s]));
     const revenueMap = new Map(revenueRows.map((r) => [r.client_id, parseInt(r.total_revenue, 10)]));
 
     const tag = localeTag(locale);

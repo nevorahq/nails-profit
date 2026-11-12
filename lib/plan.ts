@@ -1,6 +1,7 @@
 import { asc, count, desc, eq, isNull } from "drizzle-orm";
 import { cache } from "react";
 
+import { uuidLiteral } from "@/db/literal";
 import { locations, organizations, organizationSubscriptions, pilotEnrollments, specialists } from "@/db/schema";
 import { withTenant, type TenantTransaction } from "@/db/tenant";
 import {
@@ -27,20 +28,29 @@ export async function loadOrganizationPlan(
   organizationId: string,
   now: Date = new Date(),
 ): Promise<ResolvedPlan> {
-  const [organization] = await tx
-    .select({ createdAt: organizations.createdAt })
-    .from(organizations)
-    .where(eq(organizations.id, organizationId))
-    .limit(1);
-  const [subscription] = await tx
-    .select({
-      provider: organizationSubscriptions.provider,
-      status: organizationSubscriptions.status,
-      priceId: organizationSubscriptions.providerPriceId,
-    })
-    .from(organizationSubscriptions)
-    .limit(1);
-  const [pilot] = await tx.select({ status: pilotEnrollments.status }).from(pilotEnrollments).limit(1);
+  /*
+   * Three reads, started together and none with a parameter — the id written
+   * into the text, and no `limit`, which Drizzle always sends as one: the
+   * organization row is its primary key's, and a studio has one subscription
+   * row and one enrolment at most. Inside the caller's transaction they go to
+   * the database as one flight instead of three in a row. See `db/literal.ts`.
+   */
+  const [[organization], [subscription], [pilot]] = await Promise.all([
+    tx
+      .select({ createdAt: organizations.createdAt })
+      .from(organizations)
+      .where(eq(organizations.id, uuidLiteral(organizationId)))
+      .execute(),
+    tx
+      .select({
+        provider: organizationSubscriptions.provider,
+        status: organizationSubscriptions.status,
+        priceId: organizationSubscriptions.providerPriceId,
+      })
+      .from(organizationSubscriptions)
+      .execute(),
+    tx.select({ status: pilotEnrollments.status }).from(pilotEnrollments).execute(),
+  ]);
 
   const environment = process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT?.trim() === "sandbox" ? "sandbox" : "live";
   return resolvePlan({

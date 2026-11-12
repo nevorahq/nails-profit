@@ -46,21 +46,26 @@ export default async function ServicesPage() {
       ? withTenant(membership.organizationId, (tx) => loadSetupGuide(tx))
       : null,
     withTenant(membership.organizationId, async (tx) => {
-      // Read once for the page: the mode is the month's, not each service's.
-      const modes = await loadMaterialsModes(tx, membership.organizationId, workspace.timezone);
+      /*
+       * The three reads the costing needs, started together. None carries a
+       * parameter, so inside this transaction they go to the database as one
+       * flight — see `db/literal.ts`. The first card is taken from the ordered
+       * list rather than with `limit`, which would be a parameter; a studio has
+       * a handful of masters.
+       */
+      const [modes, people, catalogue] = await Promise.all([
+        // Read once for the page: the mode is the month's, not each service's.
+        loadMaterialsModes(tx, membership.organizationId, workspace.timezone),
+        tx
+          .select({ id: specialists.id })
+          .from(specialists)
+          .where(isNull(specialists.archivedAt))
+          .orderBy(asc(specialists.createdAt), asc(specialists.id))
+          .execute(),
+        tx.select().from(services).where(isNull(services.archivedAt)).orderBy(asc(services.createdAt)).execute(),
+      ]);
       const materialsMode = materialsModeAt(modes);
-      const [specialist] = await tx
-        .select({ id: specialists.id })
-        .from(specialists)
-        .where(isNull(specialists.archivedAt))
-        .orderBy(asc(specialists.createdAt), asc(specialists.id))
-        .limit(1);
-
-      const catalogue = await tx
-        .select()
-        .from(services)
-        .where(isNull(services.archivedAt))
-        .orderBy(asc(services.createdAt));
+      const specialist = people[0];
 
       const costings = await loadServiceCostings(tx, catalogue, {
         specialistId: specialist?.id ?? null,

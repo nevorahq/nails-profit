@@ -9,6 +9,7 @@ import { OrganizationSettings } from "@/components/organization-settings";
 import { type TeamMember, TeamManager } from "@/components/team-manager";
 import { MaterialsModeSetting } from "@/components/materials-mode-setting";
 import { PushDeviceSwitch } from "@/components/push-device-switch";
+import { uuidLiteral } from "@/db/literal";
 import { memberships, organizationSubscriptions, specialists, users } from "@/db/schema";
 import { db } from "@/db";
 import { readTogether } from "@/db/tenant";
@@ -101,8 +102,9 @@ export default async function SettingsPage({
                   provider_subscription_id: organizationSubscriptions.providerSubscriptionId,
                   provider_customer_id: organizationSubscriptions.providerCustomerId,
                 })
+                // One row per studio by a unique index, so no `limit` — which
+                // would be a parameter and a second round trip.
                 .from(organizationSubscriptions)
-                .limit(1)
             )[0] ?? null
         : null,
       plan: canReadOrg ? (tx) => loadOrganizationPlan(tx, membership.organizationId) : null,
@@ -126,7 +128,8 @@ export default async function SettingsPage({
           })
           .from(memberships)
           .innerJoin(users, eq(memberships.userId, users.id))
-          .where(eq(memberships.organizationId, membership.organizationId))
+          // The id written into the text: one round trip, not two. See `db/literal.ts`.
+          .where(eq(memberships.organizationId, uuidLiteral(membership.organizationId)))
           .orderBy(asc(memberships.createdAt))
       : [],
     canReadTeam ? organizationAllows(membership.organizationId, "team") : true,

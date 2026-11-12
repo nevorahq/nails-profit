@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import {
   CalendarBoard,
@@ -269,15 +269,18 @@ export default async function CalendarPage({
           .from(bookingSettings)
           .execute();
 
-        // Last, because `limit` is sent as a parameter and a parameter holds up
-        // whatever is queued behind it; the three above go out first, together.
+        /*
+         * Written out rather than built, for one word: Drizzle sends `limit` as a
+         * parameter, and a parameter costs a second round trip and holds up the
+         * flight — this read alone kept the calendar's first round open for an
+         * extra two crossings. With the number in the text it goes with the rest.
+         */
         const rosterRead = tx
-          .select({ id: clients.id, name: clients.name, phone: clients.normalizedPhone })
-          .from(clients)
-          .where(isNull(clients.archivedAt))
-          .orderBy(asc(clients.name))
-          .limit(500)
-          .execute();
+          .execute<{ id: string; name: string; phone: string | null }>(
+            sql`select ${clients.id} as id, ${clients.name} as name, ${clients.normalizedPhone} as phone
+                from ${clients} where ${clients.archivedAt} is null order by ${clients.name} asc limit 500`,
+          )
+          .then((rows) => [...rows]);
 
         const [assignments, offers, buffers, roster] = await Promise.all([
           assignmentsRead,

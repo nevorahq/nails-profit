@@ -42,16 +42,15 @@ export default async function SpecialistsPage() {
   const showsPay = seesIndividualPay(membership.role);
 
   const peopleRead = withTenant(membership.organizationId, async (tx) => {
-    const cards = await loadSpecialistCards(tx, {
-      ...(ownOnly ? { ownedBy: membership.userId } : {}),
-      withoutPay: !showsPay,
-    });
-
-    const serviceRows = await tx
-      .select()
-      .from(services)
-      .where(isNull(services.archivedAt))
-      .orderBy(asc(services.createdAt));
+    // Started together: the catalogue does not wait for the cards, and with no
+    // parameters among them the statements share a flight.
+    const [cards, serviceRows] = await Promise.all([
+      loadSpecialistCards(tx, {
+        ...(ownOnly ? { ownedBy: membership.userId } : {}),
+        withoutPay: !showsPay,
+      }),
+      tx.select().from(services).where(isNull(services.archivedAt)).orderBy(asc(services.createdAt)).execute(),
+    ]);
 
     /*
      * Whether a client can reach each of them is answered on their own card
