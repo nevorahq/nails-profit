@@ -8,6 +8,7 @@ import {
   seedStudio,
   signedInContext,
   type Studio,
+  untilRevealed,
 } from "../helpers/studio";
 
 /**
@@ -41,6 +42,7 @@ test.describe("the appointment window", () => {
     const context = await signedInContext(browser, studio.owner, baseURL);
     const page = await context.newPage();
     await page.goto(`/app/calendar?date=${isoDate(day)}${everyone ? "" : `&specialist=${studio.specialistId}`}`);
+    await untilRevealed(page);
     return { context, page };
   }
 
@@ -301,7 +303,10 @@ test.describe("the appointment window", () => {
 
     await expect(dialog.getByRole("checkbox", { name: /^Manicure with coating/ })).toBeChecked();
     await expect(dialog.getByText("Choose a service to see the free times.")).toHaveCount(0);
-    await expect(dialog.getByRole("button", { name: "11:00", exact: true })).toBeVisible();
+    // Any free time, not 11:00 by name: the studio is shared by this file's
+    // tests, and the one that books the tapped time takes 11:00 when it runs
+    // first. What is under test is that times appear with nothing chosen.
+    await expect(dialog.locator(".slot-chip").first()).toBeVisible();
     await context.close();
   });
 

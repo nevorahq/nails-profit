@@ -1695,6 +1695,23 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 /* Ambient loop, intentionally outside the standard motion system — see the note by --ease-standard. */
 .public-booking-loading > span:not(.sr-only) { min-height: 60rem; border-radius: 4rem; background: linear-gradient(100deg, var(--sage-300) 20%, var(--surface-strong) 45%, var(--sage-300) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
 @keyframes booking-skeleton { to { background-position-x: -220%; } }
+
+/*
+ * The skeleton a section of /app shows between a click and its data — see
+ * `app/app/loading.tsx`. Shaped like most of the screens it stands in for: a
+ * heading, a row of figures, one panel. It fades in after a beat, so a section
+ * that arrives quickly replaces the old screen without a grey flash between.
+ */
+.route-loading { display: flex; flex-direction: column; gap: 18rem; animation: route-loading-in 200ms ease-out 150ms both; }
+.route-loading-bar { --route-loading-tone: color-mix(in srgb, var(--sage-300) 35%, var(--surface)); display: block; min-height: 96rem; border-radius: 20rem; background: linear-gradient(100deg, var(--route-loading-tone) 20%, var(--surface) 45%, var(--route-loading-tone) 70%); background-size: 220% 100%; animation: booking-skeleton 1.2s ease-in-out infinite; }
+.route-loading-title { width: min(320rem, 60%); min-height: 34rem; border-radius: 10rem; }
+.route-loading-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18rem; }
+.route-loading-panel { min-height: 280rem; }
+@keyframes route-loading-in { from { opacity: 0; } }
+@media (max-width: 680px) {
+  .route-loading-cards { grid-template-columns: 1fr; }
+  .route-loading-cards > :nth-child(n + 2) { display: none; }
+}
 .public-booking-empty { margin-top: 30rem; padding: 24rem; border: 1rem solid var(--line); border-radius: 4rem; background: var(--surface-strong); }
 .public-booking-empty p { margin-bottom: 0; }
 /* The ribbon of coming days: scrolls sideways on a phone rather than wrapping into rows. */
@@ -4158,6 +4175,7 @@ body:has(.calendar-fab) .app-main > .app-shell { padding-bottom: 112rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
   .public-booking-loading > span:not(.sr-only) { animation: none !important; }
+  .route-loading, .route-loading-bar { animation: none !important; }
 }
 
 /*

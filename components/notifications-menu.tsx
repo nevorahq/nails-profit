@@ -22,6 +22,7 @@ import { playNotificationChime, unlockNotificationChime } from "@/lib/notificati
  */
 import type { StaffNoticeKind as NoticeKind } from "@/lib/staff-notices";
 import { useDismissiblePanel } from "@/lib/use-dismissible-panel";
+import { POLL_INTERVAL_MS, shouldPoll } from "@/lib/notification-poll";
 
 type NotificationItem = Readonly<{
   id: string;
@@ -90,8 +91,6 @@ function keysOf(next: Notifications) {
   ]);
 }
 
-/** How often an open tab checks for a new request while nobody has clicked the bell. */
-const POLL_INTERVAL_MS = 30_000;
 
 async function fetchNotifications(locale: AppLocale, fallback: string): Promise<Notifications> {
   const response = await fetch(`/api/v1/notifications?locale=${locale}`);
@@ -145,8 +144,11 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
   useEffect(() => {
     unlockNotificationChime();
     let ignore = false;
+    let lastCheckedAt: number | null = null;
 
     function poll() {
+      if (!shouldPoll(document.visibilityState, lastCheckedAt, Date.now())) return;
+      lastCheckedAt = Date.now();
       void fetchNotifications(locale, loadFailed)
         .then((next) => {
           if (!ignore) apply(next);
@@ -156,11 +158,23 @@ export function NotificationsMenu({ locale }: { locale: AppLocale }) {
         });
     }
 
-    poll();
+    // The first load always runs, so the badge is right on arrival even in a
+    // tab opened in the background.
+    lastCheckedAt = Date.now();
+    void fetchNotifications(locale, loadFailed)
+      .then((next) => {
+        if (!ignore) apply(next);
+      })
+      .catch(() => {
+        if (!ignore) setFailed(true);
+      });
+
     const timer = setInterval(poll, POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", poll);
     return () => {
       ignore = true;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", poll);
     };
   }, [apply, locale, loadFailed]);
 
