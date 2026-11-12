@@ -9,6 +9,7 @@ import {
 } from "@/components/calendar-board";
 import { avatarUrl, organizationLogoUrl } from "@/domain/avatar-image";
 import { keepsManualVisit, manualVisitSpan } from "@/domain/calendar-visits";
+import { calendarFrame, sameWindow, type CalendarFrame } from "@/domain/calendar-window";
 import {
   addOns,
   availabilityExceptions,
@@ -28,18 +29,10 @@ import {
   visitLines,
   visits,
 } from "@/db/schema";
-import { constantListLiteral, instantLiteral, uuidListLiteral, uuidLiteral } from "@/db/literal";
+import { constantListLiteral, instantLiteral, opaqueIdLiteral, uuidListLiteral, uuidLiteral } from "@/db/literal";
 import { readTogether } from "@/db/tenant";
 import { can, hasConstraint, scopeFor, seesClientNotes } from "@/domain/rbac";
-import {
-  addLocalDays,
-  formatLocalDate,
-  formatLocalTime,
-  localDateWeekday,
-  parseLocalDate,
-  toZonedParts,
-  type LocalDate,
-} from "@/domain/timezone";
+import { formatLocalDate, formatLocalTime, toZonedParts } from "@/domain/timezone";
 import { parseContactChannels } from "@/domain/contact-channels";
 import { resolveLocalizedText } from "@/i18n/localized-text";
 import { getTranslator } from "@/i18n/t";
@@ -81,33 +74,6 @@ function localDateAt(instant: Date, timezone: string) {
   return formatLocalDate({ year: parts.year, month: parts.month, day: parts.day });
 }
 
-/**
- * The whole ISO weeks a month is drawn in — 35 or 42 days, Monday first.
- *
- * Weeks rather than the month alone, because a grid of seven columns has to
- * begin on a Monday: a February that starts on a Sunday would otherwise put its
- * 1st under «пн». The days either side belong to the neighbouring months and
- * are drawn quieter, but they are real dates and pressing one works — the last
- * days of the outgoing month are exactly what somebody looking at the 1st is
- * most likely to want next.
- */
-function monthGrid(anchor: LocalDate): LocalDate[] {
-  const first: LocalDate = { year: anchor.year, month: anchor.month, day: 1 };
-  const start = addLocalDays(first, 1 - localDateWeekday(first));
-
-  const nextMonth: LocalDate =
-    anchor.month === 12
-      ? { year: anchor.year + 1, month: 1, day: 1 }
-      : { year: anchor.year, month: anchor.month + 1, day: 1 };
-  const last = addLocalDays(nextMonth, -1);
-  const end = formatLocalDate(addLocalDays(last, 7 - localDateWeekday(last)));
-
-  const days: LocalDate[] = [];
-  for (let cursor = start; ; cursor = addLocalDays(cursor, 1)) {
-    days.push(cursor);
-    if (formatLocalDate(cursor) === end) return days;
-  }
-}
 
 export default async function CalendarPage({
   searchParams,
@@ -149,7 +115,7 @@ export default async function CalendarPage({
   const logoVersion = loadOrganizationLogoVersion(membership.organizationId);
 
   const data = await (async () => {
-    const first = await readTogether(membership.organizationId, {
+    const firstRead = readTogether(membership.organizationId, {
       /*
        * Inside each read below, the statements are started together and carry
        * no parameters where the value is the code's own (see `db/literal.ts`),
@@ -291,6 +257,230 @@ export default async function CalendarPage({
         return { assignments, roster, buffers, offers };
       },
     });
+    /*
+     * The window — which month, which day — and everything read for it, as a
+     * function of the zone «today» is read in.
+     *
+     * The true zone is the address's, and the addresses arrive with the first
+     * round. Waiting for them put a whole second round of transactions behind
+     * the first: on a database in another region that was the difference
+     * between this page and every other. So the second round starts at once,
+     * on a guess — the studio's own zone, which is the address's for almost
+     * every studio — and the guess is checked when the addresses arrive. Only
+     * the day and the month the zone picks are used from it; if either differs
+     * (an address in another zone, within hours of its midnight), the window is
+     * read again for the right one. A date in the address bar needs no zone, so
+     * then the guess is always right.
+     */
+    const requestedStatuses = (filters.status?.split(",") ?? []).filter(Boolean);
+    const frameIn = (zone: string) => calendarFrame(now, zone, filters.date);
+    type Frame = CalendarFrame;
+
+    /*
+     * Whose rows the calendar is narrowed to: a master's own always, else the
+     * one picked in the filter. A master's own card is asked for inside each
+     * statement rather than looked up first — the same lookup
+     * `scopedSpecialistId` makes, as a subquery — so that the window does not
+     * wait for it. Ids are written into the statements rather than sent beside
+     * them (see `db/literal.ts`); a filter that is not an id was an error from
+     * the database before and is refused before it reaches it now.
+     */
+    const ownCard =
+      scopeFor(membership.role, "bookings") === "own"
+        ? sql`(select ${specialists.id} from ${specialists} where ${specialists.userId} = ${opaqueIdLiteral(membership.userId)} limit 1)`
+        : null;
+    const shownSpecialist = ownCard ?? (filters.specialist ? uuidLiteral(filters.specialist) : null);
+
+    const readWindow = (frame: Frame) =>
+      readTogether(membership.organizationId, {
+        appointments: async (tx) => {
+          const rows = await tx
+            .select({
+              booking: bookings,
+              specialistName: specialists.name,
+              locationName: locations.name,
+              timezone: locations.timezone,
+              clientName: clients.name,
+              clientPhone: clients.normalizedPhone,
+              clientChannels: clients.contactChannels,
+              clientNotes: clients.notes,
+            })
+            .from(bookings)
+            .innerJoin(specialists, eq(bookings.specialistId, specialists.id))
+            .innerJoin(locations, eq(bookings.locationId, locations.id))
+            .leftJoin(clients, eq(bookings.clientId, clients.id))
+            .where(
+              and(
+                gte(bookings.startsAt, instantLiteral(frame.windowStart)),
+                lt(bookings.startsAt, instantLiteral(frame.windowEnd)),
+                shownSpecialist ? eq(bookings.specialistId, shownSpecialist) : undefined,
+                filters.location ? eq(bookings.locationId, uuidLiteral(filters.location)) : undefined,
+                requestedStatuses.length > 0
+                  ? inArray(bookings.status, constantListLiteral(requestedStatuses))
+                  : undefined,
+              ),
+            )
+            .orderBy(asc(bookings.startsAt));
+
+          // Widened in UTC, narrowed back in local time: a booking at 23:00 in
+          // one zone belongs to a different local day than the same instant in
+          // another. Each booking carries its own address's zone.
+          const dated = rows.map((row) => ({
+            ...row,
+            localDate: localDateAt(row.booking.startsAt, row.timezone),
+          }));
+          const onDay = dated.filter((row) => row.localDate === frame.selected);
+
+          /*
+           * The priced-up contents of an appointment, for the listed day alone.
+           *
+           * A month of dates is drawn from status and start time only — a mark
+           * in a cell says nothing about what was booked — so reading every line
+           * of every appointment in it would be a month of rows fetched to
+           * render nothing. The day below is the half that names services and
+           * totals money, and it is one date's worth.
+           */
+          const lines =
+            onDay.length === 0
+              ? []
+              : await tx
+                  .select()
+                  .from(bookingLines)
+                  .where(inArray(bookingLines.bookingId, uuidListLiteral(onDay.map((row) => row.booking.id))));
+
+          return { dated, onDay, lines };
+        },
+        manual: async (tx) => {
+          /*
+           * Visits closed by hand, with no appointment behind them — see
+           * `domain/calendar-visits`. Scoped exactly as the appointments are.
+           * Found by when they were closed and placed by when they began, so the
+           * window runs a day longer at its far end: a visit closed just after
+           * midnight still belongs to the evening before.
+           */
+          const visitRows = await tx
+            .select({
+              id: visits.id,
+              specialistId: visits.specialistId,
+              specialistName: specialists.name,
+              clientName: clients.name,
+              completedAt: visits.completedAt,
+              plannedDurationMinutes: visits.plannedDurationMinutes,
+              actualDurationMinutes: visits.actualDurationMinutes,
+            })
+            .from(visits)
+            .innerJoin(specialists, eq(visits.specialistId, specialists.id))
+            .leftJoin(clients, eq(visits.clientId, clients.id))
+            .where(
+              and(
+                isNull(visits.bookingId),
+                gte(visits.completedAt, instantLiteral(frame.windowStart)),
+                lt(visits.completedAt, instantLiteral(new Date(frame.windowEnd.getTime() + 24 * 60 * 60_000))),
+                shownSpecialist ? eq(visits.specialistId, shownSpecialist) : undefined,
+              ),
+            )
+            .orderBy(asc(visits.completedAt));
+
+          /*
+           * Names and money for the listed day — read for every visit that could
+           * fall on it, before it is known which do.
+           *
+           * Which day a hand-closed visit belongs to is read in the zone of its
+           * address, and the addresses arrive with the other round. Rather than
+           * wait for them, this asks for every visit that begins within a day of
+           * the selected date in UTC — no zone is further from UTC than that —
+           * and the page keeps the ones that land on the day once it knows.
+           */
+          const dayStart = Date.parse(`${frame.selected}T00:00:00.000Z`);
+          const candidateIds = visitRows
+            .filter((row) => {
+              const startsAt = manualVisitSpan(row).startsAt.getTime();
+              return startsAt >= dayStart - 86_400_000 && startsAt < dayStart + 2 * 86_400_000;
+            })
+            .map((row) => row.id);
+
+          // The newest version of each visit's figures, as `/app/visits` reads
+          // it. Asked together: one flight.
+          const [handLines, handRevenue] =
+            candidateIds.length === 0
+              ? [[], []]
+              : await Promise.all([
+                  tx
+                    .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
+                    .from(visitLines)
+                    .where(inArray(visitLines.visitId, uuidListLiteral(candidateIds)))
+                    .execute(),
+                  tx
+                    .selectDistinctOn([financialSnapshots.visitId], {
+                      visitId: financialSnapshots.visitId,
+                      revenueMinor: financialSnapshots.revenueMinor,
+                    })
+                    .from(financialSnapshots)
+                    .where(inArray(financialSnapshots.visitId, uuidListLiteral(candidateIds)))
+                    .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion))
+                    .execute(),
+                ]);
+
+          return { visitRows, handLines, handRevenue };
+        },
+        availability: async (tx) => {
+          const exceptionsRead = tx
+            .select({
+              id: availabilityExceptions.id,
+              specialistId: availabilityExceptions.specialistId,
+              locationId: availabilityExceptions.locationId,
+              startsAt: availabilityExceptions.startsAt,
+              endsAt: availabilityExceptions.endsAt,
+              reason: availabilityExceptions.reason,
+            })
+            .from(availabilityExceptions)
+            .where(
+              and(
+                shownSpecialist ? eq(availabilityExceptions.specialistId, shownSpecialist) : undefined,
+                gte(availabilityExceptions.endsAt, instantLiteral(frame.windowStart)),
+                lt(availabilityExceptions.startsAt, instantLiteral(frame.windowEnd)),
+              ),
+            )
+            .orderBy(asc(availabilityExceptions.startsAt))
+            .execute();
+
+          /*
+           * The shifts the day's tally measures its free time against.
+           *
+           * Without them there is no frame at all: the hours nobody booked would
+           * be indistinguishable from the hours a master is not in the studio,
+           * and a rota of 10:00–16:00 would be reported as a whole empty day.
+           *
+           * Read for the whole window and narrowed per day in the component: a
+           * rule carries a weekday and a range of dates it applies over, and
+           * which of them covers Thursday is a question about the day listed.
+           */
+          const shiftsRead = tx
+            .select({
+              specialistId: scheduleRules.specialistId,
+              locationId: scheduleRules.locationId,
+              weekday: scheduleRules.weekday,
+              startMinute: scheduleRules.startMinute,
+              endMinute: scheduleRules.endMinute,
+              effectiveFrom: scheduleRules.effectiveFrom,
+              effectiveTo: scheduleRules.effectiveTo,
+            })
+            .from(scheduleRules)
+            .where(shownSpecialist ? eq(scheduleRules.specialistId, shownSpecialist) : undefined)
+            .execute();
+
+          const [exceptionsRaw, shifts] = await Promise.all([exceptionsRead, shiftsRead]);
+          return { exceptionsRaw, shifts };
+        },
+      });
+
+    const guess = frameIn(workspace.timezone);
+    const guessRead = readWindow(guess);
+    // Awaited below unless the guess is wrong; a thrown-away read must not
+    // surface as an unhandled rejection.
+    guessRead.catch(() => {});
+
+    const first = await firstRead;
     const { places, ownSpecialistId } = first.where;
     const { people, catalogue, extras, addOnLinks } = first.lists;
     const { assignments, roster, buffers, offers } = first.links;
@@ -300,223 +490,36 @@ export default async function CalendarPage({
     // so "today" means today where the appointments are.
     const anchorZone =
       active.find((place) => place.id === filters.location)?.timezone ?? active[0]?.timezone ?? "UTC";
-    const todayParts = toZonedParts(now, anchorZone);
-    const today: LocalDate = { year: todayParts.year, month: todayParts.month, day: todayParts.day };
-    const anchor = (filters.date ? parseLocalDate(filters.date) : null) ?? today;
-    const grid = monthGrid(anchor);
-    const selected = formatLocalDate(anchor);
+    const frame = frameIn(anchorZone);
+    const { today, anchor, grid, selected } = frame;
+    const second = sameWindow(guess, frame) ? await guessRead : await readWindow(frame);
 
-    // A day either side, because the window is expressed in local dates and the
-    // studio's locations need not share a zone: the filtering back to exact
-    // local days happens below, once each booking's own zone is known.
-    const windowStart = new Date(Date.UTC(grid[0].year, grid[0].month - 1, grid[0].day - 1));
-    const windowEnd = new Date(
-      Date.UTC(grid.at(-1)!.year, grid.at(-1)!.month - 1, grid.at(-1)!.day + 2),
-    );
+    const placeIdsOf = (specialistId: string) =>
+      assignments
+        .filter(
+          (link) => link.specialistId === specialistId && active.some((place) => place.id === link.locationId),
+        )
+        .map((link) => link.locationId);
+    const handVisits = second.manual.visitRows
+      .filter((row) =>
+        keepsManualVisit(
+          { specialistLocationIds: placeIdsOf(row.specialistId) },
+          { location: filters.location ?? "", statuses: requestedStatuses },
+        ),
+      )
+      .map((row) => {
+        const span = manualVisitSpan(row);
+        // The visit names no address, so its hours are read in the one being
+        // looked at, else its master's, else the calendar's own.
+        const place = filters.location || placeIdsOf(row.specialistId)[0];
+        const timezone = active.find((candidate) => candidate.id === place)?.timezone ?? anchorZone;
+        return { ...row, ...span, timezone, localDate: localDateAt(span.startsAt, timezone) };
+      });
+    const visitsOnDay = handVisits.filter((row) => row.localDate === selected);
+    const onDayIds = new Set(visitsOnDay.map((row) => row.id));
+    const handLines = second.manual.handLines.filter((line) => onDayIds.has(line.visitId));
+    const handRevenue = second.manual.handRevenue.filter((row) => onDayIds.has(row.visitId));
 
-    const requestedStatuses = (filters.status?.split(",") ?? []).filter(Boolean);
-    /*
-     * Whose rows the calendar is narrowed to: a master's own always, else the
-     * one picked in the filter. Both are ids, and like the window's bounds they
-     * are written into the statements rather than sent beside them — see
-     * `db/literal.ts`. A filter that is not an id was an error from the
-     * database before and is refused before it reaches it now.
-     */
-    const shownSpecialist = ownSpecialistId ?? filters.specialist ?? null;
-
-    const second = await readTogether(membership.organizationId, {
-      appointments: async (tx) => {
-        const rows = await tx
-          .select({
-            booking: bookings,
-            specialistName: specialists.name,
-            locationName: locations.name,
-            timezone: locations.timezone,
-            clientName: clients.name,
-            clientPhone: clients.normalizedPhone,
-            clientChannels: clients.contactChannels,
-            clientNotes: clients.notes,
-          })
-          .from(bookings)
-          .innerJoin(specialists, eq(bookings.specialistId, specialists.id))
-          .innerJoin(locations, eq(bookings.locationId, locations.id))
-          .leftJoin(clients, eq(bookings.clientId, clients.id))
-          .where(
-            and(
-              gte(bookings.startsAt, instantLiteral(windowStart)),
-              lt(bookings.startsAt, instantLiteral(windowEnd)),
-              shownSpecialist ? eq(bookings.specialistId, uuidLiteral(shownSpecialist)) : undefined,
-              filters.location ? eq(bookings.locationId, uuidLiteral(filters.location)) : undefined,
-              requestedStatuses.length > 0 ? inArray(bookings.status, constantListLiteral(requestedStatuses)) : undefined,
-            ),
-          )
-          .orderBy(asc(bookings.startsAt));
-
-        // Widened in UTC, narrowed back in local time: a booking at 23:00 in one
-        // zone belongs to a different local day than the same instant in another.
-        const dated = rows.map((row) => ({
-          ...row,
-          localDate: localDateAt(row.booking.startsAt, row.timezone),
-        }));
-        const onDay = dated.filter((row) => row.localDate === selected);
-
-        /*
-         * The priced-up contents of an appointment, for the listed day alone.
-         *
-         * A month of dates is drawn from status and start time only — a mark in a
-         * cell says nothing about what was booked — so reading every line of every
-         * appointment in it would be a month of rows fetched to render nothing. The
-         * day below is the half that names services and totals money, and it is one
-         * date's worth.
-         */
-        const lines =
-          onDay.length === 0
-            ? []
-            : await tx
-                .select()
-                .from(bookingLines)
-                .where(
-                  inArray(
-                    bookingLines.bookingId,
-                    uuidListLiteral(onDay.map((row) => row.booking.id)),
-                  ),
-                );
-
-        return { dated, onDay, lines };
-      },
-      manual: async (tx) => {
-        /*
-         * Visits closed by hand, with no appointment behind them — see
-         * `domain/calendar-visits`. Scoped exactly as the appointments are. Found
-         * by when they were closed and placed by when they began, so the window
-         * runs a day longer at its far end: a visit closed just after midnight
-         * still belongs to the evening before.
-         */
-        const placeIdsOf = (specialistId: string) =>
-          assignments
-            .filter(
-              (link) =>
-                link.specialistId === specialistId && active.some((place) => place.id === link.locationId),
-            )
-            .map((link) => link.locationId);
-        const visitRows = await tx
-          .select({
-            id: visits.id,
-            specialistId: visits.specialistId,
-            specialistName: specialists.name,
-            clientName: clients.name,
-            completedAt: visits.completedAt,
-            plannedDurationMinutes: visits.plannedDurationMinutes,
-            actualDurationMinutes: visits.actualDurationMinutes,
-          })
-          .from(visits)
-          .innerJoin(specialists, eq(visits.specialistId, specialists.id))
-          .leftJoin(clients, eq(visits.clientId, clients.id))
-          .where(
-            and(
-              isNull(visits.bookingId),
-              gte(visits.completedAt, instantLiteral(windowStart)),
-              lt(visits.completedAt, instantLiteral(new Date(windowEnd.getTime() + 24 * 60 * 60_000))),
-              shownSpecialist ? eq(visits.specialistId, uuidLiteral(shownSpecialist)) : undefined,
-            ),
-          )
-          .orderBy(asc(visits.completedAt));
-
-        const handVisits = visitRows
-          .filter((row) =>
-            keepsManualVisit(
-              { specialistLocationIds: placeIdsOf(row.specialistId) },
-              { location: filters.location ?? "", statuses: requestedStatuses },
-            ),
-          )
-          .map((row) => {
-            const span = manualVisitSpan(row);
-            // The visit names no address, so its hours are read in the one being
-            // looked at, else its master's, else the calendar's own.
-            const place = filters.location || placeIdsOf(row.specialistId)[0];
-            const timezone = active.find((candidate) => candidate.id === place)?.timezone ?? anchorZone;
-            return { ...row, ...span, timezone, localDate: localDateAt(span.startsAt, timezone) };
-          });
-        const visitsOnDay = handVisits.filter((row) => row.localDate === selected);
-        const visitIds = visitsOnDay.map((row) => row.id);
-
-        // Names and money for the listed day alone, as with the appointments —
-        // and the newest version of each visit's figures, as `/app/visits` reads
-        // it. Asked together: one flight.
-        const [handLines, handRevenue] =
-          visitIds.length === 0
-            ? [[], []]
-            : await Promise.all([
-                tx
-                  .select({ visitId: visitLines.visitId, kind: visitLines.kind, nameSnapshot: visitLines.nameSnapshot })
-                  .from(visitLines)
-                  .where(inArray(visitLines.visitId, uuidListLiteral(visitIds)))
-                  .execute(),
-                tx
-                  .selectDistinctOn([financialSnapshots.visitId], {
-                    visitId: financialSnapshots.visitId,
-                    revenueMinor: financialSnapshots.revenueMinor,
-                  })
-                  .from(financialSnapshots)
-                  .where(inArray(financialSnapshots.visitId, uuidListLiteral(visitIds)))
-                  .orderBy(financialSnapshots.visitId, desc(financialSnapshots.snapshotVersion))
-                  .execute(),
-              ]);
-
-        return { handVisits, visitsOnDay, handLines, handRevenue };
-      },
-      availability: async (tx) => {
-        const exceptionsRead = tx
-          .select({
-            id: availabilityExceptions.id,
-            specialistId: availabilityExceptions.specialistId,
-            locationId: availabilityExceptions.locationId,
-            startsAt: availabilityExceptions.startsAt,
-            endsAt: availabilityExceptions.endsAt,
-            reason: availabilityExceptions.reason,
-          })
-          .from(availabilityExceptions)
-          .where(
-            and(
-              shownSpecialist ? eq(availabilityExceptions.specialistId, uuidLiteral(shownSpecialist)) : undefined,
-              gte(availabilityExceptions.endsAt, instantLiteral(windowStart)),
-              lt(availabilityExceptions.startsAt, instantLiteral(windowEnd)),
-            ),
-          )
-          .orderBy(asc(availabilityExceptions.startsAt))
-          .execute();
-
-        /*
-         * The shifts the day's tally measures its free time against.
-         *
-         * Without them there is no frame at all: the hours nobody booked would be
-         * indistinguishable from the hours a master is not in the studio, and a
-         * rota of 10:00–16:00 would be reported as a whole empty day.
-         *
-         * Read for the whole window and narrowed per day in the component: a rule
-         * carries a weekday and a range of dates it applies over, and which of them
-         * covers Thursday is a question about the day being listed.
-         */
-        const shiftsRead = tx
-          .select({
-            specialistId: scheduleRules.specialistId,
-            locationId: scheduleRules.locationId,
-            weekday: scheduleRules.weekday,
-            startMinute: scheduleRules.startMinute,
-            endMinute: scheduleRules.endMinute,
-            effectiveFrom: scheduleRules.effectiveFrom,
-            effectiveTo: scheduleRules.effectiveTo,
-          })
-          .from(scheduleRules)
-          .where(shownSpecialist ? eq(scheduleRules.specialistId, uuidLiteral(shownSpecialist)) : undefined)
-          .execute();
-
-        const [exceptionsRaw, shifts] = await Promise.all([exceptionsRead, shiftsRead]);
-        return { exceptionsRaw, shifts };
-      },
-    });
-
-    const { handVisits, visitsOnDay, handLines, handRevenue } = second.manual;
     const { dated, onDay, lines } = second.appointments;
     const { exceptionsRaw, shifts } = second.availability;
 
