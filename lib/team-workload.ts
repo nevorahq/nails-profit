@@ -1,5 +1,6 @@
 import { and, count, eq, gte, inArray, isNotNull } from "drizzle-orm";
 
+import { constantListLiteral, instantLiteral } from "@/db/literal";
 import { bookings, specialists } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking-service";
@@ -31,8 +32,10 @@ export async function loadUpcomingByUser(
     .where(
       and(
         isNotNull(specialists.userId),
-        gte(bookings.startsAt, now),
-        inArray(bookings.status, [...ACTIVE_BOOKING_STATUSES]),
+        // Written into the text — see `db/literal.ts` — so the count is one
+        // round trip, not two.
+        gte(bookings.startsAt, instantLiteral(now)),
+        inArray(bookings.status, constantListLiteral(ACTIVE_BOOKING_STATUSES)),
       ),
     )
     .groupBy(specialists.userId);

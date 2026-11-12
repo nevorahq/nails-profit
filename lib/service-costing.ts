@@ -1,5 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 
+import { uuidLiteral } from "@/db/literal";
 import { addOns, commissionRules, services } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { selectCommissionRule, toCommission } from "@/domain/commission";
@@ -53,7 +54,9 @@ export async function loadCommissionRulesOf(tx: TenantTransaction, specialistId:
       activeTo: commissionRules.activeTo,
     })
     .from(commissionRules)
-    .where(eq(commissionRules.specialistId, specialistId));
+    // The id written into the text: no parameter, one round trip — see
+    // `db/literal.ts`.
+    .where(eq(commissionRules.specialistId, uuidLiteral(specialistId)));
 }
 
 /**

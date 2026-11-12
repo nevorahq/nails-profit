@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
+import { constantListLiteral, constantLiteral, instantLiteral, uuidListLiteral } from "@/db/literal";
 import { bookingSettings, bookings, clients, locations, visits } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import { returnDue, type ReturnDue, type ReturnVisit } from "@/domain/client-return";
@@ -38,15 +39,34 @@ export async function loadReturnList(
   tx: TenantTransaction,
   input: Readonly<{ timezone: string; now: Date; viewerSpecialistId: string | null }>,
 ): Promise<ReturnRow[]> {
-  const visitRows = await tx
-    .select({
-      clientId: visits.clientId,
-      specialistId: visits.specialistId,
-      completedAt: visits.completedAt,
-    })
-    .from(visits)
-    .innerJoin(clients, eq(visits.clientId, clients.id))
-    .where(and(isNotNull(visits.clientId), isNull(clients.archivedAt), isNull(clients.anonymizedAt)));
+  /*
+   * The visits and the appointments still ahead, started together: neither
+   * needs the other, and with no parameters between them (see
+   * `db/literal.ts`) they go to the database as one flight.
+   */
+  const [visitRows, coming] = await Promise.all([
+    tx
+      .select({
+        clientId: visits.clientId,
+        specialistId: visits.specialistId,
+        completedAt: visits.completedAt,
+      })
+      .from(visits)
+      .innerJoin(clients, eq(visits.clientId, clients.id))
+      .where(and(isNotNull(visits.clientId), isNull(clients.archivedAt), isNull(clients.anonymizedAt)))
+      .execute(),
+    tx
+      .selectDistinct({ clientId: bookings.clientId })
+      .from(bookings)
+      .where(
+        and(
+          isNotNull(bookings.clientId),
+          inArray(bookings.status, constantListLiteral(ACTIVE_BOOKING_STATUSES)),
+          gt(bookings.startsAt, instantLiteral(input.now)),
+        ),
+      )
+      .execute(),
+  ]);
   if (visitRows.length === 0) return [];
 
   const byClient = new Map<string, ReturnVisit[]>();
@@ -60,16 +80,6 @@ export async function loadReturnList(
     byClient.set(row.clientId!, list);
   }
 
-  const coming = await tx
-    .selectDistinct({ clientId: bookings.clientId })
-    .from(bookings)
-    .where(
-      and(
-        isNotNull(bookings.clientId),
-        inArray(bookings.status, [...ACTIVE_BOOKING_STATUSES]),
-        gt(bookings.startsAt, input.now),
-      ),
-    );
   const returning = new Set(coming.map((row) => row.clientId));
 
   const today = localDay(input.now, input.timezone);
@@ -96,7 +106,7 @@ export async function loadReturnList(
       locale: clients.locale,
     })
     .from(clients)
-    .where(inArray(clients.id, [...dueIds.keys()]));
+    .where(inArray(clients.id, uuidListLiteral([...dueIds.keys()])));
 
   return cards
     .map((card) => ({
@@ -132,7 +142,10 @@ export async function publishedBookingSlug(
     .select({ id: locations.id })
     .from(locations)
     .innerJoin(bookingSettings, eq(bookingSettings.locationId, locations.id))
-    .where(and(eq(locations.status, "active"), eq(bookingSettings.publicStatus, "published")))
-    .limit(1);
+    .where(
+      and(eq(locations.status, constantLiteral("active")), eq(bookingSettings.publicStatus, constantLiteral("published"))),
+    );
+  // Any one will do; read without `limit`, which would be a parameter — a
+  // studio has a handful of addresses.
   return published ? organization.slug : null;
 }

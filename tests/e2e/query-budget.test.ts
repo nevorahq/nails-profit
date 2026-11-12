@@ -3,10 +3,14 @@ import { sql } from "drizzle-orm";
 
 import { measureStatements } from "@/db/query-meter";
 import { readTogether, withTenant } from "@/db/tenant";
+import { loadReturnList } from "@/lib/client-return";
 import { loadDashboard } from "@/lib/dashboard";
 import { resolveLocale } from "@/lib/locale";
 import { loadOrganizationLogoVersion } from "@/lib/organization-logo";
 import { loadPeriodPL, monthOf } from "@/lib/period";
+import { loadOrganizationPlan } from "@/lib/plan";
+import { loadSpecialistCards } from "@/lib/specialist-cards";
+import { loadUpcomingByUser } from "@/lib/team-workload";
 import { getActiveMembership } from "@/lib/membership";
 import { closeTestConnections, resetDatabase } from "../helpers/database";
 import { setSessionHeaders } from "../helpers/session";
@@ -216,6 +220,20 @@ describe("reads that travel in one flight", () => {
     );
 
     expect(statements).toHaveLength(2);
+    expect(parameterised).toEqual([]);
+  });
+
+  test("as do the tariff, the master cards, the team's workload and the list of clients due back", async () => {
+    const { parameterised, transactions } = await measureStatements(() =>
+      readTogether(studio.organizationId, {
+        plan: (tx) => loadOrganizationPlan(tx, studio.organizationId),
+        cards: (tx) => loadSpecialistCards(tx),
+        workload: (tx) => loadUpcomingByUser(tx),
+        returning: (tx) => loadReturnList(tx, { timezone: "UTC", now: new Date(), viewerSpecialistId: null }),
+      }),
+    );
+
+    expect(transactions).toBe(4);
     expect(parameterised).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { expect, test } from "../fixtures";
-import { disposeStudio, seedStudio, signedInContext, type Studio } from "../helpers/studio";
+import { disposeStudio, seedStudio, signedInContext, type Studio, untilRevealed } from "../helpers/studio";
 
 /**
  * The round «+» on a phone: centred on the screen, with its own centre on the
@@ -29,6 +29,8 @@ test.describe("the round button on the bar", () => {
       const page = await context.newPage();
       test.skip((page.viewportSize()?.width ?? 0) > 680, "the bar and this button are the phone's");
       await page.goto("/app/calendar");
+      // Boxes are measured below, and a box is null while the page is behind its skeleton.
+      await untilRevealed(page);
 
       const button = page.locator(who === "owner" ? ".quick-actions-toggle" : ".calendar-fab");
       await expect(button).toBeVisible();
@@ -54,6 +56,8 @@ test.describe("the round button on the bar", () => {
       const page = await context.newPage();
       test.skip((page.viewportSize()?.width ?? 0) > 680, "the bar and this button are the phone's");
       await page.goto("/app/calendar");
+      // Boxes are measured below, and a box is null while the page is behind its skeleton.
+      await untilRevealed(page);
 
       const button = (await page.locator(who === "owner" ? ".quick-actions-toggle" : ".calendar-fab").boundingBox())!;
       const tabs = page.locator(".bottom-nav li");
@@ -82,6 +86,7 @@ test.describe("the round button on the bar", () => {
     const page = await context.newPage();
     test.skip((page.viewportSize()?.width ?? 0) > 680, "the bar and this button are the phone's");
     await page.goto("/app/calendar");
+    await untilRevealed(page);
 
     await page.locator(".quick-actions-toggle").click();
     const menu = (await page.locator(".quick-actions-menu").boundingBox())!;
@@ -98,6 +103,7 @@ test.describe("the round button on the bar", () => {
     // The suite runs with reduced motion, which switches every animation off.
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/app/calendar");
+    await untilRevealed(page);
 
     await page.locator(".quick-actions-toggle").click();
     const items =page.locator(".quick-actions-menu li");
