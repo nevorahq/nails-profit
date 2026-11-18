@@ -8,7 +8,14 @@ import { MAX_PHOTOS_PER_VISIT } from "@/domain/visit-photos";
 import { getErrorMessage, type AppLocale } from "@/i18n/messages";
 import { encodeWorkPhoto } from "@/lib/work-photo-image";
 
-export type VisitPhotoItem = Readonly<{ id: string; url: string; width: number; height: number }>;
+export type VisitPhotoItem = Readonly<{
+  id: string;
+  url: string;
+  width: number;
+  height: number;
+  /** Shown on the studio's public booking page. */
+  published: boolean;
+}>;
 
 /**
  * Photos of the work, on the visit's card.
@@ -35,6 +42,9 @@ export function VisitPhotos({
   const register = useRegister();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The photo whose publication is being confirmed, and whether the client's consent is ticked. */
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [consented, setConsented] = useState(false);
 
   async function failure(response: Response) {
     const body = (await response.json().catch(() => null)) as { error?: { code: string; message: string } } | null;
@@ -77,7 +87,32 @@ export function VisitPhotos({
     router.refresh();
   }
 
+  async function publish(photo: VisitPhotoItem) {
+    setPending(true);
+    setError(null);
+    const response = await fetch(`${photo.url}/gallery`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_consent: true }),
+    });
+    setPending(false);
+    if (!response.ok) return failure(response);
+    setConfirming(null);
+    setConsented(false);
+    router.refresh();
+  }
+
+  async function unpublish(photo: VisitPhotoItem) {
+    setPending(true);
+    setError(null);
+    const response = await fetch(`${photo.url}/gallery`, { method: "DELETE" });
+    setPending(false);
+    if (!response.ok) return failure(response);
+    router.refresh();
+  }
+
   if (photos.length === 0 && !canWrite) return null;
+  const confirmingPhoto = photos.find((photo) => photo.id === confirming) ?? null;
 
   return (
     <section className="visit-photos" aria-label={t("visitPhotos.title")}>
@@ -92,6 +127,7 @@ export function VisitPhotos({
               {/* eslint-disable-next-line @next/next/no-img-element -- a studio's own photo behind a session, not a build-time asset. */}
               <img src={photo.url} alt="" loading="lazy" width={photo.width} height={photo.height} />
             </a>
+            {photo.published && <span className="visit-photos-shown">{t("visitPhotos.shown")}</span>}
             {canWrite && (
               <button
                 type="button"
@@ -115,6 +151,44 @@ export function VisitPhotos({
           </li>
         )}
       </ul>
+      {canWrite && photos.length > 0 && (
+        <ul className="visit-photos-actions">
+          {photos.map((photo, index) => (
+            <li key={photo.id}>
+              <button
+                type="button"
+                className="inline-action"
+                disabled={pending}
+                onClick={() => {
+                  if (photo.published) return unpublish(photo);
+                  setConfirming(confirming === photo.id ? null : photo.id);
+                  setConsented(false);
+                }}
+              >
+                {photo.published
+                  ? t("visitPhotos.hide", { index: index + 1 })
+                  : t("visitPhotos.show", { index: index + 1 })}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {confirmingPhoto && (
+        <div className="visit-photos-consent">
+          <label>
+            <input type="checkbox" checked={consented} onChange={(event) => setConsented(event.target.checked)} />
+            <span>{t("visitPhotos.consent")}</span>
+          </label>
+          <p className="inline-actions">
+            <button type="button" className="inline-action" disabled={pending || !consented} onClick={() => publish(confirmingPhoto)}>
+              {t("visitPhotos.publish")}
+            </button>
+            <button type="button" className="inline-action" disabled={pending} onClick={() => setConfirming(null)}>
+              {t("common.cancel")}
+            </button>
+          </p>
+        </div>
+      )}
       {error && (
         <p className="field-error" role="alert">
           {error}

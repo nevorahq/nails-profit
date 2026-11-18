@@ -49,6 +49,7 @@ const TABLES_IN_DELETE_ORDER = [
   "booking_hold",
   "booking",
   "financial_snapshot",
+  "gallery_photo",
   "visit_photo",
   "visit_line",
   "visit",

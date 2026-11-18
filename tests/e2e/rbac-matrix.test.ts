@@ -159,6 +159,16 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/public/booking/[slug]/gallery/[photoId]",
+    method: "GET",
+    allowed: ALL_ROLES,
+    public: true,
+    note: "A published photo of work for the public page; only while a gallery row says so, and an unknown slug is a 404",
+    request: async () => ({
+      path: "/api/v1/public/booking/unknown-studio/gallery/00000000-0000-4000-8000-000000000000",
+    }),
+  },
+  {
     route: "/api/v1/public/booking/[slug]/availability",
     method: "GET",
     allowed: ALL_ROLES,
@@ -1132,6 +1142,23 @@ const cases: readonly Case[] = [
     allowed: ["owner", "manager", "master"],
     note: "bookings write, not an Analyst; a missing photo is a 404",
     request: async (fixture) => ({ path: `/api/v1/visits/${fixture.visitId}/photos/${crypto.randomUUID()}` }),
+  },
+  {
+    route: "/api/v1/visits/[id]/photos/[photoId]/gallery",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write, not an Analyst: showing a client's photo needs the client's consent, and a missing photo is a 404",
+    request: async (fixture) => ({
+      path: `/api/v1/visits/${fixture.visitId}/photos/${crypto.randomUUID()}/gallery`,
+      body: { client_consent: true },
+    }),
+  },
+  {
+    route: "/api/v1/visits/[id]/photos/[photoId]/gallery",
+    method: "DELETE",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write, not an Analyst; a missing photo is a 404",
+    request: async (fixture) => ({ path: `/api/v1/visits/${fixture.visitId}/photos/${crypto.randomUUID()}/gallery` }),
   },
   {
     route: "/api/v1/bookings/[id]/next-slots",
