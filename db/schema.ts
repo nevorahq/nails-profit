@@ -2764,6 +2764,35 @@ export const visitPhotos = pgTable(
 );
 
 /**
+ * A photo of work that the studio chose to show on its public booking page.
+ *
+ * A row here is the publication and the client's consent to it: whoever adds
+ * it states that the client agreed, and `created_at` / `created_by` are when
+ * and who. It points at the private photo rather than copying it, so there is
+ * one object to keep and one to erase — `ON DELETE CASCADE` takes the
+ * publication with the photo, and with it everything that removes photos
+ * (a client erased, a visit deleted, the studio gone) without a second queue.
+ */
+export const galleryPhotos = pgTable(
+  "gallery_photo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    visitPhotoId: uuid("visit_photo_id")
+      .notNull()
+      .references(() => visitPhotos.id, { onDelete: "cascade" }),
+    ...auditColumns,
+  },
+  (table) => [
+    // A photo is published once; publishing it again is a no-op, not a second tile.
+    uniqueIndex("gallery_photo_visit_photo_idx").on(table.visitPhotoId),
+    index("gallery_photo_org_idx").on(table.organizationId, table.createdAt),
+  ],
+);
+
+/**
  * Objects in the bucket that are owed a deletion.
  *
  * A row in Postgres and an object in Storage cannot be removed in one

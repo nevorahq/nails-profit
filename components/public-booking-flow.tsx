@@ -38,6 +38,8 @@ import {
   type PublicContactError,
   type PublicContactField,
 } from "@/lib/public-booking-ux";
+import type { PublicGalleryPhoto } from "@/lib/public-gallery";
+import { PublicGallery } from "@/components/public-gallery";
 
 type Location = {
   id: string;
@@ -152,7 +154,14 @@ function sameName(a: string, b: string) {
   return a.trim().localeCompare(b.trim(), undefined, { sensitivity: "base" }) === 0;
 }
 
-export function PublicBookingFlow({ profile }: { profile: Profile }) {
+export function PublicBookingFlow({
+  profile,
+  gallery = [],
+}: {
+  profile: Profile;
+  /** The studio's published photos of work, shown under the heading. */
+  gallery?: readonly PublicGalleryPhoto[];
+}) {
   const t = useMemo(() => getTranslator(profile.locale), [profile.locale]);
   const [locationId, setLocationId] = useState(profile.locations[0]?.id ?? "");
   const location = profile.locations.find((entry) => entry.id === locationId) ?? profile.locations[0];
@@ -342,6 +351,22 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
       block: "nearest",
     });
   });
+
+  /**
+   * «Book this» from a photo of work: the photo's master is picked when this
+   * studio lets the client pick one, and the form is brought into view. A master
+   * who is no longer offered is simply not picked — the form is still the way on.
+   */
+  function bookFromGallery(person: string | null) {
+    if (person && !solo && everyone.some((entry) => entry.id === person)) {
+      pickMaster(person);
+      return;
+    }
+    document.getElementById("booking-start")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+  }
 
   useEffect(() => {
     if (!mapOpen) return;
@@ -1035,7 +1060,9 @@ export function PublicBookingFlow({ profile }: { profile: Profile }) {
         <h1>{t("publicBooking.title")}</h1>
       </section>
 
-      <section className="public-booking-card" aria-busy={pending}>
+      <PublicGallery photos={gallery} locale={profile.locale} onBook={bookFromGallery} />
+
+      <section className="public-booking-card" id="booking-start" aria-busy={pending}>
         {!held ? (
           <form onSubmit={(event) => event.preventDefault()} noValidate>
             {profile.locations.length > 1 && (

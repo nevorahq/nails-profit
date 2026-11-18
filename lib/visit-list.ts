@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import {
   clients,
@@ -7,6 +7,7 @@ import {
   specialists,
   visitLines,
   visitPhotos,
+  galleryPhotos,
   visits,
 } from "@/db/schema";
 import { instantLiteral, uuidListLiteral, uuidLiteral } from "@/db/literal";
@@ -134,8 +135,11 @@ export async function loadVisitList(
                 visitId: visitPhotos.visitId,
                 width: visitPhotos.width,
                 height: visitPhotos.height,
+                /* Whether the studio shows it on the booking page. */
+                published: sql<boolean>`${galleryPhotos.id} is not null`,
               })
               .from(visitPhotos)
+              .leftJoin(galleryPhotos, eq(galleryPhotos.visitPhotoId, visitPhotos.id))
               .where(inArray(visitPhotos.visitId, ofTheseVisits))
               .orderBy(asc(visitPhotos.createdAt))
               .execute()

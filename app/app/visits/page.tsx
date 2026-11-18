@@ -305,6 +305,7 @@ export default async function VisitsPage({
                             url: photoUrl(visit.id, photo.id),
                             width: photo.width,
                             height: photo.height,
+                            published: photo.published,
                           }))}
                         canWrite={addsPhotos}
                         locale={locale}

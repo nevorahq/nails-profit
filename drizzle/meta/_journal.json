@@ -484,6 +484,13 @@
       "when": 1793551727270,
       "tag": "0068_a_master_charges_their_own_price",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1795013376932,
+      "tag": "0069_a_studio_shows_finished_work_to_clients",
+      "breakpoints": true
     }
   ]
 }
