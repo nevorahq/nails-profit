@@ -285,6 +285,10 @@ export function CalendarBoard({
   const [notice, setNotice] = useState<string | null>(null);
   /** The appointment cancelled on this page, whose freed hour is offered at once. */
   const [justCancelled, setJustCancelled] = useState<string | null>(null);
+  /** What the visit being closed was typed to have lasted, by booking id. */
+  const [typedMinutes, setTypedMinutes] = useState<Record<string, string>>({});
+  /** The visit just closed short, and by how much: the shift panel opens on it. */
+  const [justFreed, setJustFreed] = useState<{ id: string; minutes: number } | null>(null);
   const [previews, setPreviews] = useState<Record<string, BookingPreview | "loading" | "error">>({});
   /** «Клиент заплатил» per appointment, as typed; absent until somebody types. */
   const [paidInputs, setPaidInputs] = useState<Record<string, string>>({});
@@ -496,6 +500,13 @@ export function CalendarBoard({
     }
   }
 
+  /** Minutes a typed duration frees against the booked one; nothing under five. */
+  function freedMinutes(booking: CalendarBooking, typed: string | undefined) {
+    const planned = Math.round((Date.parse(booking.endsAt) - Date.parse(booking.startsAt)) / 60_000);
+    const actual = Number(typed);
+    return typed && Number.isInteger(actual) && actual > 0 && planned - actual >= 5 ? planned - actual : 0;
+  }
+
   async function complete(booking: CalendarBooking, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -513,9 +524,11 @@ export function CalendarBoard({
       ...(paidMinor !== null ? { paid_minor: paidMinor } : {}),
       ...(tipMinor ? { tip_minor: tipMinor } : {}),
     };
-    await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
+    const closed = await send(`/api/v1/bookings/${booking.id}/complete`, payload, {
       key: keyFor(JSON.stringify({ bookingId: booking.id, ...payload })),
     });
+    const freed = freedMinutes(booking, durationRaw);
+    if (closed && freed > 0) setJustFreed({ id: booking.id, minutes: freed });
   }
 
   async function completeNow(booking: CalendarBooking) {
@@ -1789,6 +1802,7 @@ export function CalendarBoard({
                               locale={locale}
                               localeTag={localeTag}
                               names={shiftNames}
+                              suggestedEarlierMinutes={justFreed?.id === booking.id ? justFreed.minutes : 0}
                             />
                           )}
 
@@ -1906,10 +1920,23 @@ export function CalendarBoard({
                                               min="1"
                                               step="1"
                                               placeholder={dur === undefined ? undefined : String(dur)}
+                                              onChange={(event) =>
+                                                setTypedMinutes((previous) => ({
+                                                  ...previous,
+                                                  [booking.id]: event.target.value,
+                                                }))
+                                              }
                                             />
                                           </label>
                                         );
                                       })()}
+                                      {freedMinutes(booking, typedMinutes[booking.id]) > 0 && (
+                                        <p className="muted" role="status">
+                                          {t("closeVisit.freedHint", {
+                                            count: freedMinutes(booking, typedMinutes[booking.id]),
+                                          })}
+                                        </p>
+                                      )}
                                       <button
                                         className="primary-button"
                                         type="submit"
