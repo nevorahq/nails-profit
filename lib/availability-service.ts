@@ -13,8 +13,10 @@ import {
 } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
 import {
+  applyExceptions,
   findNextAvailableDates,
   generateSlots,
+  workingIntervalsFor,
   type AvailabilityExceptionInput,
   type AvailabilitySettings,
   type ScheduleRuleInput,
@@ -23,6 +25,7 @@ import {
 } from "@/domain/availability";
 import type { Interval } from "@/domain/interval";
 import {
+  addLocalDays,
   formatLocalDate,
   toZonedParts,
   type LocalDate,
@@ -279,6 +282,35 @@ export type SlotQuery = Readonly<{
   excludeBookingId?: string | null;
   now: Date;
 }>;
+
+/**
+ * The hours a specialist works across a stretch of time, exceptions applied.
+ *
+ * Not bookings: this is the rota alone, which is what a staff move is checked
+ * against. The days read are the local days the window touches plus one on each
+ * side, because a shift can run past midnight and the window is in instants.
+ */
+export async function workingHoursIn(
+  tx: TenantTransaction,
+  input: { specialistId: string; locationId: string; window: Interval },
+  context: Pick<SlotContext, "timezone">,
+): Promise<Interval[]> {
+  const first = toZonedParts(input.window.start, context.timezone);
+  const startDate: LocalDate = addLocalDays({ year: first.year, month: first.month, day: first.day }, -1);
+
+  const [rules, exceptions] = await Promise.all([
+    loadRules(tx, input.specialistId, input.locationId),
+    loadExceptions(tx, input.specialistId, input.locationId, input.window),
+  ]);
+
+  const spanDays = Math.ceil((input.window.end.getTime() - input.window.start.getTime()) / 86_400_000) + 3;
+  const working: Interval[] = [];
+  for (let offset = 0; offset < spanDays; offset += 1) {
+    working.push(...workingIntervalsFor(rules, addLocalDays(startDate, offset), context.timezone));
+  }
+
+  return applyExceptions(working, exceptions);
+}
 
 /**
  * Slots for one specialist on one local day.
