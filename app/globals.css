@@ -1572,6 +1572,15 @@ button.report-tab { background: none; border-top: 0; border-left: 0; border-righ
 .slot-fill-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8rem 16rem; padding: 12rem 0; border-top: 1rem solid var(--line); }
 .slot-fill-who { display: grid; gap: 2rem; min-width: 0; flex: 1 1 220rem; }
 .slot-fill-who .muted { font-size: 13rem; }
+.shift-following p { margin: 0; }
+.shift-direction { display: flex; flex-wrap: wrap; gap: 8rem 16rem; margin: 0; padding: 0; border: 0; }
+.shift-direction legend { padding: 0; margin-bottom: 6rem; font-size: 13rem; color: var(--muted); }
+.shift-direction label { display: inline-flex; align-items: center; gap: 8rem; min-height: 44rem; }
+.shift-preview { display: grid; gap: 10rem; margin-top: 12rem; }
+.shift-preview h3 { margin: 0; font-size: 15rem; }
+.shift-preview ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.shift-preview li { display: flex; justify-content: space-between; gap: 12rem; padding: 10rem 0; border-top: 1rem solid var(--line); }
+.shift-preview button { min-height: 44rem; }
 
 /* Photos of work: square thumbnails on the visit card and the client card. */
 .visit-photos { display: grid; gap: 8rem; margin-top: 14rem; padding-top: 14rem; border-top: 1rem solid var(--line); }

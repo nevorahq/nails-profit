@@ -29,6 +29,7 @@ import { ServiceRows } from "@/components/service-rows";
 import { toServicesPayload, type ServiceLine } from "@/components/service-lines-field";
 import { ClientContact } from "@/components/client-contact";
 import { NextVisit } from "@/components/next-visit";
+import { ShiftFollowing } from "@/components/shift-following";
 import { SlotFillPanel } from "@/components/slot-fill-panel";
 import { PaidField, TipField, tipMinorOf, toMajorUnits, toMinorUnits } from "@/components/paid-field";
 import type { ContactChannelMarks } from "@/domain/contact-channels";
@@ -274,6 +275,10 @@ export function CalendarBoard({
 }) {
   const router = useRouter();
   const t = useTranslator(locale);
+  /** Whom each appointment is for, for the lines of the shift preview. */
+  const shiftNames = Object.fromEntries(
+    bookings.map((entry) => [entry.id, entry.clientName ?? t("calendar.noClient")]),
+  );
   const register = useRegister();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1777,6 +1782,16 @@ export function CalendarBoard({
                             has just turned grey: the client is still at the desk,
                             and the next visit is one question away.
                           */}
+                          {canWrite && booking.status === "completed" && booking.localDate === today && (
+                            <ShiftFollowing
+                              bookingId={booking.id}
+                              timezone={booking.timezone}
+                              locale={locale}
+                              localeTag={localeTag}
+                              names={shiftNames}
+                            />
+                          )}
+
                           {canWrite && booking.status === "completed" && booking.clientId && (
                             <NextVisit bookingId={booking.id} locale={locale} localeTag={localeTag} />
                           )}
@@ -1937,6 +1952,16 @@ export function CalendarBoard({
                                     {pending ? t("common.saving") : t("calendar.resendManageLinkConfirm")}
                                   </button>
                                 </details>
+                              )}
+
+                              {booking.localDate === today && (
+                                <ShiftFollowing
+                                  bookingId={booking.id}
+                                  timezone={booking.timezone}
+                                  locale={locale}
+                                  localeTag={localeTag}
+                                  names={shiftNames}
+                                />
                               )}
 
                               <details className="calendar-subform">

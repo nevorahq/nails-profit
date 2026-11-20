@@ -1211,6 +1211,16 @@ const cases: readonly Case[] = [
     }),
   },
   {
+    route: "/api/v1/bookings/[id]/shift-following",
+    method: "POST",
+    allowed: ["owner", "manager", "master"],
+    note: "bookings write; a Master shifts their own day, and a preview is as guarded as the move",
+    request: async (fixture) => ({
+      path: `/api/v1/bookings/${fixture.bookingId}/shift-following`,
+      body: { delta_minutes: 15, mode: "preview" },
+    }),
+  },
+  {
     route: "/api/v1/bookings/[id]/manage-link",
     method: "POST",
     allowed: ["owner", "manager", "master"],
@@ -1473,6 +1483,12 @@ describe("RBAC and tenant isolation", () => {
         label: "booking reschedule",
         path: (f) => `/api/v1/bookings/${f.bookingId}/reschedule`,
         body: { starts_at: "2026-09-16T07:00:00.000Z", version: 1 },
+      },
+      {
+        method: "POST",
+        label: "booking shift",
+        path: (f) => `/api/v1/bookings/${f.bookingId}/shift-following`,
+        body: { delta_minutes: 15, mode: "preview" },
       },
       { method: "GET", label: "import job", path: async (f) => `/api/v1/imports/${await freshImportJob(f)}` },
       {

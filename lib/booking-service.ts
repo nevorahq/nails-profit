@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 
 import { bookingHolds, bookingLines, bookings } from "@/db/schema";
 import type { TenantTransaction } from "@/db/tenant";
@@ -159,6 +159,8 @@ export type ConflictQuery = Readonly<{
   ignoreHoldId?: string | null;
   /** The booking being moved, which must not collide with where it already is. */
   ignoreBookingId?: string | null;
+  /** A whole chain being moved at once: each member's old hour is another's new one. */
+  ignoreBookingIds?: readonly string[];
   now: Date;
 }>;
 
@@ -186,6 +188,7 @@ export async function findConflict(
           ? or(eq(bookings.specialistId, query.specialistId), eq(bookings.workplaceId, query.workplaceId))
           : eq(bookings.specialistId, query.specialistId),
         query.ignoreBookingId ? ne(bookings.id, query.ignoreBookingId) : undefined,
+        query.ignoreBookingIds?.length ? notInArray(bookings.id, [...query.ignoreBookingIds]) : undefined,
       ),
     )
     .limit(1);

@@ -56,6 +56,7 @@ Staff routes require an active session, active pilot access where enforcement is
 | GET/PATCH | `/bookings/{id}` | Card and non-lifecycle optimistic update |
 | POST | `/bookings/{id}/confirm` | Confirm a pending request |
 | POST | `/bookings/{id}/reschedule` | Transactional move with alternatives on conflict |
+| POST | `/bookings/{id}/shift-following` | Move the same master's appointments after this one by `delta_minutes` (±240): `mode: "preview"` plans, `mode: "apply"` writes with the previewed `versions`; all or nothing, `SHIFT_NOT_POSSIBLE` with a `reason` when it cannot |
 | POST | `/bookings/{id}/cancel` | Cancel with controlled reason/actor |
 | POST | `/bookings/{id}/no-show` | Record a no-show |
 | POST | `/bookings/{id}/complete` | Create/link a visit through the shared profit snapshot flow |
