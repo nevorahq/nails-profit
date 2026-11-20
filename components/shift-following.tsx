@@ -52,7 +52,8 @@ export function ShiftFollowing({
   const register = useRegister();
   const router = useRouter();
 
-  const [open, setOpen] = useState(false);
+  // Open at once on a visit just closed short: that is what the hint promised.
+  const [open, setOpen] = useState(suggestedEarlierMinutes > 0);
   const [direction, setDirection] = useState<"earlier" | "later">(suggestedEarlierMinutes > 0 ? "earlier" : "later");
   const [minutes, setMinutes] = useState(suggestedEarlierMinutes > 0 ? String(suggestedEarlierMinutes) : "15");
   const [moves, setMoves] = useState<readonly Move[] | null>(null);

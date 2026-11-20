@@ -130,4 +130,46 @@ test.describe("shifting the rest of the day", () => {
     await expect(panel.locator(".shift-preview")).toHaveCount(0);
     await context.close();
   });
+  test("closing a visit short says what it frees, then opens the shift on that amount", async ({
+    browser,
+    baseURL,
+    browserErrors,
+  }) => {
+    void browserErrors;
+    // A visit closed «now» has to have started, which for a booking made
+    // through the API means moving it back in the table.
+    test.skip(new Date().getUTCHours() < 2, "the visit would fall on yesterday");
+
+    const booking = await bookAppointment(studio.owner, studio, {
+      startsAt: atTime(daysFromToday(1), "09:00"),
+    });
+    const startsAt = new Date(Date.now() - 100 * 60_000);
+    startsAt.setUTCSeconds(0, 0);
+    await adminDb
+      .update(bookings)
+      .set({ startsAt, endsAt: new Date(startsAt.getTime() + 90 * 60_000) })
+      .where(eq(bookings.id, booking.id));
+
+    const context = await signedInContext(browser, studio.owner, baseURL!);
+    const page = await context.newPage();
+    await page.goto(`/app/calendar?date=${isoDate(daysFromToday(0))}&specialist=${studio.specialistId}`);
+
+    const entry = page.locator(`#booking-${booking.id}`);
+    await entry.locator("summary").first().click();
+    const form = entry.locator("details.calendar-subform").filter({ hasText: "Different amount or duration" });
+    await form.locator("summary").click();
+
+    // Booked for ninety minutes, took an hour: thirty are freed, and it says so
+    // before the button is pressed.
+    await form.getByLabel("Actual time, min").fill("60");
+    await expect(form.getByRole("status")).toContainText("30 min will be freed");
+
+    await form.getByRole("button", { name: "Close into a visit" }).click();
+
+    const panel = entry.locator("details.shift-following");
+    await expect(panel).toHaveAttribute("open", "");
+    await expect(panel.getByLabel("Earlier")).toBeChecked();
+    await expect(panel.getByLabel("By how many minutes")).toHaveValue("30");
+    await context.close();
+  });
 });
